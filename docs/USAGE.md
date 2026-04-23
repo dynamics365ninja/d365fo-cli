@@ -84,15 +84,23 @@ All configuration is environment-variable driven so it plays well with `.env` fi
 | `D365FO_PACKAGES_PATH` | for `index extract` | Root of the D365 F&O `PackagesLocalDirectory`. The extractor walks `<root>/<Package>/<Model>/AxTable/*.xml` etc. |
 | `D365FO_INDEX_DB` | optional | Path to the SQLite index. Default: `$LocalAppData/d365fo-cli/d365fo-index.sqlite` (macOS/Linux: `~/.local/share/d365fo-cli/…` via `Environment.SpecialFolder.LocalApplicationData`). |
 | `D365FO_WORKSPACE_PATH` | optional | Root of your X++ workspace (used by `review diff` defaults). |
-| `D365FO_CUSTOM_MODELS` | optional | CSV of model names to mark `IsCustom=true` in the index. |
+| `D365FO_CUSTOM_MODELS` | optional | CSV of model-name patterns to mark `IsCustom=true` in the index. Supports exact names (case-insensitive), `*` / `?` wildcards, and `!` negation. Examples: `Contoso`, `ISV*`, `ISV_*,!ISV_Sample`. |
 | `D365FO_LABEL_LANGUAGES` | optional | CSV of language codes to keep during label extraction. Default: `en-us`. |
 
 Example:
 
+```powershell
+# PowerShell
+$env:D365FO_PACKAGES_PATH = "K:\AosService\PackagesLocalDirectory"
+$env:D365FO_INDEX_DB = "$env:LOCALAPPDATA\d365fo-cli\index.sqlite"
+$env:D365FO_LABEL_LANGUAGES = "en-us,cs"
+```
+
 ```sh
-export D365FO_PACKAGES_PATH=/mnt/d365fo/PackagesLocalDirectory
-export D365FO_INDEX_DB=$HOME/.d365fo/index.sqlite
-export D365FO_LABEL_LANGUAGES=en-us,cs
+# bash/zsh
+D365FO_PACKAGES_PATH=/mnt/d365fo/PackagesLocalDirectory
+D365FO_INDEX_DB=$HOME/.d365fo/index.sqlite
+D365FO_LABEL_LANGUAGES=en-us,cs
 ```
 
 ---

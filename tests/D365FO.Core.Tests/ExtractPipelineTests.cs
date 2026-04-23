@@ -108,6 +108,25 @@ public class ExtractPipelineTests : IDisposable
     }
 
     [Fact]
+    public void MetadataExtractor_marks_models_matching_custom_pattern()
+    {
+        foreach (var name in new[] { "AslCore", "AslFinance", "MsExtensions" })
+        {
+            var dir = Path.Combine(_workRoot, "Pkg", name, "AxTable");
+            Directory.CreateDirectory(dir);
+            File.WriteAllText(Path.Combine(dir, "T.xml"), "<AxTable><Name>T</Name></AxTable>");
+        }
+
+        var ex = new MetadataExtractor();
+        var batches = ex.ExtractAll(_workRoot, labelLanguages: null, customModelPatterns: new[] { "Asl*" })
+            .ToDictionary(b => b.Model, b => b.IsCustom);
+
+        Assert.True(batches["AslCore"]);
+        Assert.True(batches["AslFinance"]);
+        Assert.False(batches["MsExtensions"]);
+    }
+
+    [Fact]
     public void Scaffolder_writes_table_atomically_with_backup()
     {
         var target = Path.Combine(_workRoot, "out", "MyTable.xml");

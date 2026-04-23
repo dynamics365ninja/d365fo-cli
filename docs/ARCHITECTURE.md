@@ -2,19 +2,20 @@
 
 ## Three projects, one core
 
-```
-           ┌──────────────────────────────────────────────┐
-           │               D365FO.Core                    │
-           │  Index  Extract  Metadata  Scaffolding       │
-           │  Guardrails  ToolResult  Settings            │
-           └────────────────┬─────────────────────────────┘
-                            │ same in-process API
-            ┌───────────────┴────────────────┐
-            ▼                                ▼
-     D365FO.Cli                       D365FO.Mcp
-  Spectre.Console.Cli             StdioDispatcher
-  (stable default)           (coexistence adapter)
-     `d365fo` binary          JSON-RPC / stdio
+```mermaid
+flowchart TB
+    Core["<b>D365FO.Core</b><br/>Index · Extract · Metadata<br/>Scaffolding · Guardrails<br/>ToolResult · Settings"]
+
+    Cli["<b>D365FO.Cli</b><br/>Spectre.Console.Cli<br/><i>d365fo</i> binary<br/>(stable default)"]
+    Mcp["<b>D365FO.Mcp</b><br/>StdioDispatcher<br/>JSON-RPC / stdio<br/>(coexistence adapter)"]
+
+    Cli  -- "in-process API" --> Core
+    Mcp  -- "in-process API" --> Core
+
+    classDef core fill:#1f6feb,stroke:#0b3d91,color:#fff,stroke-width:1px;
+    classDef adapter fill:#f6f8fa,stroke:#57606a,color:#24292f,stroke-width:1px;
+    class Core core;
+    class Cli,Mcp adapter;
 ```
 
 Key invariant: **only `D365FO.Core` knows about D365FO**. Both CLI and MCP

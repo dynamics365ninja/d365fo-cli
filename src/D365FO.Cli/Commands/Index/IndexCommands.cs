@@ -111,27 +111,76 @@ public sealed class IndexExtractCommand : Command<IndexExtractCommand.Settings>
 
         var repo = RepoFactory.Create(settings.DatabasePath);
         var extractor = new MetadataExtractor();
+        var matcher = new ModelMatcher(cfg.CustomModels);
         int modelCount = 0;
+        int customCount = 0;
         var per = new List<object>();
 
-        foreach (var batch in extractor.ExtractAll(root, cfg.LabelLanguages))
+        // Pre-enumerate candidate model folders so we can report progress
+        // *before* each model is parsed (useful when a single model like
+        // ApplicationSuite takes many minutes).
+        var modelDirs = EnumerateModelDirs(root, settings.OnlyModel).ToList();
+        var showProgress = kind != OutputMode.Kind.Json && !System.Console.IsOutputRedirected;
+
+        void ProcessAll(Action<string>? onStart, Action<string, ExtractBatch>? onDone)
         {
-            if (settings.OnlyModel is { Length: > 0 } only &&
-                !string.Equals(batch.Model, only, StringComparison.OrdinalIgnoreCase))
-                continue;
-            repo.ApplyExtract(batch);
-            modelCount++;
-            per.Add(new
+            foreach (var modelDir in modelDirs)
             {
-                model = batch.Model,
-                tables = batch.Tables.Count,
-                classes = batch.Classes.Count,
-                edts = batch.Edts.Count,
-                enums = batch.Enums.Count,
-                menuItems = batch.MenuItems.Count,
-                coc = batch.CocExtensions.Count,
-                labels = batch.Labels.Count,
-            });
+                var model = Path.GetFileName(modelDir)!;
+                onStart?.Invoke(model);
+                ExtractBatch batch;
+                try
+                {
+                    batch = extractor.ExtractModel(modelDir, model, cfg.LabelLanguages, matcher.IsMatch(model));
+                }
+                catch
+                {
+                    continue;
+                }
+                repo.ApplyExtract(batch);
+                modelCount++;
+                if (batch.IsCustom) customCount++;
+                per.Add(new
+                {
+                    model = batch.Model,
+                    isCustom = batch.IsCustom,
+                    tables = batch.Tables.Count,
+                    classes = batch.Classes.Count,
+                    edts = batch.Edts.Count,
+                    enums = batch.Enums.Count,
+                    menuItems = batch.MenuItems.Count,
+                    coc = batch.CocExtensions.Count,
+                    labels = batch.Labels.Count,
+                });
+                onDone?.Invoke(model, batch);
+            }
+        }
+
+        if (showProgress)
+        {
+            AnsiConsole.Status()
+                .Spinner(Spinner.Known.Dots)
+                .Start("Extracting metadata…", sctx =>
+                {
+                    ProcessAll(
+                        onStart: model =>
+                        {
+                            var pos = modelCount + 1;
+                            sctx.Status($"[[{pos}/{modelDirs.Count}]] {Markup.Escape(model)}");
+                        },
+                        onDone: (model, batch) =>
+                        {
+                            AnsiConsole.MarkupLine(
+                                $"[green]✓[/] [[{modelCount}/{modelDirs.Count}]] {Markup.Escape(model)} " +
+                                $"[grey](tables={batch.Tables.Count} classes={batch.Classes.Count} " +
+                                $"edts={batch.Edts.Count} enums={batch.Enums.Count} " +
+                                $"labels={batch.Labels.Count}{(batch.IsCustom ? " custom" : "")})[/]");
+                        });
+                });
+        }
+        else
+        {
+            ProcessAll(null, null);
         }
 
         var totals = repo.CountAll();
@@ -139,8 +188,36 @@ public sealed class IndexExtractCommand : Command<IndexExtractCommand.Settings>
         {
             packagesRoot = root,
             modelsProcessed = modelCount,
+            customModelsMatched = customCount,
+            customModelPatterns = cfg.CustomModels,
             perModel = per,
             totals,
         }));
+    }
+
+    private static IEnumerable<string> EnumerateModelDirs(string packagesRoot, string? onlyModel)
+    {
+        IEnumerable<string> SafeDirs(string d)
+        {
+            try { return Directory.EnumerateDirectories(d); }
+            catch (UnauthorizedAccessException) { return Array.Empty<string>(); }
+        }
+
+        static bool HasAot(string dir)
+        {
+            foreach (var s in new[] { "AxTable", "AxClass", "AxEdt", "AxEnum", "AxLabelFile" })
+                if (Directory.Exists(Path.Combine(dir, s))) return true;
+            return false;
+        }
+
+        foreach (var pkg in SafeDirs(packagesRoot))
+        foreach (var model in SafeDirs(pkg))
+        {
+            if (!HasAot(model)) continue;
+            if (onlyModel is { Length: > 0 } only &&
+                !string.Equals(Path.GetFileName(model), only, StringComparison.OrdinalIgnoreCase))
+                continue;
+            yield return model;
+        }
     }
 }

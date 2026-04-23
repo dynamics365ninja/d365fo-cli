@@ -26,12 +26,17 @@ public sealed class MetadataExtractor
 
     public MetadataExtractor(ILogger? log = null) => _log = log ?? NullLogger.Instance;
 
-    public IEnumerable<ExtractBatch> ExtractAll(string packagesRoot, IReadOnlyCollection<string>? labelLanguages = null)
+    public IEnumerable<ExtractBatch> ExtractAll(
+        string packagesRoot,
+        IReadOnlyCollection<string>? labelLanguages = null,
+        IReadOnlyCollection<string>? customModelPatterns = null)
     {
         if (string.IsNullOrWhiteSpace(packagesRoot))
             throw new ArgumentException("packagesRoot required", nameof(packagesRoot));
         if (!Directory.Exists(packagesRoot))
             throw new DirectoryNotFoundException($"Packages root not found: {packagesRoot}");
+
+        var matcher = new ModelMatcher(customModelPatterns ?? Array.Empty<string>());
 
         foreach (var packageDir in EnumerateDirectories(packagesRoot))
         {
@@ -43,7 +48,7 @@ public sealed class MetadataExtractor
                 ExtractBatch batch;
                 try
                 {
-                    batch = ExtractModel(modelDir, model, labelLanguages);
+                    batch = ExtractModel(modelDir, model, labelLanguages, matcher.IsMatch(model));
                 }
                 catch (Exception ex)
                 {
@@ -55,7 +60,11 @@ public sealed class MetadataExtractor
         }
     }
 
-    public ExtractBatch ExtractModel(string modelRoot, string modelName, IReadOnlyCollection<string>? labelLanguages = null)
+    public ExtractBatch ExtractModel(
+        string modelRoot,
+        string modelName,
+        IReadOnlyCollection<string>? labelLanguages = null,
+        bool isCustom = false)
     {
         var tables = ReadAll(Path.Combine(modelRoot, "AxTable"), ParseTable);
         var classes = ReadAll(Path.Combine(modelRoot, "AxClass"), ParseClass);
@@ -86,7 +95,7 @@ public sealed class MetadataExtractor
             Model: modelName,
             Publisher: null,
             Layer: null,
-            IsCustom: false,
+            IsCustom: isCustom,
             Tables: tables,
             Classes: classes,
             Edts: edts,
