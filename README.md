@@ -1,9 +1,12 @@
 # d365fo-cli
 
-> Structured CLI + Agent Skills for Dynamics 365 Finance & Operations.
+> **CLI + Agent Skills + MCP server for Dynamics 365 Finance & Operations X++ development.**
+> Lets AI assistants (GitHub Copilot, Claude, Cursor, Codex, Gemini) understand your AOT metadata, scaffold AxTable / AxClass / Chain-of-Command extensions, review X++ diffs, and drive MSBuild / SyncEngine / SysTestRunner / xppbp on a D365FO developer VM.
 > Successor to [`d365fo-mcp-server`](https://github.com/dynamics365ninja/d365fo-mcp-server) — same metadata index, **much cheaper on tokens**, scriptable in PowerShell and CI/CD, agent-agnostic.
 
-Inspired by Agent Skills pattern introduced by Anthropic in October 2025. MCP stays available as a thin transport on top of the shared `D365FO.Core` — no drift, no migration cliff.
+Purpose-built for X++ / AOT work: indexes `AxTable`, `AxClass`, `AxEdt`, `AxEnum`, `AxMenuItem*`, `AxLabelFile` into a local SQLite cache so agents resolve types, relations, CoC targets, and labels without round-tripping a live VM.
+
+Inspired by the Agent Skills pattern introduced by Anthropic in October 2025. MCP stays available as a first-class JSON-RPC 2.0 transport (`d365fo-mcp`) on top of the shared `D365FO.Core` — no drift, no migration cliff.
 
 ## Why CLI + Skills instead of MCP?
 
