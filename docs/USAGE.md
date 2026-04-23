@@ -38,8 +38,8 @@ Off-Windows these return a structured `UNSUPPORTED_PLATFORM` error envelope so a
 ### Build from source
 
 ```sh
-git clone https://github.com/dynamics365ninja/d365fo-mcp-server-cli.git
-cd d365fo-mcp-server-cli
+git clone https://github.com/dynamics365ninja/d365fo-cli.git
+cd d365fo-cli
 dotnet build d365fo-cli.slnx -c Release
 ```
 

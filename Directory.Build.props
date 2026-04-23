@@ -8,7 +8,7 @@
     <Company>d365fo-cli contributors</Company>
     <Product>d365fo-cli</Product>
     <Copyright>MIT</Copyright>
-    <RepositoryUrl>https://github.com/dynamics365ninja/d365fo-mcp-server-cli</RepositoryUrl>
+    <RepositoryUrl>https://github.com/dynamics365ninja/d365fo-cli</RepositoryUrl>
     <PublishRepositoryUrl>true</PublishRepositoryUrl>
     <IncludeSymbols>true</IncludeSymbols>
     <SymbolPackageFormat>snupkg</SymbolPackageFormat>
