@@ -1,40 +1,33 @@
 # Setup & Usage
 
-This guide walks you through installing `d365fo-cli`, pointing it at a D365 F&O metadata source, and using it from the command line, CI, and agents (GitHub Copilot, Claude, Codex, Gemini).
+This is the complete guide to installing, configuring, and using `d365fo-cli`. It picks up where the [README](../README.md) leaves off and serves as a reference for every command.
 
-If you already know the pitch, jump straight to [Install](#install).
+Already know the pitch? Jump straight to [Install](#install).
 
 ---
 
-## What this tool does (and doesn't)
+## What this tool does
 
-**Cross-platform (macOS / Linux / Windows)** — no D365 runtime required:
+`d365fo-cli` is a local toolkit for D365 F&O X++ developers and the AI agents that help them. Under the hood it does three things:
 
-- Index D365 F&O AOT XML metadata into a local SQLite cache. Covered types:
-  `AxTable` (fields, relations, indexes, methods, delete actions), `AxClass`
-  (methods, attributes, Chain-of-Command detection, event subscribers),
-  `AxEdt`, `AxEnum`, `AxForm` (+ datasources, + extensions), `AxMenuItem*`,
-  `AxLabelFile` (multi-language), `AxQuery` / `AxQuerySimple`,
-  `AxView`, `AxDataEntityView` (OData entity/collection names),
-  `AxReport` / `AxReportSsrs`, `AxService`, `AxServiceGroup`, `AxWorkflowType`,
-  `AxSecurity{Role,Duty,Privilege}` plus a flattened `SecurityMap`, and per-model
-  Descriptor metadata (publisher, layer, module references).
-- Query the index: `search`, `get`, `find`, `resolve`, `read`, `models`.
-- Scaffold new AOT objects: `generate table|class|coc|simple-list`.
-- Review diffs against `git`: `review diff` (lint rules for AOT XML).
-- Serve as an MCP server (`d365fo-mcp`, JSON-RPC 2.0) or a warm-cache daemon (`d365fo daemon`).
+1. **Indexes your AOT metadata** into a local SQLite database so you can look up tables, classes, EDTs, enums, forms, queries, views, data entities, reports, services, workflows, security roles, and labels — instantly, offline, across every model.
+2. **Answers questions about the code** — fields, methods, relations, indexes, Chain-of-Command targets, event handlers, label translations, reverse references, model dependencies.
+3. **Scaffolds and reviews X++** — generate ready-to-use AOT XML for new tables, classes, CoC extensions, and simple-list forms; lint AOT changes between git revisions.
 
-`*FormAdaptor` companion packages are automatically excluded during extraction
-(matches `d365fo-mcp-server` behavior — those folders hold no real AOT content).
-
-**Windows + D365FO VM required** (shells out to Microsoft tools):
+It runs on **Windows, macOS, and Linux** — no D365 runtime needed for any of the above. Optionally, on a Windows D365FO developer VM, it also drives:
 
 - `d365fo build` → `MSBuild.exe`
 - `d365fo sync` → `SyncEngine.exe`
 - `d365fo test run` → `SysTestRunner.exe`
 - `d365fo bp check` → `xppbp.exe`
 
-Off-Windows these return a structured `UNSUPPORTED_PLATFORM` error envelope so agents can branch cleanly. **You do not need Windows for development, indexing, scaffolding, or agent usage** — only for `build/sync/test/bp`.
+Off-Windows these commands return a structured `UNSUPPORTED_PLATFORM` error so agents can branch cleanly.
+
+### Metadata types covered
+
+`AxTable` (fields, relations, indexes, methods, delete actions), `AxClass` (methods, attributes, Chain-of-Command detection, event subscribers), `AxEdt`, `AxEnum`, `AxForm` (+ datasources, + extensions), `AxMenuItem*`, `AxLabelFile` (multi-language), `AxQuery` / `AxQuerySimple`, `AxView`, `AxDataEntityView` (OData entity/collection names), `AxReport` / `AxReportSsrs`, `AxService`, `AxServiceGroup`, `AxWorkflowType`, `AxSecurity{Role,Duty,Privilege}` plus a flattened `SecurityMap`, and per-model Descriptor metadata (publisher, layer, module references).
+
+`*FormAdaptor` companion packages are automatically excluded (they hold no real AOT content). This matches `d365fo-mcp-server` behavior.
 
 ---
 
@@ -42,9 +35,19 @@ Off-Windows these return a structured `UNSUPPORTED_PLATFORM` error envelope so a
 
 ### Prerequisites
 
+**Required to build and use the CLI (any platform):**
+
 - .NET SDK 10 (the repo targets `net10.0`; `global.json` pins the exact SDK).
 - `git` (for `review diff`).
 - Python 3.8+ **or** PowerShell 7 (for regenerating skills — optional).
+
+**Recommended for day-to-day X++ development (Windows D365FO developer VM):**
+
+- **Visual Studio 2026** or **Visual Studio 2022** with the **Dynamics 365 Finance and Operations** developer tools (Modern Developer Tools) installed. Visual Studio is the primary IDE for X++ authoring, debugging, and deploying models — `d365fo-cli` complements it rather than replaces it.
+- A local `PackagesLocalDirectory` (`K:\AosService\PackagesLocalDirectory` on the standard Tier-1 VM image).
+- The CLI's `build` / `sync` / `test` / `bp` commands shell out to the Microsoft tooling that Visual Studio also drives (`MSBuild.exe`, `SyncEngine.exe`, `SysTestRunner.exe`, `xppbp.exe`), so they pick up the same model overlays and metadata.
+
+On **macOS and Linux** you do not need Visual Studio or any D365FO runtime — indexing, searching, scaffolding, and agent integration all work cross-platform against a copy of `PackagesLocalDirectory`.
 
 ### Build from source
 
@@ -141,12 +144,20 @@ d365fo index status
 
 ## Usage
 
-All commands return a stable JSON envelope by default (piped/non-TTY) and Spectre-rendered tables in an interactive terminal. Override with `--output json|table|raw`.
+Every command returns a predictable result:
+
+- **Interactive terminal** → nicely rendered tables.
+- **Piped / script / CI** → JSON envelope.
+- Force either with `--output json|table|raw`.
+
+The JSON envelope is always one of:
 
 ```json
-{ "ok": true,  "data": { … },  "warnings": [ … ] }
+{ "ok": true,  "data": { /* … */ }, "warnings": [] }
 { "ok": false, "error": { "code": "…", "message": "…", "hint": "…" } }
 ```
+
+Exit codes: `0` = success, `1` = controlled failure (the error envelope still prints), `2` = unhandled exception.
 
 ### Discover
 
@@ -260,6 +271,8 @@ Rules currently shipped:
 
 ### Windows-only tooling (on the D365FO VM)
 
+These commands run on a **Windows D365FO developer VM with Visual Studio 2026 or 2022 + the D365 F&O developer tools installed**. They wrap the same executables Visual Studio uses, so you can build, sync, test, or Best-Practice-check a model from a terminal, a script, or a CI pipeline instead of clicking through the IDE.
+
 ```powershell
 d365fo build --project C:\AosService\PackagesLocalDirectory\MyModel\MyModel.rnrproj
 d365fo sync --full
@@ -268,6 +281,8 @@ d365fo bp check --model MyModel
 ```
 
 Each parses the tool output and returns a structured JSON envelope (errors, warnings, elapsed time, tail of stdout).
+
+> **Tip:** keep Visual Studio open for debugging, form designer work, and model lifecycle operations; use `d365fo` for metadata lookups, scaffolding, scripted builds, and anything you want to call from an AI agent.
 
 ### Agent integration
 
@@ -285,6 +300,23 @@ Drop the prompt into Copilot / Claude / Codex / Gemini system instructions. Skil
 
 ## Agent usage patterns
 
+### Visual Studio 2026 / 2022 with GitHub Copilot (primary D365FO workflow)
+
+Visual Studio is where most X++ developers live. GitHub Copilot Chat is built into Visual Studio 2026 and available as an extension in Visual Studio 2022, and it can drive `d365fo-cli` straight from the IDE's integrated terminal:
+
+1. Build and expose the CLI on `PATH` (see [Install](#install)).
+2. Copy the Copilot skills next to the solution:
+   ```powershell
+   Copy-Item skills\copilot\* .github\instructions\ -Force
+   d365fo agent-prompt --out .github\copilot-instructions.md
+   ```
+3. In Visual Studio, open **View → GitHub Copilot Chat** and ask things like:
+   - *"Show me the CustTable relations and indexes."*
+   - *"Scaffold a CoC extension for `SalesLineType::insert` into `FleetManagement`."*
+   - *"Run `d365fo build` for `MyModel` and show the errors."*
+
+Copilot picks up `.github/instructions/*.instructions.md` via `applyTo` globs and drives `d365fo` through its terminal tool. Pair it with Visual Studio's own debugger and form designer for the full D365FO workflow.
+
 ### GitHub Copilot (VS Code)
 
 ```sh
@@ -293,7 +325,7 @@ cp skills/copilot/* .github/instructions/
 d365fo agent-prompt --out .github/copilot-instructions.md
 ```
 
-Copilot picks up `.github/instructions/*.instructions.md` via `applyTo` globs. Copilot Chat can then invoke `d365fo …` in a terminal tool.
+Copilot picks up `.github/instructions/*.instructions.md` via `applyTo` globs. Copilot Chat can then invoke `d365fo …` in a terminal tool. Useful on non-Windows developer machines where you index a copy of `PackagesLocalDirectory` without a full VM.
 
 ### Claude Code / Claude Desktop
 
