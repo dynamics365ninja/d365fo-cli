@@ -251,27 +251,87 @@ public sealed class MetadataExtractor
 
     private static IEnumerable<ExtractedLabel> ParseLabelFile(string file, IReadOnlyCollection<string>? langs)
     {
-        // D365 ships labels as .txt key=value pairs grouped under AxLabelFile
-        // XML. A full-fidelity reader walks the associated .txt; as a minimum
-        // we try to parse values embedded in the XML, which covers the common
-        // "inline labels" case.
-        var doc = XDocument.Load(file, LoadOptions.None);
-        var root = doc.Root;
-        if (root is null) yield break;
+        // D365 label files come in two shapes:
+        //   1. XML manifest at AxLabelFile/<Name>.xml that declares languages
+        //   2. sibling .txt files `<Name>.<language>.label.txt` that carry
+        //      the actual key=value payload (one entry per line, optionally
+        //      preceded by a ;-comment).
+        // We walk both so indexed labels match what Visual Studio resolves.
 
-        var logicalName = Local(root, "Name") ?? Path.GetFileNameWithoutExtension(file);
-        foreach (var loc in Children(root, "Labels"))
+        XDocument? doc = null;
+        try { doc = XDocument.Load(file, LoadOptions.None); } catch { }
+
+        string logicalName = doc?.Root is { } xr ? (Local(xr, "Name") ?? Path.GetFileNameWithoutExtension(file))
+                                                 : Path.GetFileNameWithoutExtension(file);
+
+        // Strip the AxLabelFile_ prefix some shipments use ("AxLabelFile_SysLabel").
+        const string prefix = "AxLabelFile_";
+        if (logicalName.StartsWith(prefix, StringComparison.Ordinal))
+            logicalName = logicalName.Substring(prefix.Length);
+
+        // (1) inline <AxLabel> entries (rare but supported)
+        if (doc?.Root is { } inlineRoot)
         {
-            var language = Local(loc, "Language") ?? "en-us";
-            if (langs is not null && langs.Count > 0 && !langs.Contains(language, StringComparer.OrdinalIgnoreCase))
-                continue;
-            var entries = loc.Descendants().Where(x => x.Name.LocalName == "AxLabel");
-            foreach (var entry in entries)
+            foreach (var loc in Children(inlineRoot, "Labels"))
             {
-                var key = Local(entry, "Name");
-                if (string.IsNullOrEmpty(key)) continue;
-                yield return new ExtractedLabel(logicalName, language, key!, Local(entry, "Label"));
+                var language = Local(loc, "Language") ?? "en-us";
+                if (!LangPasses(langs, language)) continue;
+                var entries = loc.Descendants().Where(x => x.Name.LocalName == "AxLabel");
+                foreach (var entry in entries)
+                {
+                    var key = Local(entry, "Name");
+                    if (string.IsNullOrEmpty(key)) continue;
+                    yield return new ExtractedLabel(logicalName, language, key!, Local(entry, "Label"));
+                }
             }
+        }
+
+        // (2) sibling .label.txt files — D365's canonical format.
+        var dir = Path.GetDirectoryName(file)!;
+        foreach (var txt in Directory.EnumerateFiles(dir, "*.label.txt", SearchOption.TopDirectoryOnly))
+        {
+            var fileName = Path.GetFileName(txt); // e.g. SysLabel.en-us.label.txt
+            var nameNoExt = fileName.EndsWith(".label.txt", StringComparison.OrdinalIgnoreCase)
+                ? fileName.Substring(0, fileName.Length - ".label.txt".Length)
+                : Path.GetFileNameWithoutExtension(fileName);
+            var dotIdx = nameNoExt.LastIndexOf('.');
+            if (dotIdx < 0) continue;
+            var labelFile = nameNoExt.Substring(0, dotIdx);
+            var language = nameNoExt.Substring(dotIdx + 1);
+            if (!LangPasses(langs, language)) continue;
+
+            // Only index labels that belong to the manifest we're reading.
+            if (!string.Equals(labelFile, logicalName, StringComparison.OrdinalIgnoreCase) &&
+                !string.IsNullOrEmpty(logicalName) &&
+                doc is not null)
+                continue;
+
+            foreach (var entry in ReadLabelTxt(txt, labelFile, language))
+                yield return entry;
+        }
+    }
+
+    private static bool LangPasses(IReadOnlyCollection<string>? langs, string language) =>
+        langs is null || langs.Count == 0 || langs.Contains(language, StringComparer.OrdinalIgnoreCase);
+
+    private static IEnumerable<ExtractedLabel> ReadLabelTxt(string path, string labelFile, string language)
+    {
+        // File format: "KEY=Value\n" with optional ";"-comments and BOM. Values
+        // may contain '=' so we split on the first occurrence only. Keys are
+        // case-sensitive in D365 (labels map directly to AOT resource ids).
+        using var reader = new StreamReader(path, detectEncodingFromByteOrderMarks: true);
+        string? line;
+        while ((line = reader.ReadLine()) is not null)
+        {
+            if (line.Length == 0) continue;
+            var trimmed = line.TrimStart();
+            if (trimmed.StartsWith(';')) continue;
+            var eq = trimmed.IndexOf('=');
+            if (eq <= 0) continue;
+            var key = trimmed.Substring(0, eq).TrimEnd();
+            var value = trimmed.Substring(eq + 1);
+            if (string.IsNullOrEmpty(key)) continue;
+            yield return new ExtractedLabel(labelFile, language, key, value);
         }
     }
 

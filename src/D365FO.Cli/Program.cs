@@ -1,4 +1,5 @@
 ﻿using D365FO.Cli.Commands.Agent;
+using D365FO.Cli.Commands.Daemon;
 using D365FO.Cli.Commands.Find;
 using D365FO.Cli.Commands.Generate;
 using D365FO.Cli.Commands.Get;
@@ -79,6 +80,14 @@ app.Configure(cfg =>
     {
         b.SetDescription("Review utilities (Git-backed).");
         b.AddCommand<ReviewDiffCommand>("diff").WithDescription("Inspect AOT changes vs. a git revision.");
+    });
+
+    cfg.AddBranch("daemon", b =>
+    {
+        b.SetDescription("Long-running JSON-RPC IPC server (named pipe / unix socket).");
+        b.AddCommand<DaemonStartCommand>("start").WithDescription("Start the daemon (foreground).");
+        b.AddCommand<DaemonStopCommand>("stop").WithDescription("Stop the running daemon.");
+        b.AddCommand<DaemonStatusCommand>("status").WithDescription("Report daemon status.");
     });
 
     cfg.AddCommand<BuildCommand>("build").WithDescription("Invoke MSBuild (Windows VM).");

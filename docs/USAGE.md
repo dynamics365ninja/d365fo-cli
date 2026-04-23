@@ -14,7 +14,7 @@ If you already know the pitch, jump straight to [Install](#install).
 - Query the index: `search`, `get`, `find`.
 - Scaffold new AOT objects: `generate table|class|coc|simple-list`.
 - Review diffs against `git`: `review diff` (lint rules for AOT XML).
-- Serve a thin MCP transport (legacy compatibility).
+- Serve as an MCP server (`d365fo-mcp`, JSON-RPC 2.0) or a warm-cache daemon (`d365fo daemon`).
 
 **Windows + D365FO VM required** (shells out to Microsoft tools):
 
@@ -230,13 +230,42 @@ Point Claude Code at `skills/anthropic/` (drop it in the project or `~/.claude/s
 
 Paste the output of `d365fo agent-prompt` into the session system prompt, or reference it from `AGENTS.md`.
 
-### MCP host (legacy)
+### MCP server (`d365fo-mcp`)
 
-```sh
-dotnet run --project src/D365FO.Mcp
+Real JSON-RPC 2.0 MCP server (protocol `2024-11-05`) published as its own executable. Wire it into Claude Desktop, Cursor, Continue, or VS Code MCP:
+
+```jsonc
+// Claude Desktop config
+{
+  "mcpServers": {
+    "d365fo": {
+      "command": "dotnet",
+      "args": ["run", "--project", "/abs/path/to/src/D365FO.Mcp", "--no-build"],
+      "env": { "D365FO_INDEX_DB": "/abs/path/d365fo-index.sqlite" }
+    }
+  }
+}
 ```
 
-The dispatcher maps legacy 54-tool names (`search_classes`, `get_table_details`, …) to `D365FO.Core` — same index, same guardrails. A full JSON-RPC 2.0 MCP transport is planned; the current dispatcher is a newline-JSON placeholder.
+After `dotnet publish src/D365FO.Mcp -c Release -r osx-arm64` you get a standalone `d365fo-mcp` binary you can drop on `$PATH` and reference directly.
+
+Supported methods: `initialize`, `ping`, `tools/list`, `tools/call`. 16 tools are exposed (search/get/find/index_status — same surface as the CLI read commands).
+
+### Daemon (warm cache)
+
+For latency-sensitive integrations, run the CLI as a daemon so the SQLite handle and read caches stay hot:
+
+```sh
+d365fo daemon start           # foreground=false, detaches
+d365fo daemon status          # running pid + endpoint
+d365fo daemon stop            # sends SIGTERM, cleans pid file
+```
+
+Transport:
+- **Windows:** named pipe `\\.\pipe\d365fo-cli`
+- **Unix:** socket at `$XDG_RUNTIME_DIR/d365fo-cli.sock` (fallback `$TMPDIR`)
+
+The daemon speaks the same JSON-RPC 2.0 frame as `d365fo-mcp` — one newline-terminated request per connection, one response, close.
 
 ---
 

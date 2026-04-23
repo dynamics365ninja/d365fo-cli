@@ -20,6 +20,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\D365FO.Core\D365FO.Core.csproj" />
+    <ProjectReference Include="..\..\src\D365FO.Mcp\D365FO.Mcp.csproj" />
   </ItemGroup>
 
 </Project>

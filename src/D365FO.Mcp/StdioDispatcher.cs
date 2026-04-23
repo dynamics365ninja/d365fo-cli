@@ -1,18 +1,37 @@
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using D365FO.Core;
 using D365FO.Core.Index;
 
 namespace D365FO.Mcp;
 
 /// <summary>
-/// Minimal stdio MCP-like server. Full MCP protocol (initialize/list_tools/
-/// call_tool with JSON-RPC) is delegated to a future commit that plugs the
-/// official C# SDK on top of <see cref="ToolHandlers"/>. For now this class
-/// exposes a hand-rolled newline-delimited JSON dispatch that proves the
-/// coexistence wiring: one shared Core, two transports.
+/// JSON-RPC 2.0 server implementing the subset of the
+/// <a href="https://modelcontextprotocol.io">Model Context Protocol</a>
+/// required by mainstream MCP clients (Claude Desktop, Cursor, VS Code
+/// Copilot MCP).
+///
+/// Methods implemented:
+/// <list type="bullet">
+///   <item><c>initialize</c> — handshake, returns capabilities + serverInfo.</item>
+///   <item><c>initialized</c> / <c>notifications/initialized</c> — ack, ignored.</item>
+///   <item><c>ping</c> — returns empty object.</item>
+///   <item><c>tools/list</c> — lists every tool in <see cref="ToolCatalog"/>.</item>
+///   <item><c>tools/call</c> — invokes a tool by name; response follows the MCP
+///   content schema (<c>content[0].type == "text"</c>, text body is the
+///   serialised <see cref="ToolResult{T}"/>).</item>
+/// </list>
+/// Frames are newline-delimited UTF-8 JSON on stdio — MCP's default stdio
+/// transport. This is intentionally dependency-free; swapping in the official
+/// C# SDK later is mechanical because the <see cref="ToolHandlers"/> surface
+/// stays identical.
 /// </summary>
 public sealed class StdioDispatcher
 {
+    private const string ProtocolVersion = "2024-11-05";
+    private const string ServerName = "d365fo-mcp";
+    private const string ServerVersion = "0.1.0-dev";
+
     private readonly ToolHandlers _handlers;
 
     public StdioDispatcher(ToolHandlers handlers) => _handlers = handlers;
@@ -20,7 +39,8 @@ public sealed class StdioDispatcher
     public static StdioDispatcher CreateDefault(string? databasePath = null)
     {
         var settings = D365FoSettings.FromEnvironment(databasePath);
-        Directory.CreateDirectory(Path.GetDirectoryName(settings.DatabasePath)!);
+        var dir = Path.GetDirectoryName(Path.GetFullPath(settings.DatabasePath));
+        if (!string.IsNullOrEmpty(dir)) Directory.CreateDirectory(dir);
         var repo = new MetadataRepository(settings.DatabasePath);
         repo.EnsureSchema();
         return new StdioDispatcher(new ToolHandlers(repo));
@@ -32,50 +52,169 @@ public sealed class StdioDispatcher
         while (!ct.IsCancellationRequested && (line = await input.ReadLineAsync(ct)) is not null)
         {
             if (string.IsNullOrWhiteSpace(line)) continue;
-            string response;
+
+            JsonElement root;
             try
             {
                 using var doc = JsonDocument.Parse(line);
-                var root = doc.RootElement;
-                var tool = root.GetProperty("tool").GetString() ?? "";
-                var args = root.TryGetProperty("args", out var a) ? a : default;
-                var result = Invoke(tool, args);
-                response = D365Json.Serialize(result);
+                root = doc.RootElement.Clone();
             }
-            catch (Exception ex)
+            catch (JsonException ex)
             {
-                response = D365Json.Serialize(ToolResult<object>.Fail(
-                    "BAD_REQUEST", ex.Message, ex.GetType().Name));
+                await WriteAsync(output, ErrorResponse(null, -32700, "Parse error: " + ex.Message), ct);
+                continue;
             }
-            await output.WriteLineAsync(response);
-            await output.FlushAsync(ct);
+
+            var response = Dispatch(root);
+            if (response is not null)
+                await WriteAsync(output, response, ct);
         }
     }
 
-    private ToolResult<object> Invoke(string tool, JsonElement args)
+    private JsonObject? Dispatch(JsonElement root)
     {
-        string Arg(string name) =>
-            args.ValueKind == JsonValueKind.Object && args.TryGetProperty(name, out var v)
-                ? v.GetString() ?? "" : "";
-
-        int ArgInt(string name, int dflt) =>
-            args.ValueKind == JsonValueKind.Object && args.TryGetProperty(name, out var v)
-                && v.ValueKind == JsonValueKind.Number && v.TryGetInt32(out var i) ? i : dflt;
-
-        return tool switch
+        JsonNode? idNode = null;
+        try
         {
-            "search_classes"   => _handlers.SearchClasses(Arg("query"), NullIfEmpty(Arg("model")), ArgInt("limit", 50)),
-            "get_table_details"=> _handlers.GetTable(Arg("name")),
-            "get_edt_details"  => _handlers.GetEdt(Arg("name")),
-            "get_class_details"=> _handlers.GetClass(Arg("name")),
-            "find_coc_extensions" => _handlers.FindCoc(Arg("class"), NullIfEmpty(Arg("method"))),
-            "search_labels"    => _handlers.SearchLabels(Arg("query"), null, ArgInt("limit", 100)),
-            "get_security_coverage_for_object"
-                               => _handlers.GetSecurity(Arg("object"), string.IsNullOrEmpty(Arg("type")) ? "Menuitem" : Arg("type")),
-            "get_table_relations" => _handlers.GetTableRelations(Arg("table")),
-            _ => ToolResult<object>.Fail("UNKNOWN_TOOL", $"Tool '{tool}' is not registered."),
+            if (root.TryGetProperty("id", out var id))
+                idNode = JsonNode.Parse(id.GetRawText());
+        }
+        catch { /* non-fatal */ }
+
+        string method;
+        try
+        {
+            method = root.GetProperty("method").GetString() ?? "";
+        }
+        catch
+        {
+            return ErrorResponse(idNode, -32600, "Invalid request: missing method");
+        }
+
+        JsonElement paramsEl = default;
+        if (root.TryGetProperty("params", out var p)) paramsEl = p;
+
+        // Notifications (no id) never get a reply, per JSON-RPC 2.0.
+        bool isNotification = idNode is null;
+
+        try
+        {
+            switch (method)
+            {
+                case "initialize":
+                    return Success(idNode, new JsonObject
+                    {
+                        ["protocolVersion"] = ProtocolVersion,
+                        ["capabilities"] = new JsonObject
+                        {
+                            ["tools"] = new JsonObject { ["listChanged"] = false },
+                        },
+                        ["serverInfo"] = new JsonObject
+                        {
+                            ["name"] = ServerName,
+                            ["version"] = ServerVersion,
+                        },
+                    });
+
+                case "initialized":
+                case "notifications/initialized":
+                case "notifications/cancelled":
+                    return null;
+
+                case "ping":
+                    return isNotification ? null : Success(idNode, new JsonObject());
+
+                case "tools/list":
+                    return Success(idNode, BuildToolsList());
+
+                case "tools/call":
+                    return HandleToolsCall(idNode, paramsEl);
+
+                default:
+                    return isNotification ? null : ErrorResponse(idNode, -32601, $"Method not found: {method}");
+            }
+        }
+        catch (Exception ex)
+        {
+            return ErrorResponse(idNode, -32603, "Internal error: " + ex.Message);
+        }
+    }
+
+    private static JsonObject BuildToolsList()
+    {
+        var arr = new JsonArray();
+        foreach (var d in ToolCatalog.All)
+        {
+            arr.Add(new JsonObject
+            {
+                ["name"] = d.Name,
+                ["description"] = d.Description,
+                ["inputSchema"] = (JsonNode)d.InputSchema.DeepClone(),
+            });
+        }
+        return new JsonObject { ["tools"] = arr };
+    }
+
+    private JsonObject HandleToolsCall(JsonNode? idNode, JsonElement paramsEl)
+    {
+        if (paramsEl.ValueKind != JsonValueKind.Object)
+            return ErrorResponse(idNode, -32602, "tools/call requires params object.");
+        var name = paramsEl.TryGetProperty("name", out var n) ? (n.GetString() ?? "") : "";
+        var args = paramsEl.TryGetProperty("arguments", out var a) ? a : default;
+
+        var descriptor = ToolCatalog.All.FirstOrDefault(d => d.Name == name);
+        if (descriptor.Name is null)
+            return ErrorResponse(idNode, -32602, $"Unknown tool: {name}");
+
+        object raw;
+        try
+        {
+            raw = descriptor.Invoke(_handlers, args);
+        }
+        catch (Exception ex)
+        {
+            raw = ToolResult<object>.Fail("HANDLER_THREW", ex.Message, ex.GetType().Name);
+        }
+
+        var body = D365Json.Serialize(raw);
+        bool isError = raw is ToolResult<object> tr && !tr.Ok;
+
+        return Success(idNode, new JsonObject
+        {
+            ["content"] = new JsonArray
+            {
+                new JsonObject { ["type"] = "text", ["text"] = body },
+            },
+            ["isError"] = isError,
+        });
+    }
+
+    // ---- JSON-RPC envelopes ----
+
+    private static JsonObject Success(JsonNode? id, JsonNode result) =>
+        new()
+        {
+            ["jsonrpc"] = "2.0",
+            ["id"] = id?.DeepClone() ?? JsonValue.Create<object?>(null),
+            ["result"] = result,
         };
 
-        static string? NullIfEmpty(string s) => string.IsNullOrEmpty(s) ? null : s;
+    private static JsonObject ErrorResponse(JsonNode? id, int code, string message, JsonNode? data = null)
+    {
+        var err = new JsonObject { ["code"] = code, ["message"] = message };
+        if (data is not null) err["data"] = data;
+        return new JsonObject
+        {
+            ["jsonrpc"] = "2.0",
+            ["id"] = id?.DeepClone() ?? JsonValue.Create<object?>(null),
+            ["error"] = err,
+        };
+    }
+
+    private static async Task WriteAsync(TextWriter output, JsonObject envelope, CancellationToken ct)
+    {
+        var line = envelope.ToJsonString();
+        await output.WriteLineAsync(line.AsMemory(), ct);
+        await output.FlushAsync(ct);
     }
 }
