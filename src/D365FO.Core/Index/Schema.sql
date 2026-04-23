@@ -1,9 +1,11 @@
 -- D365FO metadata index schema (v1)
 -- Mirrors SQLite layout used by the upstream MCP server so both
 -- D365FO.Cli and D365FO.Mcp can read the same artifact.
-
-PRAGMA foreign_keys = ON;
-PRAGMA journal_mode = WAL;
+--
+-- NOTE: per-connection PRAGMAs (foreign_keys, journal_mode) are applied by
+-- MetadataRepository.Open() at connection acquisition time, not here. Mixing
+-- them into the schema script causes issues when the script is run inside a
+-- transaction (journal_mode is ignored silently inside transactions).
 
 CREATE TABLE IF NOT EXISTS SchemaVersion (
     Version     INTEGER PRIMARY KEY,
@@ -84,6 +86,25 @@ CREATE TABLE IF NOT EXISTS Edts (
     FOREIGN KEY (ModelId) REFERENCES Models(ModelId)
 );
 CREATE INDEX IF NOT EXISTS IX_Edts_Name ON Edts(Name);
+
+CREATE TABLE IF NOT EXISTS Enums (
+    EnumId      INTEGER PRIMARY KEY AUTOINCREMENT,
+    Name        TEXT NOT NULL,
+    ModelId     INTEGER NOT NULL,
+    Label       TEXT,
+    FOREIGN KEY (ModelId) REFERENCES Models(ModelId)
+);
+CREATE INDEX IF NOT EXISTS IX_Enums_Name ON Enums(Name);
+
+CREATE TABLE IF NOT EXISTS EnumValues (
+    EnumValueId INTEGER PRIMARY KEY AUTOINCREMENT,
+    EnumId      INTEGER NOT NULL,
+    Name        TEXT NOT NULL,
+    Value       INTEGER,
+    Label       TEXT,
+    FOREIGN KEY (EnumId) REFERENCES Enums(EnumId) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS IX_EnumValues_EnumId ON EnumValues(EnumId);
 
 CREATE TABLE IF NOT EXISTS Labels (
     LabelId     INTEGER PRIMARY KEY AUTOINCREMENT,

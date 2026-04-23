@@ -4,6 +4,8 @@ using Spectre.Console.Cli;
 
 namespace D365FO.Cli.Commands.Ops;
 
+internal sealed record DoctorCheck(string Name, bool Ok, string? Detail);
+
 public sealed class DoctorCommand : Command<DoctorCommand.Settings>
 {
     public sealed class Settings : D365OutputSettings { }
@@ -12,37 +14,36 @@ public sealed class DoctorCommand : Command<DoctorCommand.Settings>
     {
         var kind = OutputMode.Resolve(settings.Output);
         var cfg = D365FoSettings.FromEnvironment();
-        var checks = new List<object>();
-        bool allOk = true;
+        var checks = new List<DoctorCheck>();
 
-        void Add(string name, bool ok, string? detail = null)
-        {
-            checks.Add(new { name, ok, detail });
-            if (!ok) allOk = false;
-        }
+        void Add(string name, bool ok, string? detail = null) => checks.Add(new DoctorCheck(name, ok, detail));
 
         Add("config.databasePath resolvable", !string.IsNullOrEmpty(cfg.DatabasePath), cfg.DatabasePath);
         Add("config.packagesPath set", !string.IsNullOrEmpty(cfg.PackagesPath),
             cfg.PackagesPath ?? "Set D365FO_PACKAGES_PATH or use --packages.");
+        Add("config.workspacePath set", !string.IsNullOrEmpty(cfg.WorkspacePath),
+            cfg.WorkspacePath ?? "Set D365FO_WORKSPACE_PATH to enable scaffold output.");
         Add("index db exists", File.Exists(cfg.DatabasePath),
             File.Exists(cfg.DatabasePath) ? null : "Run 'd365fo index build'.");
         Add("runtime", true, $".NET {Environment.Version} on {Environment.OSVersion.Platform}");
+        Add("platform.windows (build/sync/bp require it)",
+            OperatingSystem.IsWindows(),
+            OperatingSystem.IsWindows() ? null : "Non-Windows host: write-ops (build, sync, bp, test) are unavailable.");
 
-        var result = allOk
-            ? ToolResult<object>.Success(new { checks })
-            : ToolResult<object>.Fail("DOCTOR_FAILED", "One or more checks failed.", "See 'checks' array in --output json.") with
-            {
-                // keep failed payload visible:
-            };
-        // Re-wrap to keep data on failure too
-        var payload = ToolResult<object>.Success(new { ok = allOk, checks });
+        var allOk = checks.All(c => c.Ok);
+        var payload = allOk
+            ? ToolResult<object>.Success(new { allOk, checks })
+            : ToolResult<object>.Fail("DOCTOR_FAILED", "One or more checks failed.",
+                "Re-run with --output json and inspect 'error.hint' or 'data.checks'.");
 
-        return RenderHelpers.Render(kind, payload, _ =>
+        return RenderHelpers.Render(kind,
+            allOk ? payload : ToolResult<object>.Success(new { allOk, checks }), _ =>
         {
-            foreach (dynamic c in checks)
+            foreach (var c in checks)
             {
-                var ok = (bool)c.ok;
-                AnsiConsole.MarkupLine($"{(ok ? "[green]✓[/]" : "[red]✗[/]")} {c.name} {(c.detail is null ? "" : $"[grey]— {RenderHelpers.Escape((string)c.detail)}[/]")}");
+                var tick = c.Ok ? "[green]✓[/]" : "[red]✗[/]";
+                var detail = c.Detail is null ? "" : $" [grey]— {RenderHelpers.Escape(c.Detail)}[/]";
+                AnsiConsole.MarkupLine($"{tick} {RenderHelpers.Escape(c.Name)}{detail}");
             }
             AnsiConsole.MarkupLine(allOk ? "[green]All checks passed.[/]" : "[red]Some checks failed.[/]");
         });

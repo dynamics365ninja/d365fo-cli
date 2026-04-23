@@ -47,6 +47,12 @@ public sealed record EdtInfo(
     string? Label,
     int? StringSize);
 
+public sealed record EnumInfo(string Name, string Model, string? Label);
+
+public sealed record EnumValueInfo(string Name, long? Value, string? Label);
+
+public sealed record EnumDetails(EnumInfo Enum, IReadOnlyList<EnumValueInfo> Values);
+
 public sealed record LabelMatch(string File, string Language, string Key, string? Value);
 
 public sealed record MenuItemInfo(

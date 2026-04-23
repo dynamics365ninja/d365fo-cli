@@ -79,3 +79,66 @@ public sealed class SearchLabelCommand : Command<SearchLabelCommand.Settings>
         });
     }
 }
+
+public sealed class SearchTableCommand : Command<SearchTableCommand.Settings>
+{
+    public sealed class Settings : D365OutputSettings
+    {
+        [CommandArgument(0, "<QUERY>")]
+        public string Query { get; init; } = "";
+
+        [CommandOption("-m|--model <MODEL>")]
+        public string? Model { get; init; }
+
+        [CommandOption("-l|--limit <N>")]
+        public int Limit { get; init; } = 50;
+    }
+
+    public override int Execute(CommandContext ctx, Settings settings)
+    {
+        var kind = OutputMode.Resolve(settings.Output);
+        var repo = RepoFactory.Create();
+        var items = repo.SearchTables(settings.Query, settings.Model, settings.Limit);
+        return RenderHelpers.Render(kind, ToolResult<object>.Success(new { count = items.Count, items }));
+    }
+}
+
+public sealed class SearchEdtCommand : Command<SearchEdtCommand.Settings>
+{
+    public sealed class Settings : D365OutputSettings
+    {
+        [CommandArgument(0, "<QUERY>")]
+        public string Query { get; init; } = "";
+
+        [CommandOption("-l|--limit <N>")]
+        public int Limit { get; init; } = 50;
+    }
+
+    public override int Execute(CommandContext ctx, Settings settings)
+    {
+        var kind = OutputMode.Resolve(settings.Output);
+        var repo = RepoFactory.Create();
+        var items = repo.SearchEdts(settings.Query, settings.Limit);
+        return RenderHelpers.Render(kind, ToolResult<object>.Success(new { count = items.Count, items }));
+    }
+}
+
+public sealed class SearchEnumCommand : Command<SearchEnumCommand.Settings>
+{
+    public sealed class Settings : D365OutputSettings
+    {
+        [CommandArgument(0, "<QUERY>")]
+        public string Query { get; init; } = "";
+
+        [CommandOption("-l|--limit <N>")]
+        public int Limit { get; init; } = 50;
+    }
+
+    public override int Execute(CommandContext ctx, Settings settings)
+    {
+        var kind = OutputMode.Resolve(settings.Output);
+        var repo = RepoFactory.Create();
+        var items = repo.SearchEnums(settings.Query, settings.Limit);
+        return RenderHelpers.Render(kind, ToolResult<object>.Success(new { count = items.Count, items }));
+    }
+}

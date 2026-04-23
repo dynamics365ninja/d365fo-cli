@@ -135,3 +135,49 @@ public sealed class GetSecurityCommand : Command<GetSecurityCommand.Settings>
         return RenderHelpers.Render(kind, ToolResult<object>.Success(coverage));
     }
 }
+
+public sealed class GetEnumCommand : Command<GetEnumCommand.Settings>
+{
+    public sealed class Settings : D365OutputSettings
+    {
+        [CommandArgument(0, "<NAME>")]
+        public string Name { get; init; } = "";
+    }
+
+    public override int Execute(CommandContext ctx, Settings settings)
+    {
+        var kind = OutputMode.Resolve(settings.Output);
+        var repo = RepoFactory.Create();
+        var details = repo.GetEnum(settings.Name);
+        return RenderHelpers.Render(kind, details is null
+            ? ToolResult<object>.Fail("ENUM_NOT_FOUND", $"Enum '{settings.Name}' not found.")
+            : ToolResult<object>.Success(details));
+    }
+}
+
+public sealed class GetLabelCommand : Command<GetLabelCommand.Settings>
+{
+    public sealed class Settings : D365OutputSettings
+    {
+        [CommandArgument(0, "<FILE>")]
+        public string File { get; init; } = "";
+
+        [CommandArgument(1, "<KEY>")]
+        public string Key { get; init; } = "";
+
+        [CommandOption("--lang <LANG>")]
+        public string Language { get; init; } = "en-us";
+    }
+
+    public override int Execute(CommandContext ctx, Settings settings)
+    {
+        var kind = OutputMode.Resolve(settings.Output);
+        var repo = RepoFactory.Create();
+        var hit = repo.GetLabel(settings.File, settings.Language, settings.Key);
+        if (hit is null)
+            return RenderHelpers.Render(kind, ToolResult<object>.Fail("LABEL_NOT_FOUND", $"{settings.File}/{settings.Language}:{settings.Key} not found."));
+        if (!settings.RawText)
+            hit = hit with { Value = D365FO.Core.StringSanitizer.Sanitize(hit.Value) };
+        return RenderHelpers.Render(kind, ToolResult<object>.Success(hit));
+    }
+}

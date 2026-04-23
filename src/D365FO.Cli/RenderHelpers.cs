@@ -45,7 +45,8 @@ public static class RepoFactory
     public static MetadataRepository Create(string? databaseOverride = null)
     {
         var settings = D365FoSettings.FromEnvironment(databaseOverride);
-        Directory.CreateDirectory(Path.GetDirectoryName(settings.DatabasePath)!);
+        var dir = Path.GetDirectoryName(Path.GetFullPath(settings.DatabasePath));
+        if (!string.IsNullOrEmpty(dir)) Directory.CreateDirectory(dir);
         var repo = new MetadataRepository(settings.DatabasePath);
         repo.EnsureSchema();
         return repo;

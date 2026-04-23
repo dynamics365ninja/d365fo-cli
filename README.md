@@ -3,7 +3,7 @@
 > Structured CLI + Agent Skills for Dynamics 365 Finance & Operations.
 > Successor to [`d365fo-mcp-server`](https://github.com/dynamics365ninja/d365fo-mcp-server) — same metadata index, **much cheaper on tokens**, scriptable in PowerShell and CI/CD, agent-agnostic.
 
-Inspired by the CLI layout of [`seangalliher/D365-erp-cli`](https://github.com/seangalliher/D365-erp-cli) and the Agent Skills pattern introduced by Anthropic in October 2025. MCP stays available as a thin transport on top of the shared `D365FO.Core` — no drift, no migration cliff.
+Inspired by Agent Skills pattern introduced by Anthropic in October 2025. MCP stays available as a thin transport on top of the shared `D365FO.Core` — no drift, no migration cliff.
 
 ## Why CLI + Skills instead of MCP?
 
