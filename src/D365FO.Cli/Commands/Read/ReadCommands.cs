@@ -25,6 +25,14 @@ public abstract class ReadBaseCommand<TSettings> : Command<TSettings>
         [CommandOption("--declaration")]
         [System.ComponentModel.Description("Return only the top-level declaration block.")]
         public bool DeclarationOnly { get; init; }
+
+        [CommandOption("--lines <RANGE>")]
+        [System.ComponentModel.Description("Return only lines in the given 1-based inclusive range (e.g. 10-40). Requires --method.")]
+        public string? Lines { get; init; }
+
+        [CommandOption("--around <REGEX>")]
+        [System.ComponentModel.Description("Return only lines matching the regex plus 3 lines of context. Requires --method.")]
+        public string? Around { get; init; }
     }
 
     protected abstract (string? SourcePath, string Kind, string NotFoundCode) ResolveTarget(MetadataRepository repo, string name);
@@ -58,11 +66,41 @@ public abstract class ReadBaseCommand<TSettings> : Command<TSettings>
                         $"Method '{settings.Method}' not found on {objKind} '{settings.Name}'.",
                         $"Available methods: {string.Join(", ", src.Methods.Select(x => x.Name).Take(20))}"));
             }
+
+            var body = m.Body;
+            string? sliced = null;
+            if (!string.IsNullOrWhiteSpace(settings.Lines))
+            {
+                var parts = settings.Lines.Split('-', 2);
+                if (parts.Length == 2
+                    && int.TryParse(parts[0], out var from)
+                    && int.TryParse(parts[1], out var to))
+                {
+                    sliced = XppSourceReader.Slice(body, from, to);
+                }
+                else
+                {
+                    return RenderHelpers.Render(kind,
+                        ToolResult<object>.Fail("INVALID_RANGE",
+                            $"--lines expects FROM-TO (e.g. 10-40); got '{settings.Lines}'."));
+                }
+            }
+            else if (!string.IsNullOrWhiteSpace(settings.Around))
+            {
+                sliced = XppSourceReader.AroundPattern(body, settings.Around!, 3);
+            }
+
             return RenderHelpers.Render(kind, ToolResult<object>.Success(new
             {
                 kind = objKind, name = settings.Name, path = src.Path,
-                method = m.Name, source = m.Body
+                method = m.Name, source = sliced ?? body
             }));
+        }
+
+        if ((settings.Lines ?? settings.Around) is not null)
+        {
+            return RenderHelpers.Render(kind,
+                ToolResult<object>.Fail("INVALID_ARGS", "--lines / --around require --method."));
         }
 
         if (settings.DeclarationOnly)

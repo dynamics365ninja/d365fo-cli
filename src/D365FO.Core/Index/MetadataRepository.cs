@@ -161,14 +161,15 @@ public sealed class MetadataRepository
     {
         using var conn = Open();
         var like = $"%{query}%";
+        var langsLower = languages?.Select(l => l.ToLowerInvariant()).ToList();
         var sql = @"
             SELECT LabelFile AS File, Language, Key, Value
             FROM Labels
             WHERE (Value LIKE @like OR Key LIKE @like)
-              AND (@langs IS NULL OR Language IN @langs)
+              AND (@langs IS NULL OR LOWER(Language) IN @langs)
             ORDER BY LabelFile, Key
             LIMIT @limit";
-        return conn.Query<LabelMatch>(sql, new { like, langs = languages, limit }).ToList();
+        return conn.Query<LabelMatch>(sql, new { like, langs = langsLower, limit }).ToList();
     }
 
     public MenuItemInfo? GetMenuItem(string name)
@@ -554,7 +555,9 @@ public sealed class MetadataRepository
         return conn.QueryFirstOrDefault<LabelMatch>(@"
             SELECT LabelFile AS File, Language, Key, Value
             FROM Labels
-            WHERE LabelFile = @file AND Language = @lang AND Key = @key
+            WHERE LabelFile = @file COLLATE NOCASE
+              AND Language  = @lang COLLATE NOCASE
+              AND Key       = @key  COLLATE NOCASE
             LIMIT 1", new { file, lang = language, key });
     }
 
@@ -629,8 +632,43 @@ public sealed class MetadataRepository
         return rows.Select(r => (r.Kind, r.Name, r.Model)).ToList();
     }
 
-    // ---- writer API used by the extract pipeline ----
+    /// <summary>
+    /// Enumerate (Kind, Name, Model, SourcePath) tuples for artifacts whose
+    /// X++ source is worth scanning for reverse references. Filters to rows
+    /// that have a non-empty SourcePath. Used by <c>find refs</c>.
+    /// </summary>
+    public IReadOnlyList<(string Kind, string Name, string Model, string SourcePath)> EnumerateSourcePaths(string? modelFilter = null)
+    {
+        using var conn = Open();
+        var sql = @"
+            SELECT 'Class' AS Kind, c.Name AS Name, m.Name AS Model, c.SourcePath AS SourcePath
+              FROM Classes c JOIN Models m ON m.ModelId=c.ModelId
+             WHERE c.SourcePath IS NOT NULL AND c.SourcePath <> ''
+               AND (@model IS NULL OR m.Name = @model)
+            UNION ALL
+            SELECT 'Table', t.Name, m.Name, t.SourcePath
+              FROM Tables t JOIN Models m ON m.ModelId=t.ModelId
+             WHERE t.SourcePath IS NOT NULL AND t.SourcePath <> ''
+               AND (@model IS NULL OR m.Name = @model)
+            UNION ALL
+            SELECT 'Form', f.Name, m.Name, f.SourcePath
+              FROM Forms f JOIN Models m ON m.ModelId=f.ModelId
+             WHERE f.SourcePath IS NOT NULL AND f.SourcePath <> ''
+               AND (@model IS NULL OR m.Name = @model)";
+        return conn.Query<SourcePathRow>(sql, new { model = modelFilter })
+            .Select(r => (r.Kind, r.Name, r.Model, r.SourcePath))
+            .ToList();
+    }
 
+    private sealed class SourcePathRow
+    {
+        public string Kind { get; set; } = "";
+        public string Name { get; set; } = "";
+        public string Model { get; set; } = "";
+        public string SourcePath { get; set; } = "";
+    }
+
+    // ---- writer API used by the extract pipeline ----
     public long UpsertModel(string name, string? publisher, string? layer, bool isCustom)
     {
         using var conn = Open();

@@ -1,5 +1,6 @@
 <Solution>
   <Folder Name="/src/">
+    <Project Path="src/D365FO.Bridge/D365FO.Bridge.csproj" />
     <Project Path="src/D365FO.Cli/D365FO.Cli.csproj" />
     <Project Path="src/D365FO.Core/D365FO.Core.csproj" />
     <Project Path="src/D365FO.Mcp/D365FO.Mcp.csproj" />

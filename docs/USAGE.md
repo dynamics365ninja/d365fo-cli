@@ -96,7 +96,11 @@ All configuration is environment-variable driven so it plays well with `.env` fi
 | `D365FO_INDEX_DB` | optional | Path to the SQLite index. Default: `$LocalAppData/d365fo-cli/d365fo-index.sqlite` (macOS/Linux: `~/.local/share/d365fo-cli/…` via `Environment.SpecialFolder.LocalApplicationData`). |
 | `D365FO_WORKSPACE_PATH` | optional | Root of your X++ workspace (used by `review diff` defaults). |
 | `D365FO_CUSTOM_MODELS` | optional | CSV of model-name patterns to mark `IsCustom=true` in the index. Supports exact names (case-insensitive), `*` / `?` wildcards, and `!` negation. Examples: `Contoso`, `ISV*`, `ISV_*,!ISV_Sample`. |
-| `D365FO_LABEL_LANGUAGES` | optional | CSV of language codes to keep during label extraction. Default: `en-us`. |
+| `D365FO_LABEL_LANGUAGES` | optional | CSV of language codes to keep during label extraction. Also used by `--resolve-labels` (first language wins). Default: `en-us`. |
+| `D365FO_BRIDGE_ENABLED` | optional | Set to `1` / `true` to route read requests through the C# Metadata Bridge (net48 child process, Windows + D365FO VM only). Silently falls back to the SQLite index on non-Windows or if the bridge fails. |
+| `D365FO_BRIDGE_PATH` | optional | Path to `D365FO.Bridge.exe`. Defaults to `<cli-dir>/D365FO.Bridge.exe` or the sibling `src/D365FO.Bridge/...` during development. |
+| `D365FO_BIN_PATH` | optional | `PackagesLocalDirectory\bin` — used by the bridge to resolve Microsoft metadata assemblies at runtime. |
+| `D365FO_XREF_CONNECTIONSTRING` | optional | ADO.NET connection string for `DYNAMICSXREFDB`. Default: `Server=.;Database=DYNAMICSXREFDB;Integrated Security=true;Connection Timeout=5`. Used by `find refs --xref`. |
 
 Example:
 
@@ -182,15 +186,27 @@ d365fo find relations CustTable           # in- and outbound FK relations
 d365fo find usages CustPostInvoiceJob     # any index entity whose name contains the substring
 d365fo find extensions CustTable          # TableExtension / FormExtension / EdtExtension / EnumExtension
 d365fo find handlers CustTable            # event subscribers bound to a form/table/delegate
+d365fo find refs CustTable                # regex scan of indexed X++ source for reverse references
+d365fo find refs CustTable --kind class --model ApplicationSuite -l 50
+d365fo find refs CustTable --xref         # bridge-backed DYNAMICSXREFDB query (path/line/column/kind)
 
 d365fo resolve label @SYS12345 --lang en-US,cs
 d365fo read class CustTable_Extension --method validateWriteExt
-d365fo read table CustTable --method validateWrite
+d365fo read table CustTable --method validateWrite --lines 10-40
+d365fo read class SalesTableType --method insert --around "CustTable::"
 d365fo read form CustTableListPage --declaration
+
+# --resolve-labels works on every `get` command. Rewrites @File+Id tokens in
+# the response to `text [[@File12345]]`. Language is picked from
+# D365FO_LABEL_LANGUAGES (falls back to en-us).
+d365fo get table CustTable --resolve-labels
 
 d365fo models list
 d365fo models deps ApplicationSuite        # depends-on + depended-by
 ```
+
+> **Fuzzy hints:** `get class|table|edt|enum|form` on a misspelled name returns
+> a `*_NOT_FOUND` envelope with `hint: "Did you mean: …"` (Levenshtein ranked).
 
 ### Scaffold
 
@@ -209,6 +225,18 @@ d365fo generate coc CustTable --method update --method insert \
 
 d365fo generate simple-list FmVehicleListPage --table FmVehicle \
   --out src/MyModel/AxForm/FmVehicleListPage.xml
+
+# --install-to persists the artefact directly into a model via the bridge
+# (requires D365FO_BRIDGE_ENABLED=1 + D365FO_PACKAGES_PATH + D365FO_BIN_PATH).
+# The CLI resolves the model's on-disk folder and writes the scaffolded XML
+# to <modelFolder>/Ax<Kind>/<Name>.xml; pass --out as well to override.
+d365fo generate class    FmVehicleService --install-to FleetManagement
+d365fo generate table    FmVehicle --install-to FleetManagement \
+  --field VIN:VinEdt:mandatory
+d365fo generate coc      CustTable --method update --method insert \
+  --install-to FleetManagement
+d365fo generate simple-list FmVehicleListPage --table FmVehicle \
+  --install-to FleetManagement
 ```
 
 Scaffolding writes atomically (`.tmp` sibling + move) and keeps a `.bak` when `--overwrite` is used.

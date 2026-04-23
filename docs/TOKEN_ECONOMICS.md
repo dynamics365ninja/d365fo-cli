@@ -61,6 +61,15 @@ single call.
    `d365fo generate *` writes to `--out` and returns only a JSON summary on
    stdout. Skills instruct the agent to honour this.
 
+4. **Write operations and runtime-resolved unit reads.** These need D365FO's
+   own `IMetadataProvider` to produce XML that Visual Studio / MSBuild accept
+   and to return data that reflects ISV overlays. The upstream
+   `d365fo-mcp-server` routes those through a `D365MetadataBridge.exe`
+   (.NET 4.8) child process; doing the same from this CLI is tracked as item
+   **1.0** in [ROADMAP.md](ROADMAP.md). Until that lands the token-saving
+   comparison applies to scan-style tools only (search, find, label/CoC
+   analysis, security hierarchy), not to `generate`/`modify` paths.
+
 ## Benchmark recipe
 
 `scripts/measure-tokens.ps1` (follow-up) will:

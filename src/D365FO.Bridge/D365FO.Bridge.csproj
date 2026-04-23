@@ -1,0 +1,26 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <!--
+      Bridge is a .NET Framework 4.8 child process because D365FO's metadata
+      assemblies (Microsoft.Dynamics.AX.Metadata.*.dll) only ship for net48.
+      It is Windows-only and must only be started by D365FO.Core.BridgeClient.
+    -->
+    <TargetFramework>net48</TargetFramework>
+    <RootNamespace>D365FO.Bridge</RootNamespace>
+    <AssemblyName>D365FO.Bridge</AssemblyName>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+    <NoWarn>$(NoWarn);CS1591</NoWarn>
+    <Nullable>disable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <LangVersion>latest</LangVersion>
+    <!-- Do not fail CI on non-Windows SDKs; the exe is optional at runtime. -->
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="System.Text.Json" Version="8.0.5" />
+  </ItemGroup>
+
+</Project>

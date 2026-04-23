@@ -66,6 +66,7 @@ app.Configure(cfg =>
         b.AddCommand<FindUsagesCommand>("usages").WithDescription("Find index entities whose name contains a substring.");
         b.AddCommand<FindExtensionsCommand>("extensions").WithDescription("Find Table/Form/Edt/Enum extensions targeting an object.");
         b.AddCommand<FindHandlersCommand>("handlers").WithDescription("Find event handlers subscribed to a form/table/delegate.");
+        b.AddCommand<FindRefsCommand>("refs").WithDescription("Regex scan of indexed X++ source for reverse references to a symbol.");
     });
 
     cfg.AddBranch("resolve", b =>

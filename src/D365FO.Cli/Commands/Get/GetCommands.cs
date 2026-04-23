@@ -1,4 +1,5 @@
 using D365FO.Core;
+using D365FO.Core.Index;
 using Spectre.Console;
 using Spectre.Console.Cli;
 
@@ -19,14 +20,25 @@ public sealed class GetTableCommand : Command<GetTableCommand.Settings>
     public override int Execute(CommandContext ctx, Settings settings)
     {
         var kind = OutputMode.Resolve(settings.Output);
+
+        if (BridgeGate.ShouldTry())
+        {
+            var bridged = BridgeGate.TryReadTable(settings.Name);
+            if (bridged is not null)
+            {
+                return RenderHelpers.Render(kind, ToolResult<object>.Success(bridged));
+            }
+        }
+
         var repo = RepoFactory.Create();
         var details = repo.GetTableDetails(settings.Name);
 
         if (details is null)
         {
+            var hint = NameSuggester.HintFor(repo, NameSuggester.Kind.Table, settings.Name)
+                       ?? "Run 'd365fo index build' after extracting metadata.";
             return RenderHelpers.Render(kind,
-                ToolResult<object>.Fail("TABLE_NOT_FOUND", $"Table '{settings.Name}' not found in index.",
-                    "Run 'd365fo index build' after extracting metadata."));
+                ToolResult<object>.Fail("TABLE_NOT_FOUND", $"Table '{settings.Name}' not found in index.", hint));
         }
 
         var result = ToolResult<object>.Success(new
@@ -93,10 +105,19 @@ public sealed class GetEdtCommand : Command<GetEdtCommand.Settings>
     public override int Execute(CommandContext ctx, Settings settings)
     {
         var kind = OutputMode.Resolve(settings.Output);
+        if (BridgeGate.ShouldTry())
+        {
+            var bridged = BridgeGate.TryReadEdt(settings.Name);
+            if (bridged is not null)
+            {
+                return RenderHelpers.Render(kind, ToolResult<object>.Success(bridged));
+            }
+        }
         var repo = RepoFactory.Create();
         var edt = repo.GetEdt(settings.Name);
         var result = edt is null
-            ? ToolResult<object>.Fail("EDT_NOT_FOUND", $"EDT '{settings.Name}' not found.")
+            ? ToolResult<object>.Fail("EDT_NOT_FOUND", $"EDT '{settings.Name}' not found.",
+                NameSuggester.HintFor(repo, NameSuggester.Kind.Edt, settings.Name))
             : ToolResult<object>.Success(edt);
         return RenderHelpers.Render(kind, result);
     }
@@ -113,10 +134,26 @@ public sealed class GetClassCommand : Command<GetClassCommand.Settings>
     public override int Execute(CommandContext ctx, Settings settings)
     {
         var kind = OutputMode.Resolve(settings.Output);
+
+        // Bridge-primary path (opt-in via D365FO_BRIDGE_ENABLED=1).
+        // Silently falls back to the SQLite index when the bridge is missing,
+        // disabled, or returns NOT_IMPLEMENTED (POC stub). Errors from a
+        // running bridge are surfaced via --verbose only; the final result
+        // is still produced from the index so the user never sees a hole.
+        if (BridgeGate.ShouldTry())
+        {
+            var bridged = BridgeGate.TryReadClass(settings.Name);
+            if (bridged is not null)
+            {
+                return RenderHelpers.Render(kind, ToolResult<object>.Success(bridged));
+            }
+        }
+
         var repo = RepoFactory.Create();
         var details = repo.GetClassDetails(settings.Name);
         var result = details is null
-            ? ToolResult<object>.Fail("CLASS_NOT_FOUND", $"Class '{settings.Name}' not found.")
+            ? ToolResult<object>.Fail("CLASS_NOT_FOUND", $"Class '{settings.Name}' not found.",
+                NameSuggester.HintFor(repo, NameSuggester.Kind.Class, settings.Name))
             : ToolResult<object>.Success(details);
         return RenderHelpers.Render(kind, result);
     }
@@ -174,10 +211,19 @@ public sealed class GetEnumCommand : Command<GetEnumCommand.Settings>
     public override int Execute(CommandContext ctx, Settings settings)
     {
         var kind = OutputMode.Resolve(settings.Output);
+        if (BridgeGate.ShouldTry())
+        {
+            var bridged = BridgeGate.TryReadEnum(settings.Name);
+            if (bridged is not null)
+            {
+                return RenderHelpers.Render(kind, ToolResult<object>.Success(bridged));
+            }
+        }
         var repo = RepoFactory.Create();
         var details = repo.GetEnum(settings.Name);
         return RenderHelpers.Render(kind, details is null
-            ? ToolResult<object>.Fail("ENUM_NOT_FOUND", $"Enum '{settings.Name}' not found.")
+            ? ToolResult<object>.Fail("ENUM_NOT_FOUND", $"Enum '{settings.Name}' not found.",
+                NameSuggester.HintFor(repo, NameSuggester.Kind.Enum, settings.Name))
             : ToolResult<object>.Success(details));
     }
 }
@@ -186,11 +232,13 @@ public sealed class GetLabelCommand : Command<GetLabelCommand.Settings>
 {
     public sealed class Settings : D365OutputSettings
     {
-        [CommandArgument(0, "<FILE>")]
+        [CommandArgument(0, "<FILE_OR_KEY>")]
+        [System.ComponentModel.Description("Label file name (e.g. SYS) when <KEY> is given, otherwise the bare key / @File+Id token to look up across all files.")]
         public string File { get; init; } = "";
 
-        [CommandArgument(1, "<KEY>")]
-        public string Key { get; init; } = "";
+        [CommandArgument(1, "[KEY]")]
+        [System.ComponentModel.Description("Label key inside <FILE>. Omit to search every indexed file for <FILE_OR_KEY> as a key.")]
+        public string? Key { get; init; }
 
         [CommandOption("--lang <LANG>")]
         public string Language { get; init; } = "en-us";
@@ -200,6 +248,53 @@ public sealed class GetLabelCommand : Command<GetLabelCommand.Settings>
     {
         var kind = OutputMode.Resolve(settings.Output);
         var repo = RepoFactory.Create();
+
+        // Single-argument form: treat as either an @File+Id token or a bare
+        // key to look up across every indexed label file. Keeps muscle
+        // memory from `d365fo resolve label` working in the `get` tree.
+        if (string.IsNullOrWhiteSpace(settings.Key))
+        {
+            var needle = settings.File;
+            if (string.IsNullOrWhiteSpace(needle))
+            {
+                return RenderHelpers.Render(kind, ToolResult<object>.Fail(
+                    "BAD_INPUT", "Label key required.",
+                    "Pass `<FILE> <KEY>` or a single `@File+Id` / bare key argument."));
+            }
+
+            IReadOnlyList<D365FO.Core.Index.LabelMatch> hits;
+            IReadOnlyList<D365FO.Core.Index.LabelMatch> likeHits = Array.Empty<D365FO.Core.Index.LabelMatch>();
+            if (needle.StartsWith('@'))
+            {
+                hits = repo.ResolveLabel(needle, new[] { settings.Language });
+            }
+            else
+            {
+                // SearchLabels is case-insensitive on the LIKE side; keep a
+                // copy for the fallback hint and post-filter to exact Key
+                // (case-insensitive) for the primary answer so the result
+                // stays focused.
+                likeHits = repo.SearchLabels(needle, new[] { settings.Language });
+                hits = likeHits
+                    .Where(h => string.Equals(h.Key, needle, StringComparison.OrdinalIgnoreCase))
+                    .ToList();
+            }
+
+            if (hits.Count == 0)
+            {
+                var hint = likeHits.Count > 0
+                    ? $"No exact key match. `d365fo search label {needle}` returns {likeHits.Count} substring hit(s)."
+                    : $"Try `d365fo search label {needle}` for substring matches, or pass `@File+Id` / `<FILE> <KEY>`.";
+                return RenderHelpers.Render(kind, ToolResult<object>.Fail(
+                    "LABEL_NOT_FOUND", $"No label with key '{needle}' in language '{settings.Language}'.", hint));
+            }
+
+            var items = settings.RawText
+                ? hits
+                : hits.Select(h => h with { Value = D365FO.Core.StringSanitizer.Sanitize(h.Value) }).ToList();
+            return RenderHelpers.Render(kind, ToolResult<object>.Success(new { count = items.Count, items }));
+        }
+
         var hit = repo.GetLabel(settings.File, settings.Language, settings.Key);
         if (hit is null)
             return RenderHelpers.Render(kind, ToolResult<object>.Fail("LABEL_NOT_FOUND", $"{settings.File}/{settings.Language}:{settings.Key} not found."));
@@ -220,10 +315,19 @@ public sealed class GetFormCommand : Command<GetFormCommand.Settings>
     public override int Execute(CommandContext ctx, Settings settings)
     {
         var kind = OutputMode.Resolve(settings.Output);
+        if (BridgeGate.ShouldTry())
+        {
+            var bridged = BridgeGate.TryReadForm(settings.Name);
+            if (bridged is not null)
+            {
+                return RenderHelpers.Render(kind, ToolResult<object>.Success(bridged));
+            }
+        }
         var repo = RepoFactory.Create();
         var f = repo.GetForm(settings.Name);
         return RenderHelpers.Render(kind, f is null
-            ? ToolResult<object>.Fail("FORM_NOT_FOUND", $"Form '{settings.Name}' not found.")
+            ? ToolResult<object>.Fail("FORM_NOT_FOUND", $"Form '{settings.Name}' not found.",
+                NameSuggester.HintFor(repo, NameSuggester.Kind.Form, settings.Name))
             : ToolResult<object>.Success(f));
     }
 }
