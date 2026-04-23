@@ -10,11 +10,22 @@ If you already know the pitch, jump straight to [Install](#install).
 
 **Cross-platform (macOS / Linux / Windows)** — no D365 runtime required:
 
-- Index D365 F&O AOT XML metadata (`AxTable`, `AxClass`, `AxEdt`, `AxEnum`, `AxMenuItem*`, `AxLabelFile`) into a local SQLite cache.
-- Query the index: `search`, `get`, `find`.
+- Index D365 F&O AOT XML metadata into a local SQLite cache. Covered types:
+  `AxTable` (fields, relations, indexes, methods, delete actions), `AxClass`
+  (methods, attributes, Chain-of-Command detection, event subscribers),
+  `AxEdt`, `AxEnum`, `AxForm` (+ datasources, + extensions), `AxMenuItem*`,
+  `AxLabelFile` (multi-language), `AxQuery` / `AxQuerySimple`,
+  `AxView`, `AxDataEntityView` (OData entity/collection names),
+  `AxReport` / `AxReportSsrs`, `AxService`, `AxServiceGroup`, `AxWorkflowType`,
+  `AxSecurity{Role,Duty,Privilege}` plus a flattened `SecurityMap`, and per-model
+  Descriptor metadata (publisher, layer, module references).
+- Query the index: `search`, `get`, `find`, `resolve`, `read`, `models`.
 - Scaffold new AOT objects: `generate table|class|coc|simple-list`.
 - Review diffs against `git`: `review diff` (lint rules for AOT XML).
 - Serve as an MCP server (`d365fo-mcp`, JSON-RPC 2.0) or a warm-cache daemon (`d365fo daemon`).
+
+`*FormAdaptor` companion packages are automatically excluded during extraction
+(matches `d365fo-mcp-server` behavior — those folders hold no real AOT content).
 
 **Windows + D365FO VM required** (shells out to Microsoft tools):
 
@@ -31,7 +42,7 @@ Off-Windows these return a structured `UNSUPPORTED_PLATFORM` error envelope so a
 
 ### Prerequisites
 
-- .NET SDK 8 (LTS) — also builds on net10 preview while the project is pre-release.
+- .NET SDK 10 (the repo targets `net10.0`; `global.json` pins the exact SDK).
 - `git` (for `review diff`).
 - Python 3.8+ **or** PowerShell 7 (for regenerating skills — optional).
 
@@ -120,7 +131,7 @@ d365fo index extract
 d365fo index status
 ```
 
-`index extract` is **idempotent per model** — re-running replaces that model's rows, so it's safe to run in a watch script. Typical full extract takes seconds for a custom model, minutes for the full ApplicationSuite.
+`index extract` is **idempotent per model** — re-running replaces that model's rows, so it's safe to run in a watch script. Typical full extract takes seconds for a custom model, minutes for the full ApplicationSuite. XML parsing inside a model is parallelized across files (`Parallel.ForEach` at degree = CPU count). `*FormAdaptor` packages are skipped automatically.
 
 ---
 
@@ -141,18 +152,44 @@ d365fo search table Sales --limit 20
 d365fo search edt AccountNum
 d365fo search enum NoYes
 d365fo search label "Invoice"     # sanitised by default; pass --raw-text to opt out
+d365fo search query CustTransQ
+d365fo search view CustView
+d365fo search entity Customers    # matches Name, PublicEntityName or PublicCollectionName
+d365fo search report FreeTextInvoice
+d365fo search service CustomerService
+d365fo search workflow Purchase
 
-d365fo get table CustTable
+d365fo get table CustTable            # fields + relations + indexes + methods + delete actions
 d365fo get class SalesLine
 d365fo get edt CustAccount
 d365fo get enum NoYes
 d365fo get menu-item CustTable
 d365fo get security CustTable --type Table
 d365fo get label SysLabel VendorAccount --lang en-us
+d365fo get form CustTableListPage
+d365fo get role SystemAdministrator   # duties + privileges + entry points
+d365fo get duty CustInvoiceMaintain
+d365fo get privilege CustInvoiceView
+d365fo get query CustTransQ
+d365fo get view CustView
+d365fo get entity Customers           # accepts OData PublicEntityName too
+d365fo get report FreeTextInvoice
+d365fo get service CustomerService
+d365fo get service-group AifCustomerServices
 
 d365fo find coc CustTable                 # CoC extensions targeting CustTable
 d365fo find relations CustTable           # in- and outbound FK relations
 d365fo find usages CustPostInvoiceJob     # any index entity whose name contains the substring
+d365fo find extensions CustTable          # TableExtension / FormExtension / EdtExtension / EnumExtension
+d365fo find handlers CustTable            # event subscribers bound to a form/table/delegate
+
+d365fo resolve label @SYS12345 --lang en-US,cs
+d365fo read class CustTable_Extension --method validateWriteExt
+d365fo read table CustTable --method validateWrite
+d365fo read form CustTableListPage --declaration
+
+d365fo models list
+d365fo models deps ApplicationSuite        # depends-on + depended-by
 ```
 
 ### Scaffold
@@ -257,7 +294,7 @@ Real JSON-RPC 2.0 MCP server (protocol `2024-11-05`) published as its own execut
 
 After `dotnet publish src/D365FO.Mcp -c Release -r osx-arm64` you get a standalone `d365fo-mcp` binary you can drop on `$PATH` and reference directly.
 
-Supported methods: `initialize`, `ping`, `tools/list`, `tools/call`. 16 tools are exposed (search/get/find/index_status — same surface as the CLI read commands).
+Supported methods: `initialize`, `ping`, `tools/list`, `tools/call`. The adapter currently exposes 16 read tools (search/get/find/index_status — a focused subset of the CLI surface). The CLI itself has the full command set (`models`, `resolve`, `read`, extended `search`/`get`/`find`) — see `d365fo --help` or the [roadmap](ROADMAP.md) for items still missing from the MCP adapter.
 
 ### Daemon (warm cache)
 
@@ -314,3 +351,4 @@ Example GitHub Actions step:
 - Architecture and guardrails — [docs/ARCHITECTURE.md](ARCHITECTURE.md)
 - Why CLI+Skills vs. MCP — [docs/TOKEN_ECONOMICS.md](TOKEN_ECONOMICS.md)
 - Coming from the original MCP server — [docs/MIGRATION_FROM_MCP.md](MIGRATION_FROM_MCP.md)
+- Planned work and deferred items — [docs/ROADMAP.md](ROADMAP.md)

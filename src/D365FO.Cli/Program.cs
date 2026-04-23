@@ -4,7 +4,10 @@ using D365FO.Cli.Commands.Find;
 using D365FO.Cli.Commands.Generate;
 using D365FO.Cli.Commands.Get;
 using D365FO.Cli.Commands.Index;
+using D365FO.Cli.Commands.Models;
 using D365FO.Cli.Commands.Ops;
+using D365FO.Cli.Commands.Read;
+using D365FO.Cli.Commands.Resolve;
 using D365FO.Cli.Commands.Review;
 using D365FO.Cli.Commands.Search;
 using Spectre.Console.Cli;
@@ -25,6 +28,12 @@ app.Configure(cfg =>
         b.AddCommand<SearchEdtCommand>("edt").WithDescription("Find Extended Data Types.");
         b.AddCommand<SearchEnumCommand>("enum").WithDescription("Find base enums.");
         b.AddCommand<SearchLabelCommand>("label").WithDescription("Search label file entries.");
+        b.AddCommand<SearchQueryCommand>("query").WithDescription("Find AOT queries.");
+        b.AddCommand<SearchViewCommand>("view").WithDescription("Find AOT views.");
+        b.AddCommand<SearchEntityCommand>("entity").WithDescription("Find data entities (by name or OData entity/collection).");
+        b.AddCommand<SearchReportCommand>("report").WithDescription("Find SSRS / RDL reports.");
+        b.AddCommand<SearchServiceCommand>("service").WithDescription("Find SOAP services.");
+        b.AddCommand<SearchWorkflowCommand>("workflow").WithDescription("Find workflow types.");
     });
 
     cfg.AddBranch("get", b =>
@@ -37,6 +46,16 @@ app.Configure(cfg =>
         b.AddCommand<GetMenuItemCommand>("menu-item").WithDescription("Menu item -> object mapping.");
         b.AddCommand<GetSecurityCommand>("security").WithDescription("Role/Duty/Privilege coverage.");
         b.AddCommand<GetLabelCommand>("label").WithDescription("Resolve a single label entry.");
+        b.AddCommand<GetFormCommand>("form").WithDescription("Form metadata: datasources.");
+        b.AddCommand<GetRoleCommand>("role").WithDescription("Security role: duties + privileges.");
+        b.AddCommand<GetDutyCommand>("duty").WithDescription("Security duty: privileges.");
+        b.AddCommand<GetPrivilegeCommand>("privilege").WithDescription("Security privilege: entry points.");
+        b.AddCommand<GetQueryCommand>("query").WithDescription("AOT query: datasources + joins.");
+        b.AddCommand<GetViewCommand>("view").WithDescription("AOT view: fields mapped to datasource.field.");
+        b.AddCommand<GetEntityCommand>("entity").WithDescription("Data entity: fields + OData names.");
+        b.AddCommand<GetReportCommand>("report").WithDescription("Report: datasets + queries/RDP.");
+        b.AddCommand<GetServiceCommand>("service").WithDescription("SOAP service: operations.");
+        b.AddCommand<GetServiceGroupCommand>("service-group").WithDescription("Service group: members.");
     });
 
     cfg.AddBranch("find", b =>
@@ -45,6 +64,22 @@ app.Configure(cfg =>
         b.AddCommand<FindCocCommand>("coc").WithDescription("Find Chain-of-Command extensions.");
         b.AddCommand<FindRelationsCommand>("relations").WithDescription("Find table relations.");
         b.AddCommand<FindUsagesCommand>("usages").WithDescription("Find index entities whose name contains a substring.");
+        b.AddCommand<FindExtensionsCommand>("extensions").WithDescription("Find Table/Form/Edt/Enum extensions targeting an object.");
+        b.AddCommand<FindHandlersCommand>("handlers").WithDescription("Find event handlers subscribed to a form/table/delegate.");
+    });
+
+    cfg.AddBranch("resolve", b =>
+    {
+        b.SetDescription("Resolve tokens (labels etc.) to their concrete values.");
+        b.AddCommand<ResolveLabelCommand>("label").WithDescription("Resolve @SYS12345-style label token to its text.");
+    });
+
+    cfg.AddBranch("read", b =>
+    {
+        b.SetDescription("Read X++ source embedded in AOT XML.");
+        b.AddCommand<ReadClassCommand>("class").WithDescription("Read source of an AxClass (optionally a single method).");
+        b.AddCommand<ReadTableCommand>("table").WithDescription("Read source of an AxTable's methods.");
+        b.AddCommand<ReadFormCommand>("form").WithDescription("Read source of an AxForm's methods.");
     });
 
     cfg.AddBranch("index", b =>
@@ -53,6 +88,13 @@ app.Configure(cfg =>
         b.AddCommand<IndexBuildCommand>("build").WithDescription("Create/ensure index database.");
         b.AddCommand<IndexStatusCommand>("status").WithDescription("Report index health.");
         b.AddCommand<IndexExtractCommand>("extract").WithDescription("Walk PACKAGES_PATH and ingest AOT metadata.");
+    });
+
+    cfg.AddBranch("models", b =>
+    {
+        b.SetDescription("Inspect indexed models and their descriptor-declared dependencies.");
+        b.AddCommand<ModelsListCommand>("list").WithDescription("List indexed models (name/publisher/layer/custom).");
+        b.AddCommand<ModelsDepsCommand>("deps").WithDescription("Show dependency graph for a model (depends-on / depended-by).");
     });
 
     cfg.AddBranch("generate", b =>

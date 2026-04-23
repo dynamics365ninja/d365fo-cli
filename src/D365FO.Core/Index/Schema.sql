@@ -155,3 +155,282 @@ CREATE TABLE IF NOT EXISTS SecurityMap (
     ObjectType  TEXT
 );
 CREATE INDEX IF NOT EXISTS IX_Sec_Object ON SecurityMap(ObjectName, ObjectType);
+
+-- v3 additions -----------------------------------------------------------
+
+CREATE TABLE IF NOT EXISTS TableMethods (
+    Id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    TableId         INTEGER NOT NULL,
+    Name            TEXT NOT NULL,
+    Signature       TEXT,
+    IsStatic        INTEGER NOT NULL DEFAULT 0,
+    ReturnType      TEXT,
+    FOREIGN KEY (TableId) REFERENCES Tables(TableId) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS IX_TableMethods_TableId ON TableMethods(TableId, Name);
+
+CREATE TABLE IF NOT EXISTS TableIndexes (
+    Id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    TableId         INTEGER NOT NULL,
+    Name            TEXT NOT NULL,
+    AllowDuplicates INTEGER NOT NULL DEFAULT 1,
+    AlternateKey    INTEGER NOT NULL DEFAULT 0,
+    FieldsCsv       TEXT,
+    FOREIGN KEY (TableId) REFERENCES Tables(TableId) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS TableDeleteActions (
+    Id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    TableId         INTEGER NOT NULL,
+    Name            TEXT,
+    RelatedTable    TEXT NOT NULL,
+    DeleteAction    TEXT,
+    FOREIGN KEY (TableId) REFERENCES Tables(TableId) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS Forms (
+    FormId      INTEGER PRIMARY KEY AUTOINCREMENT,
+    Name        TEXT NOT NULL,
+    ModelId     INTEGER NOT NULL,
+    SourcePath  TEXT,
+    FOREIGN KEY (ModelId) REFERENCES Models(ModelId)
+);
+CREATE INDEX IF NOT EXISTS IX_Forms_Name ON Forms(Name);
+
+CREATE TABLE IF NOT EXISTS FormDataSources (
+    Id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    FormId      INTEGER NOT NULL,
+    Name        TEXT NOT NULL,
+    TableName   TEXT,
+    FOREIGN KEY (FormId) REFERENCES Forms(FormId) ON DELETE CASCADE
+);
+
+-- Generic object extensions (TableExtension / FormExtension / EdtExtension /
+-- EnumExtension / ViewExtension / MapExtension). Lets callers query
+-- "which extensions touch CustTable?" regardless of artifact kind.
+CREATE TABLE IF NOT EXISTS ObjectExtensions (
+    Id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    Kind            TEXT NOT NULL,    -- Table/Form/Edt/Enum/View/Map
+    TargetName      TEXT NOT NULL,
+    ExtensionName   TEXT NOT NULL,
+    ModelId         INTEGER NOT NULL,
+    SourcePath      TEXT,
+    FOREIGN KEY (ModelId) REFERENCES Models(ModelId)
+);
+CREATE INDEX IF NOT EXISTS IX_ObjExt_Target ON ObjectExtensions(Kind, TargetName);
+
+CREATE TABLE IF NOT EXISTS ClassAttributes (
+    Id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    ClassId         INTEGER NOT NULL,
+    MethodName      TEXT,         -- NULL = on the class itself
+    AttributeName   TEXT NOT NULL,
+    RawArgs         TEXT,
+    FOREIGN KEY (ClassId) REFERENCES Classes(ClassId) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS IX_ClsAttr_Name ON ClassAttributes(AttributeName);
+
+CREATE TABLE IF NOT EXISTS EventSubscribers (
+    Id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+    SubscriberClass     TEXT NOT NULL,
+    SubscriberMethod    TEXT NOT NULL,
+    SourceKind          TEXT NOT NULL,    -- Form/FormDataSource/FormControl/Table/DataEvent/Delegate
+    SourceObject        TEXT NOT NULL,    -- form/table/class name
+    SourceMember        TEXT,             -- datasource / control / delegate method
+    EventType           TEXT,             -- Initialized / Clicked / Inserting / ...
+    ModelId             INTEGER NOT NULL,
+    FOREIGN KEY (ModelId) REFERENCES Models(ModelId)
+);
+CREATE INDEX IF NOT EXISTS IX_EvtSub_Source ON EventSubscribers(SourceKind, SourceObject);
+
+CREATE TABLE IF NOT EXISTS SecurityDuties (
+    DutyId      INTEGER PRIMARY KEY AUTOINCREMENT,
+    Name        TEXT NOT NULL,
+    Label       TEXT,
+    ModelId     INTEGER NOT NULL,
+    FOREIGN KEY (ModelId) REFERENCES Models(ModelId)
+);
+CREATE INDEX IF NOT EXISTS IX_SecDuty_Name ON SecurityDuties(Name);
+
+CREATE TABLE IF NOT EXISTS SecurityPrivileges (
+    PrivilegeId INTEGER PRIMARY KEY AUTOINCREMENT,
+    Name        TEXT NOT NULL,
+    Label       TEXT,
+    ModelId     INTEGER NOT NULL,
+    FOREIGN KEY (ModelId) REFERENCES Models(ModelId)
+);
+CREATE INDEX IF NOT EXISTS IX_SecPriv_Name ON SecurityPrivileges(Name);
+
+CREATE TABLE IF NOT EXISTS SecurityRoleDuties (
+    Role    TEXT NOT NULL,
+    Duty    TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS IX_SecRoleDuty ON SecurityRoleDuties(Role);
+
+CREATE TABLE IF NOT EXISTS SecurityDutyPrivileges (
+    Duty        TEXT NOT NULL,
+    Privilege   TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS IX_SecDutyPriv ON SecurityDutyPrivileges(Duty);
+
+CREATE TABLE IF NOT EXISTS SecurityRolePrivileges (
+    Role        TEXT NOT NULL,
+    Privilege   TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS IX_SecRolePriv ON SecurityRolePrivileges(Role);
+
+CREATE TABLE IF NOT EXISTS SecurityPrivilegeEntryPoints (
+    Id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    Privilege       TEXT NOT NULL,
+    ObjectName      TEXT NOT NULL,
+    ObjectType      TEXT,
+    ObjectChild     TEXT,
+    AccessLevel     TEXT
+);
+CREATE INDEX IF NOT EXISTS IX_SecPrivEP_Priv ON SecurityPrivilegeEntryPoints(Privilege);
+CREATE INDEX IF NOT EXISTS IX_SecPrivEP_Obj  ON SecurityPrivilegeEntryPoints(ObjectName, ObjectType);
+
+-- v4 additions -----------------------------------------------------------
+
+CREATE TABLE IF NOT EXISTS Queries (
+    QueryId     INTEGER PRIMARY KEY AUTOINCREMENT,
+    Name        TEXT NOT NULL,
+    ModelId     INTEGER NOT NULL,
+    SourcePath  TEXT,
+    FOREIGN KEY (ModelId) REFERENCES Models(ModelId)
+);
+CREATE INDEX IF NOT EXISTS IX_Queries_Name ON Queries(Name);
+
+CREATE TABLE IF NOT EXISTS QueryDataSources (
+    Id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    QueryId     INTEGER NOT NULL,
+    Name        TEXT NOT NULL,
+    TableName   TEXT,
+    JoinMode    TEXT,
+    ParentDs    TEXT,
+    FOREIGN KEY (QueryId) REFERENCES Queries(QueryId) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS IX_QueryDs_QueryId ON QueryDataSources(QueryId);
+
+CREATE TABLE IF NOT EXISTS Views (
+    ViewId      INTEGER PRIMARY KEY AUTOINCREMENT,
+    Name        TEXT NOT NULL,
+    ModelId     INTEGER NOT NULL,
+    Label       TEXT,
+    QueryName   TEXT,
+    SourcePath  TEXT,
+    FOREIGN KEY (ModelId) REFERENCES Models(ModelId)
+);
+CREATE INDEX IF NOT EXISTS IX_Views_Name ON Views(Name);
+
+CREATE TABLE IF NOT EXISTS ViewFields (
+    Id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    ViewId      INTEGER NOT NULL,
+    Name        TEXT NOT NULL,
+    DataSource  TEXT,
+    DataField   TEXT,
+    FOREIGN KEY (ViewId) REFERENCES Views(ViewId) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS DataEntities (
+    EntityId        INTEGER PRIMARY KEY AUTOINCREMENT,
+    Name            TEXT NOT NULL,
+    ModelId         INTEGER NOT NULL,
+    PublicEntityName TEXT,
+    PublicCollectionName TEXT,
+    StagingTable    TEXT,
+    QueryName       TEXT,
+    Label           TEXT,
+    SourcePath      TEXT,
+    FOREIGN KEY (ModelId) REFERENCES Models(ModelId)
+);
+CREATE INDEX IF NOT EXISTS IX_DataEntities_Name ON DataEntities(Name);
+CREATE INDEX IF NOT EXISTS IX_DataEntities_Public ON DataEntities(PublicEntityName);
+
+CREATE TABLE IF NOT EXISTS DataEntityFields (
+    Id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    EntityId        INTEGER NOT NULL,
+    Name            TEXT NOT NULL,
+    DataSource      TEXT,
+    DataField       TEXT,
+    IsMandatory     INTEGER NOT NULL DEFAULT 0,
+    IsReadOnly      INTEGER NOT NULL DEFAULT 0,
+    FOREIGN KEY (EntityId) REFERENCES DataEntities(EntityId) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS Reports (
+    ReportId    INTEGER PRIMARY KEY AUTOINCREMENT,
+    Name        TEXT NOT NULL,
+    Kind        TEXT,        -- Ssrs / Rdl / Legacy
+    ModelId     INTEGER NOT NULL,
+    SourcePath  TEXT,
+    FOREIGN KEY (ModelId) REFERENCES Models(ModelId)
+);
+CREATE INDEX IF NOT EXISTS IX_Reports_Name ON Reports(Name);
+
+CREATE TABLE IF NOT EXISTS ReportDataSets (
+    Id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    ReportId    INTEGER NOT NULL,
+    Name        TEXT NOT NULL,
+    Kind        TEXT,        -- Query / ReportDataProvider / BusinessLogic
+    QueryOrClass TEXT,
+    FOREIGN KEY (ReportId) REFERENCES Reports(ReportId) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS Services (
+    ServiceId   INTEGER PRIMARY KEY AUTOINCREMENT,
+    Name        TEXT NOT NULL,
+    Class       TEXT,
+    ModelId     INTEGER NOT NULL,
+    SourcePath  TEXT,
+    FOREIGN KEY (ModelId) REFERENCES Models(ModelId)
+);
+CREATE INDEX IF NOT EXISTS IX_Services_Name ON Services(Name);
+
+CREATE TABLE IF NOT EXISTS ServiceOperations (
+    Id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    ServiceId   INTEGER NOT NULL,
+    OperationName TEXT NOT NULL,
+    MethodName  TEXT,
+    FOREIGN KEY (ServiceId) REFERENCES Services(ServiceId) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS ServiceGroups (
+    GroupId     INTEGER PRIMARY KEY AUTOINCREMENT,
+    Name        TEXT NOT NULL,
+    ModelId     INTEGER NOT NULL,
+    SourcePath  TEXT,
+    FOREIGN KEY (ModelId) REFERENCES Models(ModelId)
+);
+CREATE INDEX IF NOT EXISTS IX_ServiceGroups_Name ON ServiceGroups(Name);
+
+CREATE TABLE IF NOT EXISTS ServiceGroupMembers (
+    Id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    GroupId     INTEGER NOT NULL,
+    ServiceName TEXT NOT NULL,
+    FOREIGN KEY (GroupId) REFERENCES ServiceGroups(GroupId) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS WorkflowTypes (
+    Id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    Name        TEXT NOT NULL,
+    Category    TEXT,        -- Approval / Task / Hierarchy
+    DocumentClass TEXT,
+    ModelId     INTEGER NOT NULL,
+    SourcePath  TEXT,
+    FOREIGN KEY (ModelId) REFERENCES Models(ModelId)
+);
+CREATE INDEX IF NOT EXISTS IX_WorkflowTypes_Name ON WorkflowTypes(Name);
+
+-- Model-to-model references parsed from Descriptor/*.xml. One row per
+-- referenced module; Target is the raw module name as it appears in the
+-- descriptor (it may or may not match an indexed Models.Name, e.g. when the
+-- reference is to a Microsoft package not present in this extraction).
+CREATE TABLE IF NOT EXISTS ModelDependencies (
+    Id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    ModelId     INTEGER NOT NULL,
+    Target      TEXT NOT NULL,
+    FOREIGN KEY (ModelId) REFERENCES Models(ModelId)
+);
+CREATE INDEX IF NOT EXISTS IX_ModelDependencies_Model ON ModelDependencies(ModelId);
+CREATE INDEX IF NOT EXISTS IX_ModelDependencies_Target ON ModelDependencies(Target);
+

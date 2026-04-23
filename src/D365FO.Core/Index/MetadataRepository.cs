@@ -14,7 +14,7 @@ namespace D365FO.Core.Index;
 public sealed class MetadataRepository
 {
     /// <summary>Current schema version tracked in PRAGMA user_version.</summary>
-    public const int CurrentSchemaVersion = 2;
+    public const int CurrentSchemaVersion = 5;
 
     private static readonly Lazy<string> SchemaSql = new(LoadEmbeddedSchema);
 
@@ -117,7 +117,22 @@ public sealed class MetadataRepository
             FROM Relations WHERE FromTable = @n OR ToTable = @n",
             new { n = name }).ToList();
 
-        return new TableDetails(table, fields, relations);
+        var methods = conn.Query<TableMethodInfo>(@"
+            SELECT Name, Signature, ReturnType, IsStatic
+            FROM TableMethods WHERE TableId = @id ORDER BY Name",
+            new { id = table.TableId }).ToList();
+
+        var indexes = conn.Query<TableIndexInfo>(@"
+            SELECT Name, AllowDuplicates, AlternateKey, FieldsCsv
+            FROM TableIndexes WHERE TableId = @id ORDER BY Name",
+            new { id = table.TableId }).ToList();
+
+        var deleteActions = conn.Query<TableDeleteActionInfo>(@"
+            SELECT Name, RelatedTable, DeleteAction
+            FROM TableDeleteActions WHERE TableId = @id ORDER BY RelatedTable",
+            new { id = table.TableId }).ToList();
+
+        return new TableDetails(table, fields, relations, methods, indexes, deleteActions);
     }
 
     public EdtInfo? GetEdt(string name)
@@ -184,6 +199,295 @@ public sealed class MetadataRepository
             ORDER BY Role, Duty, Privilege",
             new { n = objectName, t = objectType }).ToList();
         return new SecurityCoverage(objectName, objectType, routes);
+    }
+
+    public IReadOnlyList<ObjectExtensionInfo> FindExtensions(string targetName, string? kind = null)
+    {
+        using var conn = Open();
+        return conn.Query<ObjectExtensionInfo>(@"
+            SELECT e.Kind, e.TargetName, e.ExtensionName, m.Name AS Model, e.SourcePath
+            FROM ObjectExtensions e JOIN Models m ON m.ModelId = e.ModelId
+            WHERE e.TargetName = @t AND (@k IS NULL OR e.Kind = @k)
+            ORDER BY e.Kind, e.ExtensionName",
+            new { t = targetName, k = kind }).ToList();
+    }
+
+    public IReadOnlyList<EventSubscriberInfo> FindEventSubscribers(string sourceObject, string? sourceKind = null)
+    {
+        using var conn = Open();
+        return conn.Query<EventSubscriberInfo>(@"
+            SELECT s.SubscriberClass, s.SubscriberMethod, s.SourceKind, s.SourceObject,
+                   s.SourceMember, s.EventType, m.Name AS Model
+            FROM EventSubscribers s JOIN Models m ON m.ModelId = s.ModelId
+            WHERE s.SourceObject = @o
+              AND (@k IS NULL OR s.SourceKind = @k)
+            ORDER BY s.SourceKind, s.SubscriberClass, s.SubscriberMethod",
+            new { o = sourceObject, k = sourceKind }).ToList();
+    }
+
+    public FormDetails? GetForm(string name)
+    {
+        using var conn = Open();
+        var form = conn.QueryFirstOrDefault<FormInfo>(@"
+            SELECT f.FormId, f.Name, m.Name AS Model, f.SourcePath
+            FROM Forms f JOIN Models m ON m.ModelId = f.ModelId
+            WHERE f.Name = @n LIMIT 1", new { n = name });
+        if (form is null) return null;
+        var ds = conn.Query<FormDataSourceInfo>(@"
+            SELECT Name, TableName FROM FormDataSources WHERE FormId = @id",
+            new { id = form.FormId }).ToList();
+        return new FormDetails(form, ds);
+    }
+
+    public SecurityRoleDetails? GetSecurityRole(string name)
+    {
+        using var conn = Open();
+        var header = conn.QueryFirstOrDefault<(string Name, string? Label, string Model)>(@"
+            SELECT r.Name, r.Label, m.Name AS Model
+            FROM SecurityRoles r JOIN Models m ON m.ModelId = r.ModelId
+            WHERE r.Name = @n LIMIT 1", new { n = name });
+        if (header.Name is null) return null;
+        var duties = conn.Query<string>("SELECT Duty FROM SecurityRoleDuties WHERE Role=@r ORDER BY Duty", new { r = name }).ToList();
+        var privs = conn.Query<string>("SELECT Privilege FROM SecurityRolePrivileges WHERE Role=@r ORDER BY Privilege", new { r = name }).ToList();
+        return new SecurityRoleDetails(header.Name, header.Label, header.Model, duties, privs);
+    }
+
+    public SecurityDutyDetails? GetSecurityDuty(string name)
+    {
+        using var conn = Open();
+        var header = conn.QueryFirstOrDefault<(string Name, string? Label, string Model)>(@"
+            SELECT d.Name, d.Label, m.Name AS Model
+            FROM SecurityDuties d JOIN Models m ON m.ModelId = d.ModelId
+            WHERE d.Name = @n LIMIT 1", new { n = name });
+        if (header.Name is null) return null;
+        var privs = conn.Query<string>("SELECT Privilege FROM SecurityDutyPrivileges WHERE Duty=@d ORDER BY Privilege", new { d = name }).ToList();
+        return new SecurityDutyDetails(header.Name, header.Label, header.Model, privs);
+    }
+
+    public SecurityPrivilegeDetails? GetSecurityPrivilege(string name)
+    {
+        using var conn = Open();
+        var header = conn.QueryFirstOrDefault<(string Name, string? Label, string Model)>(@"
+            SELECT p.Name, p.Label, m.Name AS Model
+            FROM SecurityPrivileges p JOIN Models m ON m.ModelId = p.ModelId
+            WHERE p.Name = @n LIMIT 1", new { n = name });
+        if (header.Name is null) return null;
+        var eps = conn.Query<SecurityEntryPointInfo>(@"
+            SELECT ObjectName, ObjectType, ObjectChild, AccessLevel
+            FROM SecurityPrivilegeEntryPoints WHERE Privilege = @p ORDER BY ObjectName",
+            new { p = name }).ToList();
+        return new SecurityPrivilegeDetails(header.Name, header.Label, header.Model, eps);
+    }
+
+    public IReadOnlyList<TableMethodInfo> GetTableMethods(string table)
+    {
+        using var conn = Open();
+        return conn.Query<TableMethodInfo>(@"
+            SELECT tm.Name, tm.Signature, tm.ReturnType, tm.IsStatic
+            FROM TableMethods tm
+            JOIN Tables t ON t.TableId = tm.TableId
+            WHERE t.Name = @n ORDER BY tm.Name", new { n = table }).ToList();
+    }
+
+    public IReadOnlyList<TableIndexInfo> GetTableIndexes(string table)
+    {
+        using var conn = Open();
+        return conn.Query<TableIndexInfo>(@"
+            SELECT ti.Name, ti.AllowDuplicates, ti.AlternateKey, ti.FieldsCsv
+            FROM TableIndexes ti
+            JOIN Tables t ON t.TableId = ti.TableId
+            WHERE t.Name = @n ORDER BY ti.Name", new { n = table }).ToList();
+    }
+
+    public IReadOnlyList<TableDeleteActionInfo> GetTableDeleteActions(string table)
+    {
+        using var conn = Open();
+        return conn.Query<TableDeleteActionInfo>(@"
+            SELECT da.Name, da.RelatedTable, da.DeleteAction
+            FROM TableDeleteActions da
+            JOIN Tables t ON t.TableId = da.TableId
+            WHERE t.Name = @n ORDER BY da.RelatedTable", new { n = table }).ToList();
+    }
+
+    // ---- v4: queries / views / data entities / reports / services / workflow ----
+
+    public IReadOnlyList<QueryInfo> SearchQueries(string query, int limit = 50)
+    {
+        using var conn = Open();
+        var like = $"%{query}%";
+        return conn.Query<QueryInfo>(@"
+            SELECT q.QueryId, q.Name, m.Name AS Model, q.SourcePath
+            FROM Queries q JOIN Models m ON m.ModelId = q.ModelId
+            WHERE q.Name LIKE @like ORDER BY q.Name LIMIT @limit",
+            new { like, limit }).ToList();
+    }
+
+    public QueryDetails? GetQuery(string name)
+    {
+        using var conn = Open();
+        var q = conn.QueryFirstOrDefault<QueryInfo>(@"
+            SELECT q.QueryId, q.Name, m.Name AS Model, q.SourcePath
+            FROM Queries q JOIN Models m ON m.ModelId = q.ModelId
+            WHERE q.Name = @n LIMIT 1", new { n = name });
+        if (q is null) return null;
+        var ds = conn.Query<QueryDataSourceInfo>(@"
+            SELECT Name, TableName, JoinMode, ParentDs FROM QueryDataSources WHERE QueryId = @id",
+            new { id = q.QueryId }).ToList();
+        return new QueryDetails(q, ds);
+    }
+
+    public IReadOnlyList<ViewInfo> SearchViews(string query, int limit = 50)
+    {
+        using var conn = Open();
+        var like = $"%{query}%";
+        return conn.Query<ViewInfo>(@"
+            SELECT v.ViewId, v.Name, m.Name AS Model, v.Label, v.QueryName, v.SourcePath
+            FROM Views v JOIN Models m ON m.ModelId = v.ModelId
+            WHERE v.Name LIKE @like ORDER BY v.Name LIMIT @limit",
+            new { like, limit }).ToList();
+    }
+
+    public ViewDetails? GetView(string name)
+    {
+        using var conn = Open();
+        var v = conn.QueryFirstOrDefault<ViewInfo>(@"
+            SELECT v.ViewId, v.Name, m.Name AS Model, v.Label, v.QueryName, v.SourcePath
+            FROM Views v JOIN Models m ON m.ModelId = v.ModelId
+            WHERE v.Name = @n LIMIT 1", new { n = name });
+        if (v is null) return null;
+        var fields = conn.Query<ViewFieldInfo>(@"
+            SELECT Name, DataSource, DataField FROM ViewFields WHERE ViewId = @id",
+            new { id = v.ViewId }).ToList();
+        return new ViewDetails(v, fields);
+    }
+
+    public IReadOnlyList<DataEntityInfo> SearchDataEntities(string query, int limit = 50)
+    {
+        using var conn = Open();
+        var like = $"%{query}%";
+        return conn.Query<DataEntityInfo>(@"
+            SELECT e.EntityId, e.Name, m.Name AS Model, e.PublicEntityName, e.PublicCollectionName,
+                   e.StagingTable, e.QueryName, e.Label, e.SourcePath
+            FROM DataEntities e JOIN Models m ON m.ModelId = e.ModelId
+            WHERE e.Name LIKE @like OR e.PublicEntityName LIKE @like OR e.PublicCollectionName LIKE @like
+            ORDER BY e.Name LIMIT @limit",
+            new { like, limit }).ToList();
+    }
+
+    public DataEntityDetails? GetDataEntity(string name)
+    {
+        using var conn = Open();
+        var e = conn.QueryFirstOrDefault<DataEntityInfo>(@"
+            SELECT e.EntityId, e.Name, m.Name AS Model, e.PublicEntityName, e.PublicCollectionName,
+                   e.StagingTable, e.QueryName, e.Label, e.SourcePath
+            FROM DataEntities e JOIN Models m ON m.ModelId = e.ModelId
+            WHERE e.Name = @n OR e.PublicEntityName = @n LIMIT 1", new { n = name });
+        if (e is null) return null;
+        var fields = conn.Query<DataEntityFieldInfo>(@"
+            SELECT Name, DataSource, DataField, IsMandatory, IsReadOnly
+            FROM DataEntityFields WHERE EntityId = @id", new { id = e.EntityId }).ToList();
+        return new DataEntityDetails(e, fields);
+    }
+
+    public IReadOnlyList<ReportInfo> SearchReports(string query, int limit = 50)
+    {
+        using var conn = Open();
+        var like = $"%{query}%";
+        return conn.Query<ReportInfo>(@"
+            SELECT r.ReportId, r.Name, r.Kind, m.Name AS Model, r.SourcePath
+            FROM Reports r JOIN Models m ON m.ModelId = r.ModelId
+            WHERE r.Name LIKE @like ORDER BY r.Name LIMIT @limit",
+            new { like, limit }).ToList();
+    }
+
+    public ReportDetails? GetReport(string name)
+    {
+        using var conn = Open();
+        var r = conn.QueryFirstOrDefault<ReportInfo>(@"
+            SELECT r.ReportId, r.Name, r.Kind, m.Name AS Model, r.SourcePath
+            FROM Reports r JOIN Models m ON m.ModelId = r.ModelId
+            WHERE r.Name = @n LIMIT 1", new { n = name });
+        if (r is null) return null;
+        var ds = conn.Query<ReportDataSetInfo>(@"
+            SELECT Name, Kind, QueryOrClass FROM ReportDataSets WHERE ReportId = @id",
+            new { id = r.ReportId }).ToList();
+        return new ReportDetails(r, ds);
+    }
+
+    public IReadOnlyList<ServiceInfo> SearchServices(string query, int limit = 50)
+    {
+        using var conn = Open();
+        var like = $"%{query}%";
+        return conn.Query<ServiceInfo>(@"
+            SELECT s.ServiceId, s.Name, s.Class, m.Name AS Model, s.SourcePath
+            FROM Services s JOIN Models m ON m.ModelId = s.ModelId
+            WHERE s.Name LIKE @like ORDER BY s.Name LIMIT @limit",
+            new { like, limit }).ToList();
+    }
+
+    public ServiceDetails? GetService(string name)
+    {
+        using var conn = Open();
+        var s = conn.QueryFirstOrDefault<ServiceInfo>(@"
+            SELECT s.ServiceId, s.Name, s.Class, m.Name AS Model, s.SourcePath
+            FROM Services s JOIN Models m ON m.ModelId = s.ModelId
+            WHERE s.Name = @n LIMIT 1", new { n = name });
+        if (s is null) return null;
+        var ops = conn.Query<ServiceOperationInfo>(@"
+            SELECT OperationName, MethodName FROM ServiceOperations WHERE ServiceId = @id",
+            new { id = s.ServiceId }).ToList();
+        return new ServiceDetails(s, ops);
+    }
+
+    public ServiceGroupDetails? GetServiceGroup(string name)
+    {
+        using var conn = Open();
+        var g = conn.QueryFirstOrDefault<ServiceGroupInfo>(@"
+            SELECT g.GroupId, g.Name, m.Name AS Model, g.SourcePath
+            FROM ServiceGroups g JOIN Models m ON m.ModelId = g.ModelId
+            WHERE g.Name = @n LIMIT 1", new { n = name });
+        if (g is null) return null;
+        var members = conn.Query<string>(@"
+            SELECT ServiceName FROM ServiceGroupMembers WHERE GroupId = @id ORDER BY ServiceName",
+            new { id = g.GroupId }).ToList();
+        return new ServiceGroupDetails(g, members);
+    }
+
+    public IReadOnlyList<WorkflowTypeInfo> SearchWorkflowTypes(string query, int limit = 50)
+    {
+        using var conn = Open();
+        var like = $"%{query}%";
+        return conn.Query<WorkflowTypeInfo>(@"
+            SELECT w.Name, w.Category, w.DocumentClass, m.Name AS Model, w.SourcePath
+            FROM WorkflowTypes w JOIN Models m ON m.ModelId = w.ModelId
+            WHERE w.Name LIKE @like OR w.DocumentClass LIKE @like
+            ORDER BY w.Name LIMIT @limit",
+            new { like, limit }).ToList();
+    }
+
+    public IReadOnlyList<ModelInfo> ListModels()
+    {
+        using var conn = Open();
+        return conn.Query<ModelInfo>(@"
+            SELECT ModelId, Name, Publisher, Layer, IsCustom
+            FROM Models ORDER BY Name").ToList();
+    }
+
+    public ModelDependencies? GetModelDependencies(string name)
+    {
+        using var conn = Open();
+        var mi = conn.QueryFirstOrDefault<ModelInfo>(@"
+            SELECT ModelId, Name, Publisher, Layer, IsCustom
+            FROM Models WHERE Name = @name LIMIT 1", new { name });
+        if (mi is null) return null;
+        var dependsOn = conn.Query<string>(@"
+            SELECT Target FROM ModelDependencies
+            WHERE ModelId = @id ORDER BY Target", new { id = mi.ModelId }).ToList();
+        var dependedBy = conn.Query<string>(@"
+            SELECT m.Name FROM ModelDependencies d
+            JOIN Models m ON m.ModelId = d.ModelId
+            WHERE d.Target = @n ORDER BY m.Name", new { n = name }).ToList();
+        return new ModelDependencies(mi, dependsOn, dependedBy);
     }
 
     // ---- additional read operations ----
@@ -255,6 +559,39 @@ public sealed class MetadataRepository
     }
 
     /// <summary>
+    /// Resolve a label token like "@SYS12345" (the '@' is optional). Tries to
+    /// split the alphabetic prefix (= label file) from the remainder (= key)
+    /// and return one row per requested language.
+    /// </summary>
+    public IReadOnlyList<LabelMatch> ResolveLabel(string token, IReadOnlyCollection<string>? languages = null)
+    {
+        if (string.IsNullOrWhiteSpace(token)) return Array.Empty<LabelMatch>();
+        var raw = token.TrimStart('@').Trim();
+        if (raw.Length == 0) return Array.Empty<LabelMatch>();
+
+        // Split on first digit: "SYS12345" -> prefix="SYS", suffix="12345".
+        int splitIdx = 0;
+        while (splitIdx < raw.Length && char.IsLetter(raw[splitIdx])) splitIdx++;
+        var prefix = splitIdx > 0 ? raw.Substring(0, splitIdx) : raw;
+        var suffix = splitIdx < raw.Length ? raw.Substring(splitIdx) : string.Empty;
+
+        using var conn = Open();
+        // Try two shapes: Key == raw (e.g. "SYS12345") in file=prefix,
+        // or Key == suffix (e.g. "12345") in file=prefix. Fall back to
+        // exact key match across all files for odd prefixes.
+        var sql = @"
+            SELECT LabelFile AS File, Language, Key, Value
+            FROM Labels
+            WHERE (@langs IS NULL OR Language IN @langs)
+              AND (
+                    (LabelFile = @prefix AND Key IN (@raw, @suffix))
+                 OR Key = @raw
+              )
+            ORDER BY LabelFile, Language";
+        return conn.Query<LabelMatch>(sql, new { langs = languages, prefix, raw, suffix }).ToList();
+    }
+
+    /// <summary>
     /// Find any index entity whose name contains the given substring. Used by
     /// `d365fo find usages` to approximate a cross-object search without
     /// loading X++ source itself.
@@ -273,6 +610,20 @@ public sealed class MetadataRepository
             SELECT 'Enum',  e.Name, m.Name FROM Enums e JOIN Models m ON m.ModelId=e.ModelId WHERE e.Name LIKE @like
             UNION ALL
             SELECT 'MenuItem', mi.Name, m.Name FROM MenuItems mi JOIN Models m ON m.ModelId=mi.ModelId WHERE mi.Name LIKE @like OR mi.Object LIKE @like
+            UNION ALL
+            SELECT 'Form',  f.Name, m.Name FROM Forms f JOIN Models m ON m.ModelId=f.ModelId WHERE f.Name LIKE @like
+            UNION ALL
+            SELECT 'Query', q.Name, m.Name FROM Queries q JOIN Models m ON m.ModelId=q.ModelId WHERE q.Name LIKE @like
+            UNION ALL
+            SELECT 'View',  v.Name, m.Name FROM Views v JOIN Models m ON m.ModelId=v.ModelId WHERE v.Name LIKE @like
+            UNION ALL
+            SELECT 'DataEntity', de.Name, m.Name FROM DataEntities de JOIN Models m ON m.ModelId=de.ModelId WHERE de.Name LIKE @like OR de.PublicEntityName LIKE @like
+            UNION ALL
+            SELECT 'Report', r.Name, m.Name FROM Reports r JOIN Models m ON m.ModelId=r.ModelId WHERE r.Name LIKE @like
+            UNION ALL
+            SELECT 'Service', s.Name, m.Name FROM Services s JOIN Models m ON m.ModelId=s.ModelId WHERE s.Name LIKE @like
+            UNION ALL
+            SELECT 'Workflow', w.Name, m.Name FROM WorkflowTypes w JOIN Models m ON m.ModelId=w.ModelId WHERE w.Name LIKE @like
             ORDER BY Name
             LIMIT @limit", new { like, limit });
         return rows.Select(r => (r.Kind, r.Name, r.Model)).ToList();
@@ -307,16 +658,56 @@ public sealed class MetadataRepository
         using var tx = conn.BeginTransaction();
 
         var modelId = UpsertModelInternal(conn, tx, batch.Model, batch.Publisher, batch.Layer, batch.IsCustom);
+        // Refresh publisher/layer if the descriptor has been learned later.
+        conn.Execute("UPDATE Models SET Publisher=@p, Layer=@l, IsCustom=@c WHERE ModelId=@m",
+            new { p = batch.Publisher, l = batch.Layer, c = batch.IsCustom ? 1 : 0, m = modelId }, tx);
 
         conn.Execute("DELETE FROM EnumValues WHERE EnumId IN (SELECT EnumId FROM Enums WHERE ModelId=@m)", new { m = modelId }, tx);
         conn.Execute("DELETE FROM Enums WHERE ModelId=@m", new { m = modelId }, tx);
         conn.Execute("DELETE FROM TableFields WHERE TableId IN (SELECT TableId FROM Tables WHERE ModelId=@m)", new { m = modelId }, tx);
+        conn.Execute("DELETE FROM TableMethods WHERE TableId IN (SELECT TableId FROM Tables WHERE ModelId=@m)", new { m = modelId }, tx);
+        conn.Execute("DELETE FROM TableIndexes WHERE TableId IN (SELECT TableId FROM Tables WHERE ModelId=@m)", new { m = modelId }, tx);
+        conn.Execute("DELETE FROM TableDeleteActions WHERE TableId IN (SELECT TableId FROM Tables WHERE ModelId=@m)", new { m = modelId }, tx);
+        // Relations are keyed globally by FromTable; clear any row whose
+        // FromTable belongs to this model *before* dropping Tables.
+        conn.Execute(@"DELETE FROM Relations
+                       WHERE FromTable IN (SELECT Name FROM Tables WHERE ModelId=@m)",
+                     new { m = modelId }, tx);
         conn.Execute("DELETE FROM Tables WHERE ModelId=@m", new { m = modelId }, tx);
         conn.Execute("DELETE FROM Methods WHERE ClassId IN (SELECT ClassId FROM Classes WHERE ModelId=@m)", new { m = modelId }, tx);
+        conn.Execute("DELETE FROM ClassAttributes WHERE ClassId IN (SELECT ClassId FROM Classes WHERE ModelId=@m)", new { m = modelId }, tx);
         conn.Execute("DELETE FROM Classes WHERE ModelId=@m", new { m = modelId }, tx);
         conn.Execute("DELETE FROM Edts WHERE ModelId=@m", new { m = modelId }, tx);
         conn.Execute("DELETE FROM MenuItems WHERE ModelId=@m", new { m = modelId }, tx);
         conn.Execute("DELETE FROM CocExtensions WHERE ModelId=@m", new { m = modelId }, tx);
+        conn.Execute("DELETE FROM FormDataSources WHERE FormId IN (SELECT FormId FROM Forms WHERE ModelId=@m)", new { m = modelId }, tx);
+        conn.Execute("DELETE FROM Forms WHERE ModelId=@m", new { m = modelId }, tx);
+        conn.Execute("DELETE FROM ObjectExtensions WHERE ModelId=@m", new { m = modelId }, tx);
+        conn.Execute("DELETE FROM EventSubscribers WHERE ModelId=@m", new { m = modelId }, tx);
+        // Security: clear by model; link tables are global but only refer to
+        // names we are about to re-insert.
+        conn.Execute(@"DELETE FROM SecurityRoleDuties WHERE Role IN (SELECT Name FROM SecurityRoles WHERE ModelId=@m)", new { m = modelId }, tx);
+        conn.Execute(@"DELETE FROM SecurityRolePrivileges WHERE Role IN (SELECT Name FROM SecurityRoles WHERE ModelId=@m)", new { m = modelId }, tx);
+        conn.Execute(@"DELETE FROM SecurityDutyPrivileges WHERE Duty IN (SELECT Name FROM SecurityDuties WHERE ModelId=@m)", new { m = modelId }, tx);
+        conn.Execute(@"DELETE FROM SecurityPrivilegeEntryPoints WHERE Privilege IN (SELECT Name FROM SecurityPrivileges WHERE ModelId=@m)", new { m = modelId }, tx);
+        conn.Execute(@"DELETE FROM SecurityMap WHERE Role IN (SELECT Name FROM SecurityRoles WHERE ModelId=@m)", new { m = modelId }, tx);
+        conn.Execute("DELETE FROM SecurityRoles WHERE ModelId=@m", new { m = modelId }, tx);
+        conn.Execute("DELETE FROM SecurityDuties WHERE ModelId=@m", new { m = modelId }, tx);
+        conn.Execute("DELETE FROM SecurityPrivileges WHERE ModelId=@m", new { m = modelId }, tx);
+        conn.Execute("DELETE FROM QueryDataSources WHERE QueryId IN (SELECT QueryId FROM Queries WHERE ModelId=@m)", new { m = modelId }, tx);
+        conn.Execute("DELETE FROM Queries WHERE ModelId=@m", new { m = modelId }, tx);
+        conn.Execute("DELETE FROM ViewFields WHERE ViewId IN (SELECT ViewId FROM Views WHERE ModelId=@m)", new { m = modelId }, tx);
+        conn.Execute("DELETE FROM Views WHERE ModelId=@m", new { m = modelId }, tx);
+        conn.Execute("DELETE FROM DataEntityFields WHERE EntityId IN (SELECT EntityId FROM DataEntities WHERE ModelId=@m)", new { m = modelId }, tx);
+        conn.Execute("DELETE FROM DataEntities WHERE ModelId=@m", new { m = modelId }, tx);
+        conn.Execute("DELETE FROM ReportDataSets WHERE ReportId IN (SELECT ReportId FROM Reports WHERE ModelId=@m)", new { m = modelId }, tx);
+        conn.Execute("DELETE FROM Reports WHERE ModelId=@m", new { m = modelId }, tx);
+        conn.Execute("DELETE FROM ServiceOperations WHERE ServiceId IN (SELECT ServiceId FROM Services WHERE ModelId=@m)", new { m = modelId }, tx);
+        conn.Execute("DELETE FROM Services WHERE ModelId=@m", new { m = modelId }, tx);
+        conn.Execute("DELETE FROM ServiceGroupMembers WHERE GroupId IN (SELECT GroupId FROM ServiceGroups WHERE ModelId=@m)", new { m = modelId }, tx);
+        conn.Execute("DELETE FROM ServiceGroups WHERE ModelId=@m", new { m = modelId }, tx);
+        conn.Execute("DELETE FROM WorkflowTypes WHERE ModelId=@m", new { m = modelId }, tx);
+        conn.Execute("DELETE FROM ModelDependencies WHERE ModelId=@m", new { m = modelId }, tx);
         // Labels are keyed by file+lang, not model; we delete by file instead.
         foreach (var file in batch.Labels.Select(l => l.File).Distinct(StringComparer.OrdinalIgnoreCase))
             conn.Execute("DELETE FROM Labels WHERE LabelFile=@f", new { f = file }, tx);
@@ -333,6 +724,30 @@ public sealed class MetadataRepository
                                VALUES(@t, @n, @ty, @e, @l, @md)",
                              new { t = tableId, n = f.Name, ty = f.Type, e = f.EdtName, l = f.Label, md = f.Mandatory ? 1 : 0 }, tx);
             }
+            foreach (var mtd in t.Methods)
+            {
+                conn.Execute(@"INSERT INTO TableMethods(TableId, Name, Signature, IsStatic, ReturnType)
+                               VALUES(@t, @n, @s, @st, @rt)",
+                             new { t = tableId, n = mtd.Name, s = mtd.Signature, st = mtd.IsStatic ? 1 : 0, rt = mtd.ReturnType }, tx);
+            }
+            foreach (var ix in t.Indexes)
+            {
+                conn.Execute(@"INSERT INTO TableIndexes(TableId, Name, AllowDuplicates, AlternateKey, FieldsCsv)
+                               VALUES(@t, @n, @a, @k, @f)",
+                             new { t = tableId, n = ix.Name, a = ix.AllowDuplicates ? 1 : 0, k = ix.AlternateKey ? 1 : 0, f = string.Join(",", ix.Fields) }, tx);
+            }
+            foreach (var da in t.DeleteActions)
+            {
+                conn.Execute(@"INSERT INTO TableDeleteActions(TableId, Name, RelatedTable, DeleteAction)
+                               VALUES(@t, @n, @r, @a)",
+                             new { t = tableId, n = da.Name, r = da.RelatedTable, a = da.DeleteAction }, tx);
+            }
+            foreach (var r in t.Relations)
+            {
+                conn.Execute(@"INSERT INTO Relations(FromTable, ToTable, Cardinality, RelationName)
+                               VALUES(@f, @to, @c, @n)",
+                             new { f = t.Name, to = r.RelatedTable, c = r.Cardinality, n = r.Name }, tx);
+            }
         }
 
         foreach (var c in batch.Classes)
@@ -346,6 +761,12 @@ public sealed class MetadataRepository
                 conn.Execute(@"INSERT INTO Methods(ClassId, Name, Signature, IsStatic, ReturnType)
                                VALUES(@c, @n, @s, @st, @rt)",
                              new { c = classId, n = mtd.Name, s = mtd.Signature, st = mtd.IsStatic ? 1 : 0, rt = mtd.ReturnType }, tx);
+            }
+            foreach (var a in c.Attributes)
+            {
+                conn.Execute(@"INSERT INTO ClassAttributes(ClassId, MethodName, AttributeName, RawArgs)
+                               VALUES(@c, @m, @n, @a)",
+                             new { c = classId, m = a.MethodName, n = a.AttributeName, a = a.RawArgs }, tx);
             }
         }
 
@@ -389,6 +810,162 @@ public sealed class MetadataRepository
                          new { f = l.File, lg = l.Language, k = l.Key, v = l.Value }, tx);
         }
 
+        foreach (var f in batch.Forms)
+        {
+            conn.Execute(@"INSERT INTO Forms(Name, ModelId, SourcePath) VALUES(@n, @m, @p)",
+                         new { n = f.Name, m = modelId, p = f.SourcePath }, tx);
+            var formId = conn.ExecuteScalar<long>("SELECT last_insert_rowid()", transaction: tx);
+            foreach (var ds in f.DataSources)
+            {
+                conn.Execute(@"INSERT INTO FormDataSources(FormId, Name, TableName) VALUES(@f, @n, @t)",
+                             new { f = formId, n = ds.Name, t = ds.Table }, tx);
+            }
+        }
+
+        foreach (var ext in batch.Extensions)
+        {
+            conn.Execute(@"INSERT INTO ObjectExtensions(Kind, TargetName, ExtensionName, ModelId, SourcePath)
+                           VALUES(@k, @t, @e, @m, @p)",
+                         new { k = ext.Kind, t = ext.TargetName, e = ext.ExtensionName, m = modelId, p = ext.SourcePath }, tx);
+        }
+
+        foreach (var s in batch.EventSubscribers)
+        {
+            conn.Execute(@"INSERT INTO EventSubscribers(SubscriberClass, SubscriberMethod, SourceKind, SourceObject, SourceMember, EventType, ModelId)
+                           VALUES(@sc, @sm, @sk, @so, @mm, @et, @mid)",
+                         new { sc = s.SubscriberClass, sm = s.SubscriberMethod, sk = s.SourceKind, so = s.SourceObject, mm = s.SourceMember, et = s.EventType, mid = modelId }, tx);
+        }
+
+        foreach (var r in batch.Roles)
+        {
+            conn.Execute(@"INSERT INTO SecurityRoles(Name, Label, ModelId) VALUES(@n, @l, @m)",
+                         new { n = r.Name, l = r.Label, m = modelId }, tx);
+            foreach (var d in r.Duties.Distinct(StringComparer.OrdinalIgnoreCase))
+                conn.Execute(@"INSERT INTO SecurityRoleDuties(Role, Duty) VALUES(@r, @d)",
+                             new { r = r.Name, d }, tx);
+            foreach (var p in r.Privileges.Distinct(StringComparer.OrdinalIgnoreCase))
+                conn.Execute(@"INSERT INTO SecurityRolePrivileges(Role, Privilege) VALUES(@r, @p)",
+                             new { r = r.Name, p }, tx);
+        }
+        foreach (var d in batch.Duties)
+        {
+            conn.Execute(@"INSERT INTO SecurityDuties(Name, Label, ModelId) VALUES(@n, @l, @m)",
+                         new { n = d.Name, l = d.Label, m = modelId }, tx);
+            foreach (var p in d.Privileges.Distinct(StringComparer.OrdinalIgnoreCase))
+                conn.Execute(@"INSERT INTO SecurityDutyPrivileges(Duty, Privilege) VALUES(@d, @p)",
+                             new { d = d.Name, p }, tx);
+        }
+        foreach (var p in batch.Privileges)
+        {
+            conn.Execute(@"INSERT INTO SecurityPrivileges(Name, Label, ModelId) VALUES(@n, @l, @m)",
+                         new { n = p.Name, l = p.Label, m = modelId }, tx);
+            foreach (var ep in p.EntryPoints)
+                conn.Execute(@"INSERT INTO SecurityPrivilegeEntryPoints(Privilege, ObjectName, ObjectType, ObjectChild, AccessLevel)
+                               VALUES(@p, @o, @t, @c, @a)",
+                             new { p = p.Name, o = ep.ObjectName, t = ep.ObjectType, c = ep.ObjectChild, a = ep.AccessLevel }, tx);
+        }
+
+        foreach (var q in batch.Queries)
+        {
+            conn.Execute(@"INSERT INTO Queries(Name, ModelId, SourcePath) VALUES(@n, @m, @p)",
+                         new { n = q.Name, m = modelId, p = q.SourcePath }, tx);
+            var queryId = conn.ExecuteScalar<long>("SELECT last_insert_rowid()", transaction: tx);
+            foreach (var ds in q.DataSources)
+                conn.Execute(@"INSERT INTO QueryDataSources(QueryId, Name, TableName, JoinMode, ParentDs)
+                               VALUES(@q, @n, @t, @j, @p)",
+                             new { q = queryId, n = ds.Name, t = ds.Table, j = ds.JoinMode, p = ds.ParentDs }, tx);
+        }
+        foreach (var v in batch.Views)
+        {
+            conn.Execute(@"INSERT INTO Views(Name, ModelId, Label, QueryName, SourcePath) VALUES(@n, @m, @l, @q, @p)",
+                         new { n = v.Name, m = modelId, l = v.Label, q = v.QueryName, p = v.SourcePath }, tx);
+            var viewId = conn.ExecuteScalar<long>("SELECT last_insert_rowid()", transaction: tx);
+            foreach (var f in v.Fields)
+                conn.Execute(@"INSERT INTO ViewFields(ViewId, Name, DataSource, DataField) VALUES(@v, @n, @ds, @df)",
+                             new { v = viewId, n = f.Name, ds = f.DataSource, df = f.DataField }, tx);
+        }
+        foreach (var e in batch.DataEntities)
+        {
+            conn.Execute(@"INSERT INTO DataEntities(Name, ModelId, PublicEntityName, PublicCollectionName, StagingTable, QueryName, Label, SourcePath)
+                           VALUES(@n, @m, @pe, @pc, @st, @q, @l, @p)",
+                         new { n = e.Name, m = modelId, pe = e.PublicEntityName, pc = e.PublicCollectionName, st = e.StagingTable, q = e.QueryName, l = e.Label, p = e.SourcePath }, tx);
+            var entityId = conn.ExecuteScalar<long>("SELECT last_insert_rowid()", transaction: tx);
+            foreach (var f in e.Fields)
+                conn.Execute(@"INSERT INTO DataEntityFields(EntityId, Name, DataSource, DataField, IsMandatory, IsReadOnly)
+                               VALUES(@e, @n, @ds, @df, @mn, @ro)",
+                             new { e = entityId, n = f.Name, ds = f.DataSource, df = f.DataField, mn = f.IsMandatory ? 1 : 0, ro = f.IsReadOnly ? 1 : 0 }, tx);
+        }
+        foreach (var r in batch.Reports)
+        {
+            conn.Execute(@"INSERT INTO Reports(Name, Kind, ModelId, SourcePath) VALUES(@n, @k, @m, @p)",
+                         new { n = r.Name, k = r.Kind, m = modelId, p = r.SourcePath }, tx);
+            var reportId = conn.ExecuteScalar<long>("SELECT last_insert_rowid()", transaction: tx);
+            foreach (var ds in r.DataSets)
+                conn.Execute(@"INSERT INTO ReportDataSets(ReportId, Name, Kind, QueryOrClass) VALUES(@r, @n, @k, @q)",
+                             new { r = reportId, n = ds.Name, k = ds.Kind, q = ds.QueryOrClass }, tx);
+        }
+        foreach (var s in batch.Services)
+        {
+            conn.Execute(@"INSERT INTO Services(Name, Class, ModelId, SourcePath) VALUES(@n, @c, @m, @p)",
+                         new { n = s.Name, c = s.Class, m = modelId, p = s.SourcePath }, tx);
+            var serviceId = conn.ExecuteScalar<long>("SELECT last_insert_rowid()", transaction: tx);
+            foreach (var op in s.Operations)
+                conn.Execute(@"INSERT INTO ServiceOperations(ServiceId, OperationName, MethodName) VALUES(@s, @o, @m)",
+                             new { s = serviceId, o = op.OperationName, m = op.MethodName }, tx);
+        }
+        foreach (var g in batch.ServiceGroups)
+        {
+            conn.Execute(@"INSERT INTO ServiceGroups(Name, ModelId, SourcePath) VALUES(@n, @m, @p)",
+                         new { n = g.Name, m = modelId, p = g.SourcePath }, tx);
+            var groupId = conn.ExecuteScalar<long>("SELECT last_insert_rowid()", transaction: tx);
+            foreach (var member in g.Members)
+                conn.Execute(@"INSERT INTO ServiceGroupMembers(GroupId, ServiceName) VALUES(@g, @s)",
+                             new { g = groupId, s = member }, tx);
+        }
+        foreach (var w in batch.WorkflowTypes)
+        {
+            conn.Execute(@"INSERT INTO WorkflowTypes(Name, Category, DocumentClass, ModelId, SourcePath)
+                           VALUES(@n, @c, @d, @m, @p)",
+                         new { n = w.Name, c = w.Category, d = w.DocumentClass, m = modelId, p = w.SourcePath }, tx);
+        }
+        foreach (var dep in batch.Dependencies.Distinct(StringComparer.OrdinalIgnoreCase))
+        {
+            conn.Execute(@"INSERT INTO ModelDependencies(ModelId, Target) VALUES(@m, @t)",
+                         new { m = modelId, t = dep }, tx);
+        }
+
+        tx.Commit();
+
+        // Rebuild the flattened SecurityMap (Role x Duty x Privilege x
+        // EntryPoint) for this model's roles/duties. We do this in a short
+        // second transaction *after* commit so the join sees both this model's
+        // data and any referenced duties/privileges from other models.
+        RebuildSecurityMap(conn, modelId);
+    }
+
+    private static void RebuildSecurityMap(SqliteConnection conn, long modelId)
+    {
+        using var tx = conn.BeginTransaction();
+        // Clear rows owned by this model's roles.
+        conn.Execute(@"DELETE FROM SecurityMap WHERE Role IN (SELECT Name FROM SecurityRoles WHERE ModelId=@m)",
+                     new { m = modelId }, tx);
+        // Role → Duty → Privilege → EntryPoint
+        conn.Execute(@"
+            INSERT INTO SecurityMap(Role, Duty, Privilege, EntryPoint, ObjectName, ObjectType)
+            SELECT r.Name, rd.Duty, dp.Privilege, ep.ObjectName, ep.ObjectName, ep.ObjectType
+            FROM SecurityRoles r
+            JOIN SecurityRoleDuties rd ON rd.Role = r.Name
+            JOIN SecurityDutyPrivileges dp ON dp.Duty = rd.Duty
+            LEFT JOIN SecurityPrivilegeEntryPoints ep ON ep.Privilege = dp.Privilege
+            WHERE r.ModelId = @m", new { m = modelId }, tx);
+        // Role → Privilege (direct) → EntryPoint
+        conn.Execute(@"
+            INSERT INTO SecurityMap(Role, Duty, Privilege, EntryPoint, ObjectName, ObjectType)
+            SELECT r.Name, NULL, rp.Privilege, ep.ObjectName, ep.ObjectName, ep.ObjectType
+            FROM SecurityRoles r
+            JOIN SecurityRolePrivileges rp ON rp.Role = r.Name
+            LEFT JOIN SecurityPrivilegeEntryPoints ep ON ep.Privilege = rp.Privilege
+            WHERE r.ModelId = @m", new { m = modelId }, tx);
         tx.Commit();
     }
 
@@ -405,7 +982,22 @@ public sealed class MetadataRepository
             Enums: conn.ExecuteScalar<long>("SELECT COUNT(*) FROM Enums"),
             MenuItems: conn.ExecuteScalar<long>("SELECT COUNT(*) FROM MenuItems"),
             Labels: conn.ExecuteScalar<long>("SELECT COUNT(*) FROM Labels"),
-            Coc: conn.ExecuteScalar<long>("SELECT COUNT(*) FROM CocExtensions"));
+            Coc: conn.ExecuteScalar<long>("SELECT COUNT(*) FROM CocExtensions"))
+        {
+            Forms = conn.ExecuteScalar<long>("SELECT COUNT(*) FROM Forms"),
+            Extensions = conn.ExecuteScalar<long>("SELECT COUNT(*) FROM ObjectExtensions"),
+            EventSubscribers = conn.ExecuteScalar<long>("SELECT COUNT(*) FROM EventSubscribers"),
+            Relations = conn.ExecuteScalar<long>("SELECT COUNT(*) FROM Relations"),
+            Roles = conn.ExecuteScalar<long>("SELECT COUNT(*) FROM SecurityRoles"),
+            Duties = conn.ExecuteScalar<long>("SELECT COUNT(*) FROM SecurityDuties"),
+            Privileges = conn.ExecuteScalar<long>("SELECT COUNT(*) FROM SecurityPrivileges"),
+            Queries = conn.ExecuteScalar<long>("SELECT COUNT(*) FROM Queries"),
+            Views = conn.ExecuteScalar<long>("SELECT COUNT(*) FROM Views"),
+            DataEntities = conn.ExecuteScalar<long>("SELECT COUNT(*) FROM DataEntities"),
+            Reports = conn.ExecuteScalar<long>("SELECT COUNT(*) FROM Reports"),
+            Services = conn.ExecuteScalar<long>("SELECT COUNT(*) FROM Services"),
+            WorkflowTypes = conn.ExecuteScalar<long>("SELECT COUNT(*) FROM WorkflowTypes"),
+        };
     }
 
     internal SqliteConnection Open()

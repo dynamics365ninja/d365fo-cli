@@ -205,19 +205,31 @@ public sealed class IndexExtractCommand : Command<IndexExtractCommand.Settings>
 
         static bool HasAot(string dir)
         {
-            foreach (var s in new[] { "AxTable", "AxClass", "AxEdt", "AxEnum", "AxLabelFile" })
+            foreach (var s in new[] {
+                "AxTable", "AxClass", "AxEdt", "AxEnum", "AxLabelFile", "AxForm",
+                "AxTableExtension", "AxFormExtension", "AxEdtExtension", "AxEnumExtension",
+                "AxSecurityRole", "AxSecurityDuty", "AxSecurityPrivilege",
+                "AxMenuItemDisplay", "AxMenuItemAction", "AxMenuItemOutput",
+                "AxQuery", "AxQuerySimple", "AxView", "AxDataEntityView",
+                "AxReport", "AxReportSsrs", "AxService", "AxServiceGroup", "AxWorkflowType",
+            })
                 if (Directory.Exists(Path.Combine(dir, s))) return true;
             return false;
         }
 
         foreach (var pkg in SafeDirs(packagesRoot))
-        foreach (var model in SafeDirs(pkg))
         {
-            if (!HasAot(model)) continue;
-            if (onlyModel is { Length: > 0 } only &&
-                !string.Equals(Path.GetFileName(model), only, StringComparison.OrdinalIgnoreCase))
-                continue;
-            yield return model;
+            // Mirror MetadataExtractor: skip FormAdaptor shim packages.
+            if (D365FO.Core.Extract.MetadataExtractor.IsFormAdaptorPackage(Path.GetFileName(pkg))) continue;
+            foreach (var model in SafeDirs(pkg))
+            {
+                if (D365FO.Core.Extract.MetadataExtractor.IsFormAdaptorPackage(Path.GetFileName(model))) continue;
+                if (!HasAot(model)) continue;
+                if (onlyModel is { Length: > 0 } only &&
+                    !string.Equals(Path.GetFileName(model), only, StringComparison.OrdinalIgnoreCase))
+                    continue;
+                yield return model;
+            }
         }
     }
 }

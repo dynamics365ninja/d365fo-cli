@@ -78,3 +78,53 @@ public sealed class FindUsagesCommand : Command<FindUsagesCommand.Settings>
             ToolResult<object>.Success(new { count = items.Count, items }));
     }
 }
+
+public sealed class FindExtensionsCommand : Command<FindExtensionsCommand.Settings>
+{
+    public sealed class Settings : D365OutputSettings
+    {
+        [CommandArgument(0, "<TARGET>")]
+        [System.ComponentModel.Description("Target artifact name (e.g. CustTable, SalesTable).")]
+        public string Target { get; init; } = "";
+
+        [CommandOption("--kind <KIND>")]
+        [System.ComponentModel.Description("Filter: Table/Form/Edt/Enum/View/Map")]
+        public string? Kind { get; init; }
+    }
+
+    public override int Execute(CommandContext ctx, Settings settings)
+    {
+        var kind = OutputMode.Resolve(settings.Output);
+        if (string.IsNullOrWhiteSpace(settings.Target))
+            return RenderHelpers.Render(kind, ToolResult<object>.Fail("BAD_INPUT", "Target required."));
+        var repo = RepoFactory.Create();
+        var items = repo.FindExtensions(settings.Target, settings.Kind);
+        return RenderHelpers.Render(kind,
+            ToolResult<object>.Success(new { count = items.Count, items }));
+    }
+}
+
+public sealed class FindHandlersCommand : Command<FindHandlersCommand.Settings>
+{
+    public sealed class Settings : D365OutputSettings
+    {
+        [CommandArgument(0, "<OBJECT>")]
+        [System.ComponentModel.Description("Source object (form/table/class) whose events you want to list handlers for.")]
+        public string Object { get; init; } = "";
+
+        [CommandOption("--kind <KIND>")]
+        [System.ComponentModel.Description("Filter: Form/FormDataSource/FormControl/Table/Delegate")]
+        public string? Kind { get; init; }
+    }
+
+    public override int Execute(CommandContext ctx, Settings settings)
+    {
+        var kind = OutputMode.Resolve(settings.Output);
+        if (string.IsNullOrWhiteSpace(settings.Object))
+            return RenderHelpers.Render(kind, ToolResult<object>.Fail("BAD_INPUT", "Object required."));
+        var repo = RepoFactory.Create();
+        var items = repo.FindEventSubscribers(settings.Object, settings.Kind);
+        return RenderHelpers.Render(kind,
+            ToolResult<object>.Success(new { count = items.Count, items }));
+    }
+}

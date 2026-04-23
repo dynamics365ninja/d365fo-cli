@@ -34,6 +34,9 @@ public sealed class GetTableCommand : Command<GetTableCommand.Settings>
             table = details.Table,
             fields = details.Fields,
             relations = details.Relations,
+            methods = details.Methods,
+            indexes = details.Indexes,
+            deleteActions = details.DeleteActions,
         });
 
         return RenderHelpers.Render(kind, result, _ =>
@@ -43,6 +46,14 @@ public sealed class GetTableCommand : Command<GetTableCommand.Settings>
             foreach (var f in details.Fields)
                 table.AddRow(f.Name, f.EdtName ?? f.Type ?? "-", RenderHelpers.Escape(f.Label) ?? "-", f.Mandatory ? "yes" : "");
             AnsiConsole.Write(table);
+            if (details.Indexes.Count > 0)
+            {
+                AnsiConsole.MarkupLine("[bold]Indexes[/]");
+                var ix = new Table().AddColumn("Name").AddColumn("Fields").AddColumn("AllowDup").AddColumn("AltKey");
+                foreach (var i in details.Indexes)
+                    ix.AddRow(i.Name, i.FieldsCsv ?? "-", i.AllowDuplicates ? "yes" : "", i.AlternateKey ? "yes" : "");
+                AnsiConsole.Write(ix);
+            }
             if (details.Relations.Count > 0)
             {
                 AnsiConsole.MarkupLine("[bold]Relations[/]");
@@ -50,6 +61,22 @@ public sealed class GetTableCommand : Command<GetTableCommand.Settings>
                 foreach (var r in details.Relations)
                     rel.AddRow(r.FromTable, r.ToTable, r.Cardinality ?? "-", r.RelationName ?? "-");
                 AnsiConsole.Write(rel);
+            }
+            if (details.DeleteActions.Count > 0)
+            {
+                AnsiConsole.MarkupLine("[bold]Delete actions[/]");
+                var da = new Table().AddColumn("Name").AddColumn("Related").AddColumn("Action");
+                foreach (var d in details.DeleteActions)
+                    da.AddRow(d.Name ?? "-", d.RelatedTable, d.DeleteAction ?? "-");
+                AnsiConsole.Write(da);
+            }
+            if (details.Methods.Count > 0)
+            {
+                AnsiConsole.MarkupLine("[bold]Methods[/]");
+                var mt = new Table().AddColumn("Name").AddColumn("Return").AddColumn("Static").AddColumn("Signature");
+                foreach (var m in details.Methods)
+                    mt.AddRow(m.Name, m.ReturnType ?? "-", m.IsStatic ? "yes" : "", RenderHelpers.Escape(m.Signature) ?? "-");
+                AnsiConsole.Write(mt);
             }
         });
     }
@@ -179,5 +206,177 @@ public sealed class GetLabelCommand : Command<GetLabelCommand.Settings>
         if (!settings.RawText)
             hit = hit with { Value = D365FO.Core.StringSanitizer.Sanitize(hit.Value) };
         return RenderHelpers.Render(kind, ToolResult<object>.Success(hit));
+    }
+}
+
+public sealed class GetFormCommand : Command<GetFormCommand.Settings>
+{
+    public sealed class Settings : D365OutputSettings
+    {
+        [CommandArgument(0, "<NAME>")]
+        public string Name { get; init; } = "";
+    }
+
+    public override int Execute(CommandContext ctx, Settings settings)
+    {
+        var kind = OutputMode.Resolve(settings.Output);
+        var repo = RepoFactory.Create();
+        var f = repo.GetForm(settings.Name);
+        return RenderHelpers.Render(kind, f is null
+            ? ToolResult<object>.Fail("FORM_NOT_FOUND", $"Form '{settings.Name}' not found.")
+            : ToolResult<object>.Success(f));
+    }
+}
+
+public sealed class GetRoleCommand : Command<GetRoleCommand.Settings>
+{
+    public sealed class Settings : D365OutputSettings
+    {
+        [CommandArgument(0, "<NAME>")]
+        public string Name { get; init; } = "";
+    }
+
+    public override int Execute(CommandContext ctx, Settings settings)
+    {
+        var kind = OutputMode.Resolve(settings.Output);
+        var repo = RepoFactory.Create();
+        var r = repo.GetSecurityRole(settings.Name);
+        return RenderHelpers.Render(kind, r is null
+            ? ToolResult<object>.Fail("ROLE_NOT_FOUND", $"Role '{settings.Name}' not found.")
+            : ToolResult<object>.Success(r));
+    }
+}
+
+public sealed class GetDutyCommand : Command<GetDutyCommand.Settings>
+{
+    public sealed class Settings : D365OutputSettings
+    {
+        [CommandArgument(0, "<NAME>")]
+        public string Name { get; init; } = "";
+    }
+
+    public override int Execute(CommandContext ctx, Settings settings)
+    {
+        var kind = OutputMode.Resolve(settings.Output);
+        var repo = RepoFactory.Create();
+        var d = repo.GetSecurityDuty(settings.Name);
+        return RenderHelpers.Render(kind, d is null
+            ? ToolResult<object>.Fail("DUTY_NOT_FOUND", $"Duty '{settings.Name}' not found.")
+            : ToolResult<object>.Success(d));
+    }
+}
+
+public sealed class GetPrivilegeCommand : Command<GetPrivilegeCommand.Settings>
+{
+    public sealed class Settings : D365OutputSettings
+    {
+        [CommandArgument(0, "<NAME>")]
+        public string Name { get; init; } = "";
+    }
+
+    public override int Execute(CommandContext ctx, Settings settings)
+    {
+        var kind = OutputMode.Resolve(settings.Output);
+        var repo = RepoFactory.Create();
+        var p = repo.GetSecurityPrivilege(settings.Name);
+        return RenderHelpers.Render(kind, p is null
+            ? ToolResult<object>.Fail("PRIVILEGE_NOT_FOUND", $"Privilege '{settings.Name}' not found.")
+            : ToolResult<object>.Success(p));
+    }
+}
+
+public sealed class GetQueryCommand : Command<GetQueryCommand.Settings>
+{
+    public sealed class Settings : D365OutputSettings
+    {
+        [CommandArgument(0, "<NAME>")] public string Name { get; init; } = "";
+    }
+    public override int Execute(CommandContext ctx, Settings settings)
+    {
+        var kind = OutputMode.Resolve(settings.Output);
+        var q = RepoFactory.Create().GetQuery(settings.Name);
+        return RenderHelpers.Render(kind, q is null
+            ? ToolResult<object>.Fail("QUERY_NOT_FOUND", $"Query '{settings.Name}' not found.")
+            : ToolResult<object>.Success(q));
+    }
+}
+
+public sealed class GetViewCommand : Command<GetViewCommand.Settings>
+{
+    public sealed class Settings : D365OutputSettings
+    {
+        [CommandArgument(0, "<NAME>")] public string Name { get; init; } = "";
+    }
+    public override int Execute(CommandContext ctx, Settings settings)
+    {
+        var kind = OutputMode.Resolve(settings.Output);
+        var v = RepoFactory.Create().GetView(settings.Name);
+        return RenderHelpers.Render(kind, v is null
+            ? ToolResult<object>.Fail("VIEW_NOT_FOUND", $"View '{settings.Name}' not found.")
+            : ToolResult<object>.Success(v));
+    }
+}
+
+public sealed class GetEntityCommand : Command<GetEntityCommand.Settings>
+{
+    public sealed class Settings : D365OutputSettings
+    {
+        [CommandArgument(0, "<NAME>")] public string Name { get; init; } = "";
+    }
+    public override int Execute(CommandContext ctx, Settings settings)
+    {
+        var kind = OutputMode.Resolve(settings.Output);
+        var e = RepoFactory.Create().GetDataEntity(settings.Name);
+        return RenderHelpers.Render(kind, e is null
+            ? ToolResult<object>.Fail("ENTITY_NOT_FOUND", $"Data entity '{settings.Name}' not found.")
+            : ToolResult<object>.Success(e));
+    }
+}
+
+public sealed class GetReportCommand : Command<GetReportCommand.Settings>
+{
+    public sealed class Settings : D365OutputSettings
+    {
+        [CommandArgument(0, "<NAME>")] public string Name { get; init; } = "";
+    }
+    public override int Execute(CommandContext ctx, Settings settings)
+    {
+        var kind = OutputMode.Resolve(settings.Output);
+        var r = RepoFactory.Create().GetReport(settings.Name);
+        return RenderHelpers.Render(kind, r is null
+            ? ToolResult<object>.Fail("REPORT_NOT_FOUND", $"Report '{settings.Name}' not found.")
+            : ToolResult<object>.Success(r));
+    }
+}
+
+public sealed class GetServiceCommand : Command<GetServiceCommand.Settings>
+{
+    public sealed class Settings : D365OutputSettings
+    {
+        [CommandArgument(0, "<NAME>")] public string Name { get; init; } = "";
+    }
+    public override int Execute(CommandContext ctx, Settings settings)
+    {
+        var kind = OutputMode.Resolve(settings.Output);
+        var s = RepoFactory.Create().GetService(settings.Name);
+        return RenderHelpers.Render(kind, s is null
+            ? ToolResult<object>.Fail("SERVICE_NOT_FOUND", $"Service '{settings.Name}' not found.")
+            : ToolResult<object>.Success(s));
+    }
+}
+
+public sealed class GetServiceGroupCommand : Command<GetServiceGroupCommand.Settings>
+{
+    public sealed class Settings : D365OutputSettings
+    {
+        [CommandArgument(0, "<NAME>")] public string Name { get; init; } = "";
+    }
+    public override int Execute(CommandContext ctx, Settings settings)
+    {
+        var kind = OutputMode.Resolve(settings.Output);
+        var g = RepoFactory.Create().GetServiceGroup(settings.Name);
+        return RenderHelpers.Render(kind, g is null
+            ? ToolResult<object>.Fail("SERVICE_GROUP_NOT_FOUND", $"Service group '{settings.Name}' not found.")
+            : ToolResult<object>.Success(g));
     }
 }

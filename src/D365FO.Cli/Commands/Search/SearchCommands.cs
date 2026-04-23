@@ -142,3 +142,107 @@ public sealed class SearchEnumCommand : Command<SearchEnumCommand.Settings>
         return RenderHelpers.Render(kind, ToolResult<object>.Success(new { count = items.Count, items }));
     }
 }
+
+public sealed class SearchQueryCommand : Command<SearchQueryCommand.Settings>
+{
+    public sealed class Settings : D365OutputSettings
+    {
+        [CommandArgument(0, "<QUERY>")]
+        public string Query { get; init; } = "";
+        [CommandOption("-l|--limit <N>")]
+        public int Limit { get; init; } = 50;
+    }
+    public override int Execute(CommandContext ctx, Settings settings)
+    {
+        var kind = OutputMode.Resolve(settings.Output);
+        var items = RepoFactory.Create().SearchQueries(settings.Query, settings.Limit);
+        return RenderHelpers.Render(kind, ToolResult<object>.Success(new { count = items.Count, items }));
+    }
+}
+
+public sealed class SearchViewCommand : Command<SearchViewCommand.Settings>
+{
+    public sealed class Settings : D365OutputSettings
+    {
+        [CommandArgument(0, "<QUERY>")]
+        public string Query { get; init; } = "";
+        [CommandOption("-l|--limit <N>")]
+        public int Limit { get; init; } = 50;
+    }
+    public override int Execute(CommandContext ctx, Settings settings)
+    {
+        var kind = OutputMode.Resolve(settings.Output);
+        var items = RepoFactory.Create().SearchViews(settings.Query, settings.Limit);
+        return RenderHelpers.Render(kind, ToolResult<object>.Success(new { count = items.Count, items }));
+    }
+}
+
+public sealed class SearchEntityCommand : Command<SearchEntityCommand.Settings>
+{
+    public sealed class Settings : D365OutputSettings
+    {
+        [CommandArgument(0, "<QUERY>")]
+        public string Query { get; init; } = "";
+        [CommandOption("-l|--limit <N>")]
+        public int Limit { get; init; } = 50;
+    }
+    public override int Execute(CommandContext ctx, Settings settings)
+    {
+        var kind = OutputMode.Resolve(settings.Output);
+        var items = RepoFactory.Create().SearchDataEntities(settings.Query, settings.Limit);
+        return RenderHelpers.Render(kind, ToolResult<object>.Success(new { count = items.Count, items }));
+    }
+}
+
+public sealed class SearchReportCommand : Command<SearchReportCommand.Settings>
+{
+    public sealed class Settings : D365OutputSettings
+    {
+        [CommandArgument(0, "<QUERY>")]
+        public string Query { get; init; } = "";
+        [CommandOption("-l|--limit <N>")]
+        public int Limit { get; init; } = 50;
+    }
+    public override int Execute(CommandContext ctx, Settings settings)
+    {
+        var kind = OutputMode.Resolve(settings.Output);
+        var items = RepoFactory.Create().SearchReports(settings.Query, settings.Limit);
+        return RenderHelpers.Render(kind, ToolResult<object>.Success(new { count = items.Count, items }));
+    }
+}
+
+public sealed class SearchServiceCommand : Command<SearchServiceCommand.Settings>
+{
+    public sealed class Settings : D365OutputSettings
+    {
+        [CommandArgument(0, "<QUERY>")]
+        public string Query { get; init; } = "";
+        [CommandOption("-l|--limit <N>")]
+        public int Limit { get; init; } = 50;
+    }
+    public override int Execute(CommandContext ctx, Settings settings)
+    {
+        var kind = OutputMode.Resolve(settings.Output);
+        var items = RepoFactory.Create().SearchServices(settings.Query, settings.Limit);
+        return RenderHelpers.Render(kind, ToolResult<object>.Success(new { count = items.Count, items }));
+    }
+}
+
+public sealed class SearchWorkflowCommand : Command<SearchWorkflowCommand.Settings>
+{
+    public sealed class Settings : D365OutputSettings
+    {
+        [CommandArgument(0, "<QUERY>")]
+        public string Query { get; init; } = "";
+        [CommandOption("-l|--limit <N>")]
+        public int Limit { get; init; } = 50;
+    }
+    public override int Execute(CommandContext ctx, Settings settings)
+    {
+        var kind = OutputMode.Resolve(settings.Output);
+        var items = RepoFactory.Create().SearchWorkflowTypes(settings.Query, settings.Limit);
+        return RenderHelpers.Render(kind, ToolResult<object>.Success(new { count = items.Count, items }));
+    }
+}
+
+
