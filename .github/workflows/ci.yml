@@ -1,0 +1,59 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  build-test:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: |
+            8.0.x
+            10.0.x
+
+      - name: Restore
+        run: dotnet restore d365fo-cli.slnx
+
+      - name: Build
+        run: dotnet build d365fo-cli.slnx --no-restore -c Release -nologo
+
+      - name: Test
+        run: dotnet test d365fo-cli.slnx --no-build -c Release --logger "trx;LogFileName=test-results.trx" --collect "XPlat Code Coverage"
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results-${{ matrix.os }}
+          path: "**/TestResults/**"
+
+  skills:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.x"
+      - name: Emit skills (Copilot + Anthropic)
+        run: python3 scripts/emit-skills.py
+      - name: Fail on untracked drift
+        run: |
+          if [ -n "$(git status --porcelain skills/copilot skills/anthropic)" ]; then
+            echo "::error::skills/ artifacts drift from skills/_source. Run scripts/emit-skills.py locally and commit."
+            git status --porcelain skills/
+            exit 1
+          fi

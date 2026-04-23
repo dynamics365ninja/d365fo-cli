@@ -1,0 +1,14 @@
+bin/
+obj/
+out/
+publish/
+*.user
+.vs/
+.idea/
+.vscode/launch.json
+TestResults/
+coverage/
+*.coverage
+*.trx
+.DS_Store
+*.log

@@ -1,0 +1,11 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/D365FO.Cli/D365FO.Cli.csproj" />
+    <Project Path="src/D365FO.Core/D365FO.Core.csproj" />
+    <Project Path="src/D365FO.Mcp/D365FO.Mcp.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/D365FO.Cli.Tests/D365FO.Cli.Tests.csproj" />
+    <Project Path="tests/D365FO.Core.Tests/D365FO.Core.Tests.csproj" />
+  </Folder>
+</Solution>
