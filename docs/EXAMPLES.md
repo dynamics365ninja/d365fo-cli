@@ -74,10 +74,13 @@ d365fo read class CustTable_Extension --method validateWriteExt
 ### `models` — inspect indexed models
 
 ```sh
+d365fo models list
 d365fo models deps ApplicationSuite
+d365fo models coupling --top 10
+d365fo models coupling --only-cycles
 ```
 
-`models list` enumerates every model with publisher, layer, and custom-flag.
+`models list` enumerates every model with publisher, layer, and custom-flag. `models coupling` runs Tarjan SCC over `ModelDependencies` to surface dependency cycles and ranks every model by fan-in / fan-out / instability (`I = Ce / (Ca + Ce)`, where 0 = most stable, 1 = most volatile).
 
 ### `search any` — scope-agnostic quick jump
 
@@ -105,9 +108,11 @@ Returns per-model object counts plus top tables (by field count), top classes (b
 d365fo index refresh
 d365fo index refresh --force          # re-scan every model
 d365fo index extract --since 2026-04-01T00:00:00Z  # explicit threshold
+d365fo index history --limit 20       # last 20 per-model extract runs
+d365fo index history --model Contoso  # filter to one model
 ```
 
-Computes the newest `.xml` mtime under each model folder and skips models that are older than the DB's last-write timestamp (minus a 5-minute safety margin). `--force` is the no-threshold equivalent of `index extract`.
+`index refresh` compares each model's live content fingerprint (`"{xmlFileCount}:{newestMtimeTicks}"`, stored in `Models.SourceFingerprint` since schema v7) against the DB row and re-extracts only the models that changed. It also keeps the pre-v7 `--since <ISO>` fallback based on DB mtime for environments where the fingerprint column is empty. `--force` ignores both thresholds. `index history` reads the append-only `ExtractionRuns` table that `index extract` writes to after every per-model run, so per-model timings survive across invocations.
 
 ### `lint` — in-process Best-Practice heuristics
 
@@ -216,7 +221,15 @@ d365fo generate privilege FmVehicleReadPriv \
 d365fo generate duty FmVehicleMaintainDuty \
   --privilege FmVehicleReadPriv --privilege FmVehicleUpdatePriv \
   --out src/MyModel/AxSecurityDuty/FmVehicleMaintainDuty.xml
+
+# Scaffold-and-wire in one pass: emit the duty/privilege XML AND merge its
+# name into an existing role's <Duties> / <Privileges>.
+d365fo generate duty FmReportingDuty --privilege FmReportsViewPriv \
+  --out src/MyModel/AxSecurityDuty/FmReportingDuty.xml \
+  --into-role src/MyModel/AxSecurityRole/FmVehicleAdminRole.xml
 ```
+
+Both `generate privilege` and `generate duty` accept `--into-role <PATH>`; after the scaffold file is written, the role XML is updated idempotently with a `.bak` sibling (same merge path as `generate role --add-to`).
 
 ### Security role (new or merge)
 
@@ -251,7 +264,7 @@ d365fo label rename NewKey RenamedKey  --file path/Foo.en-us.label.txt
 d365fo label delete RenamedKey         --file path/Foo.en-us.label.txt
 ```
 
-`search label --fts` requires a schema-v6 index (run `d365fo index refresh --force` once after upgrading) and falls back to `LIKE` scans on SQLite builds without FTS5. Write commands return envelope codes `KEY_EXISTS` / `KEY_NOT_FOUND` / `FILE_NOT_FOUND` / `WRITE_FAILED` and keep a `.bak` of the previous file.
+`search label --fts` requires a schema-v6-or-later index (run `d365fo index refresh --force` once after upgrading) and falls back to `LIKE` scans on SQLite builds without FTS5. Write commands return envelope codes `KEY_EXISTS` / `KEY_NOT_FOUND` / `FILE_NOT_FOUND` / `WRITE_FAILED` and keep a `.bak` of the previous file.
 
 ---
 
@@ -328,7 +341,7 @@ Standalone JSON-RPC 2.0 server (protocol `2024-11-05`) that shares the CLI's ind
 }
 ```
 
-After `dotnet publish src/D365FO.Mcp -c Release -r osx-arm64` you get a standalone `d365fo-mcp` binary you can drop on `$PATH`. The adapter exposes **53 tools** covering CLI parity (search / get / find / read / index_status), security & labels — read (`get_label`, `search_labels`, `search_labels_fts`) and write (`create_label`, `rename_label`, `delete_label`) — heuristics (`search_any`, `suggest_edt`, `validate_object_naming`, `analyze_extension_points`), aggregation (`stats`, `batch_search`), workspace info, and the in-proc `lint` runner. Items still missing from MCP are tracked in [ROADMAP.md](ROADMAP.md).
+After `dotnet publish src/D365FO.Mcp -c Release -r osx-arm64` you get a standalone `d365fo-mcp` binary you can drop on `$PATH`. The adapter exposes **55 tools** covering CLI parity (search / get / find / read / index_status), security & labels — read (`get_label`, `search_labels`, `search_labels_fts`) and write (`create_label`, `rename_label`, `delete_label`) — heuristics (`search_any`, `suggest_edt`, `validate_object_naming`, `analyze_extension_points`), aggregation (`stats`, `batch_search`, `index_history`, `models_coupling`), workspace info, and the in-proc `lint` runner. Items still missing from MCP are tracked in [ROADMAP.md](ROADMAP.md).
 
 ---
 

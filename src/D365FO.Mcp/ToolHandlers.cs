@@ -554,4 +554,49 @@ public sealed class ToolHandlers
             return ToolResult<object>.Fail(D365FoErrorCodes.WriteFailed, ex.Message);
         }
     }
+
+    public ToolResult<object> IndexHistory(int limit, string? model)
+    {
+        var rows = _repo.GetExtractionRuns(limit <= 0 ? 50 : limit, string.IsNullOrWhiteSpace(model) ? null : model);
+        return ToolResult<object>.Success(new
+        {
+            count = rows.Count,
+            model,
+            runs = rows.Select(r => new
+            {
+                runId = r.RunId,
+                startedUtc = r.StartedUtc,
+                model = r.Model,
+                elapsedMs = r.ElapsedMs,
+                tables = r.Tables,
+                classes = r.Classes,
+                edts = r.Edts,
+                enums = r.Enums,
+                labels = r.Labels,
+                isCustom = r.IsCustom,
+            }).ToArray(),
+        });
+    }
+
+    public ToolResult<object> ModelsCoupling(int topN, bool onlyCycles)
+    {
+        var graph = _repo.GetDependencyGraph();
+        var report = D365FO.Core.Analysis.CouplingAnalyzer.Analyse(graph);
+        var top = onlyCycles
+            ? Array.Empty<object>()
+            : report.Nodes.Take(topN <= 0 ? 20 : topN).Select(n => new
+            {
+                name = n.Name,
+                fanIn = n.FanIn,
+                fanOut = n.FanOut,
+                instability = Math.Round(n.Instability, 3),
+            }).ToArray<object>();
+        return ToolResult<object>.Success(new
+        {
+            modelCount = report.Nodes.Count,
+            cycleCount = report.Cycles.Count,
+            cycles = report.Cycles,
+            top,
+        });
+    }
 }

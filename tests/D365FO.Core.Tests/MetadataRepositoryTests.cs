@@ -62,4 +62,40 @@ public class MetadataRepositoryTests : IDisposable
         repo.EnsureSchema();
         Assert.Null(repo.GetTableDetails("DoesNotExist"));
     }
+
+    [Fact]
+    public void RecordExtractionRun_roundtrips_via_GetExtractionRuns()
+    {
+        var repo = new MetadataRepository(_dbPath);
+        repo.EnsureSchema();
+        repo.RecordExtractionRun("Contoso", DateTime.UtcNow, 1234, 10, 20, 3, 4, 50, true);
+        repo.RecordExtractionRun("ApplicationSuite", DateTime.UtcNow, 42_000, 500, 1000, 0, 0, 100, false);
+
+        var rows = repo.GetExtractionRuns(10);
+        Assert.Equal(2, rows.Count);
+        // Newest first (by RunId DESC).
+        Assert.Equal("ApplicationSuite", rows[0].Model);
+        Assert.Equal(42_000, rows[0].ElapsedMs);
+        Assert.False(rows[0].IsCustom);
+
+        var filtered = repo.GetExtractionRuns(10, "Contoso");
+        Assert.Single(filtered);
+        Assert.True(filtered[0].IsCustom);
+    }
+
+    [Fact]
+    public void ApplyExtract_stamps_fingerprint_and_LastExtractedUtc()
+    {
+        var repo = new MetadataRepository(_dbPath);
+        repo.EnsureSchema();
+        var batch = ExtractBatch.Empty("Contoso") with { Publisher = "Contoso", Layer = "usr", IsCustom = true };
+        repo.ApplyExtract(batch, sourceFingerprint: "42:1234567890");
+
+        var fps = repo.GetModelFingerprints();
+        Assert.Equal("42:1234567890", fps["Contoso"]);
+
+        // Re-apply without fingerprint should NOT wipe it (COALESCE in UPDATE).
+        repo.ApplyExtract(ExtractBatch.Empty("Contoso") with { IsCustom = true }, sourceFingerprint: null);
+        Assert.Equal("42:1234567890", repo.GetModelFingerprints()["Contoso"]);
+    }
 }

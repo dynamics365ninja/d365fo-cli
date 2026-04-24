@@ -115,6 +115,7 @@ app.Configure(cfg =>
         b.AddCommand<IndexStatusCommand>("status").WithDescription("Report index health.");
         b.AddCommand<IndexExtractCommand>("extract").WithDescription("Walk PACKAGES_PATH and ingest AOT metadata.");
         b.AddCommand<IndexRefreshCommand>("refresh").WithDescription("Incremental extract — skip models whose XMLs haven't changed since last extract.");
+        b.AddCommand<IndexHistoryCommand>("history").WithDescription("Show recent ExtractionRuns (per-model timings persisted across runs).");
     });
 
     cfg.AddBranch("models", b =>
@@ -122,6 +123,7 @@ app.Configure(cfg =>
         b.SetDescription("Inspect indexed models and their descriptor-declared dependencies.");
         b.AddCommand<ModelsListCommand>("list").WithDescription("List indexed models (name/publisher/layer/custom).");
         b.AddCommand<ModelsDepsCommand>("deps").WithDescription("Show dependency graph for a model (depends-on / depended-by).");
+        b.AddCommand<ModelsCouplingCommand>("coupling").WithDescription("Coupling metrics (fan-in, fan-out, instability, cycles) over ModelDependencies.");
     });
 
     cfg.AddBranch("generate", b =>

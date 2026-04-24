@@ -30,6 +30,19 @@ public sealed record IndexStats(
 /// <summary>Finding from <c>d365fo lint</c>.</summary>
 public sealed record LintHit(string TargetName, string Model, string? Detail);
 
+/// <summary>One row of <c>_ExtractionRuns</c> (see ROADMAP §1.3).</summary>
+public sealed record ExtractionRunRow(
+    long RunId,
+    string StartedUtc,
+    string Model,
+    long ElapsedMs,
+    long Tables,
+    long Classes,
+    long Edts,
+    long Enums,
+    long Labels,
+    bool IsCustom);
+
 
 public sealed record TableInfo(
     long TableId,

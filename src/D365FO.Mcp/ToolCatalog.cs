@@ -303,6 +303,16 @@ internal static class ToolCatalog
             "Delete a label entry from a *.label.txt file.",
             Schema(("file", "string", true), ("key", "string", true)),
             (h, p) => h.DeleteLabel(Str(p, "file"), Str(p, "key"))),
+
+        new Descriptor("index_history",
+            "Recent ExtractionRuns telemetry (per-model timings). Returns newest first.",
+            Schema(("limit", "integer", false), ("model", "string", false)),
+            (h, p) => h.IndexHistory(Int(p, "limit", 50), Str(p, "model"))),
+
+        new Descriptor("models_coupling",
+            "Coupling metrics over ModelDependencies: fan-in, fan-out, instability, dependency cycles.",
+            Schema(("topN", "integer", false), ("onlyCycles", "boolean", false)),
+            (h, p) => h.ModelsCoupling(Int(p, "topN", 20), Bool(p, "onlyCycles"))),
     };
 
     // ---- JSON helpers ----

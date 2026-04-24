@@ -14,7 +14,7 @@ namespace D365FO.Core.Index;
 public sealed class MetadataRepository
 {
     /// <summary>Current schema version tracked in PRAGMA user_version.</summary>
-    public const int CurrentSchemaVersion = 6;
+    public const int CurrentSchemaVersion = 7;
 
     private static readonly Lazy<string> SchemaSql = new(LoadEmbeddedSchema);
 
@@ -60,6 +60,18 @@ public sealed class MetadataRepository
         if (current == CurrentSchemaVersion) return false;
 
         conn.Execute(SchemaSql.Value);
+        // v7 migration: add new columns on pre-existing Models tables. SQLite
+        // lacks `ADD COLUMN IF NOT EXISTS`, so we check via PRAGMA table_info
+        // rather than relying on a benign exception.
+        if (current < 7)
+        {
+            var existingCols = conn.Query<string>("SELECT name FROM pragma_table_info('Models')")
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
+            if (!existingCols.Contains("LastExtractedUtc"))
+                conn.Execute("ALTER TABLE Models ADD COLUMN LastExtractedUtc TEXT");
+            if (!existingCols.Contains("SourceFingerprint"))
+                conn.Execute("ALTER TABLE Models ADD COLUMN SourceFingerprint TEXT");
+        }
         conn.Execute($"PRAGMA user_version = {CurrentSchemaVersion}");
         conn.Execute(
             "INSERT OR IGNORE INTO SchemaVersion(Version, AppliedUtc) VALUES(@v, @t)",
@@ -600,6 +612,36 @@ public sealed class MetadataRepository
         return new ModelDependencies(mi, dependsOn, dependedBy);
     }
 
+    /// <summary>
+    /// Return every <c>Models.Name</c> → list of <c>ModelDependencies.Target</c>
+    /// edges. Used by the coupling-metrics command (ROADMAP §6.2).
+    /// </summary>
+    public IReadOnlyDictionary<string, IReadOnlyList<string>> GetDependencyGraph()
+    {
+        using var conn = Open();
+        var rows = conn.Query<(string Source, string Target)>(@"
+            SELECT m.Name AS Source, d.Target AS Target
+            FROM ModelDependencies d
+            JOIN Models m ON m.ModelId = d.ModelId");
+        var graph = new Dictionary<string, List<string>>(StringComparer.OrdinalIgnoreCase);
+        foreach (var r in rows)
+        {
+            if (!graph.TryGetValue(r.Source, out var list))
+            {
+                list = new List<string>();
+                graph[r.Source] = list;
+            }
+            if (!list.Contains(r.Target, StringComparer.OrdinalIgnoreCase))
+                list.Add(r.Target);
+        }
+        // Ensure every model is a node even if it has no outgoing edges.
+        foreach (var m in conn.Query<string>("SELECT Name FROM Models"))
+        {
+            if (!graph.ContainsKey(m)) graph[m] = new List<string>();
+        }
+        return graph.ToDictionary(kv => kv.Key, kv => (IReadOnlyList<string>)kv.Value, StringComparer.OrdinalIgnoreCase);
+    }
+
     // ---- additional read operations ----
 
     public IReadOnlyList<TableInfo> SearchTables(string query, string? model = null, int limit = 50)
@@ -780,10 +822,62 @@ public sealed class MetadataRepository
     // ---- writer API used by the extract pipeline ----
 
     /// <summary>
+    /// Return every model's current <c>SourceFingerprint</c> (may be null for
+    /// pre-v7 rows or models that have never been through a fingerprint-aware
+    /// refresh). Keyed by model name, case-insensitive.
+    /// </summary>
+    public IReadOnlyDictionary<string, string?> GetModelFingerprints()
+    {
+        using var conn = Open();
+        var rows = conn.Query<(string Name, string? SourceFingerprint)>(
+            "SELECT Name, SourceFingerprint FROM Models");
+        var map = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
+        foreach (var r in rows) map[r.Name] = r.SourceFingerprint;
+        return map;
+    }
+
+    /// <summary>
+    /// Append one <c>ExtractionRuns</c> row. Cheap (single INSERT) and
+    /// separate from <see cref="ApplyExtract(ExtractBatch)"/> so callers that extract
+    /// speculatively (e.g. dry-run) can skip telemetry.
+    /// </summary>
+    public void RecordExtractionRun(string model, DateTime startedUtc, long elapsedMs,
+        int tables, int classes, int edts, int enums, int labels, bool isCustom)
+    {
+        using var conn = Open();
+        conn.Execute(@"INSERT INTO ExtractionRuns(StartedUtc, Model, ElapsedMs, Tables, Classes, Edts, Enums, Labels, IsCustom)
+                       VALUES(@s, @m, @el, @t, @c, @ed, @en, @lb, @ic)",
+            new
+            {
+                s = startedUtc.ToString("O"),
+                m = model,
+                el = elapsedMs,
+                t = tables,
+                c = classes,
+                ed = edts,
+                en = enums,
+                lb = labels,
+                ic = isCustom ? 1 : 0,
+            });
+    }
+
+    /// <summary>Recent <c>ExtractionRuns</c>, newest first.</summary>
+    public IReadOnlyList<ExtractionRunRow> GetExtractionRuns(int limit = 200, string? model = null)
+    {
+        using var conn = Open();
+        var sql = @"SELECT RunId, StartedUtc, Model, ElapsedMs, Tables, Classes, Edts, Enums, Labels, IsCustom
+                    FROM ExtractionRuns
+                    WHERE (@model IS NULL OR Model = @model)
+                    ORDER BY RunId DESC
+                    LIMIT @limit";
+        return conn.Query<ExtractionRunRow>(sql, new { model, limit }).ToList();
+    }
+
+    /// <summary>
     /// Upsert a <c>Models</c> row by name. Intended for callers that know the
     /// authoritative IsCustom/Publisher/Layer. If the row already exists the
     /// existing flags are preserved; the canonical way to refresh flags is
-    /// <see cref="ApplyExtract"/>, which re-runs this upsert and then issues
+    /// <see cref="ApplyExtract(ExtractBatch)"/>, which re-runs this upsert and then issues
     /// an <c>UPDATE</c> with the authoritative descriptor values.
     /// </summary>
     public long UpsertModel(string name, string? publisher, string? layer, bool isCustom)
@@ -811,16 +905,34 @@ public sealed class MetadataRepository
     /// existing rows for the given model so the pipeline stays idempotent
     /// (re-extract = replace).
     /// </summary>
-    public void ApplyExtract(ExtractBatch batch)
+    public void ApplyExtract(ExtractBatch batch) => ApplyExtract(batch, sourceFingerprint: null);
+
+    /// <summary>
+    /// Apply a batch of extracted records atomically, stamping the model's
+    /// <c>LastExtractedUtc</c> and (when provided) <c>SourceFingerprint</c>.
+    /// </summary>
+    public void ApplyExtract(ExtractBatch batch, string? sourceFingerprint)
     {
         ArgumentNullException.ThrowIfNull(batch);
         using var conn = Open();
         using var tx = conn.BeginTransaction();
 
         var modelId = UpsertModelInternal(conn, tx, batch.Model, batch.Publisher, batch.Layer, batch.IsCustom);
-        // Refresh publisher/layer if the descriptor has been learned later.
-        conn.Execute("UPDATE Models SET Publisher=@p, Layer=@l, IsCustom=@c WHERE ModelId=@m",
-            new { p = batch.Publisher, l = batch.Layer, c = batch.IsCustom ? 1 : 0, m = modelId }, tx);
+        // Refresh publisher/layer + fingerprint metadata if the descriptor has been learned later.
+        conn.Execute(@"UPDATE Models
+                          SET Publisher=@p, Layer=@l, IsCustom=@c,
+                              LastExtractedUtc=@u,
+                              SourceFingerprint=COALESCE(@fp, SourceFingerprint)
+                        WHERE ModelId=@m",
+            new
+            {
+                p = batch.Publisher,
+                l = batch.Layer,
+                c = batch.IsCustom ? 1 : 0,
+                u = DateTime.UtcNow.ToString("O"),
+                fp = sourceFingerprint,
+                m = modelId,
+            }, tx);
 
         conn.Execute("DELETE FROM EnumValues WHERE EnumId IN (SELECT EnumId FROM Enums WHERE ModelId=@m)", new { m = modelId }, tx);
         conn.Execute("DELETE FROM Enums WHERE ModelId=@m", new { m = modelId }, tx);

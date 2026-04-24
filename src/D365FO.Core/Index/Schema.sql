@@ -13,11 +13,13 @@ CREATE TABLE IF NOT EXISTS SchemaVersion (
 );
 
 CREATE TABLE IF NOT EXISTS Models (
-    ModelId     INTEGER PRIMARY KEY AUTOINCREMENT,
-    Name        TEXT NOT NULL UNIQUE,
-    Publisher   TEXT,
-    Layer       TEXT,
-    IsCustom    INTEGER NOT NULL DEFAULT 0
+    ModelId             INTEGER PRIMARY KEY AUTOINCREMENT,
+    Name                TEXT NOT NULL UNIQUE,
+    Publisher           TEXT,
+    Layer               TEXT,
+    IsCustom            INTEGER NOT NULL DEFAULT 0,
+    LastExtractedUtc    TEXT,
+    SourceFingerprint   TEXT
 );
 
 CREATE TABLE IF NOT EXISTS Tables (
@@ -464,4 +466,25 @@ CREATE TRIGGER IF NOT EXISTS Labels_au AFTER UPDATE ON Labels BEGIN
     INSERT INTO LabelFts(rowid, Value, Key, LabelFile, Language)
     VALUES (new.LabelId, new.Value, new.Key, new.LabelFile, new.Language);
 END;
+
+-- v7 additions -----------------------------------------------------------
+-- Per-model fingerprints for content-addressed incremental refresh and an
+-- ExtractionRuns audit table for `d365fo stats extract-history`. The columns
+-- on Models are also injected via ALTER TABLE in EnsureSchema() so pre-v7
+-- databases pick them up without a full rebuild.
+
+CREATE TABLE IF NOT EXISTS ExtractionRuns (
+    RunId           INTEGER PRIMARY KEY AUTOINCREMENT,
+    StartedUtc      TEXT NOT NULL,
+    Model           TEXT NOT NULL,
+    ElapsedMs       INTEGER NOT NULL,
+    Tables          INTEGER NOT NULL DEFAULT 0,
+    Classes         INTEGER NOT NULL DEFAULT 0,
+    Edts            INTEGER NOT NULL DEFAULT 0,
+    Enums           INTEGER NOT NULL DEFAULT 0,
+    Labels          INTEGER NOT NULL DEFAULT 0,
+    IsCustom        INTEGER NOT NULL DEFAULT 0
+);
+CREATE INDEX IF NOT EXISTS IX_ExtractionRuns_Model ON ExtractionRuns(Model);
+CREATE INDEX IF NOT EXISTS IX_ExtractionRuns_StartedUtc ON ExtractionRuns(StartedUtc);
 

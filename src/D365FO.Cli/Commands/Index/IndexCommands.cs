@@ -114,7 +114,8 @@ public sealed class IndexExtractCommand : Command<IndexExtractCommand.Settings>
         string? packagesOverride,
         string? databaseOverride,
         string? onlyModel,
-        string? sinceIso)
+        string? sinceIso,
+        IReadOnlyDictionary<string, string?>? fingerprintsByModel = null)
     {
         var cfg = D365FoSettings.FromEnvironment(databaseOverride);
         var root = packagesOverride ?? cfg.PackagesPath;
@@ -158,17 +159,32 @@ public sealed class IndexExtractCommand : Command<IndexExtractCommand.Settings>
         var modelDirs = EnumerateModelDirs(root, onlyModel).ToList();
         var showProgress = kind != OutputMode.Kind.Json && !System.Console.IsOutputRedirected;
 
+        // Per-model fingerprint-based skip list for refresh (§1.1). Callers
+        // pass the current DB fingerprints; we skip any model whose freshly
+        // computed fingerprint already matches. `--force` is modelled as an
+        // empty dictionary so every model runs.
+        var dbFingerprints = fingerprintsByModel ?? new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
+
         void ProcessAll(Action<string>? onStart, Action<string, ExtractBatch, long>? onDone)
         {
             foreach (var modelDir in modelDirs)
             {
                 var model = Path.GetFileName(modelDir)!;
+                var fp = ComputeFingerprint(modelDir);
                 if (since.HasValue && NewestMtime(modelDir) is { } newest && newest < since.Value)
                 {
                     skippedCount++;
                     continue;
                 }
+                if (dbFingerprints.TryGetValue(model, out var stored)
+                    && !string.IsNullOrEmpty(stored)
+                    && string.Equals(stored, fp, StringComparison.Ordinal))
+                {
+                    skippedCount++;
+                    continue;
+                }
                 onStart?.Invoke(model);
+                var startedUtc = DateTime.UtcNow;
                 var sw = System.Diagnostics.Stopwatch.StartNew();
                 ExtractBatch batch;
                 try
@@ -179,9 +195,12 @@ public sealed class IndexExtractCommand : Command<IndexExtractCommand.Settings>
                 {
                     continue;
                 }
-                repo.ApplyExtract(batch);
+                repo.ApplyExtract(batch, fp);
                 sw.Stop();
                 var elapsedMs = sw.ElapsedMilliseconds;
+                repo.RecordExtractionRun(batch.Model, startedUtc, elapsedMs,
+                    batch.Tables.Count, batch.Classes.Count, batch.Edts.Count,
+                    batch.Enums.Count, batch.Labels.Count, batch.IsCustom);
                 modelCount++;
                 if (batch.IsCustom) customCount++;
                 per.Add(new
@@ -264,6 +283,33 @@ public sealed class IndexExtractCommand : Command<IndexExtractCommand.Settings>
         return max;
     }
 
+    /// <summary>
+    /// Cheap per-model content fingerprint used by <c>d365fo index refresh</c>.
+    /// Format: <c>"{fileCount}:{newestMtimeTicks}"</c>. Sensitive enough to
+    /// catch touches (re-export, rebase, partial sync) without paying the cost
+    /// of hashing every byte. The trade-off is documented in ROADMAP §1.1.
+    /// </summary>
+    internal static string ComputeFingerprint(string dir)
+    {
+        long newestTicks = 0;
+        int count = 0;
+        try
+        {
+            foreach (var f in Directory.EnumerateFiles(dir, "*.xml", SearchOption.AllDirectories))
+            {
+                count++;
+                try
+                {
+                    var t = File.GetLastWriteTimeUtc(f).Ticks;
+                    if (t > newestTicks) newestTicks = t;
+                }
+                catch { }
+            }
+        }
+        catch { }
+        return $"{count}:{newestTicks}";
+    }
+
     private static IEnumerable<string> EnumerateModelDirs(string packagesRoot, string? onlyModel)
     {
         IEnumerable<string> SafeDirs(string d)
@@ -334,13 +380,29 @@ public sealed class IndexRefreshCommand : Command<IndexRefreshCommand.Settings>
     public override int Execute(CommandContext ctx, Settings settings)
     {
         var since = settings.Since;
-        if (!settings.Force && string.IsNullOrWhiteSpace(since))
+        IReadOnlyDictionary<string, string?>? fingerprints = null;
+        if (!settings.Force)
         {
-            var cfg = D365FoSettings.FromEnvironment(settings.DatabasePath);
-            if (File.Exists(cfg.DatabasePath))
+            // Per-model fingerprint skip (§1.1). Cheap even for tens of models
+            // because the fingerprint is just (fileCount, newestMtimeTicks).
+            try
             {
-                var dbMtime = File.GetLastWriteTimeUtc(cfg.DatabasePath);
-                since = (dbMtime - TimeSpan.FromMinutes(5)).ToString("O");
+                var repo = RepoFactory.Create(settings.DatabasePath);
+                fingerprints = repo.GetModelFingerprints();
+            }
+            catch
+            {
+                // Pre-v7 DB or opening failed — fall back to the --since path.
+            }
+
+            if (string.IsNullOrWhiteSpace(since))
+            {
+                var cfg = D365FoSettings.FromEnvironment(settings.DatabasePath);
+                if (File.Exists(cfg.DatabasePath))
+                {
+                    var dbMtime = File.GetLastWriteTimeUtc(cfg.DatabasePath);
+                    since = (dbMtime - TimeSpan.FromMinutes(5)).ToString("O");
+                }
             }
         }
         return IndexExtractCommand.ExtractCore(
@@ -348,6 +410,54 @@ public sealed class IndexRefreshCommand : Command<IndexRefreshCommand.Settings>
             settings.PackagesPath,
             settings.DatabasePath,
             settings.OnlyModel,
-            since);
+            since,
+            fingerprints);
+    }
+}
+
+/// <summary>
+/// Persisted extraction telemetry (ROADMAP §1.3). Reads from
+/// <c>ExtractionRuns</c>, which <see cref="IndexExtractCommand"/> appends to
+/// after every per-model extract.
+/// </summary>
+public sealed class IndexHistoryCommand : Command<IndexHistoryCommand.Settings>
+{
+    public sealed class Settings : D365OutputSettings
+    {
+        [CommandOption("--db <PATH>")]
+        public string? DatabasePath { get; init; }
+
+        [CommandOption("--model <NAME>")]
+        [System.ComponentModel.Description("Filter to a single model name.")]
+        public string? Model { get; init; }
+
+        [CommandOption("-n|--limit <N>")]
+        [System.ComponentModel.Description("Row cap (default 50).")]
+        public int Limit { get; init; } = 50;
+    }
+
+    public override int Execute(CommandContext ctx, Settings settings)
+    {
+        var kind = OutputMode.Resolve(settings.Output);
+        var repo = RepoFactory.Create(settings.DatabasePath);
+        var rows = repo.GetExtractionRuns(settings.Limit, settings.Model);
+        return RenderHelpers.Render(kind, ToolResult<object>.Success(new
+        {
+            count = rows.Count,
+            model = settings.Model,
+            runs = rows.Select(r => new
+            {
+                runId = r.RunId,
+                startedUtc = r.StartedUtc,
+                model = r.Model,
+                elapsedMs = r.ElapsedMs,
+                tables = r.Tables,
+                classes = r.Classes,
+                edts = r.Edts,
+                enums = r.Enums,
+                labels = r.Labels,
+                isCustom = r.IsCustom,
+            }),
+        }));
     }
 }

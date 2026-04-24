@@ -263,6 +263,10 @@ public sealed class GeneratePrivilegeCommand : Command<GeneratePrivilegeCommand.
 
         [CommandOption("--label <TEXT>")]
         public string? Label { get; init; }
+
+        [CommandOption("--into-role <PATH>")]
+        [System.ComponentModel.Description("Path to an existing AxSecurityRole XML; after scaffolding, merge this privilege's Name into the role's <Privileges>.")]
+        public string? IntoRole { get; init; }
     }
 
     public override int Execute(CommandContext ctx, Settings settings)
@@ -287,6 +291,18 @@ public sealed class GeneratePrivilegeCommand : Command<GeneratePrivilegeCommand.
         try
         {
             var res = ScaffoldFileWriter.Write(doc, outPath!, settings.Overwrite);
+            object? intoRole = null;
+            if (!string.IsNullOrWhiteSpace(settings.IntoRole))
+            {
+                if (SecurityRoleMerge.AddReferences(settings.IntoRole!, duties: null, privileges: new[] { settings.Name }, out var mergeResult, out var err))
+                {
+                    intoRole = mergeResult;
+                }
+                else
+                {
+                    return RenderHelpers.Render(kind, ToolResult<object>.Fail(D365FoErrorCodes.WriteFailed, err!));
+                }
+            }
             return RenderHelpers.Render(kind, ToolResult<object>.Success(new
             {
                 kind = "AxSecurityPrivilege",
@@ -298,6 +314,7 @@ public sealed class GeneratePrivilegeCommand : Command<GeneratePrivilegeCommand.
                 bytes = res.Bytes,
                 backup = res.BackupPath,
                 model = settings.InstallTo,
+                intoRole,
             }));
         }
         catch (Exception ex)
@@ -321,6 +338,10 @@ public sealed class GenerateDutyCommand : Command<GenerateDutyCommand.Settings>
 
         [CommandOption("--label <TEXT>")]
         public string? Label { get; init; }
+
+        [CommandOption("--into-role <PATH>")]
+        [System.ComponentModel.Description("Path to an existing AxSecurityRole XML; after scaffolding, merge this duty's Name into the role's <Duties>.")]
+        public string? IntoRole { get; init; }
     }
 
     public override int Execute(CommandContext ctx, Settings settings)
@@ -345,6 +366,18 @@ public sealed class GenerateDutyCommand : Command<GenerateDutyCommand.Settings>
         try
         {
             var res = ScaffoldFileWriter.Write(doc, outPath!, settings.Overwrite);
+            object? intoRole = null;
+            if (!string.IsNullOrWhiteSpace(settings.IntoRole))
+            {
+                if (SecurityRoleMerge.AddReferences(settings.IntoRole!, duties: new[] { settings.Name }, privileges: null, out var mergeResult, out var err))
+                {
+                    intoRole = mergeResult;
+                }
+                else
+                {
+                    return RenderHelpers.Render(kind, ToolResult<object>.Fail(D365FoErrorCodes.WriteFailed, err!));
+                }
+            }
             return RenderHelpers.Render(kind, ToolResult<object>.Success(new
             {
                 kind = "AxSecurityDuty",
@@ -355,6 +388,7 @@ public sealed class GenerateDutyCommand : Command<GenerateDutyCommand.Settings>
                 bytes = res.Bytes,
                 backup = res.BackupPath,
                 model = settings.InstallTo,
+                intoRole,
             }));
         }
         catch (Exception ex)
@@ -489,6 +523,65 @@ public sealed class GenerateRoleCommand : Command<GenerateRoleCommand.Settings>
         catch (Exception ex)
         {
             return RenderHelpers.Render(kind, ToolResult<object>.Fail(D365FoErrorCodes.WriteFailed, ex.Message));
+        }
+    }
+}
+
+/// <summary>
+/// Idempotent &quot;add duty / privilege reference into an existing role&quot; merge,
+/// used by <c>generate role --add-to</c> and by the <c>--into-role</c> flag on
+/// <c>generate duty</c> / <c>generate privilege</c>. Loads the role XML,
+/// merges via <see cref="XppScaffolder.AddToRole"/>, and writes atomically
+/// with a <c>.bak</c> sibling.
+/// </summary>
+internal static class SecurityRoleMerge
+{
+    public static bool AddReferences(string path, string[]? duties, string[]? privileges, out object result, out string? error)
+    {
+        result = null!;
+        if (!System.IO.File.Exists(path))
+        {
+            error = $"Role file not found: {path}";
+            return false;
+        }
+        System.Xml.Linq.XDocument doc;
+        try { doc = System.Xml.Linq.XDocument.Load(path); }
+        catch (Exception ex) { error = $"Failed to parse role XML: {ex.Message}"; return false; }
+
+        bool changed;
+        try { changed = D365FO.Core.Scaffolding.XppScaffolder.AddToRole(doc, duties, privileges); }
+        catch (InvalidOperationException ex) { error = ex.Message; return false; }
+
+        if (!changed)
+        {
+            result = new { path, changed = false, note = "All supplied duties / privileges were already referenced." };
+            error = null;
+            return true;
+        }
+
+        try
+        {
+            var tmp = path + ".tmp";
+            using (var fs = System.IO.File.Create(tmp)) doc.Save(fs);
+            var backup = path + ".bak";
+            if (System.IO.File.Exists(backup)) System.IO.File.Delete(backup);
+            System.IO.File.Move(path, backup);
+            System.IO.File.Move(tmp, path);
+            result = new
+            {
+                path,
+                changed = true,
+                backup,
+                addedDuties = duties ?? Array.Empty<string>(),
+                addedPrivileges = privileges ?? Array.Empty<string>(),
+            };
+            error = null;
+            return true;
+        }
+        catch (Exception ex)
+        {
+            error = ex.Message;
+            return false;
         }
     }
 }

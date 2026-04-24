@@ -3,7 +3,7 @@ namespace D365FO.Core.Index;
 /// <summary>
 /// In-memory bundle of one model's extracted metadata. Produced by the
 /// <see cref="Extract.MetadataExtractor"/> and consumed by
-/// <see cref="MetadataRepository.ApplyExtract"/>.
+/// <see cref="MetadataRepository.ApplyExtract(ExtractBatch)"/>.
 /// </summary>
 public sealed record ExtractBatch(
     string Model,

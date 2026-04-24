@@ -20,17 +20,9 @@ Items are grouped by topic and ordered roughly by ROI; within a section you can 
 
 ## 1. Refresh & observability
 
-### 1.1 Fingerprint-based incremental refresh
+### 1.1 `d365fo index diff <revision>`
 
-`d365fo index refresh [--force]` and `d365fo index extract --since <ISO>` already skip models whose newest XML mtime is older than the DB's last-write timestamp (minus a 5-minute safety margin). Remaining work: schema bump adding `Models.LastExtractedUtc` / `Models.SourceFingerprint` so refresh becomes per-model content-addressed (no false-positive re-extracts when only the DB was touched).
-
-### 1.2 `d365fo index diff <revision>`
-
-Structural AOT diff vs. a git revision — e.g. "three new fields on `CustTable`, method `validate` signature changed". Requires a double extract or snapshotting.
-
-### 1.3 Persisted extraction telemetry
-
-Per-model timings are already emitted in the JSON envelope (`elapsedMs` per model + top-level total). Remaining work: an `_index_meta` table (or sidecar `.log`) so history survives across runs and can feed `d365fo stats`.
+Structural AOT diff vs. a git revision — e.g. "three new fields on `CustTable`, method `validate` signature changed". Requires a double extract or snapshotting. (The complementary fingerprint-based incremental refresh and the `ExtractionRuns` telemetry table shipped in schema v7; see EXAMPLES.md `index refresh` and `index history`.)
 
 ## 2. Runtime / live data
 
@@ -73,7 +65,6 @@ Skeleton exists (`D365FO.Cli.Commands.Daemon`). Add 1:1 request routing with the
 
 ## 5. Scaffolding extensions
 
-- `generate duty --into-role <NAME>` / `generate privilege --into-role <NAME>` — single-pass "scaffold + wire" (today the parts ship separately: scaffold the duty/privilege file, then `generate role --add-to <path>` merges references). Would fold those two steps into one.
 - Hand-rolled serialisers for selected Ax* kinds (e.g. `AxTableExtension`, `AxSecurityRole`) where `AxSerializer`'s generic walker elides detail the agent actually wants — the depth cap + cycle guard means we currently fall back to `Name` on deeply nested overlays.
 
 ## 6. Code quality & Best Practices
@@ -85,9 +76,12 @@ Skeleton exists (`D365FO.Cli.Commands.Daemon`). Add 1:1 request routing with the
 - "method with public API but no doc-comment" — requires method-source indexing (§3.6).
 - "UI literal string without `@Label`" — requires parsing element captions on forms / menu items.
 
-### 6.2 Coupling metrics
+### 6.2 Richer coupling metrics
 
-Graph metrics over `ModelDependencies` + `DYNAMICSXREFDB` — surfaces cyclic dependencies and top incoming / outgoing symbols.
+`d365fo models coupling` ships fan-in / fan-out / instability plus Tarjan SCC cycle detection over `ModelDependencies`. Remaining ideas:
+
+- DYNAMICSXREFDB-backed object-level coupling (which class references which EDT / table) beyond the descriptor graph.
+- HTML / DOT graph export (GraphViz `digraph`) so the output can feed CI dashboards.
 
 ## 7. Tests
 
