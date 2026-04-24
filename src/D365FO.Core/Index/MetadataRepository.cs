@@ -14,7 +14,7 @@ namespace D365FO.Core.Index;
 public sealed class MetadataRepository
 {
     /// <summary>Current schema version tracked in PRAGMA user_version.</summary>
-    public const int CurrentSchemaVersion = 5;
+    public const int CurrentSchemaVersion = 6;
 
     private static readonly Lazy<string> SchemaSql = new(LoadEmbeddedSchema);
 
@@ -50,18 +50,34 @@ public sealed class MetadataRepository
     /// Ensure schema is applied. Skips the CREATE script when PRAGMA
     /// user_version already matches the current version, so subsequent CLI
     /// invocations pay only the cost of opening a connection.
+    /// Returns <c>true</c> when the schema was (re)applied, <c>false</c>
+    /// when the DB was already at the current version.
     /// </summary>
-    public void EnsureSchema()
+    public bool EnsureSchema()
     {
         using var conn = Open();
         var current = conn.ExecuteScalar<long>("PRAGMA user_version");
-        if (current == CurrentSchemaVersion) return;
+        if (current == CurrentSchemaVersion) return false;
 
         conn.Execute(SchemaSql.Value);
         conn.Execute($"PRAGMA user_version = {CurrentSchemaVersion}");
         conn.Execute(
             "INSERT OR IGNORE INTO SchemaVersion(Version, AppliedUtc) VALUES(@v, @t)",
             new { v = CurrentSchemaVersion, t = DateTime.UtcNow.ToString("O") });
+
+        // Backfill FTS5 index from pre-existing Labels rows. This is a no-op
+        // when Labels is empty or when the FTS5 mirror is already in sync
+        // (SQLite's rebuild command is cheap in that case).
+        try
+        {
+            conn.Execute("INSERT INTO LabelFts(LabelFts) VALUES('rebuild')");
+        }
+        catch (Microsoft.Data.Sqlite.SqliteException)
+        {
+            // Host SQLite build lacks FTS5 — degrade gracefully; SearchLabels()
+            // stays on the LIKE fallback path.
+        }
+        return true;
     }
 
     public IReadOnlyList<ClassInfo> SearchClasses(string query, string? model = null, int limit = 50)
@@ -170,6 +186,35 @@ public sealed class MetadataRepository
             ORDER BY LabelFile, Key
             LIMIT @limit";
         return conn.Query<LabelMatch>(sql, new { like, langs = langsLower, limit }).ToList();
+    }
+
+    /// <summary>
+    /// FTS5-backed label search. Falls back to <see cref="SearchLabels"/>
+    /// when the host SQLite build lacks FTS5. Supports standard FTS5 query
+    /// syntax — phrases in quotes, NEAR, column filters like
+    /// <c>Value:customer Key:invoice</c>.
+    /// </summary>
+    public IReadOnlyList<LabelMatch> SearchLabelsFts(string query, IReadOnlyCollection<string>? languages = null, int limit = 100)
+    {
+        using var conn = Open();
+        var langsLower = languages?.Select(l => l.ToLowerInvariant()).ToList();
+        try
+        {
+            var sql = @"
+                SELECT LabelFile AS File, Language, Key, Value
+                FROM LabelFts
+                WHERE LabelFts MATCH @q
+                  AND (@langs IS NULL OR LOWER(Language) IN @langs)
+                ORDER BY rank
+                LIMIT @limit";
+            return conn.Query<LabelMatch>(sql, new { q = query, langs = langsLower, limit }).ToList();
+        }
+        catch (Microsoft.Data.Sqlite.SqliteException)
+        {
+            // Either FTS5 is absent or the query string isn't valid FTS syntax
+            // — degrade to LIKE so callers always get *some* results.
+            return SearchLabels(query, languages, limit);
+        }
     }
 
     public MenuItemInfo? GetMenuItem(string name)
@@ -308,6 +353,70 @@ public sealed class MetadataRepository
             FROM TableDeleteActions da
             JOIN Tables t ON t.TableId = da.TableId
             WHERE t.Name = @n ORDER BY da.RelatedTable", new { n = table }).ToList();
+    }
+
+    // ---- Lint heuristics (ROADMAP §7.1) ----
+
+    /// <summary>
+    /// Tables that don't have any index. Always a BP violation — the DB
+    /// sync falls back to synthetic clustering and joins get expensive.
+    /// Restricted to custom models by default so platform noise is filtered.
+    /// </summary>
+    public IReadOnlyList<LintHit> FindTablesWithoutIndex(bool onlyCustomModels = true)
+    {
+        using var conn = Open();
+        var sql = @"
+            SELECT t.Name AS TargetName, m.Name AS Model
+            FROM Tables t
+            JOIN Models m ON m.ModelId = t.ModelId
+            LEFT JOIN TableIndexes ti ON ti.TableId = t.TableId
+            WHERE ti.TableId IS NULL
+              AND (@custom = 0 OR m.IsCustom = 1)
+            ORDER BY m.Name, t.Name";
+        return conn.Query(sql, new { custom = onlyCustomModels ? 1 : 0 })
+            .Select(r => new LintHit((string)r.TargetName, (string)r.Model, null)).ToList();
+    }
+
+    /// <summary>
+    /// Classes whose name ends with <c>_Extension</c> but where no method
+    /// carries an <c>ExtensionOf</c> attribute — typical false extension
+    /// from copy-paste scaffolding.
+    /// </summary>
+    public IReadOnlyList<LintHit> FindExtensionNamedButNotAttributed(bool onlyCustomModels = true)
+    {
+        using var conn = Open();
+        var sql = @"
+            SELECT c.Name AS TargetName, m.Name AS Model
+            FROM Classes c
+            JOIN Models m ON m.ModelId = c.ModelId
+            WHERE c.Name LIKE '%\_Extension' ESCAPE '\'
+              AND (@custom = 0 OR m.IsCustom = 1)
+              AND NOT EXISTS (
+                  SELECT 1 FROM ClassAttributes a
+                  WHERE a.ClassId = c.ClassId AND a.AttributeName = 'ExtensionOf')
+            ORDER BY m.Name, c.Name";
+        return conn.Query(sql, new { custom = onlyCustomModels ? 1 : 0 })
+            .Select(r => new LintHit((string)r.TargetName, (string)r.Model, null)).ToList();
+    }
+
+    /// <summary>
+    /// Table fields with type <c>String</c> that do not reference an
+    /// ExtendedDataType. Violates the "use EDTs for all string columns" BP.
+    /// </summary>
+    public IReadOnlyList<LintHit> FindStringFieldsWithoutEdt(bool onlyCustomModels = true)
+    {
+        using var conn = Open();
+        var sql = @"
+            SELECT (t.Name || '.' || f.Name) AS TargetName, m.Name AS Model, f.Type AS Detail
+            FROM TableFields f
+            JOIN Tables t ON t.TableId = f.TableId
+            JOIN Models m ON m.ModelId = t.ModelId
+            WHERE f.Type = 'String'
+              AND (f.EdtName IS NULL OR f.EdtName = '')
+              AND (@custom = 0 OR m.IsCustom = 1)
+            ORDER BY m.Name, t.Name, f.Name";
+        return conn.Query(sql, new { custom = onlyCustomModels ? 1 : 0 })
+            .Select(r => new LintHit((string)r.TargetName, (string)r.Model, (string?)r.Detail)).ToList();
     }
 
     // ---- v4: queries / views / data entities / reports / services / workflow ----
@@ -669,12 +778,25 @@ public sealed class MetadataRepository
     }
 
     // ---- writer API used by the extract pipeline ----
+
+    /// <summary>
+    /// Upsert a <c>Models</c> row by name. Intended for callers that know the
+    /// authoritative IsCustom/Publisher/Layer. If the row already exists the
+    /// existing flags are preserved; the canonical way to refresh flags is
+    /// <see cref="ApplyExtract"/>, which re-runs this upsert and then issues
+    /// an <c>UPDATE</c> with the authoritative descriptor values.
+    /// </summary>
     public long UpsertModel(string name, string? publisher, string? layer, bool isCustom)
     {
         using var conn = Open();
         return UpsertModelInternal(conn, null, name, publisher, layer, isCustom);
     }
 
+    // Invariant: <c>ApplyExtract</c> is the single source of truth for
+    // <c>Models.IsCustom</c>. <c>UpsertModelInternal</c> only sets it on the
+    // very first insert; later ApplyExtract calls refresh it via UPDATE so a
+    // model's custom-flag always reflects the last successful extract, never a
+    // stale best-effort guess from dep-graph traversal.
     internal long UpsertModelInternal(SqliteConnection conn, IDbTransaction? tx, string name, string? publisher, string? layer, bool isCustom)
     {
         var id = conn.ExecuteScalar<long?>("SELECT ModelId FROM Models WHERE Name = @n", new { n = name }, tx);
@@ -1036,6 +1158,57 @@ public sealed class MetadataRepository
             Services = conn.ExecuteScalar<long>("SELECT COUNT(*) FROM Services"),
             WorkflowTypes = conn.ExecuteScalar<long>("SELECT COUNT(*) FROM WorkflowTypes"),
         };
+    }
+
+    /// <summary>
+    /// Aggregate counters useful for <c>d365fo stats</c>. Each sub-query hits
+    /// a single indexed column so the whole call finishes in tens of ms on a
+    /// fully-ingested index.
+    /// </summary>
+    public IndexStats GetStats(int topN = 10)
+    {
+        using var conn = Open();
+
+        var perModel = conn.Query<PerModelStat>(@"
+            SELECT m.Name AS Model, m.IsCustom AS IsCustom,
+                   (SELECT COUNT(*) FROM Tables t WHERE t.ModelId = m.ModelId) AS Tables,
+                   (SELECT COUNT(*) FROM Classes c WHERE c.ModelId = m.ModelId) AS Classes,
+                   (SELECT COUNT(*) FROM Edts e WHERE e.ModelId = m.ModelId) AS Edts,
+                   (SELECT COUNT(*) FROM Enums en WHERE en.ModelId = m.ModelId) AS Enums,
+                   (SELECT COUNT(*) FROM MenuItems mi WHERE mi.ModelId = m.ModelId) AS MenuItems,
+                   (SELECT COUNT(*) FROM Forms f WHERE f.ModelId = m.ModelId) AS Forms,
+                   (SELECT COUNT(*) FROM ObjectExtensions ox WHERE ox.ModelId = m.ModelId) AS Extensions,
+                   (SELECT COUNT(*) FROM CocExtensions cx WHERE cx.ModelId = m.ModelId) AS Coc,
+                   (SELECT COUNT(*) FROM Labels l WHERE l.ModelId = m.ModelId) AS Labels
+            FROM Models m
+            ORDER BY m.Name").ToList();
+
+        var topTables = conn.Query<TopTableStat>(@"
+            SELECT t.Name AS Name, m.Name AS Model, COUNT(f.FieldId) AS FieldCount
+            FROM Tables t
+            JOIN Models m ON m.ModelId = t.ModelId
+            LEFT JOIN TableFields f ON f.TableId = t.TableId
+            GROUP BY t.TableId, t.Name, m.Name
+            ORDER BY FieldCount DESC, t.Name
+            LIMIT @topN", new { topN }).ToList();
+
+        var topClasses = conn.Query<TopClassStat>(@"
+            SELECT c.Name AS Name, m.Name AS Model, COUNT(mt.MethodId) AS MethodCount
+            FROM Classes c
+            JOIN Models m ON m.ModelId = c.ModelId
+            LEFT JOIN Methods mt ON mt.ClassId = c.ClassId
+            GROUP BY c.ClassId, c.Name, m.Name
+            ORDER BY MethodCount DESC, c.Name
+            LIMIT @topN", new { topN }).ToList();
+
+        var topCoc = conn.Query<TopCocStat>(@"
+            SELECT c.TargetClass AS Target, COUNT(*) AS ExtensionCount
+            FROM CocExtensions c
+            GROUP BY c.TargetClass
+            ORDER BY ExtensionCount DESC, c.TargetClass
+            LIMIT @topN", new { topN }).ToList();
+
+        return new IndexStats(perModel, topTables, topClasses, topCoc);
     }
 
     internal SqliteConnection Open()

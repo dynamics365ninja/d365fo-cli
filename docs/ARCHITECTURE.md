@@ -56,7 +56,7 @@ Every tool returns the same shape:
 ## The local index (SQLite)
 
 - Single file at `$D365FO_INDEX_DB` (default: `$LOCALAPPDATA/d365fo-cli/d365fo-index.sqlite`).
-- Schema **v5**, defined in [`src/D365FO.Core/Index/Schema.sql`](../src/D365FO.Core/Index/Schema.sql).
+- Schema **v6**, defined in [`src/D365FO.Core/Index/Schema.sql`](../src/D365FO.Core/Index/Schema.sql). v6 adds a `LabelFts` FTS5 virtual table (content-linked to `Labels` via `rowid=LabelId`) plus INSERT/UPDATE/DELETE triggers that keep the full-text index in sync; `EnsureSchema` issues a one-time `LabelFts('rebuild')` on migration and gracefully degrades if the SQLite build lacks FTS5.
 - Version tracked in `PRAGMA user_version`; migrations applied automatically on first connection via `MetadataRepository.EnsureSchema`.
 - `MetadataRepository` is stateless — every call opens and closes its own connection, so it works identically in a short-lived CLI process, a long-lived MCP server, or a daemon.
 - SQLite booleans are stored as `INTEGER`; `SqliteBoolHandler` teaches Dapper the conversion once at static init.
@@ -126,7 +126,9 @@ The bridge is Windows-only and must ship next to a live VM. Non-Windows develope
 
 ## MCP coexistence
 
-`D365FO.Mcp.ToolHandlers` forwards to the same `D365FO.Core` primitives the CLI uses. A follow-up commit replaces `StdioDispatcher` with the official `modelcontextprotocol/csharp-sdk`, keeping `ToolHandlers` as the stable internal surface.
+`D365FO.Mcp.ToolHandlers` forwards to the same `D365FO.Core` primitives the CLI uses. As of Phase 4 the server speaks the MCP stdio transport via the official [`ModelContextProtocol`](https://www.nuget.org/packages/ModelContextProtocol) C# SDK (`McpServerHost`), which handles framing, lifecycle, capabilities, and notifications. The hand-rolled `StdioDispatcher` stays behind `--legacy` for environments that cannot resolve the SDK and for deterministic in-proc tests.
+
+`ToolCatalog` is the single registry of MCP-exposed tools (~53 today — search / get / find parity across classes, tables, EDTs, enums, forms, queries, views, data entities, reports, services, workflows; security roles/duties/privileges; models, labels (read + FTS5 `search_labels_fts` + write via `create_label` / `rename_label` / `delete_label`), extensions, event handlers; plus heuristics (`search_any`, `suggest_edt`, `validate_object_naming`, `analyze_extension_points`), aggregation (`stats`, `batch_search`), workspace info, and the in-proc `lint` runner). Adding a new tool means one entry in `ToolCatalog` plus one method on `ToolHandlers`; the CLI picks it up for free once a command wraps the same `MetadataRepository` call.
 
 ## Why .NET 10
 

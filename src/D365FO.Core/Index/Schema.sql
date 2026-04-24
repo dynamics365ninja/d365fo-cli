@@ -434,3 +434,34 @@ CREATE TABLE IF NOT EXISTS ModelDependencies (
 CREATE INDEX IF NOT EXISTS IX_ModelDependencies_Model ON ModelDependencies(ModelId);
 CREATE INDEX IF NOT EXISTS IX_ModelDependencies_Target ON ModelDependencies(Target);
 
+-- v6 additions -----------------------------------------------------------
+-- Full-text search over labels. Content-linked virtual table + triggers keep
+-- LabelFts in lock-step with Labels, so `d365fo search label "customer
+-- invoice"` drops from a LIKE scan (hundreds of ms on a real workspace) to a
+-- rank-sorted MATCH (tens of ms). After a schema upgrade the caller must run
+-- `INSERT INTO LabelFts(LabelFts) VALUES('rebuild')` once to backfill from
+-- existing Labels rows — EnsureSchema() takes care of that.
+
+CREATE VIRTUAL TABLE IF NOT EXISTS LabelFts USING fts5(
+    Value, Key, LabelFile, Language,
+    content='Labels', content_rowid='LabelId',
+    tokenize = 'unicode61 remove_diacritics 1'
+);
+
+CREATE TRIGGER IF NOT EXISTS Labels_ai AFTER INSERT ON Labels BEGIN
+    INSERT INTO LabelFts(rowid, Value, Key, LabelFile, Language)
+    VALUES (new.LabelId, new.Value, new.Key, new.LabelFile, new.Language);
+END;
+
+CREATE TRIGGER IF NOT EXISTS Labels_ad AFTER DELETE ON Labels BEGIN
+    INSERT INTO LabelFts(LabelFts, rowid, Value, Key, LabelFile, Language)
+    VALUES ('delete', old.LabelId, old.Value, old.Key, old.LabelFile, old.Language);
+END;
+
+CREATE TRIGGER IF NOT EXISTS Labels_au AFTER UPDATE ON Labels BEGIN
+    INSERT INTO LabelFts(LabelFts, rowid, Value, Key, LabelFile, Language)
+    VALUES ('delete', old.LabelId, old.Value, old.Key, old.LabelFile, old.Language);
+    INSERT INTO LabelFts(rowid, Value, Key, LabelFile, Language)
+    VALUES (new.LabelId, new.Value, new.Key, new.LabelFile, new.Language);
+END;
+

@@ -10,6 +10,10 @@ using D365FO.Cli.Commands.Read;
 using D365FO.Cli.Commands.Resolve;
 using D365FO.Cli.Commands.Review;
 using D365FO.Cli.Commands.Search;
+using D365FO.Cli.Commands.Stats;
+using D365FO.Cli.Commands.Suggest;
+using D365FO.Cli.Commands.Validate;
+using D365FO.Cli.Commands.Lint;
 using Spectre.Console.Cli;
 
 var app = new CommandApp();
@@ -34,6 +38,7 @@ app.Configure(cfg =>
         b.AddCommand<SearchReportCommand>("report").WithDescription("Find SSRS / RDL reports.");
         b.AddCommand<SearchServiceCommand>("service").WithDescription("Find SOAP services.");
         b.AddCommand<SearchWorkflowCommand>("workflow").WithDescription("Find workflow types.");
+        b.AddCommand<SearchAnyCommand>("any").WithDescription("Scope-agnostic search across every indexed kind.");
     });
 
     cfg.AddBranch("get", b =>
@@ -75,6 +80,26 @@ app.Configure(cfg =>
         b.AddCommand<ResolveLabelCommand>("label").WithDescription("Resolve @SYS12345-style label token to its text.");
     });
 
+    cfg.AddBranch("suggest", b =>
+    {
+        b.SetDescription("Heuristic suggestions over the index (no scaffolding).");
+        b.AddCommand<SuggestEdtCommand>("edt").WithDescription("Suggest EDTs matching a field name.");
+    });
+
+    cfg.AddBranch("validate", b =>
+    {
+        b.SetDescription("Static checks without touching the filesystem.");
+        b.AddCommand<ValidateNameCommand>("name").WithDescription("Check object name against naming conventions.");
+    });
+
+    cfg.AddBranch("label", b =>
+    {
+        b.SetDescription("Edit *.label.txt resource files in-place.");
+        b.AddCommand<D365FO.Cli.Commands.Label.LabelCreateCommand>("create").WithDescription("Create or update a label entry.");
+        b.AddCommand<D365FO.Cli.Commands.Label.LabelRenameCommand>("rename").WithDescription("Rename a label key.");
+        b.AddCommand<D365FO.Cli.Commands.Label.LabelDeleteCommand>("delete").WithDescription("Delete a label entry.");
+    });
+
     cfg.AddBranch("read", b =>
     {
         b.SetDescription("Read X++ source embedded in AOT XML.");
@@ -89,6 +114,7 @@ app.Configure(cfg =>
         b.AddCommand<IndexBuildCommand>("build").WithDescription("Create/ensure index database.");
         b.AddCommand<IndexStatusCommand>("status").WithDescription("Report index health.");
         b.AddCommand<IndexExtractCommand>("extract").WithDescription("Walk PACKAGES_PATH and ingest AOT metadata.");
+        b.AddCommand<IndexRefreshCommand>("refresh").WithDescription("Incremental extract — skip models whose XMLs haven't changed since last extract.");
     });
 
     cfg.AddBranch("models", b =>
@@ -105,6 +131,12 @@ app.Configure(cfg =>
         b.AddCommand<GenerateClassCommand>("class").WithDescription("Create a new AxClass.");
         b.AddCommand<GenerateCocCommand>("coc").WithDescription("Create a Chain-of-Command extension class.");
         b.AddCommand<GenerateSimpleListCommand>("simple-list").WithDescription("Create a SimpleList-pattern AxForm.");
+        b.AddCommand<GenerateEntityCommand>("entity").WithDescription("Create an AxDataEntityView over a table.");
+        b.AddCommand<GenerateExtensionCommand>("extension").WithDescription("Create a Table/Form/Edt/Enum extension.");
+        b.AddCommand<GenerateEventHandlerCommand>("event-handler").WithDescription("Create an event subscriber class.");
+        b.AddCommand<GeneratePrivilegeCommand>("privilege").WithDescription("Create a security privilege over an entry point.");
+        b.AddCommand<GenerateDutyCommand>("duty").WithDescription("Create a security duty grouping privileges.");
+        b.AddCommand<GenerateRoleCommand>("role").WithDescription("Create an AxSecurityRole or merge duties/privileges into an existing role.");
     });
 
     cfg.AddBranch("test", b =>
@@ -136,6 +168,9 @@ app.Configure(cfg =>
     cfg.AddCommand<BuildCommand>("build").WithDescription("Invoke MSBuild (Windows VM).");
     cfg.AddCommand<SyncCommand>("sync").WithDescription("Run DB sync (Windows VM).");
     cfg.AddCommand<DoctorCommand>("doctor").WithDescription("Diagnose environment.");
+    cfg.AddCommand<InitCommand>("init").WithDescription("Interactive quickstart: detects PackagesLocalDirectory and prepares the index.");
+    cfg.AddCommand<StatsCommand>("stats").WithDescription("Aggregate counters over the index (top tables / classes / CoC targets).");
+    cfg.AddCommand<LintCommand>("lint").WithDescription("In-process Best-Practice gate over the index.");
     cfg.AddCommand<VersionCommand>("version").WithDescription("Print version information.");
     cfg.AddCommand<AgentPromptCommand>("agent-prompt").WithDescription("Emit LLM system prompt for this CLI.");
     cfg.AddCommand<SchemaCommand>("schema").WithDescription("Emit JSON command manifest.");
