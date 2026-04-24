@@ -79,6 +79,65 @@ d365fo models deps ApplicationSuite
 
 `models list` enumerates every model with publisher, layer, and custom-flag.
 
+### `search any` — scope-agnostic quick jump
+
+```sh
+d365fo search any CustTable
+```
+
+UNIONs every indexed kind in one query and returns `byKind` counts for triage.
+
+### `stats` — per-model + top-N aggregates
+
+```sh
+d365fo stats --top 10
+```
+
+Returns per-model object counts plus top tables (by field count), top classes (by method count), and top CoC extension targets. Handy for sizing a customisation and for agent prompts.
+
+---
+
+## Maintain the index
+
+### `index refresh` — incremental re-extract
+
+```sh
+d365fo index refresh
+d365fo index refresh --force          # re-scan every model
+d365fo index extract --since 2026-04-01T00:00:00Z  # explicit threshold
+```
+
+Computes the newest `.xml` mtime under each model folder and skips models that are older than the DB's last-write timestamp (minus a 5-minute safety margin). `--force` is the no-threshold equivalent of `index extract`.
+
+### `lint` — in-process Best-Practice heuristics
+
+```sh
+d365fo lint
+d365fo lint --category table-no-index,string-without-edt --all-models
+d365fo lint --format sarif > lint.sarif
+```
+
+Categories shipped today: `table-no-index`, `ext-named-not-attributed`, `string-without-edt`. Defaults to custom models only; pass `--all-models` to include ISV / MS content. `--format sarif` emits [SARIF 2.1.0](https://sarifweb.azurewebsites.net/) for CI ingestion (GitHub code-scanning, Azure DevOps).
+
+### `validate name` — naming-rule linter
+
+```sh
+d365fo validate name Table FmVehicle --prefix Fm
+d365fo validate name Coc CustTable_Extension
+```
+
+Static check against `ObjectNamingRules` (publisher prefix, PascalCase, suffix conventions, length / char-set). Returns structured `violations[]` with `code`, `severity`, `message`. Handy as a pre-commit hook.
+
+### `init` — quickstart
+
+```sh
+d365fo init --run-extract
+d365fo init --dry-run                  # show what would be done
+d365fo init --persist-profile          # append env vars to $PROFILE / ~/.profile
+```
+
+Auto-detects the Windows `PackagesLocalDirectory` (C:, J:, K:, `AosService`), prepares the SQLite schema, and (with `--run-extract`) drives the full extract pipeline. `--persist-profile` idempotently writes a marker block (`# >>> d365fo-cli init >>>` … `# <<< d365fo-cli init <<<`) into the user's shell profile (`$PROFILE` on Windows PowerShell, `~/.profile` elsewhere) exporting `D365FO_PACKAGES_PATH` / `D365FO_INDEX_DB` / `D365FO_WORKSPACE` — re-running replaces the block only when values change.
+
 ---
 
 ## Scaffold
@@ -115,6 +174,84 @@ d365fo generate coc CustTable --method update --method insert \
 d365fo generate simple-list FmVehicleListPage --table FmVehicle \
   --out src/MyModel/AxForm/FmVehicleListPage.xml
 ```
+
+### Data entity (`AxDataEntityView`)
+
+```sh
+d365fo generate entity FmVehicleEntity --table FmVehicle \
+  --public-entity-name FmVehicle --public-collection-name FmVehicles \
+  --all-fields \
+  --out src/MyModel/AxDataEntityView/FmVehicleEntity.xml
+```
+
+Emits a single-datasource `AxQuerySimpleRootDataSource` view with public OData names. Pass `--all-fields` to auto-populate `<Fields />` from the source table's `TableFields` (mandatory flag carries over). Without `--all-fields` or explicit `--field` flags, `<Fields />` is empty.
+
+### Extension (table / form / EDT / enum)
+
+```sh
+d365fo generate extension Table CustTable Contoso \
+  --out src/MyModel/AxTableExtension/CustTable.Contoso.xml
+```
+
+Name is always `<Target>.<Suffix>` to match the AOT convention. Kinds: `Table`, `Form`, `Edt`, `Enum`.
+
+### Event handler
+
+```sh
+d365fo generate event-handler Contoso_CustTable_Handler \
+  --source-kind Table --source-object CustTable --event inserted \
+  --out src/MyModel/AxClass/Contoso_CustTable_Handler.xml
+```
+
+Picks the right attribute (`[DataEventHandler]`, `[FormEventHandler]`, `[FormDataSourceEventHandler]`, `[SubscribesTo]`) from `--source-kind`.
+
+### Security privilege / duty
+
+```sh
+d365fo generate privilege FmVehicleReadPriv \
+  --entry-point FmVehicleListPage --entry-kind MenuItemDisplay --entry-object FmVehicleListPage \
+  --access Read --label "@Fleet:ReadVehicles" \
+  --out src/MyModel/AxSecurityPrivilege/FmVehicleReadPriv.xml
+
+d365fo generate duty FmVehicleMaintainDuty \
+  --privilege FmVehicleReadPriv --privilege FmVehicleUpdatePriv \
+  --out src/MyModel/AxSecurityDuty/FmVehicleMaintainDuty.xml
+```
+
+### Security role (new or merge)
+
+```sh
+# Scaffold a new role that references duties / privileges
+d365fo generate role FmVehicleAdminRole \
+  --duty FmVehicleMaintainDuty --privilege FmVehicleReadPriv \
+  --label "@Fleet:VehicleAdminRole" --description "Full access to Fleet vehicles" \
+  --out src/MyModel/AxSecurityRole/FmVehicleAdminRole.xml
+
+# Merge new references into an existing role (idempotent; writes .bak)
+d365fo generate role --add-to src/MyModel/AxSecurityRole/FmVehicleAdminRole.xml \
+  --duty FmReportingDuty --privilege FmExportPriv
+```
+
+`--add-to` validates the root element (`AxSecurityRole`), dedupes by `Name` (case-insensitive), and returns `NoChange` when every reference already exists.
+
+---
+
+## Labels (read & write)
+
+```sh
+# Read
+d365fo search label "Customer invoice"
+d365fo search label "customer invoice" --fts        # rank-sorted FTS5
+d365fo get label @SYS12345 --language en-us
+
+# Write \u2014 atomic, preserves comments, BOM UTF-8
+d365fo label create NewKey "New value" --file path/Foo.en-us.label.txt
+d365fo label create NewKey "Updated"   --file path/Foo.en-us.label.txt --overwrite
+d365fo label rename NewKey RenamedKey  --file path/Foo.en-us.label.txt
+d365fo label delete RenamedKey         --file path/Foo.en-us.label.txt
+```
+
+`search label --fts` requires a schema-v6 index (run `d365fo index refresh --force` once after upgrading) and falls back to `LIKE` scans on SQLite builds without FTS5. Write commands return envelope codes `KEY_EXISTS` / `KEY_NOT_FOUND` / `FILE_NOT_FOUND` / `WRITE_FAILED` and keep a `.bak` of the previous file.
 
 ---
 
@@ -191,7 +328,7 @@ Standalone JSON-RPC 2.0 server (protocol `2024-11-05`) that shares the CLI's ind
 }
 ```
 
-After `dotnet publish src/D365FO.Mcp -c Release -r osx-arm64` you get a standalone `d365fo-mcp` binary you can drop on `$PATH`. The adapter exposes 16 read tools (search / get / find / index_status) — a focused subset of the CLI surface. Items still missing from MCP are tracked in [ROADMAP.md](ROADMAP.md).
+After `dotnet publish src/D365FO.Mcp -c Release -r osx-arm64` you get a standalone `d365fo-mcp` binary you can drop on `$PATH`. The adapter exposes **53 tools** covering CLI parity (search / get / find / read / index_status), security & labels — read (`get_label`, `search_labels`, `search_labels_fts`) and write (`create_label`, `rename_label`, `delete_label`) — heuristics (`search_any`, `suggest_edt`, `validate_object_naming`, `analyze_extension_points`), aggregation (`stats`, `batch_search`), workspace info, and the in-proc `lint` runner. Items still missing from MCP are tracked in [ROADMAP.md](ROADMAP.md).
 
 ---
 

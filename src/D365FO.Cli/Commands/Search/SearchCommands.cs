@@ -52,6 +52,10 @@ public sealed class SearchLabelCommand : Command<SearchLabelCommand.Settings>
 
         [CommandOption("-l|--limit <N>")]
         public int Limit { get; init; } = 100;
+
+        [CommandOption("--fts")]
+        [System.ComponentModel.Description("Use SQLite FTS5 ranking (phrase queries, NEAR, column filters). Falls back to LIKE if FTS5 is unavailable.")]
+        public bool Fts { get; init; }
     }
 
     public override int Execute(CommandContext context, Settings settings)
@@ -62,7 +66,9 @@ public sealed class SearchLabelCommand : Command<SearchLabelCommand.Settings>
             ? null
             : settings.Languages.Split([',', ';'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
 
-        var matches = repo.SearchLabels(settings.Query, langs, settings.Limit);
+        var matches = settings.Fts
+            ? repo.SearchLabelsFts(settings.Query, langs, settings.Limit)
+            : repo.SearchLabels(settings.Query, langs, settings.Limit);
         if (!settings.RawText)
         {
             matches = matches.Select(m => m with { Value = StringSanitizer.Sanitize(m.Value) }).ToList();
@@ -242,6 +248,42 @@ public sealed class SearchWorkflowCommand : Command<SearchWorkflowCommand.Settin
         var kind = OutputMode.Resolve(settings.Output);
         var items = RepoFactory.Create().SearchWorkflowTypes(settings.Query, settings.Limit);
         return RenderHelpers.Render(kind, ToolResult<object>.Success(new { count = items.Count, items }));
+    }
+}
+
+/// <summary>
+/// Scope-agnostic quick jump across every indexed kind. Corresponds to
+/// upstream MCP <c>search</c> and fulfils ROADMAP item 4.3.
+/// </summary>
+public sealed class SearchAnyCommand : Command<SearchAnyCommand.Settings>
+{
+    public sealed class Settings : D365OutputSettings
+    {
+        [CommandArgument(0, "<QUERY>")]
+        [System.ComponentModel.Description("Substring to look up across Tables / Classes / EDTs / Enums / MenuItems / Forms / Queries / Views / DataEntities / Reports / Services / Workflows.")]
+        public string Query { get; init; } = "";
+
+        [CommandOption("-l|--limit <N>")]
+        public int Limit { get; init; } = 100;
+    }
+
+    public override int Execute(CommandContext ctx, Settings settings)
+    {
+        var kind = OutputMode.Resolve(settings.Output);
+        if (string.IsNullOrWhiteSpace(settings.Query))
+            return RenderHelpers.Render(kind, ToolResult<object>.Fail("BAD_INPUT", "Query required."));
+
+        var repo = RepoFactory.Create();
+        var rows = repo.FindUsages(settings.Query, settings.Limit)
+            .Select(t => new { kind = t.Kind, name = t.Name, model = t.Model })
+            .ToList();
+        var byKind = rows.GroupBy(r => r.kind).ToDictionary(g => g.Key, g => g.Count());
+        return RenderHelpers.Render(kind, ToolResult<object>.Success(new
+        {
+            count = rows.Count,
+            byKind,
+            items = rows,
+        }));
     }
 }
 

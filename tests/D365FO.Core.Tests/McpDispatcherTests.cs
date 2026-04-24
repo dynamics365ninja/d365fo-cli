@@ -85,4 +85,44 @@ public class McpDispatcherTests : IDisposable
         var resp = await Roundtrip("""{"jsonrpc":"2.0","method":"notifications/initialized"}""");
         Assert.Empty(resp);
     }
+
+    [Fact]
+    public async Task ToolsList_exposes_parity_tools()
+    {
+        var resp = await Roundtrip("""{"jsonrpc":"2.0","id":10,"method":"tools/list"}""");
+        var doc = Assert.Single(resp);
+        var names = doc.RootElement.GetProperty("result").GetProperty("tools")
+            .EnumerateArray().Select(t => t.GetProperty("name").GetString()).ToHashSet();
+        // A selection of the new parity tools added in the SDK migration.
+        Assert.Contains("search_queries", names);
+        Assert.Contains("get_data_entity", names);
+        Assert.Contains("search_data_entities", names);
+        Assert.Contains("list_models", names);
+        Assert.Contains("get_security_role", names);
+        Assert.Contains("find_extensions", names);
+        Assert.Contains("resolve_label", names);
+        Assert.Contains("get_table_methods", names);
+    }
+
+    [Fact]
+    public async Task ListModels_returns_empty_collection_for_fresh_db()
+    {
+        var resp = await Roundtrip("""{"jsonrpc":"2.0","id":11,"method":"tools/call","params":{"name":"list_models","arguments":{}}}""");
+        var doc = Assert.Single(resp);
+        var payload = JsonDocument.Parse(doc.RootElement.GetProperty("result")
+            .GetProperty("content")[0].GetProperty("text").GetString()!);
+        Assert.True(payload.RootElement.GetProperty("ok").GetBoolean());
+        Assert.Equal(0, payload.RootElement.GetProperty("data").GetProperty("count").GetInt32());
+    }
+
+    [Fact]
+    public async Task UnknownGet_returns_structured_notFound_error()
+    {
+        var resp = await Roundtrip("""{"jsonrpc":"2.0","id":12,"method":"tools/call","params":{"name":"get_service","arguments":{"name":"DoesNotExist"}}}""");
+        var doc = Assert.Single(resp);
+        var payload = JsonDocument.Parse(doc.RootElement.GetProperty("result")
+            .GetProperty("content")[0].GetProperty("text").GetString()!);
+        Assert.False(payload.RootElement.GetProperty("ok").GetBoolean());
+        Assert.Equal("SERVICE_NOT_FOUND", payload.RootElement.GetProperty("error").GetProperty("code").GetString());
+    }
 }

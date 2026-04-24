@@ -5,6 +5,32 @@ public sealed record ModelInfo(long ModelId, string Name, string? Publisher, str
 
 public sealed record ModelDependencies(ModelInfo Model, IReadOnlyList<string> DependsOn, IReadOnlyList<string> DependedBy);
 
+/// <summary>Per-model counters for <c>d365fo stats</c>.</summary>
+public sealed record PerModelStat(
+    string Model, bool IsCustom,
+    long Tables, long Classes, long Edts, long Enums,
+    long MenuItems, long Forms, long Extensions, long Coc, long Labels);
+
+/// <summary>Top-N table by field count.</summary>
+public sealed record TopTableStat(string Name, string Model, long FieldCount);
+
+/// <summary>Top-N class by method count.</summary>
+public sealed record TopClassStat(string Name, string Model, long MethodCount);
+
+/// <summary>Top-N Chain-of-Command target class by extension count.</summary>
+public sealed record TopCocStat(string Target, long ExtensionCount);
+
+/// <summary>Aggregate roll-up used by <c>d365fo stats</c>.</summary>
+public sealed record IndexStats(
+    IReadOnlyList<PerModelStat> PerModel,
+    IReadOnlyList<TopTableStat> TopTables,
+    IReadOnlyList<TopClassStat> TopClasses,
+    IReadOnlyList<TopCocStat> TopCocTargets);
+
+/// <summary>Finding from <c>d365fo lint</c>.</summary>
+public sealed record LintHit(string TargetName, string Model, string? Detail);
+
+
 public sealed record TableInfo(
     long TableId,
     string Name,
@@ -50,7 +76,7 @@ public sealed record EdtInfo(
     string? Extends,
     string? BaseType,
     string? Label,
-    int? StringSize);
+    long? StringSize);
 
 public sealed record EnumInfo(string Name, string Model, string? Label);
 
