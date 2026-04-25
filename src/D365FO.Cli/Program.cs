@@ -72,6 +72,7 @@ app.Configure(cfg =>
         b.AddCommand<FindExtensionsCommand>("extensions").WithDescription("Find Table/Form/Edt/Enum extensions targeting an object.");
         b.AddCommand<FindHandlersCommand>("handlers").WithDescription("Find event handlers subscribed to a form/table/delegate.");
         b.AddCommand<FindRefsCommand>("refs").WithDescription("Regex scan of indexed X++ source for reverse references to a symbol.");
+        b.AddCommand<FindFormPatternsCommand>("form-patterns").WithDescription("Analyse indexed forms by Microsoft pattern / primary table / similarity to a reference form.");
     });
 
     cfg.AddBranch("resolve", b =>
@@ -132,7 +133,8 @@ app.Configure(cfg =>
         b.AddCommand<GenerateTableCommand>("table").WithDescription("Create a new AxTable.");
         b.AddCommand<GenerateClassCommand>("class").WithDescription("Create a new AxClass.");
         b.AddCommand<GenerateCocCommand>("coc").WithDescription("Create a Chain-of-Command extension class.");
-        b.AddCommand<GenerateSimpleListCommand>("simple-list").WithDescription("Create a SimpleList-pattern AxForm.");
+        b.AddCommand<GenerateFormCommand>("form").WithDescription("Create an AxForm with a chosen pattern (SimpleList, DetailsMaster, DetailsTransaction, Dialog, Lookup, ListPage, Workspace, …).");
+        b.AddCommand<GenerateSimpleListCommand>("simple-list").WithDescription("(Deprecated) Alias for `generate form --pattern SimpleList`.");
         b.AddCommand<GenerateEntityCommand>("entity").WithDescription("Create an AxDataEntityView over a table.");
         b.AddCommand<GenerateExtensionCommand>("extension").WithDescription("Create a Table/Form/Edt/Enum extension.");
         b.AddCommand<GenerateEventHandlerCommand>("event-handler").WithDescription("Create an event subscriber class.");

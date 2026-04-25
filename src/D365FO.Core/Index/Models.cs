@@ -137,6 +137,29 @@ public sealed record FormInfo(long FormId, string Name, string Model, string? So
 public sealed record FormDataSourceInfo(string Name, string? TableName);
 public sealed record FormDetails(FormInfo Form, IReadOnlyList<FormDataSourceInfo> DataSources);
 
+// FormPatternRow / FormPatternSummary are exposed as classes (not positional
+// records) because Dapper's record-constructor matcher misreads
+// Microsoft.Data.Sqlite's COUNT(*) / COALESCE columns as byte[]. Property
+// binding by name is robust regardless of the reported reader type.
+public sealed class FormPatternRow
+{
+    public string Name { get; init; } = "";
+    public string? Pattern { get; init; }
+    public string? PatternVersion { get; init; }
+    public string? Style { get; init; }
+    public string? TitleDataSource { get; init; }
+    public string Model { get; init; } = "";
+    public string? SourcePath { get; init; }
+    public string? PrimaryTable { get; init; }
+    public long DataSourceCount { get; init; }
+}
+
+public sealed class FormPatternSummary
+{
+    public string Pattern { get; init; } = "";
+    public long Count { get; init; }
+}
+
 public sealed record SecurityRoleDetails(
     string Name,
     string? Label,

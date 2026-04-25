@@ -1,0 +1,162 @@
+<?xml version="1.0" encoding="utf-8"?>
+<AxForm xmlns:i="http://www.w3.org/2001/XMLSchema-instance" xmlns="Microsoft.Dynamics.AX.Metadata.V6">
+  <Name>{FormName}</Name>
+  <SourceCode>
+    <Methods xmlns="">
+      <Method>
+        <Name>classDeclaration</Name>
+        <Source><![CDATA[
+[Form]
+public class {FormName} extends FormRun
+{
+}
+
+]]></Source>
+      </Method>
+    </Methods>
+    <DataSources xmlns="" />
+    <DataControls xmlns="" />
+    <Members xmlns="" />
+  </SourceCode>
+  <DataSources>
+    <AxFormDataSource xmlns="">
+      <Name>{DsName}</Name>
+      <Table>{DsTable}</Table>
+      <Fields />
+      <ReferencedDataSources />
+      <InsertIfEmpty>No</InsertIfEmpty>
+      <DataSourceLinks />
+      <DerivedDataSources />
+    </AxFormDataSource>
+    <AxFormDataSource xmlns="">
+      <Name>{LinesDsName}</Name>
+      <Table>{LinesDsTable}</Table>
+      <Fields />
+      <ReferencedDataSources />
+      <InsertIfEmpty>No</InsertIfEmpty>
+      <DataSourceLinks>
+        <AxFormDataSourceLink>
+          <LinkType>Active</LinkType>
+          <Table>{DsName}</Table>
+        </AxFormDataSourceLink>
+      </DataSourceLinks>
+      <DerivedDataSources />
+    </AxFormDataSource>
+  </DataSources>
+  <Design>
+{Caption}    <DataSource xmlns="">{DsName}</DataSource>
+    <Pattern xmlns="">DetailsTransaction</Pattern>
+    <PatternVersion xmlns="">1.1</PatternVersion>
+    <Style xmlns="">DetailsFormTransaction</Style>
+    <TitleDataSource xmlns="">{DsName}</TitleDataSource>
+    <Controls xmlns="">
+      <AxFormControl xmlns="" i:type="AxFormActionPaneControl">
+        <Name>ActionPane</Name>
+        <ElementPosition>134217727</ElementPosition>
+        <FilterExpression>%1</FilterExpression>
+        <Type>ActionPane</Type>
+        <VerticalSpacing>-1</VerticalSpacing>
+        <FormControlExtension i:nil="true" />
+        <Controls>
+          <AxFormControl xmlns="" i:type="AxFormButtonGroupControl">
+            <Name>ButtonGroup</Name>
+            <Type>ButtonGroup</Type>
+            <FormControlExtension i:nil="true" />
+            <Controls />
+            <ArrangeMethod>Vertical</ArrangeMethod>
+          </AxFormControl>
+        </Controls>
+        <AlignChild>No</AlignChild>
+        <AlignChildren>No</AlignChildren>
+        <ArrangeMethod>Vertical</ArrangeMethod>
+      </AxFormControl>
+      <AxFormControl xmlns="" i:type="AxFormGroupControl">
+        <Name>NavigationFilterGroup</Name>
+        <Pattern>CustomAndQuickFilters</Pattern>
+        <PatternVersion>1.1</PatternVersion>
+        <Type>Group</Type>
+        <WidthMode>SizeToAvailable</WidthMode>
+        <FormControlExtension i:nil="true" />
+        <Controls>
+          <AxFormControl>
+            <Name>QuickFilterControl</Name>
+            <FormControlExtension>
+              <Name>QuickFilterControl</Name>
+              <ExtensionComponents />
+              <ExtensionProperties>
+                <AxFormControlExtensionProperty>
+                  <Name>targetControlName</Name>
+                  <Type>String</Type>
+                  <Value>Grid</Value>
+                </AxFormControlExtensionProperty>
+              </ExtensionProperties>
+            </FormControlExtension>
+          </AxFormControl>
+        </Controls>
+        <ArrangeMethod>HorizontalLeft</ArrangeMethod>
+        <FrameType>None</FrameType>
+        <Style>CustomFilter</Style>
+        <ViewEditMode>Edit</ViewEditMode>
+      </AxFormControl>
+      <AxFormControl xmlns="" i:type="AxFormTabControl">
+        <Name>Tab</Name>
+        <Type>Tab</Type>
+        <FormControlExtension i:nil="true" />
+        <Controls>
+          <AxFormControl xmlns="" i:type="AxFormTabPageControl">
+            <Name>TabPageHeader</Name>
+            <Pattern>FieldsFieldGroups</Pattern>
+            <PatternVersion>1.1</PatternVersion>
+            <Type>TabPage</Type>
+            <Caption>Header</Caption>
+            <FormControlExtension i:nil="true" />
+            <Controls>
+              <AxFormControl xmlns="" i:type="AxFormGroupControl">
+                <Name>HeaderGeneralGroup</Name>
+                <Type>Group</Type>
+                <Caption>General</Caption>
+                <DataGroup>Overview</DataGroup>
+                <FormControlExtension i:nil="true" />
+                <Controls>
+{HeaderFieldControls}                </Controls>
+              </AxFormControl>
+            </Controls>
+          </AxFormControl>
+          <AxFormControl xmlns="" i:type="AxFormTabPageControl">
+            <Name>TabPageLines</Name>
+            <Type>TabPage</Type>
+            <Caption>Lines</Caption>
+            <FormControlExtension i:nil="true" />
+            <Controls>
+              <AxFormControl xmlns="" i:type="AxFormActionPaneTabControl">
+                <Name>LinesActionPane</Name>
+                <Type>ActionPaneTab</Type>
+                <FormControlExtension i:nil="true" />
+                <Controls>
+                  <AxFormControl xmlns="" i:type="AxFormButtonGroupControl">
+                    <Name>LinesButtonGroup</Name>
+                    <Type>ButtonGroup</Type>
+                    <FormControlExtension i:nil="true" />
+                    <Controls />
+                    <ArrangeMethod>Vertical</ArrangeMethod>
+                  </AxFormControl>
+                </Controls>
+              </AxFormControl>
+              <AxFormControl xmlns="" i:type="AxFormGridControl">
+                <Name>LinesGrid</Name>
+                <Type>Grid</Type>
+                <FormControlExtension i:nil="true" />
+                <Controls />
+                <DataSource>{LinesDsName}</DataSource>
+                <DataGroup>Overview</DataGroup>
+                <Style>Tabular</Style>
+              </AxFormControl>
+            </Controls>
+          </AxFormControl>
+        </Controls>
+        <Style>FastTabs</Style>
+      </AxFormControl>
+    </Controls>
+  </Design>
+  <Parts />
+</AxForm>

@@ -1,0 +1,117 @@
+<?xml version="1.0" encoding="utf-8"?>
+<AxForm xmlns:i="http://www.w3.org/2001/XMLSchema-instance" xmlns="Microsoft.Dynamics.AX.Metadata.V6">
+  <Name>{FormName}</Name>
+  <SourceCode>
+    <Methods xmlns="">
+      <Method>
+        <Name>classDeclaration</Name>
+        <Source><![CDATA[
+[Form]
+public class {FormName} extends FormRun
+{
+}
+
+]]></Source>
+      </Method>
+    </Methods>
+    <DataSources xmlns="" />
+    <DataControls xmlns="" />
+    <Members xmlns="" />
+  </SourceCode>
+  <DataSources>
+    <AxFormDataSource xmlns="">
+      <Name>{DsName}</Name>
+      <Table>{DsTable}</Table>
+      <Fields />
+      <ReferencedDataSources />
+      <AllowCreate>No</AllowCreate>
+      <AllowEdit>No</AllowEdit>
+      <AllowDelete>No</AllowDelete>
+      <InsertIfEmpty>No</InsertIfEmpty>
+      <DataSourceLinks />
+      <DerivedDataSources />
+    </AxFormDataSource>
+  </DataSources>
+  <Design>
+{Caption}    <Pattern xmlns="">Workspace</Pattern>
+    <PatternVersion xmlns="">1.0</PatternVersion>
+    <Style xmlns="">Workspace</Style>
+    <Controls xmlns="">
+      <AxFormControl xmlns="" i:type="AxFormActionPaneControl">
+        <Name>ActionPane</Name>
+        <ElementPosition>134217727</ElementPosition>
+        <FilterExpression>%1</FilterExpression>
+        <Type>ActionPane</Type>
+        <VerticalSpacing>-1</VerticalSpacing>
+        <FormControlExtension i:nil="true" />
+        <Controls>
+          <AxFormControl xmlns="" i:type="AxFormActionPaneTabControl">
+            <Name>ActionPaneTab</Name>
+            <Type>ActionPaneTab</Type>
+            <FormControlExtension i:nil="true" />
+            <Controls>
+              <AxFormControl xmlns="" i:type="AxFormButtonGroupControl">
+                <Name>NewButtonGroup</Name>
+                <Type>ButtonGroup</Type>
+                <FormControlExtension i:nil="true" />
+                <Controls />
+              </AxFormControl>
+            </Controls>
+          </AxFormControl>
+        </Controls>
+        <AlignChild>No</AlignChild>
+        <AlignChildren>No</AlignChildren>
+        <ArrangeMethod>Vertical</ArrangeMethod>
+      </AxFormControl>
+      <AxFormControl xmlns="" i:type="AxFormTabControl">
+        <Name>PanoramaBody</Name>
+        <ElementPosition>268435455</ElementPosition>
+        <Type>Tab</Type>
+        <WidthMode>SizeToAvailable</WidthMode>
+        <HeightMode>SizeToAvailable</HeightMode>
+        <FormControlExtension i:nil="true" />
+        <Controls>
+          <AxFormControl xmlns="" i:type="AxFormTabPageControl">
+            <Name>SummarySection</Name>
+            <Caption>Summary</Caption>
+            <ElementPosition>536870911</ElementPosition>
+            <Type>TabPage</Type>
+            <FormControlExtension i:nil="true" />
+            <Controls>
+              <AxFormControl xmlns="" i:type="AxFormGroupControl">
+                <Name>TileSection</Name>
+                <Pattern>Workspace_SummaryNumbers_UnboundFields</Pattern>
+                <PatternVersion>1.0</PatternVersion>
+                <Type>Group</Type>
+                <WidthMode>SizeToAvailable</WidthMode>
+                <FormControlExtension i:nil="true" />
+                <Controls>
+                  <!-- Add AxFormControlButtonControl tiles here -->
+                </Controls>
+                <ArrangeMethod>HorizontalLeft</ArrangeMethod>
+                <FrameType>None</FrameType>
+                <Style>TileSection</Style>
+              </AxFormControl>
+              <AxFormControl xmlns="" i:type="AxFormGroupControl">
+                <Name>ChartSection</Name>
+                <Type>Group</Type>
+                <WidthMode>SizeToAvailable</WidthMode>
+                <FormControlExtension i:nil="true" />
+                <Controls>
+                  <!-- Add FormPart references for charts/KPIs here -->
+                </Controls>
+                <ArrangeMethod>HorizontalLeft</ArrangeMethod>
+                <FrameType>None</FrameType>
+              </AxFormControl>
+            </Controls>
+            <FrameType>None</FrameType>
+          </AxFormControl>
+{ListSections}        </Controls>
+        <AlignChild>No</AlignChild>
+        <ShowTabs>No</ShowTabs>
+        <Style>Panorama</Style>
+      </AxFormControl>
+    </Controls>
+  </Design>
+  <Parts />
+</AxForm>

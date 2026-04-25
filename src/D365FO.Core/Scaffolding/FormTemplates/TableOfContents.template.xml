@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="utf-8"?>
+<AxForm xmlns:i="http://www.w3.org/2001/XMLSchema-instance" xmlns="Microsoft.Dynamics.AX.Metadata.V6">
+  <Name>{FormName}</Name>
+  <SourceCode>
+    <Methods xmlns="">
+      <Method>
+        <Name>classDeclaration</Name>
+        <Source><![CDATA[
+[Form]
+public class {FormName} extends FormRun
+{
+}
+
+]]></Source>
+      </Method>
+    </Methods>
+    <DataSources xmlns="" />
+    <DataControls xmlns="" />
+    <Members xmlns="" />
+  </SourceCode>
+{DataSourcesXml}  <Design>
+{Caption}{DataSourceOnDesign}    <Pattern xmlns="">TableOfContents</Pattern>
+    <PatternVersion xmlns="">1.1</PatternVersion>
+    <Style xmlns="">TableOfContents</Style>
+    <Controls xmlns="">
+      <AxFormControl xmlns="" i:type="AxFormActionPaneControl">
+        <Name>ActionPane</Name>
+        <Type>ActionPane</Type>
+        <FormControlExtension i:nil="true" />
+        <Controls />
+      </AxFormControl>
+      <AxFormControl xmlns="" i:type="AxFormTabControl">
+        <Name>Tab</Name>
+        <Type>Tab</Type>
+        <FormControlExtension i:nil="true" />
+        <Controls>
+{TabPageControls}        </Controls>
+        <Style>TOCList</Style>
+      </AxFormControl>
+    </Controls>
+  </Design>
+  <Parts />
+</AxForm>

@@ -191,21 +191,29 @@ CREATE TABLE IF NOT EXISTS TableDeleteActions (
 );
 
 CREATE TABLE IF NOT EXISTS Forms (
-    FormId      INTEGER PRIMARY KEY AUTOINCREMENT,
-    Name        TEXT NOT NULL,
-    ModelId     INTEGER NOT NULL,
-    SourcePath  TEXT,
+    FormId          INTEGER PRIMARY KEY AUTOINCREMENT,
+    Name            TEXT NOT NULL,
+    ModelId         INTEGER NOT NULL,
+    SourcePath      TEXT,
+    Pattern         TEXT,        -- v8: <Design><Pattern>SimpleList</Pattern>
+    PatternVersion  TEXT,        -- v8: <Design><PatternVersion>1.1</PatternVersion>
+    Style           TEXT,        -- v8: <Design><Style>...</Style>
+    TitleDataSource TEXT,        -- v8: <Design><TitleDataSource>...
     FOREIGN KEY (ModelId) REFERENCES Models(ModelId)
 );
 CREATE INDEX IF NOT EXISTS IX_Forms_Name ON Forms(Name);
+CREATE INDEX IF NOT EXISTS IX_Forms_Pattern ON Forms(Pattern);
 
 CREATE TABLE IF NOT EXISTS FormDataSources (
     Id          INTEGER PRIMARY KEY AUTOINCREMENT,
     FormId      INTEGER NOT NULL,
     Name        TEXT NOT NULL,
     TableName   TEXT,
+    OrderIndex  INTEGER NOT NULL DEFAULT 0,    -- v8: 0 = first / driving datasource
+    JoinSource  TEXT,                          -- v8: parent datasource for inner-joins
     FOREIGN KEY (FormId) REFERENCES Forms(FormId) ON DELETE CASCADE
 );
+CREATE INDEX IF NOT EXISTS IX_FormDs_Table ON FormDataSources(TableName);
 
 -- Generic object extensions (TableExtension / FormExtension / EdtExtension /
 -- EnumExtension / ViewExtension / MapExtension). Lets callers query

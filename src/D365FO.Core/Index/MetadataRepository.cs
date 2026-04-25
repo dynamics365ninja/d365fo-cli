@@ -14,7 +14,7 @@ namespace D365FO.Core.Index;
 public sealed class MetadataRepository
 {
     /// <summary>Current schema version tracked in PRAGMA user_version.</summary>
-    public const int CurrentSchemaVersion = 7;
+    public const int CurrentSchemaVersion = 8;
 
     private static readonly Lazy<string> SchemaSql = new(LoadEmbeddedSchema);
 
@@ -71,6 +71,21 @@ public sealed class MetadataRepository
                 conn.Execute("ALTER TABLE Models ADD COLUMN LastExtractedUtc TEXT");
             if (!existingCols.Contains("SourceFingerprint"))
                 conn.Execute("ALTER TABLE Models ADD COLUMN SourceFingerprint TEXT");
+        }
+        if (current < 8)
+        {
+            // v8: Form pattern columns. Backfilled lazily — extractor will
+            // populate them on the next `index extract` / `refresh`.
+            var formCols = conn.Query<string>("SELECT name FROM pragma_table_info('Forms')")
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
+            if (!formCols.Contains("Pattern")) conn.Execute("ALTER TABLE Forms ADD COLUMN Pattern TEXT");
+            if (!formCols.Contains("PatternVersion")) conn.Execute("ALTER TABLE Forms ADD COLUMN PatternVersion TEXT");
+            if (!formCols.Contains("Style")) conn.Execute("ALTER TABLE Forms ADD COLUMN Style TEXT");
+            if (!formCols.Contains("TitleDataSource")) conn.Execute("ALTER TABLE Forms ADD COLUMN TitleDataSource TEXT");
+            var dsCols = conn.Query<string>("SELECT name FROM pragma_table_info('FormDataSources')")
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
+            if (!dsCols.Contains("OrderIndex")) conn.Execute("ALTER TABLE FormDataSources ADD COLUMN OrderIndex INTEGER NOT NULL DEFAULT 0");
+            if (!dsCols.Contains("JoinSource")) conn.Execute("ALTER TABLE FormDataSources ADD COLUMN JoinSource TEXT");
         }
         conn.Execute($"PRAGMA user_version = {CurrentSchemaVersion}");
         conn.Execute(
@@ -281,6 +296,62 @@ public sealed class MetadataRepository
               AND (@k IS NULL OR s.SourceKind = @k)
             ORDER BY s.SourceKind, s.SubscriberClass, s.SubscriberMethod",
             new { o = sourceObject, k = sourceKind }).ToList();
+    }
+
+    /// <summary>
+    /// Returns indexed forms whose Microsoft pattern matches the filters.
+    /// Used by <c>d365fo find form-patterns</c> to surface real reference
+    /// forms ("show me every SimpleListDetails on a setup table") and to
+    /// find forms that use a given primary table.
+    /// </summary>
+    public IReadOnlyList<FormPatternRow> FindFormPatterns(
+        string? pattern = null,
+        string? table = null,
+        string? model = null,
+        int limit = 50)
+    {
+        using var conn = Open();
+        // Driving datasource = OrderIndex 0 (or any when none populated yet).
+        var sql = @"
+            SELECT f.Name, f.Pattern, f.PatternVersion, f.Style, f.TitleDataSource,
+                   m.Name AS Model, f.SourcePath,
+                   (SELECT TableName FROM FormDataSources d
+                     WHERE d.FormId = f.FormId
+                     ORDER BY d.OrderIndex, d.Id LIMIT 1) AS PrimaryTable,
+                   (SELECT COUNT(*) FROM FormDataSources d WHERE d.FormId = f.FormId) AS DataSourceCount
+            FROM Forms f JOIN Models m ON m.ModelId = f.ModelId
+            WHERE (@pat IS NULL OR f.Pattern LIKE @patLike)
+              AND (@tbl IS NULL OR EXISTS (
+                    SELECT 1 FROM FormDataSources d
+                    WHERE d.FormId = f.FormId AND d.TableName = @tbl))
+              AND (@mdl IS NULL OR m.Name = @mdl)
+            ORDER BY f.Pattern, f.Name
+            LIMIT @lim";
+        var patLike = pattern is null ? null : pattern + "%";
+        return conn.Query<FormPatternRow>(sql, new
+        {
+            pat = pattern,
+            patLike,
+            tbl = table,
+            mdl = model,
+            lim = limit,
+        }).ToList();
+    }
+
+    /// <summary>
+    /// Aggregate counts of patterns across the whole index. Useful as the
+    /// no-argument default of <c>find form-patterns</c> so callers can see
+    /// what the catalogue looks like before drilling in.
+    /// </summary>
+    public IReadOnlyList<FormPatternSummary> SummarizeFormPatterns()
+    {
+        using var conn = Open();
+        return conn.Query<FormPatternSummary>(@"
+            SELECT CAST(COALESCE(NULLIF(Pattern, ''), '(none)') AS TEXT) AS Pattern,
+                   CAST(COUNT(*) AS INTEGER) AS Count
+            FROM Forms
+            GROUP BY COALESCE(NULLIF(Pattern, ''), '(none)')
+            ORDER BY Count DESC, Pattern").ToList();
     }
 
     public FormDetails? GetForm(string name)
@@ -1084,13 +1155,18 @@ public sealed class MetadataRepository
 
         foreach (var f in batch.Forms)
         {
-            conn.Execute(@"INSERT INTO Forms(Name, ModelId, SourcePath) VALUES(@n, @m, @p)",
-                         new { n = f.Name, m = modelId, p = f.SourcePath }, tx);
+            conn.Execute(@"INSERT INTO Forms(Name, ModelId, SourcePath, Pattern, PatternVersion, Style, TitleDataSource)
+                           VALUES(@n, @m, @p, @pat, @pv, @st, @td)",
+                         new { n = f.Name, m = modelId, p = f.SourcePath,
+                               pat = f.Pattern, pv = f.PatternVersion, st = f.Style, td = f.TitleDataSource }, tx);
             var formId = conn.ExecuteScalar<long>("SELECT last_insert_rowid()", transaction: tx);
+            int idx = 0;
             foreach (var ds in f.DataSources)
             {
-                conn.Execute(@"INSERT INTO FormDataSources(FormId, Name, TableName) VALUES(@f, @n, @t)",
-                             new { f = formId, n = ds.Name, t = ds.Table }, tx);
+                conn.Execute(@"INSERT INTO FormDataSources(FormId, Name, TableName, OrderIndex, JoinSource)
+                               VALUES(@f, @n, @t, @o, @j)",
+                             new { f = formId, n = ds.Name, t = ds.Table, o = idx, j = ds.JoinSource }, tx);
+                idx++;
             }
         }
 

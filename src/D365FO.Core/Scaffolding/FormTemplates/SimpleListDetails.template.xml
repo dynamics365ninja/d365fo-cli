@@ -1,0 +1,156 @@
+<?xml version="1.0" encoding="utf-8"?>
+<AxForm xmlns:i="http://www.w3.org/2001/XMLSchema-instance" xmlns="Microsoft.Dynamics.AX.Metadata.V6">
+  <Name>{FormName}</Name>
+  <SourceCode>
+    <Methods xmlns="">
+      <Method>
+        <Name>classDeclaration</Name>
+        <Source><![CDATA[
+[Form]
+public class {FormName} extends FormRun
+{
+}
+
+]]></Source>
+      </Method>
+    </Methods>
+    <DataSources xmlns="" />
+    <DataControls xmlns="" />
+    <Members xmlns="" />
+  </SourceCode>
+  <DataSources>
+    <AxFormDataSource xmlns="">
+      <Name>{DsName}</Name>
+      <Table>{DsTable}</Table>
+      <Fields />
+      <ReferencedDataSources />
+      <InsertIfEmpty>No</InsertIfEmpty>
+      <DataSourceLinks />
+      <DerivedDataSources />
+    </AxFormDataSource>
+  </DataSources>
+  <Design>
+{Caption}    <DataSource xmlns="">{DsName}</DataSource>
+    <Pattern xmlns="">SimpleListDetails</Pattern>
+    <PatternVersion xmlns="">1.3</PatternVersion>
+    <Style xmlns="">SimpleListDetails</Style>
+    <TitleDataSource xmlns="">{DsName}</TitleDataSource>
+    <Controls xmlns="">
+      <AxFormControl xmlns="" i:type="AxFormActionPaneControl">
+        <Name>ActionPane</Name>
+        <ElementPosition>134217727</ElementPosition>
+        <FilterExpression>%1</FilterExpression>
+        <Type>ActionPane</Type>
+        <VerticalSpacing>-1</VerticalSpacing>
+        <FormControlExtension i:nil="true" />
+        <Controls>
+          <AxFormControl xmlns="" i:type="AxFormButtonGroupControl">
+            <Name>ButtonGroup</Name>
+            <Type>ButtonGroup</Type>
+            <FormControlExtension i:nil="true" />
+            <Controls />
+            <ArrangeMethod>Vertical</ArrangeMethod>
+          </AxFormControl>
+        </Controls>
+        <AlignChild>No</AlignChild>
+        <AlignChildren>No</AlignChildren>
+        <ArrangeMethod>Vertical</ArrangeMethod>
+      </AxFormControl>
+      <AxFormControl xmlns="" i:type="AxFormGroupControl">
+        <Name>GridContainer</Name>
+        <Pattern>SidePanel</Pattern>
+        <PatternVersion>1.0</PatternVersion>
+        <Type>Group</Type>
+        <FormControlExtension i:nil="true" />
+        <Controls>
+          <AxFormControl>
+            <Name>QuickFilterControl</Name>
+            <FormControlExtension>
+              <Name>QuickFilterControl</Name>
+              <ExtensionComponents />
+              <ExtensionProperties>
+                <AxFormControlExtensionProperty>
+                  <Name>targetControlName</Name>
+                  <Type>String</Type>
+                  <Value>Grid</Value>
+                </AxFormControlExtensionProperty>
+                <AxFormControlExtensionProperty>
+                  <Name>defaultColumnName</Name>
+                  <Type>String</Type>
+                  <Value>{DefaultCol}</Value>
+                </AxFormControlExtensionProperty>
+                <AxFormControlExtensionProperty>
+                  <Name>placeholderText</Name>
+                  <Type>String</Type>
+                </AxFormControlExtensionProperty>
+              </ExtensionProperties>
+            </FormControlExtension>
+          </AxFormControl>
+          <AxFormControl xmlns="" i:type="AxFormGridControl">
+            <Name>Grid</Name>
+            <Type>Grid</Type>
+            <FormControlExtension i:nil="true" />
+            <Controls>
+{ListFieldControls}            </Controls>
+            <DataSource>{DsName}</DataSource>
+            <GridLinesStyle>Vertical</GridLinesStyle>
+            <Style>List</Style>
+          </AxFormControl>
+        </Controls>
+        <Style>SidePanel</Style>
+      </AxFormControl>
+      <AxFormControl xmlns="" i:type="AxFormGroupControl">
+        <Name>DetailsGroup</Name>
+        <Pattern>FieldsFieldGroups</Pattern>
+        <PatternVersion>1.1</PatternVersion>
+        <Type>Group</Type>
+        <FormControlExtension i:nil="true" />
+        <Controls>
+          <AxFormControl xmlns="" i:type="AxFormTabControl">
+            <Name>Tab</Name>
+            <Type>Tab</Type>
+            <FormControlExtension i:nil="true" />
+            <Controls>
+              <AxFormControl xmlns="" i:type="AxFormTabPageControl">
+                <Name>TabPageOverview</Name>
+                <Pattern>FieldsFieldGroups</Pattern>
+                <PatternVersion>1.1</PatternVersion>
+                <Type>TabPage</Type>
+                <Caption>Overview</Caption>
+                <FormControlExtension i:nil="true" />
+                <Controls>
+                  <AxFormControl xmlns="" i:type="AxFormGroupControl">
+                    <Name>OverviewGroup</Name>
+                    <Type>Group</Type>
+                    <DataGroup>Overview</DataGroup>
+                    <FormControlExtension i:nil="true" />
+                    <Controls>
+{DetailFieldControls}                    </Controls>
+                  </AxFormControl>
+                </Controls>
+              </AxFormControl>
+              <AxFormControl xmlns="" i:type="AxFormTabPageControl">
+                <Name>TabPageGeneral</Name>
+                <Pattern>FieldsFieldGroups</Pattern>
+                <PatternVersion>1.1</PatternVersion>
+                <Type>TabPage</Type>
+                <Caption>General</Caption>
+                <FormControlExtension i:nil="true" />
+                <Controls>
+                  <AxFormControl xmlns="" i:type="AxFormGroupControl">
+                    <Name>GeneralGroup</Name>
+                    <Type>Group</Type>
+                    <DataGroup>General</DataGroup>
+                    <FormControlExtension i:nil="true" />
+                    <Controls />
+                  </AxFormControl>
+                </Controls>
+              </AxFormControl>
+            </Controls>
+          </AxFormControl>
+        </Controls>
+      </AxFormControl>
+    </Controls>
+  </Design>
+  <Parts />
+</AxForm>

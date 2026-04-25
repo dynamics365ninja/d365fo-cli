@@ -57,6 +57,26 @@ d365fo find coc CustTable::validateWrite
 
 Also available: `find relations|usages|extensions|handlers|refs`. `find refs --xref` queries `DYNAMICSXREFDB` through the bridge for path/line/column/kind precision.
 
+#### `find form-patterns` — pattern analyser for AOT forms
+
+```sh
+# Histogram of every form pattern in the index.
+d365fo find form-patterns --output json
+
+# Every SimpleList-style form in the index (prefix match).
+d365fo find form-patterns --pattern SimpleList
+
+# All forms whose datasources include CustTable.
+d365fo find form-patterns --table CustTable
+
+# Forms that look like CustGroup (same pattern, same primary datasource).
+d365fo find form-patterns --similar-to CustGroup
+```
+
+Use it before scaffolding a new form to confirm which Microsoft pattern peers
+already use for the same table — then pass that pattern straight into
+`d365fo generate form ... --pattern <P>`.
+
 ### `resolve label` — look up a label token
 
 ```sh
@@ -152,12 +172,36 @@ Auto-detects the Windows `PackagesLocalDirectory` (C:, J:, K:, `AosService`), pr
 ### Table
 
 ```sh
+# Pattern-driven (P1) — emits canonical TableGroup, default fields, alt-key index
+d365fo generate table FmCustomer \
+  --pattern master \
+  --label "@Fleet:Customer" \
+  --install-to FleetManagement
+
+# Header / lines pair (worksheet pattern)
+d365fo generate table FmOrderHeader --pattern worksheet-header --install-to FleetManagement
+d365fo generate table FmOrderLine   --pattern worksheet-line   --install-to FleetManagement
+
+# Temp table — TempDB is a TableType, not a TableGroup
+d365fo generate table FmTmpStaging \
+  --pattern main --table-type TempDB \
+  --install-to FleetManagement
+
+# Hand-picked fields override pattern defaults
 d365fo generate table FmVehicle \
   --label "@Fleet:Vehicle" \
   --field VIN:VinEdt:mandatory \
   --field Make:Name \
+  --primary-key VIN \
   --out src/MyModel/AxTable/FmVehicle.xml
 ```
+
+`--pattern` accepts: `main` (alias `master`), `transaction` (alias
+`transactional`), `parameter` (aliases `setup`, `config`), `group`,
+`worksheetheader` (alias `header`), `worksheetline` (alias `line`),
+`reference` (alias `lookup`), `framework`, `miscellaneous`. Passing
+`TempDB` / `InMemory` is rejected — they are `TableType` values; combine
+`--table-type TempDB --pattern main` for temp tables.
 
 ### Class
 
@@ -179,6 +223,42 @@ d365fo generate coc CustTable --method update --method insert \
 d365fo generate simple-list FmVehicleListPage --table FmVehicle \
   --out src/MyModel/AxForm/FmVehicleListPage.xml
 ```
+
+> **Deprecated.** `simple-list` is now an alias for `generate form --pattern SimpleList`. New scripts should use `generate form` (below) for access to all nine D365FO patterns.
+
+### Form (any of nine D365FO patterns)
+
+```sh
+d365fo generate form FmVehicleDetails \
+  --pattern DetailsMaster \
+  --table FmVehicle \
+  --field VIN --field Make --field Model \
+  --caption "@Fleet:Vehicles" \
+  --out src/MyModel/AxForm/FmVehicleDetails.xml
+```
+
+| Pattern | Use case | Reference form |
+|---|---|---|
+| `SimpleList` | setup / config tables (< 10 fields) | `CustGroup` |
+| `SimpleListDetails` | medium entities, list + detail panel | `PaymTerm` |
+| `DetailsMaster` | full master record with FastTabs | `CustTable` |
+| `DetailsTransaction` | header + lines (orders, journals) | `SalesTable` |
+| `Dialog` | modal popup dialog | `ProjTableCreate` |
+| `TableOfContents` | tabbed parameter / setup pages | `CustParameters` |
+| `Lookup` | dropdown lookup with custom filter | `SysLanguageLookup` |
+| `ListPage` | navigation list page (read-only) | `CustTableListPage` |
+| `Workspace` | KPI tiles + panorama sections | `VendPaymentWorkspace` |
+
+The pattern argument is case-insensitive and accepts common aliases (`master`, `transaction`, `toc`, `panorama`, `dropdialog`, `simple-list`, …) — see [`FormPatternNormalizer`](../src/D365FO.Core/Scaffolding/FormPattern.cs).
+
+Pattern-specific switches:
+
+- `--field <NAME>` (repeatable) — grid / detail columns. Bound to the primary datasource.
+- `--section <Name:Caption>` (repeatable) — TabPages for `TableOfContents`, optional sections for `Dialog`, panorama list sections for `Workspace`.
+- `--lines-table <TABLE>` — secondary datasource for `DetailsTransaction` (header + lines).
+- `--caption <TEXT>` — design caption (literal text or `@File:Label` reference).
+
+The emitted XML is structurally validated against the upstream MCP server's reference forms and round-trips through `XDocument` cleanly. See [`FormPatternScaffoldingTests`](../tests/D365FO.Cli.Tests/FormPatternScaffoldingTests.cs) for the per-pattern assertions.
 
 ### Data entity (`AxDataEntityView`)
 

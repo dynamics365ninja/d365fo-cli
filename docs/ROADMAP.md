@@ -3,9 +3,21 @@
 > **Audience:** contributors and users who want to know what's coming next.
 > **Living document.** Only items that are **not yet implemented** live here. Everything already shipped is documented in [SETUP.md](SETUP.md) / [EXAMPLES.md](EXAMPLES.md) (user-visible surface) and [ARCHITECTURE.md](ARCHITECTURE.md) (internals). Git history preserves earlier design notes.
 
-Items are grouped by topic and ordered roughly by ROI; within a section you can pick any order.
+Items are ordered top-down by priority. Sections labelled **P0 / P1 / …** are
+the active backlog (lower number = ship sooner). Sections without a P-tag are
+long-tail ideas grouped by topic.
 
 ## Contents
+
+### Active backlog (priority-ordered)
+
+- [P0 — Form pattern parity with `d365fo-mcp-server`](#p0--form-pattern-parity-with-d365fo-mcp-server)
+- [P1 — Smart-table pattern presets](#p1--smart-table-pattern-presets--shipped)
+- [P2 — Form / table pattern analyzer (`find form-patterns`)](#p2--form--table-pattern-analyzer-find-form-patterns)
+- [P3 — Smart report scaffold (`generate report`)](#p3--smart-report-scaffold-generate-report)
+- [P4 — Extension strategy advisor + completeness analyzer](#p4--extension-strategy-advisor--completeness-analyzer)
+
+### Long-tail / topical
 
 1. [Refresh & observability](#1-refresh--observability)
 2. [Runtime / live data](#2-runtime--live-data)
@@ -15,6 +27,96 @@ Items are grouped by topic and ordered roughly by ROI; within a section you can 
 6. [Code quality & Best Practices](#6-code-quality--best-practices)
 7. [Tests](#7-tests)
 8. [Small items / technical debt](#8-small-items--technical-debt)
+
+---
+
+## P0 — Form pattern parity with `d365fo-mcp-server`
+
+**Status:** ✅ shipped. The CLI now ships `d365fo generate form <Name> --pattern <P>` with full parity to upstream MCP's `generate_smart_form`. Templates live as embedded resources under [`src/D365FO.Core/Scaffolding/FormTemplates/`](../src/D365FO.Core/Scaffolding/FormTemplates/) and are exercised by [`FormPatternScaffoldingTests`](../tests/D365FO.Cli.Tests/FormPatternScaffoldingTests.cs).
+
+The legacy `d365fo generate simple-list` command still works as a thin alias for `--pattern SimpleList`.
+
+| Pattern | Reference form | Use case |
+|---|---|---|
+| `SimpleList` | `CustGroup` | setup / config tables |
+| `SimpleListDetails` | `PaymTerm` | medium entities, list + detail panel |
+| `DetailsMaster` | `CustTable` | full master record |
+| `DetailsTransaction` | `SalesTable` | header + lines (orders) |
+| `Dialog` | `ProjTableCreate` | popup dialog |
+| `TableOfContents` | `CustParameters` | tabbed parameter pages |
+| `Lookup` | `SysLanguageLookup` | dropdown lookups |
+| `ListPage` | `CustTableListPage` | navigation list page |
+| `Workspace` | `VendPaymentWorkspace` | KPI tiles + panorama sections |
+
+See [EXAMPLES.md → Form](EXAMPLES.md#form-any-of-nine-d365fo-patterns) for usage.
+
+## P1 — Smart-table pattern presets ✅ shipped
+
+`d365fo generate table` now accepts `--pattern <P>` and emits the canonical
+`<TableGroup>`, default field skeleton, and an alternate-key
+`<AxTableIndex AlternateKey=Yes>` index — so the scaffold passes
+BP `BPCheckAlternateKeyAbsent` out of the box.
+
+| Surface | Reference |
+|---|---|
+| Pattern enum + alias normaliser | [src/D365FO.Core/Scaffolding/TablePattern.cs](../src/D365FO.Core/Scaffolding/TablePattern.cs) |
+| Default field presets per pattern | `TablePatternPresets.DefaultFieldsFor` |
+| Scaffolder integration (TableGroup / TableType / index) | [src/D365FO.Core/Scaffolding/XppScaffolder.cs](../src/D365FO.Core/Scaffolding/XppScaffolder.cs) |
+| CLI flags `--pattern`, `--table-type`, `--primary-key` | [src/D365FO.Cli/Commands/Generate/GenerateCommands.cs](../src/D365FO.Cli/Commands/Generate/GenerateCommands.cs) |
+| Tests (16 cases incl. TempDB→TableType guard, alias matrix, alt-key) | [tests/D365FO.Cli.Tests/TablePatternScaffoldingTests.cs](../tests/D365FO.Cli.Tests/TablePatternScaffoldingTests.cs) |
+| Skill | [skills/_source/table-scaffolding.md](../skills/_source/table-scaffolding.md) |
+
+Patterns shipped: `Main`, `Transaction`, `Parameter`, `Group`,
+`WorksheetHeader`, `WorksheetLine`, `Reference`, `Framework`, `Miscellaneous`.
+Aliases (`master`, `setup`, `config`, `transactional`, `lookup`, `header`,
+`line`, …) are normalised. Passing `TempDB` / `InMemory` to `--pattern` is
+**rejected** with a hint pointing to `--table-type`.
+
+Deferred to a later iteration: live "copy fields from CustTable" via the
+bridge, EDT auto-relation migration (BP `BPErrorEDTNotMigrated`), and
+pattern *analysis* of indexed tables (P2).
+
+## P2 — Form / table pattern analyzer (`find form-patterns`) ✅ shipped
+
+`d365fo find form-patterns` analyses every indexed `AxForm` by reading
+`<Design><Pattern>` / `<PatternVersion>` and the primary datasource. The
+index schema bumped to **v8** (extra columns on `Forms`/`FormDataSources`
+backfilled lazily on next `index extract`).
+
+| File | Purpose |
+|---|---|
+| [src/D365FO.Core/Index/Schema.sql](../src/D365FO.Core/Index/Schema.sql) | `Forms.Pattern/PatternVersion/Style/TitleDataSource`, `FormDataSources.OrderIndex/JoinSource`. |
+| [src/D365FO.Core/Index/MetadataRepository.cs](../src/D365FO.Core/Index/MetadataRepository.cs) | v8 migration; `FindFormPatterns(...)` + `SummarizeFormPatterns()`. |
+| [src/D365FO.Core/Extract/MetadataExtractor.cs](../src/D365FO.Core/Extract/MetadataExtractor.cs) | `ParseForm` reads `<Design>` pattern hints. |
+| [src/D365FO.Cli/Commands/Find/FindCommands.cs](../src/D365FO.Cli/Commands/Find/FindCommands.cs) | `FindFormPatternsCommand`. |
+| [tests/D365FO.Core.Tests/FormPatternAnalyzerTests.cs](../tests/D365FO.Core.Tests/FormPatternAnalyzerTests.cs) | 4 tests covering extractor + repository + filters. |
+
+CLI surface:
+
+```sh
+d365fo find form-patterns                        # histogram across the index
+d365fo find form-patterns --pattern SimpleList   # all forms with that pattern (prefix)
+d365fo find form-patterns --table CustTable      # every form bound to CustTable
+d365fo find form-patterns --similar-to CustGroup # peers with same pattern + primary table
+d365fo find form-patterns --pattern ListPage --table CustTable --model ApplicationSuite
+```
+
+Deferred follow-ups: permission histogram (`AllowEdit/Create/Delete`),
+table-pattern *analysis* of indexed tables (cluster by group/index/relation
+shape), and a `find table-patterns --similar-to <Table>` peer.
+
+## P3 — Smart report scaffold (`generate report`)
+
+Port `generate_smart_report` → `XppScaffolder.Report(...)`. Produces an
+`AxReport` with one DP class reference, one design and a tablix, plus a
+matching `AxClass` skeleton implementing `SrsReportDataProviderBase`.
+
+## P4 — Extension strategy advisor + completeness analyzer
+
+Two MCP capabilities still missing:
+
+- **`extension_strategy_advisor`** — `d365fo suggest extension <Target>` recommends *Class CoC* vs *Event handler* vs *Form/Table extension* based on what the target exposes (delegate count, sealed methods, attribute usage). Outputs ranked options with one-line rationale.
+- **`analyze_completeness`** — `d365fo analyze completeness <Project>` cross-checks a workspace project against indexed AOT (e.g. role references a missing duty, table has an EDT not present in any model, label key has no translation).
 
 ---
 

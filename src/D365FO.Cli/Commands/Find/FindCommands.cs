@@ -235,3 +235,103 @@ public sealed class FindRefsCommand : Command<FindRefsCommand.Settings>
         }));
     }
 }
+
+/// <summary>
+/// Pattern analyser for indexed AOT forms. Surfaces real reference forms so
+/// the agent can ground "what pattern fits this table?" without guessing.
+/// Three modes:
+///   --pattern &lt;P&gt;        list all forms whose Microsoft pattern starts with P
+///   --table &lt;T&gt;          list all forms whose primary datasource is T
+///   --similar-to &lt;Form&gt;  resolve the reference form's pattern/table and list peers
+///   (no flags)            histogram of patterns across the index
+/// </summary>
+public sealed class FindFormPatternsCommand : Command<FindFormPatternsCommand.Settings>
+{
+    public sealed class Settings : D365OutputSettings
+    {
+        [CommandOption("--pattern <PATTERN>")]
+        [System.ComponentModel.Description("Filter by Microsoft form pattern (SimpleList, DetailsMaster, ListPage, ...). Prefix match.")]
+        public string? Pattern { get; init; }
+
+        [CommandOption("--table <TABLE>")]
+        [System.ComponentModel.Description("Filter forms whose datasources include this table.")]
+        public string? Table { get; init; }
+
+        [CommandOption("--similar-to <FORM>")]
+        [System.ComponentModel.Description("Find forms similar to a reference form (same pattern + same primary table).")]
+        public string? SimilarTo { get; init; }
+
+        [CommandOption("--model <MODEL>")]
+        [System.ComponentModel.Description("Restrict to a single model.")]
+        public string? Model { get; init; }
+
+        [CommandOption("-l|--limit <N>")]
+        public int Limit { get; init; } = 50;
+    }
+
+    public override int Execute(CommandContext ctx, Settings settings)
+    {
+        var kind = OutputMode.Resolve(settings.Output);
+        var repo = RepoFactory.Create();
+
+        // --similar-to: resolve the reference form first, then delegate.
+        string? pattern = settings.Pattern;
+        string? table = settings.Table;
+        object? reference = null;
+        if (!string.IsNullOrWhiteSpace(settings.SimilarTo))
+        {
+            var refForm = repo.GetForm(settings.SimilarTo);
+            if (refForm is null)
+            {
+                return RenderHelpers.Render(kind, ToolResult<object>.Fail(
+                    "FORM_NOT_FOUND",
+                    $"Form '{settings.SimilarTo}' is not in the index.",
+                    "Run `d365fo index extract` (or refresh) and retry, or check the spelling with `d365fo search form`."));
+            }
+            // Pattern lives on Forms.Pattern but FormDetails doesn't surface
+            // it yet. Re-use the analyser query with the model + name to
+            // pull the reference row directly.
+            var enriched = repo.FindFormPatterns(model: refForm.Form.Model, limit: int.MaxValue)
+                .FirstOrDefault(r => string.Equals(r.Name, refForm.Form.Name, StringComparison.OrdinalIgnoreCase));
+            pattern ??= enriched?.Pattern;
+            table ??= enriched?.PrimaryTable
+                  ?? refForm.DataSources.Select(d => d.TableName).FirstOrDefault(t => !string.IsNullOrEmpty(t));
+            reference = new
+            {
+                name = refForm.Form.Name,
+                model = refForm.Form.Model,
+                pattern,
+                primaryTable = table,
+            };
+        }
+
+        // No filters => show histogram so the user can pick a pattern.
+        if (string.IsNullOrWhiteSpace(pattern) && string.IsNullOrWhiteSpace(table))
+        {
+            var summary = repo.SummarizeFormPatterns();
+            return RenderHelpers.Render(kind, ToolResult<object>.Success(new
+            {
+                mode = "summary",
+                totalForms = summary.Sum(s => s.Count),
+                patterns = summary,
+                hint = "Pass --pattern <P>, --table <T>, or --similar-to <Form> to drill in.",
+            }));
+        }
+
+        var rows = repo.FindFormPatterns(pattern, table, settings.Model, settings.Limit);
+        // When --similar-to was used, drop the reference form itself.
+        if (reference is not null && !string.IsNullOrEmpty(settings.SimilarTo))
+        {
+            rows = rows.Where(r => !string.Equals(r.Name, settings.SimilarTo, StringComparison.OrdinalIgnoreCase)).ToList();
+        }
+
+        return RenderHelpers.Render(kind, ToolResult<object>.Success(new
+        {
+            mode = reference is null ? "filter" : "similar",
+            filter = new { pattern, table, model = settings.Model },
+            reference,
+            count = rows.Count,
+            items = rows,
+        }));
+    }
+}

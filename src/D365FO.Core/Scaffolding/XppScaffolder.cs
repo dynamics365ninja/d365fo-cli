@@ -11,9 +11,24 @@ namespace D365FO.Core.Scaffolding;
 /// </summary>
 public static class XppScaffolder
 {
-    public static XDocument Table(string name, string? label = null, IEnumerable<TableFieldSpec>? fields = null)
+    public static XDocument Table(
+        string name,
+        string? label = null,
+        IEnumerable<TableFieldSpec>? fields = null,
+        TablePattern pattern = TablePattern.None,
+        TableStorage storage = TableStorage.RegularTable,
+        IEnumerable<string>? primaryKeyFields = null)
     {
-        var fieldEls = (fields ?? Enumerable.Empty<TableFieldSpec>()).Select(f =>
+        // Resolve effective field list: caller-supplied wins; otherwise use the
+        // pattern preset (if any). When neither is supplied, emit nothing —
+        // the AOT will not compile a table with zero fields, but that is the
+        // correct error for the caller, not something we silently paper over.
+        var supplied = (fields ?? Enumerable.Empty<TableFieldSpec>()).ToList();
+        var effectiveFields = supplied.Count > 0
+            ? supplied
+            : TablePatternPresets.DefaultFieldsFor(pattern).ToList();
+
+        var fieldEls = effectiveFields.Select(f =>
         {
             var el = new XElement("AxTableField",
                 new XElement("Name", f.Name),
@@ -23,14 +38,53 @@ public static class XppScaffolder
             return el;
         });
 
+        // Pick the primary-key / alternate-key index. Order of preference:
+        //   1. caller-supplied --primary-key list (must reference real fields).
+        //   2. all mandatory fields from the pattern preset (typical D365FO shape).
+        //   3. first field as a fallback so BPCheckAlternateKeyAbsent never trips.
+        var pkNames = (primaryKeyFields ?? Enumerable.Empty<string>())
+            .Where(n => !string.IsNullOrWhiteSpace(n) &&
+                        effectiveFields.Any(f => string.Equals(f.Name, n, StringComparison.OrdinalIgnoreCase)))
+            .ToList();
+        if (pkNames.Count == 0)
+        {
+            pkNames = effectiveFields.Where(f => f.Mandatory).Select(f => f.Name).ToList();
+        }
+        if (pkNames.Count == 0 && effectiveFields.Count > 0)
+        {
+            pkNames = new List<string> { effectiveFields[0].Name };
+        }
+
+        XElement? indexesEl = null;
+        if (pkNames.Count > 0)
+        {
+            indexesEl = new XElement("Indexes",
+                new XElement("AxTableIndex",
+                    new XElement("Name", "PrimaryIdx"),
+                    new XElement("AlternateKey", "Yes"),
+                    new XElement("AllowDuplicates", "No"),
+                    new XElement("Fields",
+                        pkNames.Select(n => new XElement("AxTableIndexField",
+                            new XElement("DataField", n))))));
+        }
+
+        // TableGroup / TableType: only emit when the caller asked for them.
+        // An absent element means the AOT default applies (Miscellaneous /
+        // Regular) — we never want to flip a default by accident.
+        var tableGroup = TablePatternPresets.TableGroupFor(pattern);
+        var tableType  = storage == TableStorage.RegularTable ? null : TablePatternPresets.TableTypeFor(storage);
+
         return new XDocument(
             new XElement("AxTable",
                 new XElement("Name", name),
                 string.IsNullOrEmpty(label) ? null : new XElement("Label", label),
+                tableGroup is null ? null : new XElement("TableGroup", tableGroup),
+                tableType  is null ? null : new XElement("TableType",  tableType),
                 new XElement("Fields", fieldEls),
                 new XElement("FieldGroups",
                     new XElement("AxTableFieldGroup",
-                        new XElement("Name", "AutoReport")))));
+                        new XElement("Name", "AutoReport"))),
+                indexesEl));
     }
 
     public static XDocument Class(string name, string? extends = null, bool isFinal = true)
@@ -63,6 +117,47 @@ public static class XppScaffolder
                 new XElement("Methods", methodEls)));
     }
 
+    /// <summary>
+    /// Scaffolds a pattern-correct <c>AxForm</c>. Returns the rendered XML as
+    /// a string (preserving the exact element ordering expected by the AOT)
+    /// so the caller can hand it to <see cref="ScaffoldFileWriter.Write(string, string, bool)"/>.
+    /// Mirrors upstream MCP <c>generate_smart_form</c>.
+    /// </summary>
+    /// <param name="formName">AOT form name (also used for <c>classDeclaration</c>).</param>
+    /// <param name="dataSourceTable">Primary datasource table (optional).</param>
+    /// <param name="pattern">D365FO form pattern; defaults to <see cref="FormPattern.SimpleList"/>.</param>
+    /// <param name="caption">Optional caption / label string.</param>
+    /// <param name="gridFields">Field names rendered as grid / detail columns.</param>
+    /// <param name="sections">Sections for <c>TableOfContents</c> / <c>Dialog</c> / <c>Workspace</c>.</param>
+    /// <param name="linesTable">Lines datasource table for <see cref="FormPattern.DetailsTransaction"/>.</param>
+    public static string Form(
+        string formName,
+        string? dataSourceTable = null,
+        FormPattern pattern = FormPattern.SimpleList,
+        string? caption = null,
+        IReadOnlyList<string>? gridFields = null,
+        IReadOnlyList<FormSectionSpec>? sections = null,
+        string? linesTable = null)
+    {
+        var opt = new FormTemplateOptions
+        {
+            FormName     = formName,
+            DsName       = dataSourceTable,
+            DsTable      = dataSourceTable,
+            Caption      = caption,
+            GridFields   = gridFields ?? Array.Empty<string>(),
+            Sections     = sections ?? Array.Empty<FormSectionSpec>(),
+            LinesDsName  = linesTable,
+            LinesDsTable = linesTable,
+        };
+        return FormPatternTemplates.Build(pattern, opt);
+    }
+
+    /// <summary>
+    /// Legacy <c>SimpleList</c> scaffolder kept for backwards compatibility.
+    /// Prefer <see cref="Form"/> with an explicit <see cref="FormPattern"/>.
+    /// </summary>
+    [Obsolete("Use XppScaffolder.Form(name, table, FormPattern.SimpleList, ...) instead.")]
     public static XDocument SimpleList(string formName, string dataSourceTable)
     {
         return new XDocument(
@@ -297,6 +392,22 @@ public static class ScaffoldFileWriter
     public static WriteResult Write(XDocument doc, string path, bool overwrite = false)
     {
         ArgumentNullException.ThrowIfNull(doc);
+        return WriteCore(doc.ToString(SaveOptions.None), path, overwrite, declarationOnSaveFromXDoc: true, doc);
+    }
+
+    /// <summary>
+    /// Writes a pre-rendered XML string atomically. Used by
+    /// <see cref="FormPatternTemplates"/> which produces formatted AOT XML
+    /// directly (preserving exact element ordering required by D365FO).
+    /// </summary>
+    public static WriteResult Write(string xml, string path, bool overwrite = false)
+    {
+        ArgumentException.ThrowIfNullOrEmpty(xml);
+        return WriteCore(xml, path, overwrite, declarationOnSaveFromXDoc: false, null);
+    }
+
+    private static WriteResult WriteCore(string xml, string path, bool overwrite, bool declarationOnSaveFromXDoc, XDocument? doc)
+    {
         ArgumentException.ThrowIfNullOrWhiteSpace(path);
 
         var full = Path.GetFullPath(path);
@@ -314,9 +425,14 @@ public static class ScaffoldFileWriter
         }
 
         var tmp = full + ".tmp";
-        using (var fs = File.Create(tmp))
+        if (declarationOnSaveFromXDoc && doc is not null)
         {
+            using var fs = File.Create(tmp);
             doc.Save(fs);
+        }
+        else
+        {
+            File.WriteAllText(tmp, xml);
         }
         File.Move(tmp, full);
         var bytes = new FileInfo(full).Length;

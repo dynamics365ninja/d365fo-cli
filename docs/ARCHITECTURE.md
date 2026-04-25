@@ -110,7 +110,7 @@ One request per line, UTF-8:
 - `D365FO.Core.Bridge.BridgeClient` spawns the net48 exe and pumps JSON-RPC.
 - `BridgeGate` in `D365FO.Cli` gates every call behind `D365FO_BRIDGE_ENABLED=1`.
 - `d365fo get class|table|edt|enum|form` is bridge-primary with SQLite fallback; the response payload carries `_source: "bridge"` / `"bridge-kernel"` so callers can audit which store answered.
-- `d365fo generate class|table|coc|simple-list --install-to <Model>` asks the bridge for the model folder, then writes the scaffolded XML atomically.
+- `d365fo generate class|table|coc|form|simple-list --install-to <Model>` asks the bridge for the model folder, then writes the scaffolded XML atomically. Form scaffolding supports all nine D365FO patterns via [`FormPatternTemplates`](../src/D365FO.Core/Scaffolding/FormPatternTemplates.cs); each pattern is a separate embedded `.template.xml` resource under `Scaffolding/FormTemplates/`.
 - `d365fo find refs <Name> --xref` routes through `findReferences`; output is tagged `_source: "xrefdb"`. Without `--xref`, the CLI falls back to a parallel regex scan over indexed X++ source — cross-platform, no SQL Server required.
 
 ### Environment

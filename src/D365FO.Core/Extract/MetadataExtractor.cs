@@ -782,10 +782,29 @@ public sealed class MetadataExtractor
             {
                 var dsName = Local(ds, "Name");
                 if (string.IsNullOrEmpty(dsName)) continue;
-                datasources.Add(new ExtractedFormDataSource(dsName!, Local(ds, "Table")));
+                datasources.Add(new ExtractedFormDataSource(dsName!, Local(ds, "Table"))
+                {
+                    JoinSource = Local(ds, "JoinSource"),
+                });
             }
         }
-        return new ExtractedForm(name, file, datasources);
+        // <Design> sits directly under <AxForm>; pattern hints live there.
+        var design = root.Elements().FirstOrDefault(x => x.Name.LocalName == "Design");
+        string? pattern = null, patternVersion = null, style = null, titleDs = null;
+        if (design is not null)
+        {
+            pattern = Local(design, "Pattern");
+            patternVersion = Local(design, "PatternVersion");
+            style = Local(design, "Style");
+            titleDs = Local(design, "TitleDataSource");
+        }
+        return new ExtractedForm(name, file, datasources)
+        {
+            Pattern = pattern,
+            PatternVersion = patternVersion,
+            Style = style,
+            TitleDataSource = titleDs,
+        };
     }
 
     // -------- object extensions (AxTableExtension, AxFormExtension, ...) --------

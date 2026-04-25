@@ -10,6 +10,7 @@
 
   <ItemGroup>
     <EmbeddedResource Include="Index\Schema.sql" />
+    <EmbeddedResource Include="Scaffolding\FormTemplates\*.template.xml" />
   </ItemGroup>
 
   <ItemGroup>

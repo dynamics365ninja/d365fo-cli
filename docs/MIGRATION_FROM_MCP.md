@@ -64,6 +64,39 @@ d365fo index status
 - No destructive migrations run without explicit confirmation.
 - `ApplyExtract` is idempotent per-model (re-extract replaces that model's rows only).
 
+## Knowledge transfer
+
+The CLI repo ports the **complete X++ rule canon** that has been refined over time in `d365fo-mcp-server`'s `.github/copilot-instructions.md` and `src/prompts/systemInstructions.ts`. Same wisdom, CLI-flavoured surface:
+
+| Source (MCP) | Destination (CLI) |
+|---|---|
+| `.github/copilot-instructions.md` (master rule sheet) | [`.github/copilot-instructions.md`](../.github/copilot-instructions.md) — same structure, MCP tool names mapped to `d365fo` shell commands. |
+| `src/prompts/systemInstructions.ts` (runtime prompt) | `d365fo agent-prompt` (emits the same canon to stdout or a file). |
+| MS Learn citations (`xpp-select-statement`, `method-wrapping-coc`, `xpp-classes-methods`, `xpp-conditional`, `xpp-variables-data-types`) | Cited verbatim in both the master sheet and per-skill files. |
+| Workflow templates (refactor / CoC / table fields / data-event / form / security) | Same workflows, `d365fo` commands instead of MCP tool calls. |
+
+Skills coverage in `skills/_source/` (regenerate Copilot + Anthropic flavours via `python3 scripts/emit-skills.py`):
+
+| Skill | Topic |
+|---|---|
+| `coc-extension-authoring.md` | CoC rules: no defaults in wrapper, `next` scope, `[Hookable]`/`[Wrappable]`, form-nested wrapping. |
+| `xpp-class-and-method-rules.md` | Class default access, instance fields protected, constructor pattern, override visibility, extension methods. |
+| `xpp-database-queries.md` | `select` grammar, `crossCompany` on outer buffer, `in container`, no nested `while select`, set-based ops, `validTimeState`. |
+| `xpp-statement-and-type-rules.md` | `switch break`, ternary, no-DB-null sentinels, `as`/`is`, `using` blocks. |
+| `xpp-best-practice-rules.md` | BP rules: today→DateTimeUtil, label-typed messages, alternate keys, doc comments, EDT migration. |
+| `table-scaffolding.md` | Pattern presets (Main/Transaction/Parameter/Group/Worksheet/Reference), TableGroup vs TableType, EDT label inheritance, alternate-key rule. |
+| `form-pattern-scaffolding.md` | Nine D365FO form patterns (SimpleList, SimpleListDetails, DetailsMaster, DetailsTransaction, Dialog, TableOfContents, Lookup, ListPage, Workspace) — anti-patterns of hand-rolled XML. |
+| `data-entity-scaffolding.md` | `AxDataEntityView` for OData / DMF; PublicEntityName / PublicCollectionName conventions. |
+| `object-extension-authoring.md` | Table / Form / Edt / Enum extensions (NOT class CoC); `<Target>.<Suffix>` shape; collision check. |
+| `event-handler-authoring.md` | `[DataEventHandler]` for standard data events vs `[SubscribesTo + delegateStr]` for custom delegates. |
+| `label-translation.md` | Label CRUD (`label create / rename / delete`), reuse over create, `--raw-text` injection guard. |
+| `security-hierarchy-trace.md` | Role / duty / privilege traversal; `get security`. |
+| `model-dependency-and-coupling.md` | `models deps`, `models coupling`, layer ordering, cycle detection. |
+| `review-and-checkpoint-workflow.md` | Git-checkpoint workflow + AOT-semantic `review diff`. |
+| `x++-class-authoring.md` | General workflow recipe (class authoring with the index). |
+
+If upstream `d365fo-mcp-server` updates its rule canon, sync this repo's [`.github/copilot-instructions.md`](../.github/copilot-instructions.md), `src/D365FO.Cli/Commands/Agent/AgentPromptCommand.cs`, and `skills/_source/`.
+
 ## Command mapping
 
 ### MCP tool → CLI command
@@ -78,6 +111,7 @@ d365fo index status
 | `search_labels` | `d365fo search label <q> --lang en-us,cs` |
 | `get_menu_item_details` | `d365fo get menu-item <name>` |
 | `get_table_relations` | `d365fo find relations <table>` |
+| `generate_smart_form` | `d365fo generate form <Name> --pattern <P>` (all 9 patterns: `SimpleList`, `SimpleListDetails`, `DetailsMaster`, `DetailsTransaction`, `Dialog`, `TableOfContents`, `Lookup`, `ListPage`, `Workspace`) |
 
 ### CLI-only surface (no upstream MCP equivalent)
 
@@ -91,7 +125,7 @@ d365fo index status
 | `d365fo read class\|table\|form <Name> [--method X] [--declaration]` | Read embedded X++ source from the AOT XML. |
 | `d365fo models list` / `d365fo models deps <Name>` | List indexed models or show their Descriptor-declared dependency graph. |
 | `d365fo index extract --model <Name>` | Incremental per-model re-extract. |
-| `d365fo generate table\|class\|coc\|simple-list` | Scaffold new AOT XML. |
+| `d365fo generate table\|class\|coc\|form\|entity\|extension\|event-handler\|privilege\|duty\|role` | Scaffold new AOT XML (table, class, CoC class, AxForm with 9 patterns, data entity, extension, event handler, security artefacts). |
 | `d365fo review diff` | Lint AOT XML changes between git revisions. |
 | `d365fo build` / `sync` / `test run` / `bp check` | Drive MSBuild / SyncEngine / SysTestRunner / xppbp (Windows + VM). |
 

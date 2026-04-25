@@ -9,7 +9,7 @@
 ## What you get
 
 - 🔎 **Instant AOT lookup** — find tables, classes, EDTs, enums, forms, queries, views, reports, services, workflows, security roles, and labels in milliseconds, without touching a D365 VM.
-- 🏗️ **Scaffold X++ objects** — generate ready-to-use XML for tables, classes, Chain-of-Command extensions, and simple-list forms; optionally drop them straight into a model folder.
+- 🏗️ **Scaffold X++ objects** — generate ready-to-use XML for tables, classes, Chain-of-Command extensions, and AxForms (all nine D365FO patterns: `SimpleList`, `SimpleListDetails`, `DetailsMaster`, `DetailsTransaction`, `Dialog`, `TableOfContents`, `Lookup`, `ListPage`, `Workspace`); optionally drop them straight into a model folder.
 - 🕵️ **Understand the code** — trace CoC targets, relations, event handlers, label translations, and reverse references across your workspace.
 - 🤖 **AI-ready** — every command returns a stable JSON envelope, so agents can parse results reliably. A pre-built system prompt and lazy-loaded Skills keep token usage low.
 - 🧪 **Scriptable** — runs in PowerShell, bash/zsh, CI/CD pipelines, and cron jobs. No host application required.
@@ -134,7 +134,7 @@ See [`docs/SETUP.md`](docs/SETUP.md#configure) for the full list.
 | **Find** | `find coc`, `find relations`, `find usages`, `find extensions`, `find handlers`, `find refs` | Trace Chain-of-Command, references, handlers, relationships. |
 | **Read** | `read class`, `read table`, `read form` | Pull source snippets for a method, declaration, or range. |
 | **Resolve** | `resolve label` | Look up multi-language label text by token. |
-| **Generate** | `generate table\|class\|coc\|simple-list` | Scaffold AOT XML for new objects. |
+| **Generate** | `generate table\|class\|coc\|form\|entity\|extension\|event-handler\|privilege\|duty\|role` | Scaffold AOT XML for new objects (forms support 9 D365FO patterns). |
 | **Review** | `review diff` | Lint AOT changes between two git revs. |
 | **Models** | `models list`, `models deps` | List models and trace dependencies. |
 | **Agent** | `agent-prompt`, `schema` | Emit system prompts and machine-readable catalogs for AI agents. |
@@ -149,11 +149,12 @@ See [`docs/EXAMPLES.md`](docs/EXAMPLES.md) for one worked example per command.
 
 `d365fo-cli` is built to be driven by AI agents. Two pieces make that easy:
 
-1. **A system prompt** that tells the agent what commands exist:
+1. **A system prompt** that tells the agent what commands exist and the full X++/CoC/BP rule canon (including MS Learn citations):
    ```sh
    d365fo agent-prompt --out .prompts/d365fo.md
    ```
-2. **Skills** — short, lazy-loaded recipes for common tasks (authoring classes, scaffolding tables, Chain-of-Command, security tracing, label translation). Source skills live in [`skills/_source/`](skills/_source/) and are emitted in two formats:
+   The same canon is also available as [`/.github/copilot-instructions.md`](.github/copilot-instructions.md) for GitHub Copilot — drop it in the consuming repo's `.github/` folder.
+2. **Skills** (15 topics) — short, lazy-loaded recipes covering the X++ rule canon ported from `d365fo-mcp-server`. Generation workflows: table scaffolding (with pattern presets), form patterns (9 templates), CoC extensions, object extensions (Table/Form/Edt/Enum), data entities, event handlers, label CRUD, security hierarchy. Language rules: X++ database queries (`select` / `crossCompany` / `in` / set-based ops), class & method rules (modifier order, fields-protected), statement & type rules (switch, ternary, no-DB-null sentinels, `as`/`is`), and best-practice rules (`BPUpgradeCodeToday`, `BPErrorLabelIsText`, alt-key, doc comments). Analyst skills: model dependency / coupling, Git-checkpoint review workflow. Source skills live in [`skills/_source/`](skills/_source/) and are emitted in two formats:
 
    ```sh
    python3 scripts/emit-skills.py     # or: pwsh scripts/emit-skills.ps1

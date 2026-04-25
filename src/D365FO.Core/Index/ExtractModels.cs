@@ -77,8 +77,18 @@ public sealed record ExtractedMenuItem(string Name, string Kind, string? Object,
 public sealed record ExtractedCoc(string TargetClass, string TargetMethod, string ExtensionClass);
 public sealed record ExtractedLabel(string File, string Language, string Key, string? Value);
 
-public sealed record ExtractedForm(string Name, string? SourcePath, IReadOnlyList<ExtractedFormDataSource> DataSources);
-public sealed record ExtractedFormDataSource(string Name, string? Table);
+public sealed record ExtractedForm(string Name, string? SourcePath, IReadOnlyList<ExtractedFormDataSource> DataSources)
+{
+    /// <summary>v8: <c>&lt;Design&gt;&lt;Pattern&gt;</c> — null when the form has no Microsoft pattern applied.</summary>
+    public string? Pattern { get; init; }
+    public string? PatternVersion { get; init; }
+    public string? Style { get; init; }
+    public string? TitleDataSource { get; init; }
+}
+public sealed record ExtractedFormDataSource(string Name, string? Table)
+{
+    public string? JoinSource { get; init; }
+}
 
 public sealed record ExtractedObjectExtension(string Kind, string TargetName, string ExtensionName, string? SourcePath);
 
