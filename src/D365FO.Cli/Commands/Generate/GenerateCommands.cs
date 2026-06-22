@@ -201,7 +201,7 @@ public sealed class GenerateTableCommand : Command<GenerateTableCommand.Settings
         public string? Label { get; init; }
 
         [CommandOption("--field <SPEC>")]
-        [System.ComponentModel.Description("Repeatable: <name>:<edt>[:mandatory]. Example: --field AccountNum:CustAccount:mandatory")]
+        [System.ComponentModel.Description("Repeatable: <name>:<edt>[[:mandatory]]. Example: --field AccountNum:CustAccount:mandatory")]
         public string[] Fields { get; init; } = Array.Empty<string>();
 
         [CommandOption("--pattern <PATTERN>")]

@@ -14,7 +14,7 @@ public sealed class GenerateEnumCommand : Command<GenerateEnumCommand.Settings>
         public string Name { get; init; } = "";
 
         [CommandOption("--value <SPEC>")]
-        [System.ComponentModel.Description("Repeatable: <name>:<intValue>[:<label>]. Example: --value None:0 --value Active:1:'Active record'")]
+        [System.ComponentModel.Description("Repeatable: <name>:<intValue>[[:<label>]]. Example: --value None:0 --value Active:1:'Active record'")]
         public string[] Values { get; init; } = Array.Empty<string>();
 
         [CommandOption("--non-extensible")]
