@@ -55,6 +55,8 @@ Figures use the post-consolidation MCP baseline (~1,800 tok/turn). Real workflow
 | Single one-off lookup per session | Either — an MCP warm connection has no per-turn startup cost |
 | Agent needs the full generated XML back in context | Avoid both — `d365fo generate` always writes to `--out` and returns a JSON summary only |
 
+> **Running CLI + MCP side by side?** Keeping MCP registered pays the full ~1,800 tok/turn schema overhead on *every* turn, even ones that only call the CLI — the per-call savings don't offset a per-turn cost. Side by side is worth it only for mixed shell-tool environments or a migration grace period; for a single agent with a working shell tool, prefer CLI only. See [MIGRATION_FROM_MCP.md](MIGRATION_FROM_MCP.md#when-to-run-both-side-by-side).
+
 ---
 
 ## Sources

@@ -23,17 +23,25 @@ Both tools share an **identical purpose** — give GitHub Copilot access to real
 | Agent without a shell tool (Claude.ai web, ChatGPT web) | MCP |
 | Want both — Copilot picks the cheaper one per task | Side by side (Path A below) |
 
+### When to run both side by side
+
+Run them side by side only when a single index must serve agents with **mixed shell-tool support** (e.g. Copilot in VS Code alongside Claude.ai web), or during a **migration grace period** before you confirm the CLI path covers everything.
+
+Be aware of the cost: keeping MCP registered injects its full schema overhead (~1,800 tok/turn — see [TOKEN_ECONOMICS.md](TOKEN_ECONOMICS.md)) on **every** turn, including turns where only the CLI is called. The "Copilot picks the cheaper one" benefit applies per *call*, not per *turn*, so for a single agent with a working shell tool, prefer **CLI only (Path B)** — it is both cheaper and simpler.
+
 ---
 
 ## Migration
 
-### Path A — side-by-side operation (recommended)
+### Path A — side-by-side operation (mixed environments / migration)
 
 The existing `.mcp.json` and `copilot-instructions.md` stay unchanged. The CLI is added alongside:
 
 1. Build and deploy the CLI — see [SETUP.md](SETUP.md).
 2. Copy `skills/copilot/*.instructions.md` to `.github/instructions/` in your X++ project.
 3. Copilot automatically uses the shell tool for CLI commands and MCP for tool calls — both from the same index.
+
+> **Heads-up — `copilot-instructions.md` collision.** The per-topic skills in `.github/instructions/*.instructions.md` have unique filenames and coexist fine. But both the CLI and `d365fo-mcp-server` ship a top-level `.github/copilot-instructions.md` and install it with `Copy-Item -Force`, so it's last-installer-wins, not a merge — re-running the other installer clobbers it again. Keep **one** canon file: the CLI's, which is the schema-v5 superset and already documents the shell-first flow plus a no-shell fallback. You don't need the MCP server's instruction file for its tools to work — MCP tools are registered via `.mcp.json` and their schemas are self-describing; the instruction file only guides behaviour, it doesn't enable the tools.
 
 ### Path B — CLI only
 
