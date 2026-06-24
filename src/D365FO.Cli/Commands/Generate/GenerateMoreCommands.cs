@@ -23,7 +23,7 @@ public sealed class GenerateEntityCommand : Command<GenerateEntityCommand.Settin
         public string? PublicCollection { get; init; }
 
         [CommandOption("--field <SPEC>")]
-        [System.ComponentModel.Description("Repeatable: <name>[:<dataField>[:mandatory]].")]
+        [System.ComponentModel.Description("Repeatable: <name>[[:<dataField>[[:mandatory]]]].")]
         public string[] Fields { get; init; } = Array.Empty<string>();
 
         [CommandOption("--all-fields")]
