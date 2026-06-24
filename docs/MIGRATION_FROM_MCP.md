@@ -76,7 +76,7 @@ renaming `form_pattern` → `object_patterns`.
 | `search` | `type`, `queries[]` (batch) | all per-type `search_*`, `search_any`, `batch_search`, `find_usages` |
 | `get_object_info` | `objectType` (+ `relations`/`methods`/`indexes`/`deleteActions` for tables) | all `get_*_details`, `get_form/query/view/...`, `get_table_*` |
 | `get_method` | `include` (signature/source/both) | reads X++ source (was CLI `read` only) |
-| `labels` | `action` (search/fts/info/resolve/create/rename/delete) | `search_labels(_fts)`, `get_label`, `resolve_label`, `create/rename/delete_label` |
+| `labels` | `action` (search/fts/info/resolve/create/rename/delete); `create` also accepts a bulk `labels:[{key,value}, …]` array with shared top-level fields | `search_labels(_fts)`, `get_label`, `resolve_label`, `create/rename/delete_label` |
 | `security_info` | `mode` (artifact/coverage) | `get_security_role/duty/privilege`, `get_security_coverage_for_object` |
 | `object_patterns` | `domain` (form) + `action` (spec/validate) | `get_form_pattern_spec`, `validate_form_pattern`, `form_pattern` |
 | `generate_object` | `objectType` — table/class/coc/form (writes to disk) **and** edt/enum/query/sysoperation/business-event/runbase/security-policy (XML only) | `generate_table/class/coc/form` + the XML-only scaffolders (was two tools `generate` + `generate_xml`) |

@@ -212,6 +212,37 @@ public class McpDispatcherTests : IDisposable
     }
 
     [Fact]
+    public async Task Labels_create_fans_out_bulk_array()
+    {
+        var file = Path.Combine(Path.GetTempPath(), $"d365fo-lbl-{Guid.NewGuid():N}.en-us.label.txt");
+        try
+        {
+            // A `labels:[…]` array writes every entry through the single-create path
+            // with the shared top-level file; the report aggregates per-entry results.
+            var req = "{\"jsonrpc\":\"2.0\",\"id\":26,\"method\":\"tools/call\",\"params\":{\"name\":\"labels\","
+                    + "\"arguments\":{\"action\":\"create\",\"file\":\"" + file.Replace("\\", "\\\\") + "\","
+                    + "\"labels\":[{\"key\":\"@Con:One\",\"value\":\"First\"},"
+                    + "{\"labelId\":\"@Con:Two\",\"text\":\"Second\"}]}}}";
+            var resp = await Roundtrip(req);
+            var doc = Assert.Single(resp);
+            var payload = JsonDocument.Parse(doc.RootElement.GetProperty("result")
+                .GetProperty("content")[0].GetProperty("text").GetString()!);
+            Assert.True(payload.RootElement.GetProperty("ok").GetBoolean());
+            var data = payload.RootElement.GetProperty("data");
+            Assert.Equal(2, data.GetProperty("total").GetInt32());
+            Assert.Equal(2, data.GetProperty("created").GetInt32());
+            Assert.Equal(0, data.GetProperty("failed").GetInt32());
+            var written = await File.ReadAllTextAsync(file);
+            Assert.Contains("First", written);
+            Assert.Contains("Second", written);
+        }
+        finally
+        {
+            if (File.Exists(file)) File.Delete(file);
+        }
+    }
+
+    [Fact]
     public async Task ExtensionInfo_points_accepts_full_extension_name()
     {
         // The dispatch must reach the handler and resolve the dotted extension

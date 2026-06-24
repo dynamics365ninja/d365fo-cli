@@ -516,6 +516,39 @@ public sealed class ToolHandlers
         }
     }
 
+    /// <summary>
+    /// Bulk variant of <see cref="CreateLabel"/>: each entry (key + value) fans out
+    /// through the normal single-label path with shared top-level fields. A failed
+    /// entry is recorded but does not abort the batch — the report aggregates per-entry
+    /// outcomes so a partial success is still actionable.
+    /// </summary>
+    public ToolResult<object> CreateLabels(
+        IReadOnlyList<(string key, string value)> entries,
+        string? file, bool overwrite = false,
+        string? installTo = null, string? lang = null, string? labelFile = null)
+    {
+        if (entries is null || entries.Count == 0)
+            return ToolResult<object>.Fail(D365FoErrorCodes.BadInput,
+                "labels array is empty.",
+                "Provide labels:[{key,value}, …], or use a single create with key+value.");
+
+        var results = new List<object>(entries.Count);
+        int created = 0, failed = 0;
+        foreach (var (key, value) in entries)
+        {
+            var r = CreateLabel(file, key, value, overwrite, installTo, lang, labelFile);
+            if (r.Ok) created++; else failed++;
+            results.Add(new
+            {
+                key,
+                ok = r.Ok,
+                error = r.Error?.Code,
+                message = r.Error?.Message,
+            });
+        }
+        return ToolResult<object>.Success(new { total = entries.Count, created, failed, results });
+    }
+
     public ToolResult<object> RenameLabel(string file, string oldKey, string newKey, bool overwrite = false)
     {
         if (string.IsNullOrWhiteSpace(file)) return ToolResult<object>.Fail(D365FoErrorCodes.BadInput, "file required");
