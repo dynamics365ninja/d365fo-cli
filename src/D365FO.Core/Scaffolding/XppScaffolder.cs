@@ -13,6 +13,23 @@ namespace D365FO.Core.Scaffolding;
 /// </summary>
 public static class XppScaffolder
 {
+    /// <summary>
+    /// Scaffolds an <c>AxTable</c> XML skeleton: fields (from <paramref name="fields"/>
+    /// or the <paramref name="pattern"/> preset), an alternate-key index, and the
+    /// table group/type implied by the pattern and storage.
+    /// </summary>
+    /// <param name="name">Table name (the AOT <c>&lt;Name&gt;</c> and file stem).</param>
+    /// <param name="label">Optional label; emitted as <c>&lt;Label&gt;</c> when set.</param>
+    /// <param name="fields">
+    /// Explicit field list. Wins over the pattern preset; when null/empty the preset
+    /// for <paramref name="pattern"/> is used.
+    /// </param>
+    /// <param name="pattern">Table pattern preset driving default fields and table group.</param>
+    /// <param name="storage">Storage kind; anything other than a regular table stamps <c>&lt;TableType&gt;</c>.</param>
+    /// <param name="primaryKeyFields">
+    /// Optional field names for the primary/alternate-key index. Names that don't match
+    /// an effective field are ignored; falls back to mandatory fields, then the first field.
+    /// </param>
     /// <param name="edtBaseTypeResolver">
     /// Optional callback resolving an EDT name to its primitive base type
     /// (<c>String</c>, <c>Int</c>, <c>Enum</c>, …) — typically backed by the
