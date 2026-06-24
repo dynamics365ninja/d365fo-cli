@@ -167,12 +167,13 @@ public static class ToolCatalog
             "Unified label operations via `action`: " +
             "search (substring across label files) · fts (ranked FTS5; supports phrases, NEAR, Value: filters) · " +
             "info (all translations of a token like @SYS12345, or one entry by file+language+key) · " +
-            "resolve (alias of info) · create (write a key=value; needs file or installTo) · " +
+            "resolve (alias of info) · create (write a key=value; needs file or installTo; " +
+            "pass `labels:[{key,value}, …]` for a bulk create with shared top-level fields) · " +
             "rename (rename a key in place) · delete (remove a key). Values are sanitised unless raw=true.",
             Schema(("action", "string", true), ("query", "string", false), ("token", "string", false),
                    ("languages", "array", false), ("limit", "integer", false), ("raw", "boolean", false),
                    ("file", "string", false), ("language", "string", false), ("key", "string", false),
-                   ("value", "string", false), ("overwrite", "boolean", false),
+                   ("value", "string", false), ("overwrite", "boolean", false), ("labels", "array", false),
                    ("installTo", "string", false), ("lang", "string", false), ("labelFile", "string", false),
                    ("oldKey", "string", false), ("newKey", "string", false),
                    // create-input aliases tolerated for clients that guess the schema
@@ -188,7 +189,13 @@ public static class ToolCatalog
                 // text/label for value, model for installTo, language for lang,
                 // labelFileId for labelFile. Canonical names still win when both
                 // are present.
-                "create" => h.CreateLabel(StrOrNull(p, "file"),
+                // A `labels:[…]` array fans out as a bulk create (shared top-level
+                // file/installTo/lang/labelFile/overwrite); otherwise a single create.
+                "create" => LabelEntries(p) is { Count: > 0 } entries
+                            ? h.CreateLabels(entries, StrOrNull(p, "file"), Bool(p, "overwrite"),
+                                StrAliasOrNull(p, "installTo", "model"), StrAliasOrNull(p, "lang", "language"),
+                                StrAliasOrNull(p, "labelFile", "labelFileId"))
+                            : h.CreateLabel(StrOrNull(p, "file"),
                                 StrAlias(p, "key", "labelId"), StrAlias(p, "value", "text", "label"),
                                 Bool(p, "overwrite"),
                                 StrAliasOrNull(p, "installTo", "model"), StrAliasOrNull(p, "lang", "language"),
@@ -484,5 +491,25 @@ public static class ToolCatalog
         if (v.ValueKind != JsonValueKind.Array) return null;
         return v.EnumerateArray().Where(x => x.ValueKind == JsonValueKind.String)
                  .Select(x => x.GetString()!).ToArray();
+    }
+
+    /// <summary>
+    /// Read a bulk-create <c>labels:[{key,value}, …]</c> array. Each entry tolerates the
+    /// same key/value aliases as a single create (key|labelId, value|text|label). Entries
+    /// missing a key are skipped here; an empty result falls back to single-create.
+    /// </summary>
+    private static List<(string key, string value)> LabelEntries(JsonElement p)
+    {
+        var list = new List<(string, string)>();
+        if (p.ValueKind != JsonValueKind.Object || !p.TryGetProperty("labels", out var arr)
+            || arr.ValueKind != JsonValueKind.Array) return list;
+        foreach (var e in arr.EnumerateArray())
+        {
+            if (e.ValueKind != JsonValueKind.Object) continue;
+            var key = StrAlias(e, "key", "labelId");
+            if (string.IsNullOrEmpty(key)) continue;
+            list.Add((key, StrAlias(e, "value", "text", "label")));
+        }
+        return list;
     }
 }
