@@ -278,6 +278,49 @@ public class ExtractPipelineTests : IDisposable
     }
 
     [Fact]
+    public void MetadataExtractor_reads_form_datasources_when_SourceCode_DataSources_precede_metadata()
+    {
+        // Regression (issue #99): a form that carries datasource override methods
+        // has a form-level <SourceCode><DataSources> block whose <DataSource>
+        // children are NOT AxFormDataSource, and it appears BEFORE the metadata
+        // <DataSources>. The extractor must still pick the metadata container and
+        // index the real datasource, not the (first-in-document) SourceCode one.
+        var model = Path.Combine(_workRoot, "PkgFormDS", "PkgFormDS");
+        Directory.CreateDirectory(Path.Combine(model, "AxForm"));
+        File.WriteAllText(Path.Combine(model, "AxForm", "DemoForm.xml"), """
+            <AxForm xmlns="Microsoft.Dynamics.AX.Metadata.V6" xmlns:i="http://www.w3.org/2001/XMLSchema-instance">
+              <Name>DemoForm</Name>
+              <SourceCode>
+                <DataSources xmlns="">
+                  <DataSource>
+                    <Name>DemoDS</Name>
+                    <Methods>
+                      <Method><Name>active</Name><Source><![CDATA[public int active(){return super();}]]></Source></Method>
+                    </Methods>
+                    <Fields />
+                  </DataSource>
+                </DataSources>
+              </SourceCode>
+              <DataSources>
+                <AxFormDataSource xmlns="">
+                  <Name>DemoDS</Name>
+                  <Table>DemoTable</Table>
+                </AxFormDataSource>
+              </DataSources>
+              <Design />
+            </AxForm>
+            """);
+
+        var batches = new MetadataExtractor().ExtractAll(_workRoot).ToList();
+        var batch = batches.Single(b => b.Model == "PkgFormDS");
+        var form = Assert.Single(batch.Forms);
+        Assert.Equal("DemoForm", form.Name);
+        var ds = Assert.Single(form.DataSources);
+        Assert.Equal("DemoDS", ds.Name);
+        Assert.Equal("DemoTable", ds.Table);
+    }
+
+    [Fact]
     public void MetadataExtractor_detects_abstract_with_newline_in_declaration()
     {
         var model = Path.Combine(_workRoot, "PkgFix4", "PkgFix4");

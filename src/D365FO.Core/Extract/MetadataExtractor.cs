@@ -1054,7 +1054,18 @@ public sealed class MetadataExtractor
         if (root is null) return null;
         var name = Local(root, "Name") ?? Path.GetFileNameWithoutExtension(file);
         var datasources = new List<ExtractedFormDataSource>();
-        var dsContainer = root.Descendants().FirstOrDefault(x => x.Name.LocalName == "DataSources");
+        // The form-level metadata datasources live in the <DataSources> element that
+        // is a DIRECT child of <AxForm>. A form may ALSO carry a <SourceCode><DataSources>
+        // block (datasource override methods — see generate datasource-method) whose
+        // <DataSource> children are NOT AxFormDataSource. Using Descendants() here would
+        // pick whichever <DataSources> appears first in document order (the SourceCode
+        // one comes first in VS-emitted XML), yielding zero datasources and silently
+        // dropping the form's real datasources from the index. Scope to direct children
+        // and prefer the container that actually holds AxFormDataSource elements.
+        var dsContainer = root.Elements()
+            .Where(x => x.Name.LocalName == "DataSources")
+            .FirstOrDefault(c => c.Elements().Any(e => e.Name.LocalName.StartsWith("AxFormDataSource", StringComparison.Ordinal)))
+            ?? root.Elements().FirstOrDefault(x => x.Name.LocalName == "DataSources");
         if (dsContainer is not null)
         {
             foreach (var ds in dsContainer.Elements().Where(x => x.Name.LocalName.StartsWith("AxFormDataSource", StringComparison.Ordinal)))

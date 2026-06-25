@@ -78,6 +78,51 @@ internal static class BridgeGate
     }
 
     /// <summary>
+    /// Update an existing Ax* object in <paramref name="model"/> via the live
+    /// metadata provider (bridge <c>updateObject</c>). Unlike
+    /// <see cref="TrySaveObject"/> (which creates), this overwrites an object
+    /// that already exists — used by the form-method commands, which read the
+    /// current form, inject a method, and push the whole modified XML back.
+    /// Returns (true, null) on success, (false, message) on any failure.
+    /// </summary>
+    internal static (bool ok, string? error) TryUpdateObject(string kind, string name, string model, string xml)
+    {
+        if (!BridgeClient.IsAvailable())
+        {
+            return (false, "bridge is not available (set D365FO_BRIDGE_ENABLED=1 and D365FO_BRIDGE_PATH).");
+        }
+
+        try
+        {
+            var options = DefaultOptions();
+            using var client = new BridgeClient(options);
+            var args = new JsonObject
+            {
+                ["kind"] = kind,
+                ["name"] = name,
+                ["model"] = model,
+                ["xml"] = xml,
+            };
+
+            var result = client.SendAsync("updateObject", args).GetAwaiter().GetResult();
+            if (result is null) return (false, "bridge returned no result");
+
+            var ok = (bool?)result["ok"] ?? false;
+            if (!ok)
+            {
+                var err = (string?)result["error"] ?? "UNKNOWN";
+                var msg = (string?)result["message"] ?? string.Empty;
+                return (false, err + ": " + msg);
+            }
+            return (true, null);
+        }
+        catch (BridgeException ex)
+        {
+            return (false, "bridge error: " + ex.Message);
+        }
+    }
+
+    /// <summary>
     /// Query the DYNAMICSXREFDB for reverse references via the bridge.
     /// Returns the raw bridge JSON (tag _source already included by the
     /// bridge) or null on any failure — callers fall back to the regex

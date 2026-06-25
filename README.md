@@ -43,7 +43,7 @@ This CLI pre-indexes your entire D365FO installation (hundreds of thousands of s
 | 🔍 **Full-codebase intelligence** | Tables, classes, EDTs, enums, forms, queries, views, entities, reports, services, workflows, security artifacts, labels (FTS5) — results in milliseconds, no VM round-trip |
 | 🛡️ **Grounded generation** | Fail-closed gates: `prepare change`/`prepare create` issue grounding tokens, `validate references` proves every identifier, `validate xpp` enforces BP rules — hallucinated code never reaches disk |
 | 🧩 **Form pattern engine** | Catalog of Microsoft form patterns and container sub-patterns: `get form-pattern` serves the required structure, `generate form` self-tests against it (FP001–FP010), `validate form-pattern` re-checks any hand edit |
-| ✍️ **Pattern-correct scaffolding** | 24 `generate` commands — tables, classes, CoC, forms (9 patterns), entities, security, SysOperation, workflows, business events, number sequences, XDS policies |
+| ✍️ **Pattern-correct scaffolding** | 26 `generate` commands — tables, classes, CoC, forms (9 patterns), form datasource/control override methods, entities, security, SysOperation, workflows, business events, number sequences, XDS policies |
 | 🏗️ **SDLC integration** | MSBuild compilation with structured `xppcDiagnostics`, DB sync, xppbp best practices, SysTestRunner — on Windows D365FO VMs |
 | 📐 **X++ knowledge base** | 19 lazy-loaded Skills: select grammar, CoC authoring, FormRun lifecycle, BP rule canon — loaded only when relevant, for Copilot and Claude alike |
 | ⚡ **Agent-first ergonomics** | Stable `{ ok, data, warnings }` JSON envelope, `search batch` / `get batch` / `prepare` single-round aggregators, `agent-prompt` + `schema` manifests |
@@ -138,6 +138,11 @@ d365fo generate form FmVehicles \
   --table FmVehicle \
   --field VIN --field Make --field Year \
   --out src/MyModel/AxForm/FmVehicles.xml
+
+# Form datasource / control override methods (mutates the existing AxForm)
+d365fo generate datasource-method FmVehicles --datasource FmVehicle --list      # show overridable methods
+d365fo generate datasource-method FmVehicles --datasource FmVehicle --method active
+d365fo generate control-method    FmVehicles --control VIN --method modified
 ```
 
 Full walkthrough: **[docs/SETUP.md](docs/SETUP.md)**

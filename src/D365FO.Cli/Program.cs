@@ -200,6 +200,8 @@ app.Configure(cfg =>
         b.AddCommand<GenerateClassCommand>("class").WithDescription("Create a new AxClass.");
         b.AddCommand<GenerateCocCommand>("coc").WithDescription("Create a Chain-of-Command extension class.");
         b.AddCommand<GenerateFormCommand>("form").WithDescription("Create an AxForm with a chosen pattern (SimpleList, DetailsMaster, DetailsTransaction, Dialog, Lookup, ListPage, Workspace, …).");
+        b.AddCommand<GenerateDataSourceMethodCommand>("datasource-method").WithDescription("Add/override a method on a form datasource (form-level SourceCode). Omit --method to list overridable methods.");
+        b.AddCommand<GenerateControlMethodCommand>("control-method").WithDescription("Add/override a method on a form control (form-level SourceCode). Omit --method to list overridable methods.");
         b.AddCommand<GenerateSimpleListCommand>("simple-list").WithDescription("(Deprecated) Alias for `generate form --pattern SimpleList`.");
         b.AddCommand<GenerateEntityCommand>("entity").WithDescription("Create an AxDataEntityView over a table.");
         b.AddCommand<GenerateExtensionCommand>("extension").WithDescription("Create a Table/Form/Edt/Enum extension.");
