@@ -168,6 +168,8 @@ All scaffolders write atomically (`.tmp` + move, `.bak` on overwrite). Pass `--i
 | `generate class` | `AxClass` skeleton |
 | `generate coc` | Chain-of-Command extension class |
 | `generate form` | `AxForm` XML (9 patterns: SimpleList, DetailsMaster, Workspace …) |
+| `generate datasource-method` | Add/override a method on a form datasource (form-level `SourceCode`); `--list` shows overridable methods |
+| `generate control-method` | Add/override a method on a form control (form-level `SourceCode`); `--list` shows overridable methods |
 | `generate entity` | `AxDataEntityView` |
 | `generate extension` | `AxTableExtension` / `AxFormExtension` / `AxEdtExtension` / `AxEnumExtension` |
 | `generate event-handler` | X++ event subscriber class with correct attribute |
