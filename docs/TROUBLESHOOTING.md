@@ -230,6 +230,31 @@ and report it so the catalog's version list can be updated.
 
 ---
 
+## Copilot isn't finding the instruction files
+
+### "I set `D365FO_WORKSPACE_PATH` / `D365FO_CUSTOM_PACKAGES_PATH` but Copilot still doesn't use the Skills"
+
+These are two completely unrelated concepts that happen to share the word "workspace":
+
+| Term | What it controls |
+|---|---|
+| `D365FO_WORKSPACE_PATH`, `D365FO_PACKAGES_PATH`, `D365FO_CUSTOM_PACKAGES_PATH` (CLI env vars) | Where the `d365fo` CLI indexes metadata from / writes scaffolded output to |
+| The folder/`.sln` open in Visual Studio or VS Code ("workspace" in the IDE sense) | Where Copilot looks for `.github/copilot-instructions.md` and `.github/instructions/*.instructions.md` |
+
+No `D365FO_*` environment variable or `settings.json` entry has any effect on Copilot's instruction discovery. Copilot (both in Visual Studio and VS Code) only walks **upward from the folder/solution you actually opened in the editor** looking for a `.github/` folder — it never reads CLI configuration.
+
+Fix, in order:
+
+1. Confirm which folder is actually open in the editor (Visual Studio: the `.sln`'s folder; VS Code: File → Open Folder).
+2. Re-run `Install-D365FoCopilotSkills.ps1` targeting that exact folder (or a parent of it) as `-XppRepo`, not the `D365FO_WORKSPACE_PATH` / `D365FO_CUSTOM_PACKAGES_PATH` value.
+3. Visual Studio only: enable **Tools → Options → GitHub → Copilot → Copilot Chat → "Enable custom instructions to be loaded from .github/copilot-instructions.md files and added to requests."**
+4. No shared parent solution/`.sln` above your projects? Use the global fallback instead of per-project copies:
+   - Visual Studio: concatenate `skills/copilot/*.instructions.md` into `%USERPROFILE%\copilot-instructions.md` (applies to every solution, but loses `applyTo` scoping).
+   - VS Code: point `chat.instructionsFilesLocations` at one shared folder containing the `*.instructions.md` files (keeps `applyTo` scoping).
+5. Verify: after Copilot answers, expand **References / "Used N references"** in the reply — loaded instruction files are listed there. If your file isn't listed, it wasn't discovered.
+
+---
+
 ## MCP tool count and token budget
 
 ### How many tools are exposed

@@ -168,6 +168,15 @@ flowchart LR
 
 > ⚠️ **Never** use `@workspace` or built-in code search on AOT XML. It always fails. Copilot must use `d365fo` exclusively for codebase queries; the Skills enforce this.
 
+> ⚠️ **"Workspace" means two unrelated things here — don't conflate them.**
+>
+> | Term | What it controls | Set via |
+> |---|---|---|
+> | `D365FO_WORKSPACE_PATH` (CLI env var) | Where `d365fo generate` writes scaffolded X++ files | `d365fo init` / `settings.json` / env var |
+> | Editor "workspace" (VS solution root / VS Code opened folder) | Where Copilot looks for `.github/copilot-instructions.md` and `.github/instructions/*.instructions.md` | Which folder/`.sln` you open in the IDE |
+>
+> Setting `D365FO_WORKSPACE_PATH` (or any `D365FO_*` env var) has **zero effect** on Copilot's instruction discovery. If Copilot isn't finding your instructions, the fix is always about **which folder is open in the editor**, never about CLI configuration — re-run `Install-D365FoCopilotSkills.ps1` against the actual parent folder you open, not against `D365FO_WORKSPACE_PATH`.
+
 ### Claude Code (CLI or VS Code extension)
 
 ```sh
