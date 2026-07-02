@@ -80,6 +80,40 @@ public sealed class FindUsagesCommand : Command<FindUsagesCommand.Settings>
     }
 }
 
+/// <summary>
+/// Field-level lookup: "which tables contain field/EDT X". Exact match against
+/// TableFields.Name / TableFields.EdtName — NOT a relation or FK lookup, and
+/// NOT a source-code grep. Use this instead of `find refs --kind table` or
+/// `find relations` when the question is about a table's own field list.
+/// </summary>
+public sealed class FindFieldsCommand : Command<FindFieldsCommand.Settings>
+{
+    public sealed class Settings : D365OutputSettings
+    {
+        [CommandArgument(0, "<NAME>")]
+        [System.ComponentModel.Description("Field name or EDT name to match exactly (e.g. CustAccount).")]
+        public string Name { get; init; } = "";
+
+        [CommandOption("--model <NAME>")]
+        [System.ComponentModel.Description("Restrict to a single model.")]
+        public string? Model { get; init; }
+
+        [CommandOption("-l|--limit <N>")]
+        public int Limit { get; init; } = 200;
+    }
+
+    public override int Execute(CommandContext ctx, Settings settings)
+    {
+        var kind = OutputMode.Resolve(settings.Output);
+        if (string.IsNullOrWhiteSpace(settings.Name))
+            return RenderHelpers.Render(kind, ToolResult<object>.Fail("BAD_INPUT", "Name required."));
+        var repo = RepoFactory.Create();
+        var items = repo.FindTablesByField(settings.Name, settings.Model, settings.Limit);
+        return RenderHelpers.Render(kind,
+            ToolResult<object>.Success(new { count = items.Count, items }));
+    }
+}
+
 public sealed class FindExtensionsCommand : Command<FindExtensionsCommand.Settings>
 {
     public sealed class Settings : D365OutputSettings
@@ -181,10 +215,22 @@ public sealed class FindRefsCommand : Command<FindRefsCommand.Settings>
 
         // Regex scan over indexed X++ source — shared with the unified
         // `find_references` MCP tool (D365FO.Mcp.ToolHandlers.FindReferences).
-        var repo = RepoFactory.Create();
-        var result = new D365FO.Mcp.ToolHandlers(repo)
-            .FindReferences(settings.Name, settings.Kind, settings.Model, settings.Limit);
-        return RenderHelpers.Render(kind, result);
+        // Wrapped so an unexpected disk/index error surfaces as a clear
+        // ToolResult.Fail instead of an unhandled exception (issue #101).
+        try
+        {
+            var repo = RepoFactory.Create();
+            var result = new D365FO.Mcp.ToolHandlers(repo)
+                .FindReferences(settings.Name, settings.Kind, settings.Model, settings.Limit);
+            return RenderHelpers.Render(kind, result);
+        }
+        catch (Exception ex)
+        {
+            return RenderHelpers.Render(kind, ToolResult<object>.Fail(
+                "SCAN_FAILED",
+                $"find refs failed: {ex.Message}",
+                "Try narrowing --kind/--model, or run `d365fo doctor --output json` to confirm the index is healthy."));
+        }
     }
 }
 

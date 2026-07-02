@@ -67,6 +67,19 @@ public sealed record TableFieldInfo(
     string? Label,
     bool Mandatory);
 
+/// <summary>
+/// A table that has a field whose name or EDT matches a lookup — used by
+/// <see cref="MetadataRepository.FindTablesByField"/> to answer "which tables
+/// contain field X" precisely (as opposed to relation-based heuristics).
+/// </summary>
+public sealed record TableFieldMatch(
+    string TableName,
+    string Model,
+    string FieldName,
+    string? Type,
+    string? EdtName,
+    bool Mandatory);
+
 public sealed record TableDetails(
     TableInfo Table,
     IReadOnlyList<TableFieldInfo> Fields,

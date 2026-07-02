@@ -173,6 +173,7 @@ public sealed class SchemaCommand : Command<SchemaCommand.Settings>
         C("find coc", "Find Chain-of-Command extensions.", ["<TARGET>"], ["--output"], ["extension_info (mode=coc)"]),
         C("find relations", "Find table relations.", ["<TABLE>"], ["--output"], ["get_object_info (objectType=table,relations)"]),
         C("find usages", "Find indexed entities whose names contain a substring.", ["<SYMBOL>"], ["--limit", "--output"], ["search (type=any)"]),
+        C("find fields", "Find tables that declare a field name or EDT (exact match) — precise field-level lookup, not relation/FK or source-code search.", ["<NAME>"], ["--model", "--limit", "--output"], ["find_tables_by_field"]),
         C("find extensions", "Find Table/Form/Edt/Enum extensions targeting an object.", ["<TARGET>"], ["--kind", "--output"], ["extension_info (mode=points)", "extension_info (mode=table-merge)"]),
         C("find handlers", "Find event subscribers.", ["<OBJECT>"], ["--kind", "--output"], ["extension_info (mode=events)"]),
         C("find event-handlers", "Alias of `find handlers`.", ["<OBJECT>"], ["--kind", "--output"], ["extension_info (mode=events)"]),
