@@ -207,3 +207,4 @@ d365fo generate menu-item FmOrdersReportMenuItem \
 - One menu item per AOT type (`AxMenuItemDisplay`, `AxMenuItemAction`, `AxMenuItemOutput`) — naming convention `<ObjectName>MenuItem` or `<ObjectName>Action`.
 - Do not create an `Action` menu item pointing to a form — use `Display`.
 - After creating a menu item, it must be added to a menu or a security privilege to be reachable.
+- Generated menu items always include `<Image><ImageType>Symbol</ImageType></Image>` — this avoids `BPErrorMissingOrUnsupportedImage` (an omitted or `File`-typed image fails best-practice checks; `Symbol` inherits the icon from the target object and is always valid).
