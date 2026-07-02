@@ -1700,6 +1700,30 @@ public sealed partial class MetadataRepository
 
     // ---- additional read operations ----
 
+    /// <summary>
+    /// Tables that actually declare a field named <paramref name="name"/> (exact,
+    /// case-insensitive) or whose field uses an EDT named <paramref name="name"/>
+    /// (exact, case-insensitive, walking the EdtName column only — not relation
+    /// FK targets). This answers "which tables contain field X" precisely; use
+    /// this instead of <c>find refs</c> or relation lookups, which answer a
+    /// different question (source-code references / FK relation targets) and
+    /// silently inflate the result set with unrelated tables. See issue #101.
+    /// </summary>
+    public IReadOnlyList<TableFieldMatch> FindTablesByField(string name, string? model = null, int limit = 200)
+    {
+        using var conn = OpenReadOnly();
+        return conn.Query<TableFieldMatch>(@"
+            SELECT t.Name AS TableName, m.Name AS Model, f.Name AS FieldName,
+                   f.Type AS Type, f.EdtName AS EdtName, f.Mandatory AS Mandatory
+            FROM TableFields f
+            JOIN Tables t ON t.TableId = f.TableId
+            JOIN Models m ON m.ModelId = t.ModelId
+            WHERE (f.Name = @name COLLATE NOCASE OR f.EdtName = @name COLLATE NOCASE)
+              AND (@model IS NULL OR m.Name = @model)
+            ORDER BY t.Name
+            LIMIT @limit", new { name, model, limit }).ToList();
+    }
+
     public IReadOnlyList<TableInfo> SearchTables(string query, string? model = null, int limit = 50)
     {
         using var conn = OpenReadOnly();

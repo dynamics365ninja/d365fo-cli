@@ -255,6 +255,14 @@ public static class ToolCatalog
             Schema(("name", "string", true), ("kind", "string", false), ("model", "string", false), ("limit", "integer", false)),
             (h, p) => h.FindReferences(Str(p, "name"), StrOrNull(p, "kind"), StrOrNull(p, "model"), Int(p, "limit", 200))),
 
+        new Descriptor("find_tables_by_field",
+            "Which tables declare a field named `name` (or whose field uses an EDT named `name`) — exact match. " +
+            "Use this for 'which tables contain field X' questions. Do NOT use find_references or relation lookups for " +
+            "this — those answer source-code usage / FK-relation targets, not a table's own field list, and will " +
+            "return an inflated, semantically-wrong result set.",
+            Schema(("name", "string", true), ("model", "string", false), ("limit", "integer", false)),
+            (h, p) => h.FindTablesByField(Str(p, "name"), StrOrNull(p, "model"), Int(p, "limit", 200))),
+
         new Descriptor("validate_object_naming",
             "Static naming-rule check (PascalCase, length, character set, extension suffix, optional publisher prefix). No index access required.",
             Schema(("kind", "string", true), ("name", "string", true), ("prefix", "string", false)),

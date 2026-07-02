@@ -62,6 +62,20 @@ public class ExtractPipelineTests : IDisposable
 
         var usages = repo.FindUsages("Fleet");
         Assert.NotEmpty(usages);
+
+        // Field-level lookup: exact field name and exact EDT name should both
+        // resolve to the same table (issue #101 — relation-based results were
+        // being confused with actual field membership).
+        var byFieldName = repo.FindTablesByField("Vin");
+        var hit = Assert.Single(byFieldName);
+        Assert.Equal("FleetVehicle", hit.TableName);
+        Assert.Equal("VinEdt", hit.EdtName);
+
+        var byEdtName = repo.FindTablesByField("VinEdt");
+        Assert.Single(byEdtName);
+        Assert.Equal("FleetVehicle", byEdtName[0].TableName);
+
+        Assert.Empty(repo.FindTablesByField("NoSuchFieldOrEdt"));
     }
 
     [Fact]

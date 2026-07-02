@@ -82,6 +82,7 @@ app.Configure(cfg =>
         b.AddCommand<FindCocCommand>("coc").WithDescription("Find Chain-of-Command extensions.");
         b.AddCommand<FindRelationsCommand>("relations").WithDescription("Find table relations.");
         b.AddCommand<FindUsagesCommand>("usages").WithDescription("Find index entities whose name contains a substring.");
+        b.AddCommand<FindFieldsCommand>("fields").WithDescription("Find tables that declare a field name or EDT (exact match) — precise field-level lookup, not a relation/FK or source-code search.");
         b.AddCommand<FindExtensionsCommand>("extensions").WithDescription("Find Table/Form/Edt/Enum extensions targeting an object.");
         b.AddCommand<FindHandlersCommand>("handlers").WithDescription("Find event handlers subscribed to a form/table/delegate.");
         b.AddCommand<FindRefsCommand>("refs").WithDescription("Regex scan of indexed X++ source for reverse references to a symbol.");

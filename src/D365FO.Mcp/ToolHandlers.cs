@@ -1519,4 +1519,19 @@ public sealed class ToolHandlers
             items,
         });
     }
+
+    /// <summary>
+    /// Field-level lookup shared with the CLI <c>find fields</c> command: which
+    /// tables declare a field (or use an EDT) with this exact name. Answers
+    /// "which tables contain field X" without the relation/FK false-positives
+    /// that <c>find_references</c> / relation lookups produce (issue #101).
+    /// </summary>
+    public ToolResult<object> FindTablesByField(string name, string? model, int limit = 200)
+    {
+        if (string.IsNullOrWhiteSpace(name))
+            return ToolResult<object>.Fail("BAD_INPUT", "name is required.");
+
+        var items = _repo.FindTablesByField(name, model, limit);
+        return ToolResult<object>.Success(new { count = items.Count, items });
+    }
 }
