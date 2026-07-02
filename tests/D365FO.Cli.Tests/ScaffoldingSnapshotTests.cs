@@ -440,4 +440,30 @@ public class ScaffoldingSnapshotTests
         var lookupSrc = methods.First(m => m.Element("Name")!.Value == "lookupVendor").Element("Source")!.Value;
         Assert.DoesNotContain("[SysEntryPointAttribute", lookupSrc);
     }
+
+    // ---- MenuItem (issue #102) ----
+
+    [Fact]
+    public void MenuItem_emits_Symbol_image_to_avoid_BPErrorMissingOrUnsupportedImage()
+    {
+        // Omitting <Image> (or leaving it defaulted to File) trips
+        // BPErrorMissingOrUnsupportedImage during best-practice checks.
+        // Symbol tells the compiler to inherit the icon, which is always valid.
+        var doc = MenuItemScaffolder.MenuItem(MenuItemKind.Display, "MyMenuItem", "MyForm");
+        var root = doc.Root!;
+        Assert.Equal("AxMenuItemDisplay", root.Name.LocalName);
+        Assert.Equal("Symbol", root.Element("Image")!.Element("ImageType")!.Value);
+    }
+
+    [Theory]
+    [InlineData(MenuItemKind.Display, "AxMenuItemDisplay")]
+    [InlineData(MenuItemKind.Action, "AxMenuItemAction")]
+    [InlineData(MenuItemKind.Output, "AxMenuItemOutput")]
+    public void MenuItem_all_kinds_emit_Symbol_image(MenuItemKind kind, string expectedRoot)
+    {
+        var doc = MenuItemScaffolder.MenuItem(kind, "MyMenuItem", "MyObject");
+        var root = doc.Root!;
+        Assert.Equal(expectedRoot, root.Name.LocalName);
+        Assert.Equal("Symbol", root.Element("Image")!.Element("ImageType")!.Value);
+    }
 }

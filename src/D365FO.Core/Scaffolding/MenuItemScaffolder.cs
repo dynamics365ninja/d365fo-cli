@@ -38,6 +38,11 @@ public static class MenuItemScaffolder
             new XElement(rootElement,
                 new XElement("Name", name),
                 string.IsNullOrEmpty(label) ? null : new XElement("Label", label),
+                // Explicit Symbol image avoids BPErrorMissingOrUnsupportedImage:
+                // an omitted <Image> still resolves to the unsupported "File" type
+                // during best-practice checks, so state Symbol (inherit icon) up front.
+                new XElement("Image",
+                    new XElement("ImageType", "Symbol")),
                 new XElement("Object", objectName),
                 new XElement("ObjectType", objTypeStr)));
     }
