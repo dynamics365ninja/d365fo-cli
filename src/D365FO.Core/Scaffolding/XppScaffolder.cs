@@ -126,11 +126,27 @@ public static class XppScaffolder
                 // predictable physical ordering (validate xpp XML005).
                 indexesEl is null ? null : new XElement("ClusteredIndex", "PrimaryIdx"),
                 new XElement("Fields", fieldEls),
+                // "Overview" and "General" are referenced by <DataGroup> in every
+                // generated form pattern (SimpleList, SimpleListDetails,
+                // DetailsMaster, DetailsTransaction) — the metadata reader
+                // rejects the form with "Field group 'Overview' does not exist"
+                // when the underlying table lacks them (issue #91 follow-up).
+                // AutoReport is the standard AX lookup/report group. All three
+                // are populated with every effective field so any pattern's
+                // grid/group controls resolve.
                 new XElement("FieldGroups",
-                    new XElement("AxTableFieldGroup",
-                        new XElement("Name", "AutoReport"))),
+                    BuildFieldGroup("AutoReport", effectiveFields),
+                    BuildFieldGroup("Overview", effectiveFields),
+                    BuildFieldGroup("General", effectiveFields)),
                 indexesEl));
     }
+
+    private static XElement BuildFieldGroup(string name, IReadOnlyList<TableFieldSpec> fields) =>
+        new XElement("AxTableFieldGroup",
+            new XElement("Name", name),
+            new XElement("Fields",
+                fields.Select(f => new XElement("AxTableFieldGroupField",
+                    new XElement("DataField", f.Name)))));
 
     public static XDocument Class(string name, string? extends = null, bool isFinal = true)
     {
