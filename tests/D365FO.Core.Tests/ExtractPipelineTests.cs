@@ -41,7 +41,23 @@ public class ExtractPipelineTests : IDisposable
             Enums: new[] { new ExtractedEnum("FleetKind", "Kind", new[] { new ExtractedEnumValue("Car", 0, "Car") }) },
             MenuItems: new[] { new ExtractedMenuItem("FleetForm", "Display", "FleetVehicleForm", "Form", null) },
             CocExtensions: new[] { new ExtractedCoc("CustTable", "update", "CustTable_Extension") },
-            Labels: new[] { new ExtractedLabel("FleetLabels", "en-us", "VIN", "Vehicle Identification Number") });
+            Labels: new[] { new ExtractedLabel("FleetLabels", "en-us", "VIN", "Vehicle Identification Number") })
+        {
+            // Extension that adds a field to a DIFFERENT table (CustTable) using the
+            // same EDT as the base FleetVehicle.Vin field. Exercises the base +
+            // extension union in FindTablesByField (find-fields gap fix).
+            Extensions = new[]
+            {
+                new ExtractedObjectExtension("Table", "CustTable", "CustTable.FleetExtension",
+                    "/x/CustTable.FleetExtension.xml")
+                {
+                    AddedFields = new[]
+                    {
+                        new ExtractedTableField("FleetVin", "ExtendedDataType", "VinEdt", "Fleet VIN", false),
+                    },
+                },
+            },
+        };
 
         repo.ApplyExtract(batch);
         var counts1 = repo.CountAll();
@@ -70,10 +86,23 @@ public class ExtractPipelineTests : IDisposable
         var hit = Assert.Single(byFieldName);
         Assert.Equal("FleetVehicle", hit.TableName);
         Assert.Equal("VinEdt", hit.EdtName);
+        Assert.Equal("base", hit.Source);
 
+        // EDT lookup now spans base-table fields AND extension-added fields, so it
+        // reconciles with a direct SQL column query (find-fields gap fix).
         var byEdtName = repo.FindTablesByField("VinEdt");
-        Assert.Single(byEdtName);
-        Assert.Equal("FleetVehicle", byEdtName[0].TableName);
+        Assert.Equal(2, byEdtName.Count);
+        Assert.Contains(byEdtName, r => r.TableName == "FleetVehicle" && r.Source == "base");
+        var extByEdt = Assert.Single(byEdtName, r => r.Source == "extension");
+        Assert.Equal("CustTable", extByEdt.TableName);
+        Assert.Equal("CustTable.FleetExtension", extByEdt.ExtensionName);
+
+        // The extension-added field also resolves by its own name and carries provenance.
+        var byExtField = repo.FindTablesByField("FleetVin");
+        var extHit = Assert.Single(byExtField);
+        Assert.Equal("CustTable", extHit.TableName);
+        Assert.Equal("extension", extHit.Source);
+        Assert.Equal("CustTable.FleetExtension", extHit.ExtensionName);
 
         Assert.Empty(repo.FindTablesByField("NoSuchFieldOrEdt"));
     }
