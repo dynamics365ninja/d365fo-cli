@@ -1816,6 +1816,10 @@ public sealed partial class MetadataRepository
             SELECT Name, Value, Label
             FROM EnumValues WHERE EnumId = @id
             ORDER BY COALESCE(Value, EnumValueId)", new { id = en.EnumId }).ToList();
+        // Rows extracted before UseEnumValue=No synthesis store NULL — the
+        // runtime value of such members is their declaration order.
+        for (var i = 0; i < values.Count; i++)
+            if (values[i].Value is null) values[i] = values[i] with { Value = i };
         return new EnumDetails(new EnumInfo(en.Name, en.Model, en.Label), values);
     }
 

@@ -57,6 +57,16 @@ public class FormPatternValidatorTests
     }
 
     [Fact]
+    public void Resolve_maps_bare_factbox_to_grid_variant()
+    {
+        // Bare "FactBox" must not silently degrade; grid is the common variant.
+        Assert.Equal("FormPartFactboxGrid", FormPatternCatalog.Resolve("FactBox")!.Id);
+        Assert.Equal("FormPartFactboxGrid", FormPatternCatalog.Resolve("fact box")!.Id);
+        // The card variant stays an explicit ask via its exact alias.
+        Assert.Equal("FormPartFactboxCard", FormPatternCatalog.Resolve("FactBoxCard")!.Id);
+    }
+
+    [Fact]
     public void ResolveExact_rejects_fuzzy_names_the_validator_must_not_accept()
     {
         Assert.NotNull(FormPatternCatalog.ResolveExact("SimpleList"));

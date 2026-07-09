@@ -37,6 +37,10 @@ public sealed class LabelCreateCommand : Command<LabelCreateCommand.Settings>
         [CommandOption("--overwrite")]
         [System.ComponentModel.Description("Replace an existing value. Default: fail with KEY_EXISTS.")]
         public bool Overwrite { get; init; }
+
+        [CommandOption("--allow-extension-label-file")]
+        [System.ComponentModel.Description("Permit writing into a label file EXTENSION (…_Extension…). Off by default: new labels belong in the model's original label file.")]
+        public bool AllowExtensionLabelFile { get; init; }
     }
 
     public override int Execute(CommandContext ctx, Settings settings)
@@ -81,6 +85,16 @@ public sealed class LabelCreateCommand : Command<LabelCreateCommand.Settings>
                 var diskLang = ResolveOnDiskCasing(resourcesDir, lang);
                 resolvedFiles.Add(System.IO.Path.Combine(resourcesDir, diskLang, $"{lf}.{diskLang}.label.txt"));
             }
+        }
+
+        if (!settings.AllowExtensionLabelFile)
+        {
+            var extFile = resolvedFiles.FirstOrDefault(LabelFileWriter.IsExtensionLabelFile);
+            if (extFile is not null)
+                return RenderHelpers.Render(kind, ToolResult<object>.Fail(
+                    "EXTENSION_LABEL_FILE",
+                    $"'{System.IO.Path.GetFileName(extFile)}' is a label file EXTENSION — it only extends a base label file owned by another model. New labels belong in the model's ORIGINAL label file.",
+                    hint: "Target the model's own label file (e.g. --label-file <MODEL>), or pass --allow-extension-label-file to override."));
         }
 
         try
@@ -151,6 +165,10 @@ public sealed class LabelRenameCommand : Command<LabelRenameCommand.Settings>
 
         [CommandOption("--overwrite")]
         public bool Overwrite { get; init; }
+
+        [CommandOption("--allow-extension-label-file")]
+        [System.ComponentModel.Description("Permit renaming inside a label file EXTENSION (…_Extension…). Off by default.")]
+        public bool AllowExtensionLabelFile { get; init; }
     }
 
     public override int Execute(CommandContext ctx, Settings settings)
@@ -160,6 +178,11 @@ public sealed class LabelRenameCommand : Command<LabelRenameCommand.Settings>
             return RenderHelpers.Render(kind, ToolResult<object>.Fail(D365FoErrorCodes.BadInput, "Both <OLD> and <NEW> label keys required."));
         if (string.IsNullOrWhiteSpace(settings.File))
             return RenderHelpers.Render(kind, ToolResult<object>.Fail(D365FoErrorCodes.BadInput, "--file <PATH> required."));
+        if (!settings.AllowExtensionLabelFile && LabelFileWriter.IsExtensionLabelFile(settings.File!))
+            return RenderHelpers.Render(kind, ToolResult<object>.Fail(
+                "EXTENSION_LABEL_FILE",
+                $"'{System.IO.Path.GetFileName(settings.File)}' is a label file EXTENSION — it only extends a base label file owned by another model.",
+                hint: "Rename the label in the model's ORIGINAL label file, or pass --allow-extension-label-file to override."));
 
         try
         {

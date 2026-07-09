@@ -257,13 +257,22 @@ public static class XppScaffolder
     /// Scaffolds a minimal <c>AxDataEntityView</c> — data entity with a
     /// single table datasource and public OData names derived from the table
     /// by convention (<c>&lt;Table&gt;Entity</c>, collection plural).
+    /// <para>
+    /// <c>DataManagementEnabled</c> defaults to <c>No</c>: nothing here creates
+    /// the DIXF staging table, and <c>Yes</c> with a non-existent
+    /// <c>&lt;Name&gt;Staging</c> table fails the very next build. Opting in via
+    /// <paramref name="dataManagementEnabled"/> makes the caller responsible for
+    /// the staging table existing (create it as its own table).
+    /// </para>
     /// </summary>
     public static XDocument DataEntity(
         string entityName,
         string table,
         string? publicEntityName = null,
         string? publicCollectionName = null,
-        IEnumerable<EntityFieldSpec>? fields = null)
+        IEnumerable<EntityFieldSpec>? fields = null,
+        bool dataManagementEnabled = false,
+        string? dataManagementStagingTable = null)
     {
         var pubEntity = string.IsNullOrEmpty(publicEntityName) ? entityName : publicEntityName;
         var pubColl = string.IsNullOrEmpty(publicCollectionName) ? pubEntity + "s" : publicCollectionName;
@@ -275,12 +284,18 @@ public static class XppScaffolder
                 new XElement("DataSource", table),
                 f.IsMandatory ? new XElement("IsMandatory", "Yes") : null));
 
+        var stagingTable = dataManagementEnabled
+            ? new XElement("DataManagementStagingTable",
+                string.IsNullOrEmpty(dataManagementStagingTable) ? entityName + "Staging" : dataManagementStagingTable)
+            : new XElement("DataManagementStagingTable");
+
         return new XDocument(
             new XElement("AxDataEntityView",
                 new XElement("Name", entityName),
                 new XElement("PublicEntityName", pubEntity),
                 new XElement("PublicCollectionName", pubColl),
-                new XElement("DataManagementEnabled", "Yes"),
+                new XElement("DataManagementEnabled", dataManagementEnabled ? "Yes" : "No"),
+                stagingTable,
                 new XElement("IsPublic", "Yes"),
                 new XElement("DataSources",
                     new XElement("AxQuerySimpleRootDataSource",
@@ -307,6 +322,49 @@ public static class XppScaffolder
         return new XDocument(
             new XElement(elementName,
                 new XElement("Name", $"{targetName}.{suffix}")));
+    }
+
+    /// <summary>
+    /// Scaffolds an <c>AxSecurityDutyExtension</c> — adds privileges to an
+    /// EXISTING (often Microsoft-owned) duty without overlaying it. Name follows
+    /// the dot-notation convention <c>&lt;BaseDuty&gt;.&lt;Suffix&gt;</c>, same
+    /// as table/menu extensions.
+    /// </summary>
+    public static XDocument SecurityDutyExtension(
+        string targetDuty, string suffix, IEnumerable<string>? privileges = null)
+    {
+        return new XDocument(
+            new XElement("AxSecurityDutyExtension",
+                new XElement("Name", $"{targetDuty}.{suffix}"),
+                new XElement("Privileges",
+                    (privileges ?? Enumerable.Empty<string>())
+                        .Where(p => !string.IsNullOrWhiteSpace(p))
+                        .Select(p => new XElement("AxSecurityPrivilegeReference", new XElement("Name", p)))),
+                new XElement("PropertyModifications")));
+    }
+
+    /// <summary>
+    /// Scaffolds an <c>AxSecurityRoleExtension</c> — adds duties and/or
+    /// privileges to an EXISTING (often Microsoft-owned) role without
+    /// overlaying it. Name follows <c>&lt;BaseRole&gt;.&lt;Suffix&gt;</c>.
+    /// </summary>
+    public static XDocument SecurityRoleExtension(
+        string targetRole, string suffix,
+        IEnumerable<string>? duties = null, IEnumerable<string>? privileges = null)
+    {
+        return new XDocument(
+            new XElement("AxSecurityRoleExtension",
+                new XElement("Name", $"{targetRole}.{suffix}"),
+                new XElement("DirectAccessPermissions"),
+                new XElement("Duties",
+                    (duties ?? Enumerable.Empty<string>())
+                        .Where(d => !string.IsNullOrWhiteSpace(d))
+                        .Select(d => new XElement("AxSecurityDutyReference", new XElement("Name", d)))),
+                new XElement("Privileges",
+                    (privileges ?? Enumerable.Empty<string>())
+                        .Where(p => !string.IsNullOrWhiteSpace(p))
+                        .Select(p => new XElement("AxSecurityPrivilegeReference", new XElement("Name", p)))),
+                new XElement("PropertyModifications")));
     }
 
     /// <summary>
@@ -343,20 +401,57 @@ public static class XppScaffolder
                     new XElement("Declaration", src))));
     }
 
-    /// <summary>Scaffolds an <c>AxSecurityPrivilege</c> with a single entry point.</summary>
+    /// <summary>
+    /// Scaffolds an <c>AxSecurityPrivilege</c> with an optional entry point and
+    /// an optional data-entity permission (for OData/DMF access).
+    /// <para>
+    /// <c>AxSecurityDataEntityPermission</c> child order matches the Microsoft
+    /// metadata serializer (verified against shipped ApplicationCommon
+    /// privileges <c>AgentFeedEntityMaintain/View</c>): <c>Grant</c> FIRST,
+    /// then <c>Name</c>, <c>Fields</c>, <c>Methods</c> — unlike
+    /// <c>AxSecurityEntryPointReference</c>, which is Name-first. The
+    /// <c>&lt;Grant&gt;</c> CRUD elements are alphabetical (Correct, Create,
+    /// Delete, Read, Update). Non-canonical order re-sorts noisily on first
+    /// save in Visual Studio.
+    /// </para>
+    /// </summary>
     public static XDocument Privilege(
-        string name, string entryPointName, string entryPointKind,
-        string? entryPointObject = null, string? access = "Read", string? label = null)
+        string name, string? entryPointName, string? entryPointKind,
+        string? entryPointObject = null, string? access = "Read", string? label = null,
+        string? dataEntity = null, string? dataEntityAccess = "view")
     {
+        XElement? dataEntityPermissions = null;
+        if (!string.IsNullOrEmpty(dataEntity))
+        {
+            var maintain = string.Equals(dataEntityAccess, "maintain", StringComparison.OrdinalIgnoreCase);
+            var grant = maintain
+                ? new XElement("Grant",
+                    new XElement("Correct", "Allow"),
+                    new XElement("Create", "Allow"),
+                    new XElement("Delete", "Allow"),
+                    new XElement("Read", "Allow"),
+                    new XElement("Update", "Allow"))
+                : new XElement("Grant",
+                    new XElement("Read", "Allow"));
+            dataEntityPermissions = new XElement("DataEntityPermissions",
+                new XElement("AxSecurityDataEntityPermission",
+                    grant,
+                    new XElement("Name", dataEntity),
+                    new XElement("Fields"),
+                    new XElement("Methods")));
+        }
+
         return new XDocument(
             new XElement("AxSecurityPrivilege",
                 new XElement("Name", name),
                 string.IsNullOrEmpty(label) ? null : new XElement("Label", label),
+                dataEntityPermissions,
                 new XElement("EntryPoints",
+                    string.IsNullOrEmpty(entryPointName) ? null :
                     new XElement("AxSecurityEntryPointReference",
                         new XElement("Name", entryPointName),
                         new XElement("ObjectName", entryPointObject ?? entryPointName),
-                        new XElement("ObjectType", entryPointKind),
+                        new XElement("ObjectType", entryPointKind ?? "MenuItemDisplay"),
                         new XElement("AccessLevel", access ?? "Read")))));
     }
 
@@ -826,20 +921,31 @@ public static class XppScaffolder
                 _                     => null,
             };
 
-    private static string InferConcreteTypeSuffixFromExtends(string? extends) =>
-        extends?.ToLowerInvariant() switch
+    private static string InferConcreteTypeSuffixFromExtends(string? extends)
+    {
+        var e = extends?.ToLowerInvariant();
+        if (string.IsNullOrEmpty(e)) return "String";
+        var exact = e switch
         {
             "integer" or "int"                                      => "Int",
             "int64" or "recid"                                      => "Int64",
             "amount" or "amountmst" or "qty" or "weight" or "real"  => "Real",
             "date" or "transdate"                                   => "Date",
             "utcdatetime" or "transdatetime"                        => "UtcDateTime",
-            "noyes" or "noyesid" or "boolean"                      => "Enum",
+            "noyes" or "noyesid" or "boolean"                       => "Enum",
             "timeofday" or "time"                                   => "Time",
             "guid"                                                   => "Guid",
             "container"                                              => "Container",
-            _                                                       => "String",
-        } ?? "String";
+            _                                                        => null,
+        };
+        if (exact is not null) return exact;
+        // Name-shape fallback for unindexed custom EDTs. Any *DateTime* name is
+        // a utcDateTime EDT — an exclusion-based variant of this check upstream
+        // mistyped exactly "TransDateTime" (contains both markers) as String.
+        if (e.Contains("datetime")) return "UtcDateTime";
+        if (e.EndsWith("date")) return "Date";
+        return "String";
+    }
 
     /// <summary>Scaffolds an <c>AxEnum</c> with optional values.</summary>
     public static XDocument Enum(

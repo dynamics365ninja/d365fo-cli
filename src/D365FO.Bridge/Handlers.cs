@@ -37,8 +37,38 @@ namespace D365FO.Bridge
         internal JsonObject ReadClass(JsonObject args) { return ReadArtifact(args, "Classes", "class"); }
         internal JsonObject ReadTable(JsonObject args) { return ReadArtifact(args, "Tables", "table"); }
         internal JsonObject ReadEdt(JsonObject args) { return ReadArtifact(args, "Edts", "edt"); }
-        internal JsonObject ReadEnum(JsonObject args) { return ReadArtifact(args, "Enums", "enum"); }
+        internal JsonObject ReadEnum(JsonObject args)
+        {
+            var result = ReadArtifact(args, "Enums", "enum");
+            FixPositionalEnumValues(result);
+            return result;
+        }
+
         internal JsonObject ReadForm(JsonObject args) { return ReadArtifact(args, "Forms", "form"); }
+
+        /// <summary>
+        /// UseEnumValue=No (required for extensible enums) omits the &lt;Value&gt;
+        /// element from the XML entirely, so AxEnumValue.Value deserialises to its
+        /// int default (0) for every member — no exception, no fallback. The value
+        /// that actually gets compiled is position-based (0,1,2,… by declaration
+        /// order), so only trust the serialised Value when UseEnumValue=Yes and
+        /// substitute the declaration-order index otherwise.
+        /// </summary>
+        private static void FixPositionalEnumValues(JsonObject result)
+        {
+            if (result == null || !(result["ok"] is JsonNode okNode) || !string.Equals(okNode.ToString(), "true", StringComparison.OrdinalIgnoreCase)) return;
+            if (!(result["data"] is JsonObject data)) return;
+            var useEnumValue = data["UseEnumValue"] != null ? data["UseEnumValue"].ToString() : null;
+            if (string.Equals(useEnumValue, "Yes", StringComparison.OrdinalIgnoreCase)) return;
+            if (!(data["EnumValues"] is JsonArray values)) return;
+            for (int i = 0; i < values.Count; i++)
+            {
+                if (values[i] is JsonObject v && v["Value"] != null)
+                {
+                    v["Value"] = JsonValue.Create(i.ToString(System.Globalization.CultureInfo.InvariantCulture));
+                }
+            }
+        }
 
         // --- write path -----------------------------------------------------
 

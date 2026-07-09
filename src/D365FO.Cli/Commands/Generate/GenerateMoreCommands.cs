@@ -29,6 +29,14 @@ public sealed class GenerateEntityCommand : Command<GenerateEntityCommand.Settin
         [CommandOption("--all-fields")]
         [System.ComponentModel.Description("Populate <Fields /> from the source table's columns. Requires the table to be indexed.")]
         public bool AllFields { get; init; }
+
+        [CommandOption("--data-management")]
+        [System.ComponentModel.Description("Emit DataManagementEnabled=Yes. Off by default: the staging table is NOT generated, so enabling this without an existing <ENTITY>Staging table fails the next build.")]
+        public bool DataManagement { get; init; }
+
+        [CommandOption("--staging-table <TABLE>")]
+        [System.ComponentModel.Description("Staging table name when --data-management is set (default: <ENTITY>Staging).")]
+        public string? StagingTable { get; init; }
     }
 
     public override int Execute(CommandContext ctx, Settings settings)
@@ -64,7 +72,8 @@ public sealed class GenerateEntityCommand : Command<GenerateEntityCommand.Settin
             autoFromTable = true;
         }
         var doc = XppScaffolder.DataEntity(
-            settings.EntityName, settings.Table!, settings.PublicEntity, settings.PublicCollection, fields);
+            settings.EntityName, settings.Table!, settings.PublicEntity, settings.PublicCollection, fields,
+            settings.DataManagement, settings.StagingTable);
         try
         {
             var res = ScaffoldFileWriter.Write(doc, outPath!, settings.Overwrite);
@@ -103,7 +112,7 @@ public sealed class GenerateExtensionCommand : Command<GenerateExtensionCommand.
     public sealed class Settings : GenerateSettings
     {
         [CommandArgument(0, "<KIND>")]
-        [System.ComponentModel.Description("Extension kind: Table, Form, Edt, Enum.")]
+        [System.ComponentModel.Description("Extension kind: Table, Form, Edt, Enum, SecurityDuty, SecurityRole.")]
         public string Kind { get; init; } = "";
 
         [CommandArgument(1, "<TARGET>")]
@@ -112,6 +121,14 @@ public sealed class GenerateExtensionCommand : Command<GenerateExtensionCommand.
         [CommandOption("--suffix <SUFFIX>")]
         [System.ComponentModel.Description("Extension suffix. Defaults to the InstallTo model name or 'Extension'.")]
         public string? Suffix { get; init; }
+
+        [CommandOption("--privilege <NAME>")]
+        [System.ComponentModel.Description("Repeatable; SecurityDuty/SecurityRole only: privilege reference to add to the base duty/role.")]
+        public string[] Privileges { get; init; } = Array.Empty<string>();
+
+        [CommandOption("--duty <NAME>")]
+        [System.ComponentModel.Description("Repeatable; SecurityRole only: duty reference to add to the base role.")]
+        public string[] Duties { get; init; } = Array.Empty<string>();
     }
 
     public override int Execute(CommandContext ctx, Settings settings)
@@ -128,17 +145,20 @@ public sealed class GenerateExtensionCommand : Command<GenerateExtensionCommand.
 
         var suffix = settings.Suffix
             ?? (hasInstall ? settings.InstallTo! : "Extension");
-        var axFolder = settings.Kind switch
+        var normalizedKind = settings.Kind.Replace("-", "").Replace("_", "");
+        var axFolder = normalizedKind.ToLowerInvariant() switch
         {
-            "Table" => "AxTableExtension",
-            "Form" => "AxFormExtension",
-            "Edt" => "AxEdtExtension",
-            "Enum" => "AxEnumExtension",
+            "table" => "AxTableExtension",
+            "form" => "AxFormExtension",
+            "edt" => "AxEdtExtension",
+            "enum" => "AxEnumExtension",
+            "securityduty" => "AxSecurityDutyExtension",
+            "securityrole" => "AxSecurityRoleExtension",
             _ => null,
         };
         if (axFolder is null)
             return RenderHelpers.Render(kind, ToolResult<object>.Fail(D365FoErrorCodes.BadInput,
-                $"Unsupported extension kind: {settings.Kind}. Expected Table|Form|Edt|Enum."));
+                $"Unsupported extension kind: {settings.Kind}. Expected Table|Form|Edt|Enum|SecurityDuty|SecurityRole."));
 
         var fullName = $"{settings.Target}.{suffix}";
         var outPath = settings.Out;
@@ -148,7 +168,12 @@ public sealed class GenerateExtensionCommand : Command<GenerateExtensionCommand.
             if (fail.HasValue) return fail.Value;
         }
 
-        var doc = XppScaffolder.Extension(settings.Kind, settings.Target, suffix);
+        var doc = axFolder switch
+        {
+            "AxSecurityDutyExtension" => XppScaffolder.SecurityDutyExtension(settings.Target, suffix, settings.Privileges),
+            "AxSecurityRoleExtension" => XppScaffolder.SecurityRoleExtension(settings.Target, suffix, settings.Duties, settings.Privileges),
+            _ => XppScaffolder.Extension(axFolder["Ax".Length..^"Extension".Length], settings.Target, suffix),
+        };
 
         // Grounding gate: the target object must exist in the index; fail
         // closed under D365FO_GROUNDING_ENFORCE=true.
@@ -267,6 +292,14 @@ public sealed class GeneratePrivilegeCommand : Command<GeneratePrivilegeCommand.
         [CommandOption("--label <TEXT>")]
         public string? Label { get; init; }
 
+        [CommandOption("--data-entity <NAME>")]
+        [System.ComponentModel.Description("Grant OData/DMF permissions on this data entity (emits <DataEntityPermissions>).")]
+        public string? DataEntity { get; init; }
+
+        [CommandOption("--data-entity-access <LEVEL>")]
+        [System.ComponentModel.Description("view (Read only, default) | maintain (Correct/Create/Delete/Read/Update).")]
+        public string DataEntityAccess { get; init; } = "view";
+
         [CommandOption("--into-role <PATH>")]
         [System.ComponentModel.Description("Path to an existing AxSecurityRole XML; after scaffolding, merge this privilege's Name into the role's <Privileges>.")]
         public string? IntoRole { get; init; }
@@ -277,8 +310,11 @@ public sealed class GeneratePrivilegeCommand : Command<GeneratePrivilegeCommand.
         var kind = OutputMode.Resolve(settings.Output);
         if (string.IsNullOrWhiteSpace(settings.Name))
             return RenderHelpers.Render(kind, ToolResult<object>.Fail(D365FoErrorCodes.BadInput, "Privilege name required."));
-        if (string.IsNullOrWhiteSpace(settings.EntryPoint))
-            return RenderHelpers.Render(kind, ToolResult<object>.Fail(D365FoErrorCodes.BadInput, "--entry-point required."));
+        if (string.IsNullOrWhiteSpace(settings.EntryPoint) && string.IsNullOrWhiteSpace(settings.DataEntity))
+            return RenderHelpers.Render(kind, ToolResult<object>.Fail(D365FoErrorCodes.BadInput, "--entry-point or --data-entity required."));
+        if (!string.Equals(settings.DataEntityAccess, "view", StringComparison.OrdinalIgnoreCase)
+            && !string.Equals(settings.DataEntityAccess, "maintain", StringComparison.OrdinalIgnoreCase))
+            return RenderHelpers.Render(kind, ToolResult<object>.Fail(D365FoErrorCodes.BadInput, "--data-entity-access must be view or maintain."));
         var hasInstall = !string.IsNullOrWhiteSpace(settings.InstallTo);
         var hasOut = !string.IsNullOrWhiteSpace(settings.Out);
         if (!hasInstall && !hasOut)
@@ -290,7 +326,8 @@ public sealed class GeneratePrivilegeCommand : Command<GeneratePrivilegeCommand.
             if (fail.HasValue) return fail.Value;
         }
 
-        var doc = XppScaffolder.Privilege(settings.Name, settings.EntryPoint!, settings.EntryKind, settings.EntryObject, settings.Access, settings.Label);
+        var doc = XppScaffolder.Privilege(settings.Name, settings.EntryPoint, settings.EntryKind, settings.EntryObject, settings.Access, settings.Label,
+            settings.DataEntity, settings.DataEntityAccess);
         try
         {
             var res = ScaffoldFileWriter.Write(doc, outPath!, settings.Overwrite);
@@ -313,6 +350,8 @@ public sealed class GeneratePrivilegeCommand : Command<GeneratePrivilegeCommand.
                 entryPoint = settings.EntryPoint,
                 entryKind = settings.EntryKind,
                 access = settings.Access,
+                dataEntity = settings.DataEntity,
+                dataEntityAccess = settings.DataEntity is null ? null : settings.DataEntityAccess,
                 path = res.Path,
                 bytes = res.Bytes,
                 backup = res.BackupPath,

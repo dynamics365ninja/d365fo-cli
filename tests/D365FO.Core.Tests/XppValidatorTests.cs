@@ -80,6 +80,58 @@ public class XppValidatorTests
         Assert.DoesNotContain(v, x => x.Rule == "SEL005" && x.Excerpt.Contains("fieldNum"));
     }
 
+    [Fact]
+    public void Sel005_clause_closes_at_statement_terminator()
+    {
+        var code = """
+            int certCount = (select count(RecId) from certTable
+                where certTable.Status == status).RecId;
+            info(strFmt("Found %1 certificates", certCount));
+            """;
+        var v = Run(code);
+        Assert.DoesNotContain(v, x => x.Rule == "SEL005" && x.Excerpt.Contains("info"));
+        Assert.DoesNotContain(v, x => x.Rule == "SEL005" && x.Excerpt.Contains("strFmt"));
+    }
+
+    [Fact]
+    public void Sel005_state_does_not_leak_into_later_methods()
+    {
+        var code = """
+            public void run1()
+            {
+                select custTable where custTable.Blocked == blockedStatus;
+            }
+
+            public void run2()
+            {
+                this.doWork(someArg);
+            }
+            """;
+        var v = Run(code);
+        Assert.DoesNotContain(v, x => x.Rule == "SEL005" && x.Excerpt.Contains("doWork"));
+        Assert.DoesNotContain(v, x => x.Rule == "SEL005" && x.Excerpt.Contains("run2"));
+    }
+
+    [Fact]
+    public void Sel005_ignores_calls_before_where_on_same_line()
+    {
+        var v = Run("select count(RecId) from certTable where certTable.Status == status;");
+        Assert.DoesNotContain(v, x => x.Rule == "SEL005");
+    }
+
+    [Fact]
+    public void Sel005_still_flags_call_in_multiline_where()
+    {
+        var code = """
+            select custTable
+                where custTable.AccountNum == getCurrentAccount()
+            {
+            }
+            """;
+        var v = Run(code);
+        Assert.Contains(v, x => x.Rule == "SEL005" && x.Excerpt.Contains("getCurrentAccount"));
+    }
+
     // ── COC rules ────────────────────────────────────────────────────────────
 
     [Fact]
