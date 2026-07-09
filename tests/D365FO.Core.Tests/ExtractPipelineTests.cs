@@ -41,7 +41,23 @@ public class ExtractPipelineTests : IDisposable
             Enums: new[] { new ExtractedEnum("FleetKind", "Kind", new[] { new ExtractedEnumValue("Car", 0, "Car") }) },
             MenuItems: new[] { new ExtractedMenuItem("FleetForm", "Display", "FleetVehicleForm", "Form", null) },
             CocExtensions: new[] { new ExtractedCoc("CustTable", "update", "CustTable_Extension") },
-            Labels: new[] { new ExtractedLabel("FleetLabels", "en-us", "VIN", "Vehicle Identification Number") });
+            Labels: new[] { new ExtractedLabel("FleetLabels", "en-us", "VIN", "Vehicle Identification Number") })
+        {
+            // Extension that adds a field to a DIFFERENT table (CustTable) using the
+            // same EDT as the base FleetVehicle.Vin field. Exercises the base +
+            // extension union in FindTablesByField (find-fields gap fix).
+            Extensions = new[]
+            {
+                new ExtractedObjectExtension("Table", "CustTable", "CustTable.FleetExtension",
+                    "/x/CustTable.FleetExtension.xml")
+                {
+                    AddedFields = new[]
+                    {
+                        new ExtractedTableField("FleetVin", "ExtendedDataType", "VinEdt", "Fleet VIN", false),
+                    },
+                },
+            },
+        };
 
         repo.ApplyExtract(batch);
         var counts1 = repo.CountAll();
@@ -70,12 +86,84 @@ public class ExtractPipelineTests : IDisposable
         var hit = Assert.Single(byFieldName);
         Assert.Equal("FleetVehicle", hit.TableName);
         Assert.Equal("VinEdt", hit.EdtName);
+        Assert.Equal("base", hit.Source);
 
+        // EDT lookup now spans base-table fields AND extension-added fields, so it
+        // reconciles with a direct SQL column query (find-fields gap fix).
         var byEdtName = repo.FindTablesByField("VinEdt");
-        Assert.Single(byEdtName);
-        Assert.Equal("FleetVehicle", byEdtName[0].TableName);
+        Assert.Equal(2, byEdtName.Count);
+        Assert.Contains(byEdtName, r => r.TableName == "FleetVehicle" && r.Source == "base");
+        var extByEdt = Assert.Single(byEdtName, r => r.Source == "extension");
+        Assert.Equal("CustTable", extByEdt.TableName);
+        Assert.Equal("CustTable.FleetExtension", extByEdt.ExtensionName);
+
+        // The extension-added field also resolves by its own name and carries provenance.
+        var byExtField = repo.FindTablesByField("FleetVin");
+        var extHit = Assert.Single(byExtField);
+        Assert.Equal("CustTable", extHit.TableName);
+        Assert.Equal("extension", extHit.Source);
+        Assert.Equal("CustTable.FleetExtension", extHit.ExtensionName);
 
         Assert.Empty(repo.FindTablesByField("NoSuchFieldOrEdt"));
+    }
+
+    [Fact]
+    public void FindTablesByField_limit_returns_deterministic_alphabetical_order_across_base_and_extension()
+    {
+        var repo = new MetadataRepository(_dbPath);
+        repo.EnsureSchema();
+
+        // Base tables declaring "SharedField" directly, inserted in REVERSE
+        // alphabetical order so the two alphabetically-earliest names (AlphaTable,
+        // BravoTable) are the LAST rows written. Without an ORDER BY before the
+        // SQL-side LIMIT, SQLite's unordered scan returns rows in insertion order,
+        // so a naive `LIMIT @limit` would truncate away exactly the earliest names
+        // before the final in-memory sort ever sees them.
+        var baseTableNames = new[]
+        {
+            "GolfTable", "FoxtrotTable", "EchoTable", "DeltaTable", "CharlieTable", "BravoTable", "AlphaTable",
+        };
+        var tables = baseTableNames.Select(n => new ExtractedTable(n, null, $"/x/{n}.xml",
+            new[] { new ExtractedTableField("SharedField", "String", null, null, false) })).ToArray();
+
+        // Extension-added "SharedField" on further tables, sorting well after the
+        // base tables above but also inserted in reverse order, to exercise the
+        // same truncation risk on the ExtensionFields query.
+        var extTableNames = new[]
+        {
+            "NovemberTable", "MikeTable", "LimaTable", "KiloTable", "JulietTable", "IndiaTable", "HotelTable",
+        };
+        var extensions = extTableNames.Select(n => new ExtractedObjectExtension(
+            "Table", n, $"{n}.SharedExt", $"/x/{n}.SharedExt.xml")
+        {
+            AddedFields = new[] { new ExtractedTableField("SharedField", "String", null, null, false) },
+        }).ToArray();
+
+        var batch = new ExtractBatch(
+            Model: "Shared",
+            Publisher: "Contoso",
+            Layer: "usr",
+            IsCustom: true,
+            Tables: tables,
+            Classes: Array.Empty<ExtractedClass>(),
+            Edts: Array.Empty<ExtractedEdt>(),
+            Enums: Array.Empty<ExtractedEnum>(),
+            MenuItems: Array.Empty<ExtractedMenuItem>(),
+            CocExtensions: Array.Empty<ExtractedCoc>(),
+            Labels: Array.Empty<ExtractedLabel>())
+        {
+            Extensions = extensions,
+        };
+
+        repo.ApplyExtract(batch);
+
+        // 14 total matches (7 base + 7 extension); ask for far fewer so the
+        // per-source SQL-side LIMIT actually kicks in on both queries.
+        var results = repo.FindTablesByField("SharedField", limit: 5);
+
+        Assert.Equal(
+            new[] { "AlphaTable", "BravoTable", "CharlieTable", "DeltaTable", "EchoTable" },
+            results.Select(r => r.TableName).ToArray());
     }
 
     [Fact]

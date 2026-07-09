@@ -71,6 +71,14 @@ public sealed record TableFieldInfo(
 /// A table that has a field whose name or EDT matches a lookup — used by
 /// <see cref="MetadataRepository.FindTablesByField"/> to answer "which tables
 /// contain field X" precisely (as opposed to relation-based heuristics).
+/// <para>
+/// <see cref="Source"/> is <c>"base"</c> when the field is declared on the base
+/// table (<c>TableFields</c>) and <c>"extension"</c> when it is added by an
+/// <c>AxTableExtension</c> (<c>ExtensionFields</c>). Extension-added fields land
+/// on the same physical SQL column as base fields, so both must be returned to
+/// reconcile with a direct database column query. <see cref="ExtensionName"/>
+/// names the owning extension for <c>"extension"</c> rows and is null otherwise.
+/// </para>
 /// </summary>
 public sealed record TableFieldMatch(
     string TableName,
@@ -78,7 +86,9 @@ public sealed record TableFieldMatch(
     string FieldName,
     string? Type,
     string? EdtName,
-    bool Mandatory);
+    bool Mandatory,
+    string Source = "base",
+    string? ExtensionName = null);
 
 public sealed record TableDetails(
     TableInfo Table,

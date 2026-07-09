@@ -1712,7 +1712,11 @@ public sealed partial class MetadataRepository
     public IReadOnlyList<TableFieldMatch> FindTablesByField(string name, string? model = null, int limit = 200)
     {
         using var conn = OpenReadOnly();
-        return conn.Query<TableFieldMatch>(@"
+
+        // Base-table fields (TableFields). Queried as real columns so the SQLite
+        // provider reports column types correctly; provenance is stamped in C#.
+        var results = new List<TableFieldMatch>();
+        foreach (var r in conn.Query(@"
             SELECT t.Name AS TableName, m.Name AS Model, f.Name AS FieldName,
                    f.Type AS Type, f.EdtName AS EdtName, f.Mandatory AS Mandatory
             FROM TableFields f
@@ -1721,7 +1725,42 @@ public sealed partial class MetadataRepository
             WHERE (f.Name = @name COLLATE NOCASE OR f.EdtName = @name COLLATE NOCASE)
               AND (@model IS NULL OR m.Name = @model)
             ORDER BY t.Name
-            LIMIT @limit", new { name, model, limit }).ToList();
+            LIMIT @limit", new { name, model, limit }))
+        {
+            results.Add(new TableFieldMatch(
+                (string)r.TableName, (string)r.Model, (string)r.FieldName,
+                (string?)r.Type, (string?)r.EdtName,
+                r.Mandatory is not null && Convert.ToBoolean(r.Mandatory),
+                Source: "base"));
+        }
+
+        // Extension-added fields (ExtensionFields). An AxTableExtension field
+        // materialises as a real column on the target table's physical SQL table,
+        // so omitting these made `find fields` under-report versus a direct
+        // database column query (e.g. CustAccount added to ContactPerson via
+        // ContactPerson.<Ext>). The @model filter matches the extension's owning
+        // model here (vs the base table's model above).
+        foreach (var r in conn.Query(@"
+            SELECT ef.TargetTable AS TableName, m.Name AS Model, ef.Name AS FieldName,
+                   ef.Type AS Type, ef.EdtName AS EdtName, ef.ExtensionName AS ExtensionName
+            FROM ExtensionFields ef
+            JOIN Models m ON m.ModelId = ef.ModelId
+            WHERE (ef.Name = @name COLLATE NOCASE OR ef.EdtName = @name COLLATE NOCASE)
+              AND (@model IS NULL OR m.Name = @model)
+            ORDER BY ef.TargetTable
+            LIMIT @limit", new { name, model, limit }))
+        {
+            results.Add(new TableFieldMatch(
+                (string)r.TableName, (string)r.Model, (string)r.FieldName,
+                (string?)r.Type, (string?)r.EdtName, Mandatory: false,
+                Source: "extension", ExtensionName: (string?)r.ExtensionName));
+        }
+
+        return results
+            .OrderBy(x => x.TableName, StringComparer.Ordinal)
+            .ThenBy(x => x.Source, StringComparer.Ordinal)
+            .Take(limit)
+            .ToList();
     }
 
     public IReadOnlyList<TableInfo> SearchTables(string query, string? model = null, int limit = 50)
