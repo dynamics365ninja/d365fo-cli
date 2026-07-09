@@ -1724,6 +1724,7 @@ public sealed partial class MetadataRepository
             JOIN Models m ON m.ModelId = t.ModelId
             WHERE (f.Name = @name COLLATE NOCASE OR f.EdtName = @name COLLATE NOCASE)
               AND (@model IS NULL OR m.Name = @model)
+            ORDER BY t.Name
             LIMIT @limit", new { name, model, limit }))
         {
             results.Add(new TableFieldMatch(
@@ -1746,6 +1747,7 @@ public sealed partial class MetadataRepository
             JOIN Models m ON m.ModelId = ef.ModelId
             WHERE (ef.Name = @name COLLATE NOCASE OR ef.EdtName = @name COLLATE NOCASE)
               AND (@model IS NULL OR m.Name = @model)
+            ORDER BY ef.TargetTable
             LIMIT @limit", new { name, model, limit }))
         {
             results.Add(new TableFieldMatch(

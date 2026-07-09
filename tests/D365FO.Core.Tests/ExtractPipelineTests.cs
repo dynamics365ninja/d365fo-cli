@@ -108,6 +108,65 @@ public class ExtractPipelineTests : IDisposable
     }
 
     [Fact]
+    public void FindTablesByField_limit_returns_deterministic_alphabetical_order_across_base_and_extension()
+    {
+        var repo = new MetadataRepository(_dbPath);
+        repo.EnsureSchema();
+
+        // Base tables declaring "SharedField" directly, inserted in REVERSE
+        // alphabetical order so the two alphabetically-earliest names (AlphaTable,
+        // BravoTable) are the LAST rows written. Without an ORDER BY before the
+        // SQL-side LIMIT, SQLite's unordered scan returns rows in insertion order,
+        // so a naive `LIMIT @limit` would truncate away exactly the earliest names
+        // before the final in-memory sort ever sees them.
+        var baseTableNames = new[]
+        {
+            "GolfTable", "FoxtrotTable", "EchoTable", "DeltaTable", "CharlieTable", "BravoTable", "AlphaTable",
+        };
+        var tables = baseTableNames.Select(n => new ExtractedTable(n, null, $"/x/{n}.xml",
+            new[] { new ExtractedTableField("SharedField", "String", null, null, false) })).ToArray();
+
+        // Extension-added "SharedField" on further tables, sorting well after the
+        // base tables above but also inserted in reverse order, to exercise the
+        // same truncation risk on the ExtensionFields query.
+        var extTableNames = new[]
+        {
+            "NovemberTable", "MikeTable", "LimaTable", "KiloTable", "JulietTable", "IndiaTable", "HotelTable",
+        };
+        var extensions = extTableNames.Select(n => new ExtractedObjectExtension(
+            "Table", n, $"{n}.SharedExt", $"/x/{n}.SharedExt.xml")
+        {
+            AddedFields = new[] { new ExtractedTableField("SharedField", "String", null, null, false) },
+        }).ToArray();
+
+        var batch = new ExtractBatch(
+            Model: "Shared",
+            Publisher: "Contoso",
+            Layer: "usr",
+            IsCustom: true,
+            Tables: tables,
+            Classes: Array.Empty<ExtractedClass>(),
+            Edts: Array.Empty<ExtractedEdt>(),
+            Enums: Array.Empty<ExtractedEnum>(),
+            MenuItems: Array.Empty<ExtractedMenuItem>(),
+            CocExtensions: Array.Empty<ExtractedCoc>(),
+            Labels: Array.Empty<ExtractedLabel>())
+        {
+            Extensions = extensions,
+        };
+
+        repo.ApplyExtract(batch);
+
+        // 14 total matches (7 base + 7 extension); ask for far fewer so the
+        // per-source SQL-side LIMIT actually kicks in on both queries.
+        var results = repo.FindTablesByField("SharedField", limit: 5);
+
+        Assert.Equal(
+            new[] { "AlphaTable", "BravoTable", "CharlieTable", "DeltaTable", "EchoTable" },
+            results.Select(r => r.TableName).ToArray());
+    }
+
+    [Fact]
     public void MetadataExtractor_reads_a_synthetic_model()
     {
         var model = Path.Combine(_workRoot, "Contoso", "Contoso");
