@@ -21,6 +21,28 @@ public class ScaffoldingSmokeTests
     }
 
     [Fact]
+    public void DataEntity_defaults_data_management_off_with_empty_staging_table()
+    {
+        var doc = XppScaffolder.DataEntity("CustEntity", "CustTable");
+        var root = doc.Root!;
+        Assert.Equal("No", root.Element("DataManagementEnabled")!.Value);
+        Assert.Equal("", root.Element("DataManagementStagingTable")!.Value);
+    }
+
+    [Fact]
+    public void DataEntity_opt_in_data_management_names_staging_table()
+    {
+        var doc = XppScaffolder.DataEntity("CustEntity", "CustTable", dataManagementEnabled: true);
+        var root = doc.Root!;
+        Assert.Equal("Yes", root.Element("DataManagementEnabled")!.Value);
+        Assert.Equal("CustEntityStaging", root.Element("DataManagementStagingTable")!.Value);
+
+        var custom = XppScaffolder.DataEntity("CustEntity", "CustTable",
+            dataManagementEnabled: true, dataManagementStagingTable: "MyStaging");
+        Assert.Equal("MyStaging", custom.Root!.Element("DataManagementStagingTable")!.Value);
+    }
+
+    [Fact]
     public void Extension_produces_dotted_name_for_target_and_suffix()
     {
         var doc = XppScaffolder.Extension("Table", "CustTable", "Contoso");
@@ -45,6 +67,81 @@ public class ScaffoldingSmokeTests
         Assert.Equal("PurchTable", ep.Element("ObjectName")!.Value);
         Assert.Equal("MenuItemDisplay", ep.Element("ObjectType")!.Value);
         Assert.Equal("Read", ep.Element("AccessLevel")!.Value);
+    }
+
+    [Fact]
+    public void Privilege_data_entity_view_emits_canonical_permission_order()
+    {
+        var doc = XppScaffolder.Privilege("CustEntityViewPriv", null, null,
+            dataEntity: "CustCustomerEntity", dataEntityAccess: "view");
+        var perm = doc.Root!.Element("DataEntityPermissions")!
+            .Element("AxSecurityDataEntityPermission")!;
+        // Serializer-canonical child order: Grant FIRST, then Name, Fields, Methods.
+        Assert.Equal(new[] { "Grant", "Name", "Fields", "Methods" },
+            perm.Elements().Select(e => e.Name.LocalName).ToArray());
+        Assert.Equal("CustCustomerEntity", perm.Element("Name")!.Value);
+        var grant = perm.Element("Grant")!.Elements().Select(e => e.Name.LocalName).ToArray();
+        Assert.Equal(new[] { "Read" }, grant);
+    }
+
+    [Fact]
+    public void Privilege_data_entity_maintain_emits_alphabetical_crud_grant()
+    {
+        var doc = XppScaffolder.Privilege("CustEntityMaintainPriv", null, null,
+            dataEntity: "CustCustomerEntity", dataEntityAccess: "maintain");
+        var grant = doc.Root!.Element("DataEntityPermissions")!
+            .Element("AxSecurityDataEntityPermission")!
+            .Element("Grant")!.Elements().Select(e => e.Name.LocalName).ToArray();
+        // CRUD elements alphabetical, matching the Microsoft serializer.
+        Assert.Equal(new[] { "Correct", "Create", "Delete", "Read", "Update" }, grant);
+        Assert.All(doc.Root.Element("DataEntityPermissions")!
+            .Element("AxSecurityDataEntityPermission")!
+            .Element("Grant")!.Elements(), e => Assert.Equal("Allow", e.Value));
+    }
+
+    [Fact]
+    public void Privilege_without_data_entity_omits_permissions_block()
+    {
+        var doc = XppScaffolder.Privilege("PurchOrderReadPriv", "PurchTableForm", "MenuItemDisplay");
+        Assert.Null(doc.Root!.Element("DataEntityPermissions"));
+    }
+
+    [Fact]
+    public void SecurityDutyExtension_adds_privileges_to_base_duty()
+    {
+        var doc = XppScaffolder.SecurityDutyExtension("BatchJobMaintain", "Contoso", new[] { "MyPriv" });
+        var root = doc.Root!;
+        Assert.Equal("AxSecurityDutyExtension", root.Name.LocalName);
+        Assert.Equal("BatchJobMaintain.Contoso", root.Element("Name")!.Value);
+        var priv = root.Element("Privileges")!.Elements("AxSecurityPrivilegeReference").Single();
+        Assert.Equal("MyPriv", priv.Element("Name")!.Value);
+        Assert.NotNull(root.Element("PropertyModifications"));
+    }
+
+    [Fact]
+    public void SecurityRoleExtension_adds_duties_and_privileges_to_base_role()
+    {
+        var doc = XppScaffolder.SecurityRoleExtension("SystemUser", "Contoso",
+            duties: new[] { "MyDuty" }, privileges: new[] { "MyPriv" });
+        var root = doc.Root!;
+        Assert.Equal("AxSecurityRoleExtension", root.Name.LocalName);
+        Assert.Equal("SystemUser.Contoso", root.Element("Name")!.Value);
+        Assert.Equal("MyDuty", root.Element("Duties")!.Elements().Single().Element("Name")!.Value);
+        Assert.Equal("MyPriv", root.Element("Privileges")!.Elements().Single().Element("Name")!.Value);
+        Assert.NotNull(root.Element("DirectAccessPermissions"));
+    }
+
+    [Theory]
+    [InlineData("TransDateTime", "AxTableFieldUtcDateTime")]
+    [InlineData("EventDateTime", "AxTableFieldUtcDateTime")]
+    [InlineData("StartDate", "AxTableFieldDate")]
+    [InlineData("SomethingElse", "AxTableFieldString")]
+    public void Table_field_discriminator_infers_datetime_edts_without_index(string edt, string expectedType)
+    {
+        var doc = XppScaffolder.Table("MyTable", null, new[] { new TableFieldSpec("F1", edt, null, false) });
+        XNamespace xsi = "http://www.w3.org/2001/XMLSchema-instance";
+        var field = doc.Root!.Element("Fields")!.Elements("AxTableField").Single();
+        Assert.Equal(expectedType, field.Attribute(xsi + "type")!.Value);
     }
 
     [Fact]

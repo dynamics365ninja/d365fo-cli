@@ -170,10 +170,10 @@ All scaffolders write atomically (`.tmp` + move, `.bak` on overwrite). Pass `--i
 | `generate form` | `AxForm` XML (9 patterns: SimpleList, DetailsMaster, Workspace …) |
 | `generate datasource-method` | Add/override a method on a form datasource (form-level `SourceCode`); `--list` shows overridable methods |
 | `generate control-method` | Add/override a method on a form control (form-level `SourceCode`); `--list` shows overridable methods |
-| `generate entity` | `AxDataEntityView` |
-| `generate extension` | `AxTableExtension` / `AxFormExtension` / `AxEdtExtension` / `AxEnumExtension` |
+| `generate entity` | `AxDataEntityView` (`DataManagementEnabled=No` by default; opt in via `--data-management`) |
+| `generate extension` | `AxTableExtension` / `AxFormExtension` / `AxEdtExtension` / `AxEnumExtension` / `AxSecurityDutyExtension` / `AxSecurityRoleExtension` |
 | `generate event-handler` | X++ event subscriber class with correct attribute |
-| `generate privilege` | `AxSecurityPrivilege` |
+| `generate privilege` | `AxSecurityPrivilege` (entry point and/or `--data-entity` OData/DMF grant) |
 | `generate duty` | `AxSecurityDuty` |
 | `generate role` | `AxSecurityRole` (new or merge into existing) |
 | `generate menu-item` | `AxMenuItemDisplay` / `AxMenuItemAction` / `AxMenuItemOutput` |

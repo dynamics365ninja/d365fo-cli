@@ -175,21 +175,42 @@ public static class XppValidator
     private static void CheckFunctionInWhere(string code, List<XppViolation> v)
     {
         var lines = code.Split('\n');
+        // inWhere carries an open where-clause across wrapped lines. It must be
+        // closed at the clause's actual boundary — the statement terminator `;`
+        // or a block-open `{` — otherwise every function call in the rest of
+        // the file (including unrelated later methods) gets misattributed to
+        // "inside where clause".
         bool inWhere = false;
         for (int i = 0; i < lines.Length; i++)
         {
             var rawLine = lines[i];
             var line = rawLine.TrimStart();
             if (line.StartsWith("//") || line.StartsWith('*')) continue;
-            if (Regex.IsMatch(rawLine, @"\bwhere\b", RegexOptions.IgnoreCase)) inWhere = true;
-            if (inWhere && rawLine.Contains('{')) inWhere = false;
-            if (!inWhere) continue;
 
-            foreach (Match m in Regex.Matches(rawLine, @"\b([a-zA-Z_]\w*)\s*\("))
+            // Scanning starts right after the `where` keyword when a new clause
+            // opens on this line (so a count(...) in the select list before the
+            // `where` is never in scope), or at the top of the line when a
+            // clause opened on an earlier line is still open.
+            int scanStart = 0;
+            if (!inWhere)
+            {
+                var whereMatch = Regex.Match(rawLine, @"\bwhere\b", RegexOptions.IgnoreCase);
+                if (!whereMatch.Success) continue;
+                inWhere = true;
+                scanStart = whereMatch.Index + whereMatch.Length;
+            }
+
+            // The clause ends at the first `;` or `{` at/after scanStart — only
+            // scan the segment before that terminator.
+            var rest = rawLine[scanStart..];
+            int endIdx = rest.IndexOfAny([';', '{']);
+            var scanSegment = endIdx >= 0 ? rest[..endIdx] : rest;
+
+            foreach (Match m in Regex.Matches(scanSegment, @"\b([a-zA-Z_]\w*)\s*\("))
             {
                 var fnName = m.Groups[1].Value;
                 if (IntrinsicFunctions.Contains(fnName)) continue;
-                if (fnName.ToLowerInvariant() is "if" or "while" or "for" or "switch" or "catch" or "str" or "int" or "new") continue;
+                if (fnName.ToLowerInvariant() is "if" or "while" or "for" or "switch" or "catch" or "str" or "int" or "new" or "where") continue;
                 v.Add(new XppViolation("SEL005", "warning", i + 1,
                     $"{fnName}(...) inside where clause",
                     $"Assign the result of {fnName}() to a local variable BEFORE the select statement, " +
@@ -197,6 +218,8 @@ public static class XppValidator
                     "Function calls in where clauses prevent index usage and may cause unexpected results."));
                 break; // one violation per line is enough
             }
+
+            if (endIdx >= 0) inWhere = false;
         }
     }
 

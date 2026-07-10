@@ -143,4 +143,35 @@ public class FormPatternScaffoldingTests
     {
         Assert.Equal(expected, FormPatternNormalizer.Normalize(raw));
     }
+
+    [Theory]
+    [InlineData(FormPattern.SimpleList, new[] { "Overview" })]
+    [InlineData(FormPattern.DetailsTransaction, new[] { "Overview" })]
+    [InlineData(FormPattern.SimpleListDetails, new[] { "Overview", "General" })]
+    [InlineData(FormPattern.DetailsMaster, new[] { "Overview", "General" })]
+    [InlineData(FormPattern.Dialog, new string[0])]
+    public void RequiredFieldGroups_lists_datagroups_referenced_by_templates(FormPattern pattern, string[] expected)
+    {
+        Assert.Equal(expected, D365FO.Cli.Commands.Generate.GenerateFormImpl.RequiredFieldGroups(pattern));
+    }
+
+    [Fact]
+    public void TableDefinesFieldGroup_reads_table_xml()
+    {
+        var path = Path.Combine(Path.GetTempPath(), Path.GetRandomFileName() + ".xml");
+        File.WriteAllText(path, """
+            <AxTable>
+              <Name>FmVehicle</Name>
+              <FieldGroups>
+                <AxTableFieldGroup><Name>Overview</Name></AxTableFieldGroup>
+              </FieldGroups>
+            </AxTable>
+            """);
+        try
+        {
+            Assert.True(D365FO.Cli.Commands.Generate.GenerateFormImpl.TableDefinesFieldGroup(path, "Overview"));
+            Assert.False(D365FO.Cli.Commands.Generate.GenerateFormImpl.TableDefinesFieldGroup(path, "General"));
+        }
+        finally { File.Delete(path); }
+    }
 }

@@ -485,6 +485,50 @@ internal static class GenerateFormImpl
 
         var sectionSpecs = ParseSections(sections);
 
+        // Caption resolution: explicit --caption wins; otherwise reuse the bound
+        // table's Label from the index (a raw-text caption trips
+        // BPErrorLabelIsText, the table's label is already translated). Falls
+        // back to no <Caption> element when neither is available.
+        var effectiveCaption = caption;
+        var preflightWarnings = new List<string>();
+        if (!string.IsNullOrWhiteSpace(table))
+        {
+            try
+            {
+                var t = RepoFactory.Create().GetTableDetails(table!)?.Table;
+                if (t is not null)
+                {
+                    if (string.IsNullOrWhiteSpace(effectiveCaption) && !string.IsNullOrWhiteSpace(t.Label))
+                        effectiveCaption = t.Label;
+
+                    // The index is a cache that is never invalidated on delete or
+                    // rollback — verify the table's XML still exists before
+                    // trusting the hit, so a form is not bound to a phantom table.
+                    if (!string.IsNullOrEmpty(t.SourcePath) && !File.Exists(t.SourcePath))
+                    {
+                        preflightWarnings.Add(
+                            $"Table '{table}' is in the index but its XML no longer exists on disk ({t.SourcePath}) — " +
+                            "it may have been deleted or rolled back. Run `d365fo index refresh` and verify the table before using this form.");
+                    }
+                    else if (!string.IsNullOrEmpty(t.SourcePath))
+                    {
+                        // SimpleList/SimpleListDetails/DetailsMaster/DetailsTransaction
+                        // controls reference the table's Overview (and sometimes
+                        // General) field group via <DataGroup>; a missing group
+                        // renders an empty grid and flags BP on build.
+                        foreach (var group in RequiredFieldGroups(pattern))
+                        {
+                            if (!TableDefinesFieldGroup(t.SourcePath!, group))
+                                preflightWarnings.Add(
+                                    $"Form pattern {pattern} references field group '{group}' but table '{table}' does not define it " +
+                                    "(extension-added groups are not checked). Add the field group to the table, or the bound controls will render empty.");
+                        }
+                    }
+                }
+            }
+            catch { /* index may be empty; not fatal */ }
+        }
+
         string xml;
         try
         {
@@ -492,7 +536,7 @@ internal static class GenerateFormImpl
                 formName:        formName,
                 dataSourceTable: table,
                 pattern:         pattern,
-                caption:         caption,
+                caption:         effectiveCaption,
                 gridFields:      fields,
                 sections:        sectionSpecs,
                 linesTable:      linesTable);
@@ -506,8 +550,9 @@ internal static class GenerateFormImpl
         // block the write while D365FO_FORM_PATTERN_ENFORCE=true (the default),
         // mirroring the upstream MCP form-pattern write gate.
         var patternReport = D365FO.Core.FormPatterns.FormPatternValidator.ValidateXml(xml);
-        var patternWarnings = patternReport.Violations
-            .Select(v => $"form-pattern {v.Rule} [{v.Severity}] {v.Path}: {v.Excerpt}")
+        var patternWarnings = preflightWarnings
+            .Concat(patternReport.Violations
+                .Select(v => $"form-pattern {v.Rule} [{v.Severity}] {v.Path}: {v.Excerpt}"))
             .ToList();
         if (patternReport.HasErrors && FormPatternGate.EnforcementEnabled)
         {
@@ -544,6 +589,31 @@ internal static class GenerateFormImpl
                 },
             },
             patternWarnings.Count > 0 ? patternWarnings : null);
+    }
+
+    /// <summary>Field groups a pattern's controls reference via &lt;DataGroup&gt; (see FormTemplates/*.template.xml).</summary>
+    internal static IReadOnlyList<string> RequiredFieldGroups(FormPattern pattern) => pattern switch
+    {
+        FormPattern.SimpleList or FormPattern.DetailsTransaction => new[] { "Overview" },
+        FormPattern.SimpleListDetails or FormPattern.DetailsMaster => new[] { "Overview", "General" },
+        _ => Array.Empty<string>(),
+    };
+
+    internal static bool TableDefinesFieldGroup(string tableXmlPath, string groupName)
+    {
+        try
+        {
+            var doc = System.Xml.Linq.XDocument.Load(tableXmlPath);
+            return doc.Root?
+                .Element("FieldGroups")?
+                .Elements("AxTableFieldGroup")
+                .Any(g => string.Equals(g.Element("Name")?.Value, groupName, StringComparison.OrdinalIgnoreCase)) == true;
+        }
+        catch
+        {
+            // Unreadable XML must not block form generation — skip the warning.
+            return true;
+        }
     }
 
     private static IReadOnlyList<FormSectionSpec> ParseSections(IReadOnlyList<string> raw)

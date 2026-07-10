@@ -117,6 +117,26 @@ public static class LabelFileWriter
         return new WriteResult(path, WriteOutcome.Renamed, newKey, source.existingValue, source.existingValue);
     }
 
+    /// <summary>
+    /// True when a label file ID (or a <c>*.label.txt</c> path) refers to a
+    /// label file EXTENSION rather than an original (base) label file owned by
+    /// the model. D365FO names label file extensions with an <c>_Extension</c>
+    /// marker, optionally followed by a model prefix — e.g.
+    /// <c>Base_Extension</c> or <c>Base_ExtensionContoso</c>. New labels must
+    /// always go into the model's own ORIGINAL label file: an extension only
+    /// extends a base file owned by another model, and writing there is what
+    /// leads clients to wrongly prefix label IDs.
+    /// </summary>
+    public static bool IsExtensionLabelFile(string labelFileIdOrPath)
+    {
+        if (string.IsNullOrWhiteSpace(labelFileIdOrPath)) return false;
+        var name = Path.GetFileName(labelFileIdOrPath);
+        // Strip the `.<lang>.label.txt` tail when a physical path was given.
+        var dot = name.IndexOf('.');
+        var fileId = dot > 0 ? name[..dot] : name;
+        return fileId.Contains("_Extension", StringComparison.OrdinalIgnoreCase);
+    }
+
     /// <summary>Delete a key. Returns <see cref="WriteOutcome.KeyMissing"/> when absent.</summary>
     public static WriteResult Delete(string path, string key)
     {

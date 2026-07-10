@@ -164,6 +164,20 @@ public class LabelFileWriterTests
         finally { SafeDelete(path); }
     }
 
+    [Theory]
+    [InlineData("Base_Extension", true)]
+    [InlineData("Base_ExtensionContoso", true)]
+    [InlineData("base_extension", true)]
+    [InlineData(@"C:\Pkg\M\M\AxLabelFile\LabelResources\en-us\Foo_Extension.en-us.label.txt", true)]
+    [InlineData("Contoso", false)]
+    [InlineData("ExtensionPoints", false)]
+    [InlineData("/pkg/M/M/AxLabelFile/LabelResources/en-us/Contoso.en-us.label.txt", false)]
+    [InlineData("", false)]
+    public void IsExtensionLabelFile_detects_extension_marker(string input, bool expected)
+    {
+        Assert.Equal(expected, LabelFileWriter.IsExtensionLabelFile(input));
+    }
+
     private static void SafeDelete(string path)
     {
         try { if (File.Exists(path)) File.Delete(path); } catch { }

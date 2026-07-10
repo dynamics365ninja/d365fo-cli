@@ -1192,6 +1192,10 @@ public static class FormPatternCatalog
         (s => s.Contains("dialog"), "Dialog"),
         (s => s.Contains("tableofcontents") || s.Contains("toc") || s.Contains("parameter"), "TableOfContents"),
         (s => s.Contains("lookup"), "Lookup"),
+        // Bare "FactBox" resolves to the grid variant — the common case; the
+        // card variant stays an explicit ask ("FactBoxCard" hits the exact
+        // alias map before this fallback runs).
+        (s => s.Contains("factbox"), "FormPartFactboxGrid"),
         (s => s.Contains("operational"), "WorkspaceOperational"),
         (s => s.Contains("workspace") || s.Contains("panorama"), "Workspace"),
         (s => s.Contains("master"), "DetailsMaster"),

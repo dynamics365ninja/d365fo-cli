@@ -210,6 +210,50 @@ public class ExtractPipelineTests : IDisposable
     }
 
     [Fact]
+    public void MetadataExtractor_synthesizes_positional_values_for_UseEnumValue_No()
+    {
+        var model = Path.Combine(_workRoot, "Contoso", "Contoso");
+        Directory.CreateDirectory(Path.Combine(model, "AxEnum"));
+        File.WriteAllText(Path.Combine(model, "AxEnum", "TierEnum.xml"), """
+            <AxEnum>
+              <Name>TierEnum</Name>
+              <UseEnumValue>No</UseEnumValue>
+              <IsExtensible>true</IsExtensible>
+              <EnumValues>
+                <AxEnumValue><Name>Standard</Name></AxEnumValue>
+                <AxEnumValue><Name>Silver</Name></AxEnumValue>
+                <AxEnumValue><Name>Gold</Name></AxEnumValue>
+              </EnumValues>
+            </AxEnum>
+            """);
+
+        var batches = new MetadataExtractor().ExtractAll(_workRoot).ToList();
+        var en = Assert.Single(Assert.Single(batches).Enums);
+        // UseEnumValue=No omits <Value>; the compiled value is positional.
+        Assert.Equal(new int?[] { 0, 1, 2 }, en.Values.Select(v => v.Value).ToArray());
+    }
+
+    [Fact]
+    public void MetadataExtractor_keeps_explicit_values_for_UseEnumValue_Yes()
+    {
+        var model = Path.Combine(_workRoot, "Contoso", "Contoso");
+        Directory.CreateDirectory(Path.Combine(model, "AxEnum"));
+        File.WriteAllText(Path.Combine(model, "AxEnum", "GapEnum.xml"), """
+            <AxEnum>
+              <Name>GapEnum</Name>
+              <EnumValues>
+                <AxEnumValue><Name>A</Name><Value>10</Value></AxEnumValue>
+                <AxEnumValue><Name>B</Name><Value>20</Value></AxEnumValue>
+              </EnumValues>
+            </AxEnum>
+            """);
+
+        var batches = new MetadataExtractor().ExtractAll(_workRoot).ToList();
+        var en = Assert.Single(Assert.Single(batches).Enums);
+        Assert.Equal(new int?[] { 10, 20 }, en.Values.Select(v => v.Value).ToArray());
+    }
+
+    [Fact]
     public void MetadataExtractor_marks_models_matching_custom_pattern()
     {
         foreach (var name in new[] { "AslCore", "AslFinance", "MsExtensions" })

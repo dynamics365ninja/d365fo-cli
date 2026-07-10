@@ -708,6 +708,9 @@ public sealed class MetadataExtractor
         if (root is null) return null;
         var name = Local(root, "Name") ?? Path.GetFileNameWithoutExtension(file);
         var label = Local(root, "Label");
+        // Extensible enums carry UseEnumValue=No and omit <Value>; each
+        // member's runtime value is then its declaration order, not 0/unknown.
+        var explicitValues = !string.Equals(Local(root, "UseEnumValue"), "No", StringComparison.OrdinalIgnoreCase);
         var values = new List<ExtractedEnumValue>();
         var container = root.Descendants().FirstOrDefault(x => x.Name.LocalName == "EnumValues");
         if (container is not null)
@@ -716,7 +719,9 @@ public sealed class MetadataExtractor
             {
                 var vname = Local(v, "Name");
                 if (string.IsNullOrEmpty(vname)) continue;
-                int? val = int.TryParse(Local(v, "Value"), out var i) ? i : null;
+                int? val = explicitValues
+                    ? (int.TryParse(Local(v, "Value"), out var i) ? i : null)
+                    : values.Count;
                 values.Add(new ExtractedEnumValue(vname!, val, Local(v, "Label")));
             }
         }
