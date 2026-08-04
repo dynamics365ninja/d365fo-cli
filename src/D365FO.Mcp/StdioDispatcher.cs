@@ -33,17 +33,30 @@ public sealed class StdioDispatcher
     private const string ServerVersion = "0.1.0-dev";
 
     private readonly ToolHandlers _handlers;
+    private readonly McpServerMode _mode;
 
-    public StdioDispatcher(ToolHandlers handlers) => _handlers = handlers;
+    public StdioDispatcher(ToolHandlers handlers, McpServerMode mode = McpServerMode.Full)
+    {
+        _handlers = handlers;
+        _mode = mode;
+    }
 
-    public static StdioDispatcher CreateDefault(string? databasePath = null)
+    /// <summary>
+    /// Builds the default dispatcher against the environment-configured index.
+    /// <paramref name="mode"/> defaults to the resolved <c>MCP_SERVER_MODE</c>
+    /// setting (env var / settings.json), so every transport built on top of
+    /// this factory — stdio, the daemon socket/pipe, and the HTTP host — honors
+    /// the same mode without each caller re-resolving it.
+    /// </summary>
+    public static StdioDispatcher CreateDefault(string? databasePath = null, McpServerMode? mode = null)
     {
         var settings = D365FoSettings.FromEnvironment(databasePath);
         var dir = Path.GetDirectoryName(Path.GetFullPath(settings.DatabasePath));
         if (!string.IsNullOrEmpty(dir)) Directory.CreateDirectory(dir);
         var repo = new MetadataRepository(settings.DatabasePath);
         repo.EnsureSchema();
-        return new StdioDispatcher(new ToolHandlers(repo));
+        var resolvedMode = mode ?? ServerModeConfig.Resolve(D365FoSettings.Resolve("MCP_SERVER_MODE"));
+        return new StdioDispatcher(new ToolHandlers(repo), resolvedMode);
     }
 
     public async Task RunAsync(TextReader input, TextWriter output, CancellationToken ct = default)
@@ -71,7 +84,15 @@ public sealed class StdioDispatcher
         }
     }
 
-    private JsonObject? Dispatch(JsonElement root)
+    /// <summary>
+    /// Processes a single decoded JSON-RPC request/notification object and
+    /// returns the response envelope, or <c>null</c> for notifications (which
+    /// per JSON-RPC 2.0 never get a reply). Public so non-stdio transports —
+    /// currently <see cref="HttpServerHost"/>, one JSON-RPC message per HTTP
+    /// POST — can reuse the exact same routing, mode gate, and dedup cache as
+    /// the stdio/daemon transports instead of re-implementing them.
+    /// </summary>
+    public JsonObject? Dispatch(JsonElement root)
     {
         JsonNode? idNode = null;
         try
@@ -125,7 +146,7 @@ public sealed class StdioDispatcher
                     return isNotification ? null : Success(idNode, new JsonObject());
 
                 case "tools/list":
-                    return Success(idNode, BuildToolsList());
+                    return Success(idNode, BuildToolsList(_mode));
 
                 case "tools/call":
                     return HandleToolsCall(idNode, paramsEl);
@@ -140,11 +161,16 @@ public sealed class StdioDispatcher
         }
     }
 
-    private static JsonObject BuildToolsList()
+    private static JsonObject BuildToolsList(McpServerMode mode)
     {
         var arr = new JsonArray();
         foreach (var d in ToolCatalog.All)
         {
+            // Tools disallowed under the resolved MCP_SERVER_MODE are omitted
+            // from tools/list entirely — advertising a tool tools/call would
+            // then reject with MODE_NOT_ALLOWED just confuses clients that
+            // build a UI from this list.
+            if (!ServerModeConfig.IsToolAllowed(mode, d.Name)) continue;
             arr.Add(new JsonObject
             {
                 ["name"] = d.Name,
@@ -166,6 +192,16 @@ public sealed class StdioDispatcher
         var descriptor = ToolCatalog.All.FirstOrDefault(d => d.Name == name);
         if (descriptor.Name is null)
             return ErrorResponse(idNode, -32602, $"Unknown tool: {name}");
+
+        // Call-time mode gate: even if a client cached an earlier tools/list
+        // (or calls a tool name it already knew about), a disallowed tool
+        // must never actually run under the resolved MCP_SERVER_MODE.
+        if (!ServerModeConfig.IsToolAllowed(_mode, name))
+        {
+            return ErrorResponse(idNode, -32602,
+                $"Tool '{name}' is not available in '{ServerModeConfig.ToWireString(_mode)}' mode.",
+                new JsonObject { ["code"] = D365FoErrorCodes.ModeNotAllowed });
+        }
 
         // Duplicate-call dedup (agentic-loop mitigation): repeated identical
         // read calls are answered from a 60 s cache with a loop hint.

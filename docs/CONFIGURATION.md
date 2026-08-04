@@ -30,6 +30,19 @@
 | `D365FO_GROUNDING_ENFORCE` | `true` = `generate` rejects writes without a valid grounding token or with unresolved references / BP errors | `false` (warn only) |
 | `D365FO_FORM_PATTERN_ENFORCE` | `false` = disable the form-pattern write gate; by default `generate form` rejects structural pattern violations (FP001–FP005, FP007) | `true` |
 
+### `d365fo-mcp`-only variables
+
+Read the same way (env var → `settings.json` → default) but only consulted by
+the `d365fo-mcp` server, not the `d365fo` CLI. See
+[MIGRATION_FROM_MCP.md](MIGRATION_FROM_MCP.md#http-transport--shared-deployment-azure-app-service)
+for the shared-deployment story these enable.
+
+| Variable | Purpose | Default |
+|---|---|---|
+| `MCP_SERVER_MODE` | `full` \| `read-only` \| `write-only` — gates which MCP tools are exposed/callable (both transports) | `full` |
+| `API_KEY` | Shared secret required in the `X-Api-Key` header on `POST /mcp` (`--http` transport only). Unset = unauthenticated, with a startup warning | — |
+| `MCP_HTTP_PORT` | Listen port for `d365fo-mcp --http` when `--port` isn't passed | `3000` |
+
 ---
 
 ## JSON config file
