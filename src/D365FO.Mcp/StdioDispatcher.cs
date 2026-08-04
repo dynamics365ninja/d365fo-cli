@@ -146,7 +146,7 @@ public sealed class StdioDispatcher
                     return isNotification ? null : Success(idNode, new JsonObject());
 
                 case "tools/list":
-                    return Success(idNode, BuildToolsList());
+                    return Success(idNode, BuildToolsList(_mode));
 
                 case "tools/call":
                     return HandleToolsCall(idNode, paramsEl);
@@ -161,11 +161,16 @@ public sealed class StdioDispatcher
         }
     }
 
-    private static JsonObject BuildToolsList()
+    private static JsonObject BuildToolsList(McpServerMode mode)
     {
         var arr = new JsonArray();
         foreach (var d in ToolCatalog.All)
         {
+            // Tools disallowed under the resolved MCP_SERVER_MODE are omitted
+            // from tools/list entirely — advertising a tool tools/call would
+            // then reject with MODE_NOT_ALLOWED just confuses clients that
+            // build a UI from this list.
+            if (!ServerModeConfig.IsToolAllowed(mode, d.Name)) continue;
             arr.Add(new JsonObject
             {
                 ["name"] = d.Name,
@@ -187,6 +192,16 @@ public sealed class StdioDispatcher
         var descriptor = ToolCatalog.All.FirstOrDefault(d => d.Name == name);
         if (descriptor.Name is null)
             return ErrorResponse(idNode, -32602, $"Unknown tool: {name}");
+
+        // Call-time mode gate: even if a client cached an earlier tools/list
+        // (or calls a tool name it already knew about), a disallowed tool
+        // must never actually run under the resolved MCP_SERVER_MODE.
+        if (!ServerModeConfig.IsToolAllowed(_mode, name))
+        {
+            return ErrorResponse(idNode, -32602,
+                $"Tool '{name}' is not available in '{ServerModeConfig.ToWireString(_mode)}' mode.",
+                new JsonObject { ["code"] = D365FoErrorCodes.ModeNotAllowed });
+        }
 
         // Duplicate-call dedup (agentic-loop mitigation): repeated identical
         // read calls are answered from a 60 s cache with a loop hint.
