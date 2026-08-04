@@ -33,17 +33,30 @@ public sealed class StdioDispatcher
     private const string ServerVersion = "0.1.0-dev";
 
     private readonly ToolHandlers _handlers;
+    private readonly McpServerMode _mode;
 
-    public StdioDispatcher(ToolHandlers handlers) => _handlers = handlers;
+    public StdioDispatcher(ToolHandlers handlers, McpServerMode mode = McpServerMode.Full)
+    {
+        _handlers = handlers;
+        _mode = mode;
+    }
 
-    public static StdioDispatcher CreateDefault(string? databasePath = null)
+    /// <summary>
+    /// Builds the default dispatcher against the environment-configured index.
+    /// <paramref name="mode"/> defaults to the resolved <c>MCP_SERVER_MODE</c>
+    /// setting (env var / settings.json), so every transport built on top of
+    /// this factory — stdio, the daemon socket/pipe, and the HTTP host — honors
+    /// the same mode without each caller re-resolving it.
+    /// </summary>
+    public static StdioDispatcher CreateDefault(string? databasePath = null, McpServerMode? mode = null)
     {
         var settings = D365FoSettings.FromEnvironment(databasePath);
         var dir = Path.GetDirectoryName(Path.GetFullPath(settings.DatabasePath));
         if (!string.IsNullOrEmpty(dir)) Directory.CreateDirectory(dir);
         var repo = new MetadataRepository(settings.DatabasePath);
         repo.EnsureSchema();
-        return new StdioDispatcher(new ToolHandlers(repo));
+        var resolvedMode = mode ?? ServerModeConfig.Resolve(D365FoSettings.Resolve("MCP_SERVER_MODE"));
+        return new StdioDispatcher(new ToolHandlers(repo), resolvedMode);
     }
 
     public async Task RunAsync(TextReader input, TextWriter output, CancellationToken ct = default)
@@ -71,7 +84,15 @@ public sealed class StdioDispatcher
         }
     }
 
-    private JsonObject? Dispatch(JsonElement root)
+    /// <summary>
+    /// Processes a single decoded JSON-RPC request/notification object and
+    /// returns the response envelope, or <c>null</c> for notifications (which
+    /// per JSON-RPC 2.0 never get a reply). Public so non-stdio transports —
+    /// currently <see cref="HttpServerHost"/>, one JSON-RPC message per HTTP
+    /// POST — can reuse the exact same routing, mode gate, and dedup cache as
+    /// the stdio/daemon transports instead of re-implementing them.
+    /// </summary>
+    public JsonObject? Dispatch(JsonElement root)
     {
         JsonNode? idNode = null;
         try
