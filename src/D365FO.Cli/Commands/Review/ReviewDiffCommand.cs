@@ -72,7 +72,7 @@ public sealed class ReviewDiffCommand : Command<ReviewDiffCommand.Settings>
         }));
     }
 
-    private static void InspectTableXml(string path, string text, List<object> bag)
+    internal static void InspectTableXml(string path, string text, List<object> bag)
     {
         XDocument doc;
         try { doc = XDocument.Parse(text); }
@@ -81,15 +81,26 @@ public sealed class ReviewDiffCommand : Command<ReviewDiffCommand.Settings>
             bag.Add(new { file = path, rule = "XML_PARSE", severity = "error", message = ex.Message });
             return;
         }
-        var fields = doc.Descendants().Where(e => e.Name.LocalName.StartsWith("AxTableField", StringComparison.Ordinal));
+        // Real field definitions live only under AxTable/Fields/AxTableField*.
+        // Never descend into <FieldGroups> — <AxTableFieldGroup> names and
+        // <AxTableFieldGroupField><DataField> references are not fields and
+        // must not be evaluated as such.
+        var fieldsContainer = doc.Root?.Elements().FirstOrDefault(e => e.Name.LocalName == "Fields");
+        var fields = fieldsContainer?.Elements().Where(e => e.Name.LocalName.StartsWith("AxTableField", StringComparison.Ordinal))
+            ?? Enumerable.Empty<XElement>();
         foreach (var f in fields)
         {
             var name = f.Elements().FirstOrDefault(e => e.Name.LocalName == "Name")?.Value ?? "?";
-            var hasEdt = f.Elements().Any(e => e.Name.LocalName == "ExtendedDataType");
+            var edtValue = f.Elements().FirstOrDefault(e => e.Name.LocalName == "ExtendedDataType")?.Value;
+            var enumValue = f.Elements().FirstOrDefault(e => e.Name.LocalName == "EnumType")?.Value;
+            // EnumType is an equivalent, valid type declaration for AxTableFieldEnum
+            // fields — either it or a non-empty ExtendedDataType satisfies the rule,
+            // and both also carry an inherited label from their type definition.
+            var hasTypeDeclaration = !string.IsNullOrWhiteSpace(edtValue) || !string.IsNullOrWhiteSpace(enumValue);
             var hasLabel = f.Elements().Any(e => e.Name.LocalName == "Label");
-            if (!hasEdt)
+            if (!hasTypeDeclaration)
                 bag.Add(new { file = path, rule = "FIELD_WITHOUT_EDT", severity = "warning", field = name, message = $"Field '{name}' has no ExtendedDataType; prefer typed EDTs over raw types." });
-            if (!hasLabel)
+            if (!hasLabel && !hasTypeDeclaration)
                 bag.Add(new { file = path, rule = "FIELD_WITHOUT_LABEL", severity = "info", field = name, message = $"Field '{name}' has no Label; required for user-facing fields." });
         }
     }

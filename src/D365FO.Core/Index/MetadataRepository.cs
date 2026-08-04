@@ -438,7 +438,7 @@ public sealed partial class MetadataRepository
                 WHERE LabelFts MATCH @q
                 ORDER BY rank
                 LIMIT @limit";
-                return conn.Query<LabelMatch>(sql, new { q = query, limit }).ToList();
+                return ReadLabelMatches(conn.Query(sql, new { q = query, limit }));
             }
             else
             {
@@ -449,7 +449,7 @@ public sealed partial class MetadataRepository
                   AND LOWER(Language) IN @langs
                 ORDER BY rank
                 LIMIT @limit";
-                return conn.Query<LabelMatch>(sql, new { q = query, langs = langsLower, limit }).ToList();
+                return ReadLabelMatches(conn.Query(sql, new { q = query, langs = langsLower, limit }));
             }
         }
         catch (Microsoft.Data.Sqlite.SqliteException)
@@ -467,6 +467,22 @@ public sealed partial class MetadataRepository
             return results;
         }
     }
+
+    /// <summary>
+    /// Maps rows from the <c>LabelFts</c> virtual table into <see cref="LabelMatch"/>.
+    /// FTS5 columns carry no declared SQLite type, so on a zero-row result set
+    /// Dapper's strongly-typed <c>Query&lt;LabelMatch&gt;</c> infers every column as
+    /// <c>byte[]</c> and fails to find a matching constructor (see issue #115).
+    /// Querying as <c>dynamic</c> and converting by hand sidesteps that
+    /// materialization entirely, for both the empty and non-empty cases.
+    /// </summary>
+    private static List<LabelMatch> ReadLabelMatches(IEnumerable<dynamic> rows) =>
+        rows.Select(row => new LabelMatch(
+                (string)Convert.ChangeType(row.File, typeof(string)),
+                (string)Convert.ChangeType(row.Language, typeof(string)),
+                (string)Convert.ChangeType(row.Key, typeof(string)),
+                row.Value is null ? null : (string)Convert.ChangeType(row.Value, typeof(string))))
+            .ToList();
 
     /// <summary>
     /// Number of method bodies currently in the opt-in <c>MethodSourceFts</c>

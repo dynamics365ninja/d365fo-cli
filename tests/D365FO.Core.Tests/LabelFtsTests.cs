@@ -57,6 +57,33 @@ public class LabelFtsTests
         }
     }
 
+    [Fact]
+    public void Fts_search_with_zero_results_returns_empty_list()
+    {
+        var db = Path.Combine(Path.GetTempPath(), $"d365fo-fts-{Guid.NewGuid():N}.sqlite");
+        try
+        {
+            var repo = new MetadataRepository(db);
+            repo.EnsureSchema();
+            repo.UpsertModel("Fleet", "Contoso", "usr", true);
+            // Only index an English label; searching for a term that only
+            // exists in a non-indexed language (or nowhere) must yield zero
+            // matches from the FTS5 MATCH query, not throw during
+            // materialization (see issue #115).
+            Insert(db, 1, "Vehicle fleet operations", "en-us", "VehicleFleet", "Vehicles.en-us");
+
+            var hits = repo.SearchLabelsFts("zzzznonexistentterm", new[] { "en-us" }, 10);
+            Assert.Empty(hits);
+
+            var likeHits = repo.SearchLabels("zzzznonexistentterm", new[] { "en-us" }, 10);
+            Assert.Empty(likeHits);
+        }
+        finally
+        {
+            try { File.Delete(db); } catch { }
+        }
+    }
+
     private static void Insert(string db, long labelId, string value, string lang, string key, string file)
     {
         using var conn = new Microsoft.Data.Sqlite.SqliteConnection($"Data Source={db}");

@@ -337,6 +337,31 @@ public class ScaffoldingSnapshotTests
         Assert.Equal("1", items[1].Element("Value")!.Value);
     }
 
+    [Fact]
+    public void Enum_extensible_sets_UseEnumValue_No()
+    {
+        // VS build validation: "UseEnumValue property must be set to 'No' when the
+        // IsExtensible property is 'True'." UseEnumValue is a NoYes-style enum property
+        // (unlike the CLR-bool IsExtensible), so it takes "Yes"/"No", not "true"/"false".
+        var vals = new[] { new EnumValueSpec("Draft", 0), new EnumValueSpec("Validated", 1), new EnumValueSpec("Completed", 2) };
+        var doc = XppScaffolder.Enum("MyEnumStatusType", vals, isExtensible: true, label: "test status");
+        var root = doc.Root!;
+        Assert.Equal("true", root.Element("IsExtensible")!.Value);
+        Assert.Equal("No", root.Element("UseEnumValue")!.Value);
+    }
+
+    [Fact]
+    public void Enum_non_extensible_does_not_emit_UseEnumValue()
+    {
+        // UseEnumValue is only forced when IsExtensible=true; a non-extensible enum has no
+        // build-rule requiring it, so the element is omitted (VS defaults it to Yes).
+        var vals = new[] { new EnumValueSpec("None", 0) };
+        var doc = XppScaffolder.Enum("MyEnum", vals, isExtensible: false);
+        var root = doc.Root!;
+        Assert.Equal("false", root.Element("IsExtensible")!.Value);
+        Assert.Null(root.Element("UseEnumValue"));
+    }
+
     // ---- Query (Phase 2) ----
 
     [Fact]

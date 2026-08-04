@@ -82,6 +82,7 @@ SysDa is the modern X++ query API — fluent and object-oriented. Use it when qu
 
 **Core classes:**
 - `SysDaQueryObject` — root query builder; set table buffer via constructor.
+- `SysDaSearchObject` — wraps a `SysDaQueryObject` for iteration; pass this (not the raw query object) to `SysDaSearchStatement`/`SysDaFindStatement`.
 - `SysDaSearchStatement` — execute + iterate; `SysDaFindStatement` — `firstOnly` equivalent.
 - `SysDaUpdateStatement` / `SysDaInsertStatement` / `SysDaDeleteStatement` — set-based ops.
 
@@ -91,8 +92,9 @@ var qe = new SysDaQueryObject(custTable);
 qe.whereClause(new SysDaEqualsExpression(
     new SysDaFieldExpression(custTable, fieldStr(CustTable, AccountNum)),
     new SysDaValueExpression('US-001')));
-var so = new SysDaSearchStatement();
-while (so.nextRecord(qe))
+var so = new SysDaSearchObject(qe);       // wraps the query object for iteration
+var search = new SysDaSearchStatement();
+while (search.nextRecord(so))
 {
     info(custTable.AccountNum);
 }
