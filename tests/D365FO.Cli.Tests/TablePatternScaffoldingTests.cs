@@ -165,6 +165,94 @@ public class TablePatternScaffoldingTests
         Assert.Null(doc.Root!.Element("Indexes"));
     }
 
+    // --- issue #110: generated tables must carry the same five default field
+    //     groups Visual Studio / the AOT stamps on every new table, and must
+    //     NOT emit shouldThrowExceptionOnZeroDelete (not part of the fresh
+    //     VS scaffold — ground-truthed against shipped standard-model tables).
+
+    [Fact]
+    public void Table_emits_the_five_default_AOT_field_groups_in_order()
+    {
+        var doc = XppScaffolder.Table("FmThing", pattern: TablePattern.Main);
+        var groupNames = doc.Root!.Element("FieldGroups")!.Elements("AxTableFieldGroup")
+            .Select(g => g.Element("Name")!.Value).ToList();
+
+        Assert.Equal(
+            new[] { "AutoReport", "AutoLookup", "AutoIdentification", "AutoSummary", "AutoBrowse", "Overview", "General" },
+            groupNames);
+    }
+
+    [Theory]
+    [InlineData("AutoReport")]
+    [InlineData("AutoLookup")]
+    [InlineData("AutoIdentification")]
+    [InlineData("AutoSummary")]
+    [InlineData("AutoBrowse")]
+    public void Default_AOT_field_groups_are_empty_even_when_the_table_has_fields(string groupName)
+    {
+        // Ground truth: VS does NOT auto-populate these groups with fields, even
+        // once the table has real fields (verified against shipped tables, e.g.
+        // ApplicationCommon\AgentFeedUserPreference.xml,
+        // ApplicationSuite\Foundation\AssetAddition.xml).
+        var doc = XppScaffolder.Table("FmCustomer", pattern: TablePattern.Main);
+        var group = doc.Root!.Element("FieldGroups")!.Elements("AxTableFieldGroup")
+            .Single(g => g.Element("Name")!.Value == groupName);
+
+        var fieldsEl = group.Element("Fields")!;
+        Assert.False(fieldsEl.HasElements);
+    }
+
+    [Fact]
+    public void AutoIdentification_field_group_has_AutoPopulate_Yes()
+    {
+        var doc = XppScaffolder.Table("FmThing", pattern: TablePattern.Main);
+        var group = doc.Root!.Element("FieldGroups")!.Elements("AxTableFieldGroup")
+            .Single(g => g.Element("Name")!.Value == "AutoIdentification");
+
+        Assert.Equal("Yes", group.Element("AutoPopulate")!.Value);
+    }
+
+    [Theory]
+    [InlineData("AutoReport")]
+    [InlineData("AutoLookup")]
+    [InlineData("AutoSummary")]
+    [InlineData("AutoBrowse")]
+    public void Only_AutoIdentification_field_group_carries_AutoPopulate(string groupName)
+    {
+        var doc = XppScaffolder.Table("FmThing", pattern: TablePattern.Main);
+        var group = doc.Root!.Element("FieldGroups")!.Elements("AxTableFieldGroup")
+            .Single(g => g.Element("Name")!.Value == groupName);
+
+        Assert.Null(group.Element("AutoPopulate"));
+    }
+
+    [Fact]
+    public void Overview_and_General_field_groups_stay_populated_for_form_compatibility()
+    {
+        // Not part of the AOT default scaffold, but required so this CLI's own
+        // generated forms (which reference them via <DataGroup>) compile — see
+        // issue #91 follow-up.
+        var doc = XppScaffolder.Table("FmCustomer", pattern: TablePattern.Main);
+        var overview = doc.Root!.Element("FieldGroups")!.Elements("AxTableFieldGroup")
+            .Single(g => g.Element("Name")!.Value == "Overview");
+        var general = doc.Root!.Element("FieldGroups")!.Elements("AxTableFieldGroup")
+            .Single(g => g.Element("Name")!.Value == "General");
+
+        Assert.True(overview.Element("Fields")!.HasElements);
+        Assert.True(general.Element("Fields")!.HasElements);
+    }
+
+    [Fact]
+    public void Generated_table_does_not_emit_shouldThrowExceptionOnZeroDelete()
+    {
+        // VS/AOT does not generate this method on a fresh table — it's a
+        // developer override some standard tables happen to add, not a
+        // scaffold default. Confirmed by sampling shipped standard-model
+        // tables: only a small minority carry it.
+        var doc = XppScaffolder.Table("FmThing", pattern: TablePattern.Main);
+        Assert.DoesNotContain("shouldThrowExceptionOnZeroDelete", doc.ToString());
+    }
+
     // --- issue #91: AxTableField is abstract — every field needs a concrete
     //     i:type discriminator or the metadata reader rejects the whole table.
 
