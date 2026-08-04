@@ -223,6 +223,7 @@ app.Configure(cfg =>
         b.AddCommand<GenerateMigrationScriptCommand>("migration-script").WithDescription("Scaffold a SysRunnable data-migration class.");
         b.AddCommand<GenerateRunBaseCommand>("runbase").WithDescription("Scaffold a RunBase/RunBaseBatch class with dialog and pack/unpack.");
         b.AddCommand<GenerateSecurityPolicyCommand>("security-policy").WithDescription("Scaffold an AxSecurityPolicy (XDS) XML.");
+        b.AddCommand<GenerateSysTestCommand>("systest").WithDescription("Scaffold an ATL-ready SysTestCase class (Arrange/Act/Assert skeleton).");
     });
 
     cfg.AddBranch("analyze", b =>

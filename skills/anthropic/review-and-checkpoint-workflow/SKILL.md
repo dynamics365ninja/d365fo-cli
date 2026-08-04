@@ -1,6 +1,6 @@
 ---
 name: review-and-checkpoint-workflow
-description: Use Git as the review layer for AI-driven D365FO edits, and use `d365fo review diff` to get an AOT-semantic summary of XML changes. Invoke whenever the user is about to start a non-trivial change, before "accepting" AI edits, or wants a structural diff (added classes, modified table fields, new CoC wrappers).
+description: Use Git as the review layer for AI-driven D365FO edits, and use `d365fo review diff` for a shallow BP-style probe (missing EDT/Label, hard-coded strings, dynamic query) over changed AxTable/AxClass XML on top of the raw byte diff. Invoke whenever the user is about to start a non-trivial change, before "accepting" AI edits, or wants a quick heuristic pass over what changed.
 applies_when: User intent mentions reviewing changes, accepting / rejecting AI edits, "what changed", AOT diff, structural diff, or VS 2022's missing accept/undo UI.
 ---
 > ⛔ **NEVER write X++ AOT XML files directly** via PowerShell, terminal file commands (`Set-Content`, `Out-File`, `New-Item`), editor write tools, or any raw text approach. The XML schema (`<AxClass>`, `<AxTable>`, `<AxForm>`, `<Methods>`, `<SourceCode>`) is proprietary — LLMs have not been trained on it reliably. **ALWAYS use `d365fo generate …` commands** to produce correct AOT XML. If `d365fo` is unavailable in PATH, stop and ask the user to install it.
@@ -8,8 +8,8 @@ applies_when: User intent mentions reviewing changes, accepting / rejecting AI e
 # Git-checkpoint review workflow
 
 > Visual Studio 2022 has no inline accept/reject UI for AI edits. Use Git as
-> the review layer; pair with `d365fo review diff` for an AOT-semantic
-> summary on top of the raw byte diff.
+> the review layer; pair with `d365fo review diff` for a quick heuristic
+> probe on top of the raw byte diff.
 
 ## 1. Before starting any non-trivial task
 
@@ -61,24 +61,33 @@ For new forms based on an example, compare the pattern metadata and required
 controls/datasources from the example. Missing ActionPane/Body/Tab/FastTab/grid
 or QuickFilter elements are not acceptable just because the XML parses.
 
-## 3. After the task — AOT-semantic review
+## 3. After the task — review the diff
 
 ```sh
 # Raw byte diff (as usual)
 git diff --stat
 git diff <ref> -- AxClass/ AxTable/ AxForm/
 
-# AOT-semantic diff — added classes, modified table fields, new CoC wrappers …
+# Shallow BP-style probe over changed AxTable/AxClass XML in the working tree
+# vs --base (git diff --name-only under the hood; not a full structural diff)
 d365fo review diff --base <ref> --output json
-d365fo review diff --base HEAD~1 --output json | jq '.data.added,.data.modified'
+d365fo review diff --base HEAD~1 --output json | jq '.data.violations'
 ```
 
-`review diff` is **complementary** to `git diff`, not a replacement:
+`review diff` is **complementary** to `git diff`, not a replacement — and it
+is a shallow regex/XML probe, not a compiler-grade structural diff. It does
+NOT report added classes, modified fields, or new CoC wrappers. It only
+scans changed `.xml`/`.xpp` files and flags a small fixed set of issues:
+fields with no `<ExtendedDataType>` or no `<Label>` in changed
+`AxTable/…` XML, and hard-coded string literals / dynamic-`Query`
+construction in changed `AxClass/…` XML. Output shape: `{baseRev, headRev,
+changedFiles, violationCount, violations: [{file, rule, severity, message,
+…}]}`.
 
 | Tool | Shows | Best for |
 |---|---|---|
 | `git diff` | Raw bytes per file | Spotting whitespace / unintended edits |
-| `d365fo review diff` | Structural deltas (added field, new wrapper, index change) | Reviewer summary, PR descriptions |
+| `d365fo review diff` | A handful of BP-style probes (missing EDT/Label, hard-coded strings, dynamic query) over changed AxTable/AxClass XML | A fast heuristic pass before `bp check` — not a substitute for reading the diff |
 
 ## 4. Accept / reject
 
@@ -96,4 +105,4 @@ d365fo review diff --base HEAD~1 --output json | jq '.data.added,.data.modified'
 - Always include the `.bak` files in `.gitignore` for the user's repo so
   scaffold-overwrite backups don't pollute commits.
 - Always show `d365fo review diff` output BEFORE asking the user to accept
-  — they need the structural summary to make a decision.
+  — they need the heuristic-probe summary to make a decision.
