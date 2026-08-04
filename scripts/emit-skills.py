@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Emit Copilot and Anthropic Agent-Skills variants from skills/_source/*.md.
+"""Emit Copilot, Anthropic, and d365fo-cli skill resource variants from skills/_source/*.md.
 
 Equivalent of scripts/emit-skills.ps1 for environments without PowerShell.
 Single source of truth: skills/_source/<id>.md with YAML frontmatter.
@@ -13,6 +13,7 @@ Frontmatter keys:
 Outputs:
   skills/copilot/<id>.instructions.md
   skills/anthropic/<id>/SKILL.md
+  skills/d365fo-cli/resources/<id>.md
 """
 from __future__ import annotations
 
@@ -86,12 +87,25 @@ def emit_anthropic(meta: dict, body: str, out_dir: Path) -> Path:
     return path
 
 
+def emit_copilot_skill(meta: dict, body: str, out_dir: Path) -> Path:
+    """Emit body-only (no frontmatter) to skills/d365fo-cli/resources/<id>.md."""
+    sid = meta["id"]
+    out_dir.mkdir(parents=True, exist_ok=True)
+    path = out_dir / f"{sid}.md"
+    path.write_text(body, encoding="utf-8")
+    return path
+
+
 def main() -> int:
-    copilot_out = OUT_ROOT / "copilot"
-    anthropic_out = OUT_ROOT / "anthropic"
+    copilot_out      = OUT_ROOT / "copilot"
+    anthropic_out    = OUT_ROOT / "anthropic"
+    copilot_skill_out = OUT_ROOT / "d365fo-cli" / "resources"
     for p in (copilot_out, anthropic_out):
         if p.exists():
             shutil.rmtree(p)
+    # Only remove the resources dir so SKILL.md is preserved
+    if copilot_skill_out.exists():
+        shutil.rmtree(copilot_skill_out)
 
     files = sorted(SOURCE.glob("*.md"))
     if not files:
@@ -108,8 +122,9 @@ def main() -> int:
                 raise SystemExit(f"{f.name}: missing '{required}'")
         emit_copilot(meta, body, copilot_out)
         emit_anthropic(meta, body, anthropic_out)
+        emit_copilot_skill(meta, body, copilot_skill_out)
 
-    print(f"\nDone. {len(files)} skill(s) emitted.")
+    print(f"\nDone. {len(files)} skill(s) emitted to all three targets (copilot, anthropic, d365fo-cli).")
     return 0
 
 

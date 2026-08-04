@@ -110,12 +110,26 @@ description: $desc
     Write-Host "  [anthropic] $path"
 }
 
+function Emit-CopilotSkill {
+    # Writes body-only (no frontmatter) to skills/d365fo-cli/resources/<id>.md
+    # so Copilot can lazily load topic guidance from the bundled d365fo-cli skill.
+    param($Meta, [string]$Body, [string]$OutDir)
+    $id = $Meta.id
+    $path = Join-Path $OutDir "$id.md"
+    New-Item -ItemType Directory -Force -Path (Split-Path $path) | Out-Null
+    Set-Content -Path $path -Value $Body -Encoding utf8 -NoNewline
+    Write-Host "  [d365fo-cli] $path"
+}
+
 Write-Host "Source: $Source"
-$copilotOut  = Join-Path $OutRoot 'copilot'
-$anthropicOut = Join-Path $OutRoot 'anthropic'
+$copilotOut      = Join-Path $OutRoot 'copilot'
+$anthropicOut    = Join-Path $OutRoot 'anthropic'
+$copilotSkillOut = Join-Path $OutRoot 'd365fo-cli' 'resources'
 
 if (Test-Path $copilotOut)  { Remove-Item -Recurse -Force $copilotOut }
 if (Test-Path $anthropicOut) { Remove-Item -Recurse -Force $anthropicOut }
+# Note: d365fo-cli/resources is regenerated (not fully removed) so SKILL.md is preserved.
+if (Test-Path $copilotSkillOut) { Remove-Item -Recurse -Force $copilotSkillOut }
 
 $files = Get-ChildItem -Path $Source -Filter '*.md' -File
 if ($files.Count -eq 0) { Write-Warning "No source skills found."; exit 0 }
@@ -128,8 +142,9 @@ foreach ($f in $files) {
     if (-not $meta.id)          { throw "Missing 'id' in $($f.Name)." }
     if (-not $meta.description) { throw "Missing 'description' in $($f.Name)." }
 
-    Emit-Copilot   -Meta $meta -Body $split.Body -OutDir $copilotOut
-    Emit-Anthropic -Meta $meta -Body $split.Body -OutDir $anthropicOut
+    Emit-Copilot      -Meta $meta -Body $split.Body -OutDir $copilotOut
+    Emit-Anthropic    -Meta $meta -Body $split.Body -OutDir $anthropicOut
+    Emit-CopilotSkill -Meta $meta -Body $split.Body -OutDir $copilotSkillOut
 }
 
-Write-Host "`nDone. $($files.Count) skill(s) emitted to both targets."
+Write-Host "`nDone. $($files.Count) skill(s) emitted to all three targets (copilot, anthropic, d365fo-cli)."

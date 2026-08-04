@@ -153,12 +153,55 @@ Full walkthrough: **[docs/SETUP.md](docs/SETUP.md)**
 
 ### GitHub Copilot (VS Code / Visual Studio)
 
-Copy `.github/copilot-instructions.md` into your consuming repo's `.github/` folder. It contains the full X++ rule canon with MS Learn citations.
+The preferred method is the **one-command skill installer** — it deploys the bundled `d365fo-cli` Copilot skill (SKILL.md + 19 lazily-loaded topic resources) into your X++ project's `.github/skills/d365fo-cli/` folder. Copilot auto-discovers skills in `.github/skills/` with no extra configuration.
 
-```sh
-python3 scripts/emit-skills.py                                   # emit instruction files
-cp skills/copilot/*.instructions.md /your-repo/.github/instructions/
+```powershell
+# From the d365fo-cli repo's scripts folder:
+.\Install-D365FoCopilotSkills.ps1 -XppRepo "K:\D365FO\MyProject"
 ```
+
+The installer:
+1. Regenerates `skills/d365fo-cli/resources/` via `emit-skills.ps1` if needed.
+2. Copies `skills/d365fo-cli/SKILL.md` and all `resources/*.md` to `<XppRepo>/.github/skills/d365fo-cli/`.
+3. Prints a migration note if the legacy `copilot-instructions.md` / `instructions/` files still exist.
+
+**Skill layout installed into your X++ repo:**
+
+```
+.github/
+└── skills/
+    └── d365fo-cli/
+        ├── SKILL.md              # core rule canon + tool mapping (always loaded)
+        └── resources/            # 19 lazily-loaded X++ topic files
+            ├── coc-extension-authoring.md
+            ├── xpp-database-queries.md
+            ├── x++-class-authoring.md
+            ├── xpp-class-and-method-rules.md
+            ├── xpp-statement-and-type-rules.md
+            ├── xpp-best-practice-rules.md
+            ├── form-pattern-scaffolding.md
+            ├── table-scaffolding.md
+            ├── data-entity-scaffolding.md
+            ├── event-handler-authoring.md
+            ├── object-extension-authoring.md
+            ├── security-hierarchy-trace.md
+            ├── sysoperation-batch-patterns.md
+            ├── business-events-authoring.md
+            ├── custom-service-authoring.md
+            ├── integration-patterns.md
+            ├── label-translation.md
+            ├── model-dependency-and-coupling.md
+            └── review-and-checkpoint-workflow.md
+```
+
+**Legacy path (pre-skill format):** If you previously used `copilot-instructions.md` + `instructions/*.instructions.md`, you can migrate by running the installer and then removing the old files:
+
+```powershell
+Remove-Item "<XppRepo>\.github\copilot-instructions.md" -ErrorAction SilentlyContinue
+Remove-Item "<XppRepo>\.github\instructions" -Recurse -ErrorAction SilentlyContinue
+```
+
+The legacy `skills/copilot/*.instructions.md` output is still emitted by `emit-skills.ps1` / `emit-skills.py` for environments that cannot use the `.github/skills/` format (e.g. GitHub Copilot versions that predate skill auto-discovery).
 
 ### Claude Code / Claude Desktop
 

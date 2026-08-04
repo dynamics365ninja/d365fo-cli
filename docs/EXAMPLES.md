@@ -641,12 +641,11 @@ d365fo agent-prompt --out .prompts/d365fo.md
 
 ### GitHub Copilot (VS Code / Visual Studio)
 
-```sh
-cp skills/copilot/* .github/instructions/
-d365fo agent-prompt --out .github/copilot-instructions.md
+```powershell
+.\scripts\Install-D365FoCopilotSkills.ps1 -XppRepo "K:\D365FO\MyProject"
 ```
 
-Copilot picks up `.github/instructions/*.instructions.md` via `applyTo` globs and drives `d365fo` through its terminal tool.
+Copilot auto-discovers `.github/skills/d365fo-cli/` and loads the skill on demand — no extra configuration needed. It drives `d365fo` through its terminal tool.
 
 ### Claude Code / Claude Desktop
 
