@@ -1,16 +1,22 @@
 <#
 .SYNOPSIS
-    Deploys d365fo Copilot Skills and the X++ rule canon to an X++ project repo.
+    Deploys the d365fo-cli Copilot Skill to an X++ project repo.
 
 .DESCRIPTION
-    Copies:
-      - .github/copilot-instructions.md  (full X++ / CoC / BP rule canon)
-      - .github/instructions/*.instructions.md  (15 topic Skills)
-    from this d365fo-cli clone into the target X++ project repository so that
-    GitHub Copilot in Visual Studio 2022 / 2026 has the D365FO rule canon in
-    scope without manual setup.
+    Copies the bundled `d365fo-cli` Copilot skill folder:
+      - skills/d365fo-cli/SKILL.md            (main rule canon + tool mapping)
+      - skills/d365fo-cli/resources/*.md      (19 lazily-loaded X++ topic files)
+    into <XppRepo>/.github/skills/d365fo-cli/ so that GitHub Copilot in
+    Visual Studio 2022 / 2026 (and VS Code) automatically picks up the skill.
 
-    Re-run after pulling updates to d365fo-cli to keep Skills current.
+    If the skill folder's resources/ is empty (first run or clean clone), this
+    script re-runs emit-skills.ps1 to regenerate them before copying.
+
+    Re-run after pulling updates to d365fo-cli to keep the skill current.
+
+    Legacy note: previous versions deployed .github/copilot-instructions.md and
+    .github/instructions/*.instructions.md. Those files are no longer needed. If
+    they exist in your X++ repo you can safely delete them.
 
 .PARAMETER CliRepo
     Absolute path to your d365fo-cli clone.
@@ -33,7 +39,7 @@
     After running, commit .github/ in your X++ repo so teammates get the same
     Copilot context automatically:
         git add .github/
-        git commit -m "chore: add d365fo Copilot skills"
+        git commit -m "chore: add d365fo Copilot skill"
 #>
 
 [CmdletBinding()]
@@ -46,10 +52,9 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
 # ── Resolve paths ──────────────────────────────────────────────────────────────
-$skillsSrc  = Join-Path $CliRepo 'skills\copilot'
-$canonSrc   = Join-Path $CliRepo '.github\copilot-instructions.md'
-$dstRoot    = Join-Path $XppRepo '.github'
-$dstInstr   = Join-Path $dstRoot 'instructions'
+$skillSrc    = Join-Path $CliRepo 'skills\d365fo-cli'
+$resourceSrc = Join-Path $skillSrc 'resources'
+$dstSkill    = Join-Path $XppRepo '.github\skills\d365fo-cli'
 
 Write-Host "d365fo-cli repo : $CliRepo"
 Write-Host "X++ project repo: $XppRepo"
@@ -63,49 +68,60 @@ if (-not (Test-Path $XppRepo)) {
     Write-Error "XppRepo not found: $XppRepo"
 }
 
-# ── Regenerate Skills if the source folder is stale ───────────────────────────
-$skillFiles = Get-ChildItem -Path $skillsSrc -Filter '*.instructions.md' -ErrorAction SilentlyContinue
-if ($skillFiles.Count -eq 0) {
-    Write-Warning "No *.instructions.md found in $skillsSrc - running emit-skills.py first..."
-    $py = Get-Command python -ErrorAction SilentlyContinue
-    if (-not $py) { $py = Get-Command python3 -ErrorAction SilentlyContinue }
-    if ($py) {
-        & $py.Source (Join-Path $CliRepo 'scripts\emit-skills.py') `
-              --source (Join-Path $CliRepo 'skills\_source') `
-              --out-root (Join-Path $CliRepo 'skills')
-        $skillFiles = Get-ChildItem -Path $skillsSrc -Filter '*.instructions.md'
+# ── Regenerate resources if the folder is empty (first run / clean clone) ─────
+$resourceFiles = Get-ChildItem -Path $resourceSrc -Filter '*.md' -ErrorAction SilentlyContinue
+if ($resourceFiles.Count -eq 0) {
+    Write-Warning "No resource files found in $resourceSrc — running emit-skills.ps1 first..."
+    $emitScript = Join-Path $CliRepo 'scripts\emit-skills.ps1'
+    if (Test-Path $emitScript) {
+        & pwsh -NoProfile -File $emitScript
+        $resourceFiles = Get-ChildItem -Path $resourceSrc -Filter '*.md' -ErrorAction SilentlyContinue
     } else {
-        Write-Warning "Python not found. Run 'python scripts/emit-skills.py' manually in the d365fo-cli repo, then re-run this script."
+        Write-Warning "emit-skills.ps1 not found at: $emitScript — run it manually, then re-run this script."
     }
 }
 
 # ── Create target directories ─────────────────────────────────────────────────
-New-Item -ItemType Directory -Force -Path $dstRoot  | Out-Null
-New-Item -ItemType Directory -Force -Path $dstInstr | Out-Null
+New-Item -ItemType Directory -Force -Path $dstSkill | Out-Null
+New-Item -ItemType Directory -Force -Path (Join-Path $dstSkill 'resources') | Out-Null
 
-# ── Copy X++ rule canon ────────────────────────────────────────────────────────
-if (Test-Path $canonSrc) {
-    Copy-Item -Path $canonSrc -Destination $dstRoot -Force
-    Write-Host "[OK] copilot-instructions.md"
+# ── Copy SKILL.md ─────────────────────────────────────────────────────────────
+$skillMd = Join-Path $skillSrc 'SKILL.md'
+if (Test-Path $skillMd) {
+    Copy-Item -Path $skillMd -Destination $dstSkill -Force
+    Write-Host "[OK] .github\skills\d365fo-cli\SKILL.md"
 } else {
-    Write-Warning "copilot-instructions.md not found at: $canonSrc"
+    Write-Warning "SKILL.md not found at: $skillMd"
 }
 
-# ── Copy Skills ────────────────────────────────────────────────────────────────
+# ── Copy resources ────────────────────────────────────────────────────────────
 $copied = 0
-foreach ($f in $skillFiles) {
-    Copy-Item -Path $f.FullName -Destination $dstInstr -Force
-    Write-Host "[OK] instructions\$($f.Name)"
+foreach ($f in $resourceFiles) {
+    Copy-Item -Path $f.FullName -Destination (Join-Path $dstSkill 'resources') -Force
+    Write-Host "[OK] .github\skills\d365fo-cli\resources\$($f.Name)"
     $copied++
+}
+
+# ── Migration notice ──────────────────────────────────────────────────────────
+$legacyCanon   = Join-Path $XppRepo '.github\copilot-instructions.md'
+$legacyInstrDir = Join-Path $XppRepo '.github\instructions'
+if ((Test-Path $legacyCanon) -or (Test-Path $legacyInstrDir)) {
+    Write-Host ""
+    Write-Host "⚠  Legacy files detected in your X++ repo:"
+    if (Test-Path $legacyCanon)   { Write-Host "     .github\copilot-instructions.md" }
+    if (Test-Path $legacyInstrDir) { Write-Host "     .github\instructions\" }
+    Write-Host "   These are superseded by the d365fo-cli skill and can be safely deleted:"
+    Write-Host "     Remove-Item -Recurse '$legacyCanon' -ErrorAction SilentlyContinue"
+    Write-Host "     Remove-Item -Recurse '$legacyInstrDir' -ErrorAction SilentlyContinue"
 }
 
 # ── Summary ───────────────────────────────────────────────────────────────────
 Write-Host ""
-Write-Host "Deployed $copied skill(s) + copilot-instructions.md to:"
-Write-Host "  $dstRoot"
+Write-Host "Deployed SKILL.md + $copied resource(s) to:"
+Write-Host "  $dstSkill"
 Write-Host ""
 Write-Host "Next steps:"
-Write-Host "  1. Restart Visual Studio to pick up the new instructions."
+Write-Host "  1. Restart Visual Studio / VS Code to pick up the new skill."
 Write-Host "  2. Commit .github/ in your X++ project:"
 Write-Host "       git -C `"$XppRepo`" add .github/"
-Write-Host "       git -C `"$XppRepo`" commit -m `"chore: add d365fo Copilot skills`""
+Write-Host "       git -C `"$XppRepo`" commit -m `"chore: add d365fo Copilot skill`""

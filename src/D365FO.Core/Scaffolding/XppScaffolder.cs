@@ -126,20 +126,48 @@ public static class XppScaffolder
                 // predictable physical ordering (validate xpp XML005).
                 indexesEl is null ? null : new XElement("ClusteredIndex", "PrimaryIdx"),
                 new XElement("Fields", fieldEls),
-                // "Overview" and "General" are referenced by <DataGroup> in every
-                // generated form pattern (SimpleList, SimpleListDetails,
-                // DetailsMaster, DetailsTransaction) — the metadata reader
+                // Visual Studio / the AOT stamps every new table with five default
+                // field groups, all initially empty (issue #110). Ground-truthed
+                // against shipped standard-model tables on a real AOS
+                // (e.g. ApplicationCommon\AgentFeedUserPreference.xml,
+                // ApplicationSuite\Foundation\AssetAddition.xml): VS does NOT
+                // auto-populate AutoReport (or any of the five) with fields, even
+                // once the table has real fields — the developer assigns them
+                // later in the AOT designer. AutoIdentification is the only one
+                // that carries a property, <AutoPopulate>Yes</AutoPopulate>. We
+                // match that shape exactly instead of pre-populating AutoReport.
+                //
+                // "Overview" and "General" are NOT part of the AOT default
+                // scaffold — they exist here only because this CLI's own
+                // generated forms need them: every form pattern (SimpleList,
+                // SimpleListDetails, DetailsMaster, DetailsTransaction)
+                // references them via <DataGroup>, and the metadata reader
                 // rejects the form with "Field group 'Overview' does not exist"
-                // when the underlying table lacks them (issue #91 follow-up).
-                // AutoReport is the standard AX lookup/report group. All three
-                // are populated with every effective field so any pattern's
-                // grid/group controls resolve.
+                // when the underlying table lacks them (issue #91 follow-up). They
+                // are populated with every effective field so the grid/group
+                // controls resolve.
                 new XElement("FieldGroups",
-                    BuildFieldGroup("AutoReport", effectiveFields),
+                    BuildEmptyFieldGroup("AutoReport"),
+                    BuildEmptyFieldGroup("AutoLookup"),
+                    BuildEmptyFieldGroup("AutoIdentification", autoPopulate: true),
+                    BuildEmptyFieldGroup("AutoSummary"),
+                    BuildEmptyFieldGroup("AutoBrowse"),
                     BuildFieldGroup("Overview", effectiveFields),
                     BuildFieldGroup("General", effectiveFields)),
                 indexesEl));
     }
+
+    /// <summary>
+    /// Builds one of the five default, initially-empty <c>AxTableFieldGroup</c>
+    /// elements VS/AOT stamps on every new table (AutoReport, AutoLookup,
+    /// AutoIdentification, AutoSummary, AutoBrowse). Only AutoIdentification
+    /// carries <c>AutoPopulate</c>.
+    /// </summary>
+    private static XElement BuildEmptyFieldGroup(string name, bool autoPopulate = false) =>
+        new XElement("AxTableFieldGroup",
+            new XElement("Name", name),
+            autoPopulate ? new XElement("AutoPopulate", "Yes") : null,
+            new XElement("Fields"));
 
     private static XElement BuildFieldGroup(string name, IReadOnlyList<TableFieldSpec> fields) =>
         new XElement("AxTableFieldGroup",
@@ -970,6 +998,10 @@ public static class XppScaffolder
         // the root element (it is emitted by Visual Studio on every AxEnum file). IsExtensible
         // is a CLR bool, so the DataContractSerializer expects "true"/"false" — the NoYes-style
         // "Yes"/"No" written previously produced an invalid file VS refused to read.
+        // VS's build-time validation additionally rejects IsExtensible=true unless
+        // UseEnumValue is explicitly "No" ("UseEnumValue property must be set to 'No' when
+        // the IsExtensible property is 'True'."). UseEnumValue is itself a NoYes-style enum
+        // property (unlike IsExtensible), so it takes "Yes"/"No", not "true"/"false".
         XNamespace xsi = "http://www.w3.org/2001/XMLSchema-instance";
         return new XDocument(
             new XElement("AxEnum",
@@ -977,6 +1009,7 @@ public static class XppScaffolder
                 new XElement("Name", name),
                 string.IsNullOrEmpty(label) ? null : new XElement("Label", label),
                 new XElement("IsExtensible", isExtensible ? "true" : "false"),
+                isExtensible ? new XElement("UseEnumValue", "No") : null,
                 enumVals.Count > 0 ? new XElement("EnumValues", valEls) : null));
     }
 

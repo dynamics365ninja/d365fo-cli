@@ -35,9 +35,12 @@ d365fo labels create "@FleetManagement:VehicleVin" "VIN" \
 
 - The `<KEY>` form `@File:Key` must match the target `.label.txt` filename
   (`@FleetManagement:VehicleVin` → `FleetManagement.label.txt`).
-- `--lang` is required when the file does not embed a single language stem
-  (`FleetManagement.en-us.label.txt`).
-- The CLI writes atomically (`.tmp` + move; `.bak` retained on overwrite).
+- `--lang` only affects path resolution when using `--install-to <MODEL>`; it
+  has no effect when `--file` is given directly — pass the full path to the
+  target `<Name>.<lang>.label.txt` file yourself.
+- The CLI writes atomically (`.tmp` + move; `.bak` retained whenever the
+  target file already existed, on both first-write-to-existing-file and
+  `--overwrite`).
 
 ## 3. Rename a label key (refactor across the model)
 
@@ -76,5 +79,9 @@ d365fo labels delete @FleetManagement:DeprecatedKey --file <path>.label.txt
 ## EDT-label inheritance — exception
 
 When adding a field whose EDT already carries a `Label`, do **NOT** create
-a new label or pass `--label` on the field — the field inherits the EDT
-caption. Only override when the table needs a different caption deliberately.
+a new label for it — an `AxTableField` with no `<Label>` element inherits
+the EDT's caption at runtime. `d365fo generate table --field <name>:<edt>`
+never emits a per-field `<Label>` (there is no per-field `--label` option
+today — `--label` on `generate table` sets the *table's* caption, not a
+field's). Only add a table-level `--label`/field-level label override when
+the table or field needs a caption different from the EDT's.

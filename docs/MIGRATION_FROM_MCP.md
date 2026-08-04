@@ -35,13 +35,13 @@ Be aware of the cost: keeping MCP registered injects its full schema overhead (~
 
 ### Path A — side-by-side operation (mixed environments / migration)
 
-The existing `.mcp.json` and `copilot-instructions.md` stay unchanged. The CLI is added alongside:
+The existing `.mcp.json` stays unchanged. The CLI is added alongside:
 
 1. Build and deploy the CLI — see [SETUP.md](SETUP.md).
-2. Copy `skills/copilot/*.instructions.md` to `.github/instructions/` in your X++ project.
+2. Run `scripts/Install-D365FoCopilotSkills.ps1 -XppRepo <your-xpp-repo>` to deploy the `d365fo-cli` Copilot skill.
 3. Copilot automatically uses the shell tool for CLI commands and MCP for tool calls — both from the same index.
 
-> **Heads-up — `copilot-instructions.md` collision.** The per-topic skills in `.github/instructions/*.instructions.md` have unique filenames and coexist fine. But both the CLI and `d365fo-mcp-server` ship a top-level `.github/copilot-instructions.md` and install it with `Copy-Item -Force`, so it's last-installer-wins, not a merge — re-running the other installer clobbers it again. Keep **one** canon file: the CLI's, which is the schema-v5 superset and already documents the shell-first flow plus a no-shell fallback. You don't need the MCP server's instruction file for its tools to work — MCP tools are registered via `.mcp.json` and their schemas are self-describing; the instruction file only guides behaviour, it doesn't enable the tools.
+> **Heads-up — conflict with old MCP instruction files.** If you previously deployed `.github/copilot-instructions.md` from `d365fo-mcp-server`, remove it — the new `d365fo-cli` Copilot skill supersedes it. The skill format avoids the file collision: `.github/skills/d365fo-cli/` coexists with any other skills without clobbering.
 
 ### Path B — CLI only
 

@@ -23,7 +23,10 @@ d365fo search edt  <Edt>        --output json    # for any EDT mappings
 ## Scaffolding
 
 ```sh
-# Minimal — exposes one table; OData names default to <Name>Entity / <Name>Entities
+# Minimal — without --public-entity/--public-collection, PublicEntityName
+# defaults to the literal ENTITY argument and PublicCollectionName to
+# ENTITY + "s" (naive pluralization, e.g. FmVehicleEntity / FmVehicleEntitys) —
+# always pass both explicitly for clean OData names.
 d365fo generate entity FmVehicleEntity \
     --table FmVehicle \
     --all-fields \
@@ -33,13 +36,14 @@ d365fo generate entity FmVehicleEntity \
 d365fo generate entity FmVehicleEntity \
     --table FmVehicle \
     --field VIN --field Make --field Year \
-    --public-entity-name FleetVehicle \
-    --public-collection-name FleetVehicles \
+    --public-entity FleetVehicle \
+    --public-collection FleetVehicles \
     --install-to FleetManagement
 ```
 
-The CLI returns `{path, bytes, backup, fieldCount, publicEntityName,
-publicCollectionName}`. Never request the full XML back.
+The CLI returns `{kind, name, table, path, bytes, fieldCount, fieldsFromTable}`
+(plus `backup` when `--overwrite` replaces an existing file). Never request
+the full XML back.
 
 ## OData naming conventions (D365FO)
 

@@ -337,6 +337,31 @@ public class ScaffoldingSnapshotTests
         Assert.Equal("1", items[1].Element("Value")!.Value);
     }
 
+    [Fact]
+    public void Enum_extensible_sets_UseEnumValue_No()
+    {
+        // VS build validation: "UseEnumValue property must be set to 'No' when the
+        // IsExtensible property is 'True'." UseEnumValue is a NoYes-style enum property
+        // (unlike the CLR-bool IsExtensible), so it takes "Yes"/"No", not "true"/"false".
+        var vals = new[] { new EnumValueSpec("Draft", 0), new EnumValueSpec("Validated", 1), new EnumValueSpec("Completed", 2) };
+        var doc = XppScaffolder.Enum("MyEnumStatusType", vals, isExtensible: true, label: "test status");
+        var root = doc.Root!;
+        Assert.Equal("true", root.Element("IsExtensible")!.Value);
+        Assert.Equal("No", root.Element("UseEnumValue")!.Value);
+    }
+
+    [Fact]
+    public void Enum_non_extensible_does_not_emit_UseEnumValue()
+    {
+        // UseEnumValue is only forced when IsExtensible=true; a non-extensible enum has no
+        // build-rule requiring it, so the element is omitted (VS defaults it to Yes).
+        var vals = new[] { new EnumValueSpec("None", 0) };
+        var doc = XppScaffolder.Enum("MyEnum", vals, isExtensible: false);
+        var root = doc.Root!;
+        Assert.Equal("false", root.Element("IsExtensible")!.Value);
+        Assert.Null(root.Element("UseEnumValue"));
+    }
+
     // ---- Query (Phase 2) ----
 
     [Fact]
@@ -439,6 +464,176 @@ public class ScaffoldingSnapshotTests
         Assert.Contains(methods, m => m.Element("Name")!.Value == "lookupVendor");
         var lookupSrc = methods.First(m => m.Element("Name")!.Value == "lookupVendor").Element("Source")!.Value;
         Assert.DoesNotContain("[SysEntryPointAttribute", lookupSrc);
+    }
+
+    // ---- SysTest (issue #107) ----
+
+    [Fact]
+    public void SysTest_extends_SysTestCase_and_emits_default_test_method()
+    {
+        var doc = SysTestScaffolder.TestClass("CustServiceTest");
+        var root = doc.Root!;
+        Assert.Equal("AxClass", root.Name.LocalName);
+        Assert.Equal("CustServiceTest", root.Element("Name")!.Value);
+        Assert.Equal("SysTestCase", root.Element("Extends")!.Value);
+
+        var decl = root.Element("SourceCode")!.Element("Declaration")!.Value;
+        Assert.Contains("public class CustServiceTest extends SysTestCase", decl);
+        Assert.DoesNotContain("SysTestCaseDataDependency", decl);
+        Assert.DoesNotContain("AtlDataRootNode", decl);
+
+        var methods = root.Element("SourceCode")!.Element("Methods")!.Elements("Method").ToList();
+        var testMethod = Assert.Single(methods);
+        Assert.Equal("subject_scenario_expectedResult", testMethod.Element("Name")!.Value);
+        var src = testMethod.Element("Source")!.Value;
+        Assert.Contains("[SysTestMethod]", src);
+        Assert.Contains("// Arrange", src);
+        Assert.Contains("// Act", src);
+        Assert.Contains("// Assert", src);
+    }
+
+    [Fact]
+    public void SysTest_data_area_id_emits_SysTestCaseDataDependency_attribute()
+    {
+        var doc = SysTestScaffolder.TestClass("CustServiceTest", dataAreaId: "USMF");
+        var decl = doc.Root!.Element("SourceCode")!.Element("Declaration")!.Value;
+        Assert.Contains("[SysTestCaseDataDependency('USMF')]", decl);
+    }
+
+    [Fact]
+    public void SysTest_without_data_area_id_omits_attribute_entirely()
+    {
+        var doc = SysTestScaffolder.TestClass("CustServiceTest");
+        var decl = doc.Root!.Element("SourceCode")!.Element("Declaration")!.Value;
+        Assert.DoesNotContain("SysTestCaseDataDependency", decl);
+    }
+
+    [Fact]
+    public void SysTest_atl_adds_field_and_setUpTestCase_calling_super_first()
+    {
+        var doc = SysTestScaffolder.TestClass("CustServiceTest", atl: true);
+        var decl = doc.Root!.Element("SourceCode")!.Element("Declaration")!.Value;
+        Assert.Contains("AtlDataRootNode data;", decl);
+
+        var methods = doc.Root.Element("SourceCode")!.Element("Methods")!.Elements("Method").ToList();
+        var setUp = methods.First(m => m.Element("Name")!.Value == "setUpTestCase");
+        var src = setUp.Element("Source")!.Value;
+        Assert.True(src.IndexOf("super();", StringComparison.Ordinal) < src.IndexOf("AtlDataRootNode::construct();", StringComparison.Ordinal),
+            "super() must be called before AtlDataRootNode::construct()");
+    }
+
+    [Fact]
+    public void SysTest_without_atl_has_no_field_or_setUpTestCase()
+    {
+        var doc = SysTestScaffolder.TestClass("CustServiceTest", atl: false);
+        var decl = doc.Root!.Element("SourceCode")!.Element("Declaration")!.Value;
+        Assert.DoesNotContain("AtlDataRootNode", decl);
+
+        var methods = doc.Root.Element("SourceCode")!.Element("Methods")!.Elements("Method");
+        Assert.DoesNotContain(methods, m => m.Element("Name")!.Value == "setUpTestCase");
+    }
+
+    [Fact]
+    public void SysTest_subject_from_resolved_method_names_the_test_method()
+    {
+        var doc = SysTestScaffolder.TestClass("CustServiceCreateCustomerTest", subject: "createCustomer");
+        var methods = doc.Root!.Element("SourceCode")!.Element("Methods")!.Elements("Method").ToList();
+        var testMethod = Assert.Single(methods);
+        Assert.Equal("createCustomer_scenario_expectedResult", testMethod.Element("Name")!.Value);
+    }
+
+    [Fact]
+    public void GenerateSysTestCommand_class_not_found_fails_with_clear_error()
+    {
+        var outPath = System.IO.Path.Combine(System.IO.Path.GetTempPath(), $"d365fo-cli-test-systest-{System.Guid.NewGuid():N}.xml");
+        var cmd = new GenerateSysTestCommand();
+        var settings = new GenerateSysTestCommand.Settings
+        {
+            Name = "CustServiceTest",
+            Class = "ThisClassDoesNotExistAnywhere",
+            Out = outPath,
+            Overwrite = true,
+        };
+
+        var oldDb = System.Environment.GetEnvironmentVariable("D365FO_INDEX_DB");
+        var forcedMissingDb = System.IO.Path.Combine(System.IO.Path.GetTempPath(), $"d365fo-cli-missing-{System.Guid.NewGuid():N}.sqlite");
+        if (System.IO.File.Exists(forcedMissingDb)) System.IO.File.Delete(forcedMissingDb);
+
+        try
+        {
+            System.Environment.SetEnvironmentVariable("D365FO_INDEX_DB", forcedMissingDb);
+            var exit = cmd.Execute(null!, settings);
+            Assert.Equal(1, exit);
+            Assert.False(System.IO.File.Exists(outPath));
+        }
+        finally
+        {
+            System.Environment.SetEnvironmentVariable("D365FO_INDEX_DB", oldDb);
+            if (System.IO.File.Exists(outPath)) System.IO.File.Delete(outPath);
+        }
+    }
+
+    [Fact]
+    public void GenerateSysTestCommand_class_and_table_together_is_rejected()
+    {
+        var cmd = new GenerateSysTestCommand();
+        var settings = new GenerateSysTestCommand.Settings
+        {
+            Name = "CustServiceTest",
+            Class = "CustService",
+            Table = "CustTable",
+            Out = System.IO.Path.Combine(System.IO.Path.GetTempPath(), $"d365fo-cli-test-systest-{System.Guid.NewGuid():N}.xml"),
+        };
+        var exit = cmd.Execute(null!, settings);
+        Assert.Equal(1, exit);
+    }
+
+    [Fact]
+    public void GenerateSysTestCommand_method_without_class_or_table_is_rejected()
+    {
+        var cmd = new GenerateSysTestCommand();
+        var settings = new GenerateSysTestCommand.Settings
+        {
+            Name = "CustServiceTest",
+            Method = "createCustomer",
+            Out = System.IO.Path.Combine(System.IO.Path.GetTempPath(), $"d365fo-cli-test-systest-{System.Guid.NewGuid():N}.xml"),
+        };
+        var exit = cmd.Execute(null!, settings);
+        Assert.Equal(1, exit);
+    }
+
+    [Fact]
+    public void GenerateSysTestCommand_writes_file_and_reports_extends_SysTestCase()
+    {
+        var outPath = System.IO.Path.Combine(System.IO.Path.GetTempPath(), $"d365fo-cli-test-systest-{System.Guid.NewGuid():N}.xml");
+        if (System.IO.File.Exists(outPath)) System.IO.File.Delete(outPath);
+
+        var cmd = new GenerateSysTestCommand();
+        var settings = new GenerateSysTestCommand.Settings
+        {
+            Name = "CustServiceTest",
+            DataAreaId = "USMF",
+            Atl = true,
+            Out = outPath,
+            Overwrite = true,
+        };
+
+        try
+        {
+            var exit = cmd.Execute(null!, settings);
+            Assert.Equal(0, exit);
+
+            var doc = XDocument.Load(outPath);
+            Assert.Equal("AxClass", doc.Root!.Name.LocalName);
+            Assert.Equal("SysTestCase", doc.Root.Element("Extends")!.Value);
+            var decl = doc.Root.Element("SourceCode")!.Element("Declaration")!.Value;
+            Assert.Contains("[SysTestCaseDataDependency('USMF')]", decl);
+            Assert.Contains("AtlDataRootNode data;", decl);
+        }
+        finally
+        {
+            if (System.IO.File.Exists(outPath)) System.IO.File.Delete(outPath);
+        }
     }
 
     // ---- MenuItem (issue #102) ----

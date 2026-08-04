@@ -15,7 +15,7 @@ applyTo: '**/AxDataEntityView/**,**/AxService/**,**/AxServiceGroup/**,**/*Entity
 
 | Pattern | Direction | Latency | Volume | Entry point |
 |---------|-----------|---------|--------|-------------|
-| **OData REST API** | In + Out | Synchronous, real-time | Record-level | `data/<EntityName>` endpoint |
+| **OData REST API** | In + Out | Synchronous, real-time | Record-level | `data/<PublicCollectionName>` endpoint |
 | **Custom Services** | In | Synchronous | Operation-level | SOAP + JSON REST endpoint |
 | **Data Management Framework (DMF)** | In + Out | Async batch | Bulk | Import/export jobs, staging tables |
 | **Business Events** | Out | Near-real-time | Event-driven | Service Bus, Event Grid, Power Automate, Logic Apps |
@@ -26,11 +26,11 @@ applyTo: '**/AxDataEntityView/**,**/AxService/**,**/AxServiceGroup/**,**/*Entity
 
 **Purpose:** real-time synchronous CRUD from external systems — Power Platform, Logic Apps, third-party ERPs.
 
-**Endpoint:** `https://{env}.cloudax.dynamics.com/data/{PublicEntityName}`
+**Endpoint:** `https://{env}.cloudax.dynamics.com/data/{PublicCollectionName}`
 
 **Requirements for a working OData entity:**
 
-- `EnablePublicAPI = Yes` on the `AxDataEntityView`
+- `IsPublic = Yes` on the `AxDataEntityView`
 - A unique `PublicEntityName` (the OData entity type) and `PublicCollectionName` (the collection URL segment)
 - At least one key field with `AlternateKey = Yes` on a unique index
 - All mandatory fields mapped in the entity
@@ -50,7 +50,7 @@ d365fo get table <SourceTable> --output json | jq '.data.indexes[] | select(.alt
 # 4. Scaffold a new entity if needed
 d365fo generate entity <Name> --table <T> \
   --all-fields \
-  --public-entity-name <Singular> --public-collection-name <Plural> \
+  --public-entity <Singular> --public-collection <Plural> \
   --out c:/AOT/MyModel/AxDataEntityView/<Name>.xml
 ```
 
@@ -111,8 +111,8 @@ d365fo generate custom-service <Name> \
 
 **Requirements for DMF-capable entity:**
 
-- `EnableDataManagementCapabilities = Yes` on the `AxDataEntityView`
-- A staging table (`StagingTable` property set)
+- `DataManagementEnabled = Yes` on the `AxDataEntityView`
+- A staging table (`DataManagementStagingTable` property set)
 - Change tracking support (for incremental export)
 
 **CLI workflow:**
@@ -121,12 +121,12 @@ d365fo generate custom-service <Name> \
 # 1. Find the entity
 d365fo search entity <Name> --output json
 
-# 2. Check DMF capability and staging table presence
-d365fo get entity <Name> --output json | jq '{enableDMF: .data.enableDataManagementCapabilities, stagingTable: .data.stagingTable}'
+# 2. Check staging table presence (a non-empty value implies DMF is wired up)
+d365fo get entity <Name> --output json | jq '.data.entity.stagingTable'
 
 # 3. Scaffold a DMF-capable entity (staging table must be created separately)
-d365fo generate entity <Name> --table <T> --all-fields --out …
-# Then hand-edit to set EnableDataManagementCapabilities + StagingTable
+d365fo generate entity <Name> --table <T> --all-fields \
+  --data-management --staging-table <Name>Staging --out …
 ```
 
 **Notes:**
