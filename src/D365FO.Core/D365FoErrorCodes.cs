@@ -55,4 +55,9 @@ public static class D365FoErrorCodes
 
     // MCP dispatcher
     public const string UnknownTool = "UNKNOWN_TOOL";
+
+    // MCP HTTP transport
+    public const string Unauthorized = "UNAUTHORIZED";
+    public const string ModeNotAllowed = "MODE_NOT_ALLOWED";
+    public const string RateLimited = "RATE_LIMITED";
 }
