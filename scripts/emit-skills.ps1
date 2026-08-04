@@ -21,11 +21,12 @@
 #>
 [CmdletBinding()]
 param(
-    [string]$Source  = (Join-Path $PSScriptRoot '..' 'skills' '_source'),
-    [string]$OutRoot = (Join-Path $PSScriptRoot '..' 'skills')
+    [string]$Source  = (Join-Path (Join-Path $PSScriptRoot '..') (Join-Path 'skills' '_source')),
+    [string]$OutRoot = (Join-Path $PSScriptRoot (Join-Path '..' 'skills'))
 )
 
 $ErrorActionPreference = 'Stop'
+$Utf8NoBom = [System.Text.UTF8Encoding]::new($false)
 
 function Split-Frontmatter {
     param([string]$Content)
@@ -83,7 +84,7 @@ applyTo: '$glob'
 "@
     $path = Join-Path $OutDir "$id.instructions.md"
     New-Item -ItemType Directory -Force -Path (Split-Path $path) | Out-Null
-    Set-Content -Path $path -Value "$fm`n$Body" -Encoding utf8 -NoNewline
+    [System.IO.File]::WriteAllText($path, "$fm`n$Body", $Utf8NoBom)
     Write-Host "  [copilot]   $path"
 }
 
@@ -106,7 +107,7 @@ description: $desc
     $dir = Join-Path $OutDir $id
     New-Item -ItemType Directory -Force -Path $dir | Out-Null
     $path = Join-Path $dir 'SKILL.md'
-    Set-Content -Path $path -Value "$fm`n$Body" -Encoding utf8 -NoNewline
+    [System.IO.File]::WriteAllText($path, "$fm`n$Body", $Utf8NoBom)
     Write-Host "  [anthropic] $path"
 }
 
@@ -122,7 +123,7 @@ if ($files.Count -eq 0) { Write-Warning "No source skills found."; exit 0 }
 
 foreach ($f in $files) {
     Write-Host "» $($f.Name)"
-    $raw = Get-Content -Raw -Path $f.FullName
+    $raw = [System.IO.File]::ReadAllText($f.FullName, [System.Text.Encoding]::UTF8)
     $split = Split-Frontmatter -Content $raw
     $meta = Parse-Yaml -Text $split.Frontmatter
     if (-not $meta.id)          { throw "Missing 'id' in $($f.Name)." }

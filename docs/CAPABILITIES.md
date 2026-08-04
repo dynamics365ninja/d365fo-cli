@@ -188,6 +188,7 @@ All scaffolders write atomically (`.tmp` + move, `.bak` on overwrite). Pass `--i
 | `generate custom-service` | `AxService` + service class + `AxServiceGroup` |
 | `generate runbase` | `RunBase` / `RunBaseBatch` skeleton with dialog parameters |
 | `generate security-policy` | `AxSecurityPolicy` (XDS row-level security) |
+| `generate systest` | `SysTestCase` skeleton — `[SysTestMethod]` Arrange/Act/Assert stub, optional `[SysTestCaseDataDependency]` and `--atl` `AtlDataRootNode` wiring (ATL-ready MVP, no test-logic generation) |
 | `generate migration-script` | Data-fix `Runnable` class with `ttsbegin`/`ttscommit` batching |
 | `generate simple-list` | Alias for `generate form --pattern SimpleList` |
 

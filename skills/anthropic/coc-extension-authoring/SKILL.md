@@ -22,7 +22,7 @@ strategy, and a **grounding token**. Do NOT issue separate `get class` /
 
 If `existingCocExtensions` is non-empty, enumerate them to the user and stop before writing another wrapper. Stacking duplicates risks ordering bugs.
 
-Pass the token to the generator: `d365fo generate coc <TargetClass> --method <method> --install-to <Model> --grounding-token <token>`. For any hand-written wrapper body, run `d365fo validate references --file <f>` + `d365fo validate xpp --file <f>` BEFORE writing — exit code 2 means hallucinated symbols / BP errors to fix first.
+Pass the token to the generator: `d365fo generate coc <TargetClass> --method <method> --install-to <Model> --grounding-token <token>`. For any hand-written wrapper body, run `d365fo validate references <f>` + `d365fo validate xpp <f>` BEFORE writing (the file is a positional argument, not `--file`; omit it to read from stdin) — exit code 2 means hallucinated symbols / BP errors to fix first.
 
 Fallback (prepare unavailable): `d365fo get class <TargetClass>` + `d365fo find coc <TargetClass>::<method>`.
 
