@@ -17,3 +17,6 @@ memory/
 
 # Upstream porting scratch (TS sources exported from d365fo-mcp-server)
 .porting/
+
+# Agent workflow scratch worktrees
+.claude/worktrees/
