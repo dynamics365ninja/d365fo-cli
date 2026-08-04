@@ -1,7 +1,7 @@
 ---
 name: model-dependency-and-coupling
 description: Inspect indexed D365FO models, their declared dependencies, and architectural coupling metrics (fan-in, fan-out, instability, cycles). Use when the user asks "what models depend on X", "is there a cycle", "what's the layer of model Y", or "show coupling".
-applies_when: User intent mentions model dependencies, layer (sys/syp/isv/iss/cus/cup/usr/usp), coupling, fan-in / fan-out / instability metrics, or "which model contains object X".
+applies_when: User intent mentions model dependencies, layer (sys/syp/cus/var/isv/usr, incl. patch layers), coupling, fan-in / fan-out / instability metrics, or "which model contains object X".
 ---
 > ⛔ **NEVER write X++ AOT XML files directly** via PowerShell, terminal file commands (`Set-Content`, `Out-File`, `New-Item`), editor write tools, or any raw text approach. The XML schema (`<AxClass>`, `<AxTable>`, `<AxForm>`, `<Methods>`, `<SourceCode>`) is proprietary — LLMs have not been trained on it reliably. **ALWAYS use `d365fo generate …` commands** to produce correct AOT XML. If `d365fo` is unavailable in PATH, stop and ask the user to install it.
 
@@ -21,7 +21,11 @@ d365fo models list --output json
 d365fo models deps FleetManagement --output json
 ```
 
-Output shape: `{name, publisher, layer, version, customizable, dependsOn[], dependedBy[]}`.
+`models list` output shape: `{count, items: [{modelId, name, publisher,
+layer, isCustom}]}` (`publisher`/`layer` are frequently absent — omitted
+when the Descriptor XML didn't populate them). `models deps` output shape:
+`{model: {modelId, name, publisher, layer, isCustom}, dependsOn: string[],
+dependedBy: string[]}`.
 
 ## Coupling metrics
 
@@ -41,8 +45,10 @@ Output highlights:
 
 ## When to invoke
 
-- Before introducing a new dependency: confirm the target model isn't
-  customer-layer (`layer: cus*`) when you're an ISV.
+- Before introducing a new dependency: check `models list`/`models deps` for
+  the target's layer — a model can only *depend on* strictly lower-or-equal
+  layers (e.g. a `cus`-layer model must not depend on an `isv`- or
+  `usr`-layer one).
 - During architectural review: `cycles[]` must be empty; fan-out outliers
   flag candidates for splitting.
 - When CoC / extensions don't take effect: `models deps` reveals if your
@@ -50,10 +56,14 @@ Output highlights:
 
 ## Hard rules
 
-- Never extend / depend on a `cus*` (customer-layer) model from an ISV model
-  — D365FO disallows the upward dependency.
+- Layer ordering (lowest → highest): `sys → syp → gls → glp → dis → dip →
+  cus → cup → var → vap → isv → isp → usr → usp` (each `Descriptor/*.xml`
+  stores the numeric layer id, e.g. `<Layer>8</Layer>` = `var`). Each layer
+  can only consume (depend on) *lower* layers — a `cus`-layer model cannot
+  depend on an `isv`- or `usr`-layer model; the reverse is allowed. In
+  practice most customer extension work happens in `usr` (the highest
+  layer) precisely so it can reference everything below it, including
+  installed ISV solutions.
 - Never introduce a cycle — even a 2-node cycle blocks compilation.
-- Layer ordering (lowest → highest): `sys → syp → isv → iss → cus → cup → usr → usp`.
-  Each layer can only consume *lower* layers.
 - After modifying any `Descriptor/*.xml`, run `d365fo index refresh` so
   subsequent `models deps` / `models coupling` reflects reality.

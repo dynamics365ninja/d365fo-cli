@@ -26,7 +26,7 @@ A custom business event consists of exactly two classes:
    - Implements buildContract() to populate the payload
    - Has a static newFrom<Context>(...) factory
 
-2. Contract class — implements BusinessEventsContract
+2. Contract class — extends BusinessEventsContract
    - Decorated with [DataContractAttribute]
    - One parmXxx() accessor per payload field, decorated with [DataMemberAttribute]
 ```
@@ -70,10 +70,10 @@ d365fo generate business-event CustPaymentBusinessEvent \
 
 ```xpp
 [BusinessEvents(
-    classStr(CustPaymentBusinessEvent),
     classStr(CustPaymentBusinessEventContract),
-    "CustomerPayments",
-    "@MyModel:CustPaymentBusinessEventDescription")]
+    'MyModel:CustPaymentBusinessEventName',
+    'MyModel:CustPaymentBusinessEventDescription',
+    ModuleAxapta::Customer)]
 public final class CustPaymentBusinessEvent extends BusinessEventsBase
 {
     private CustTrans custTrans;
@@ -143,7 +143,7 @@ public final class CustPaymentBusinessEventContract extends BusinessEventsContra
 
 ## Firing the event
 
-Call the static factory from the business process at the right lifecycle point — typically in a table `insert` / `update` override, a posting engine, or a workflow action:
+Call the static factory from the business process at the right lifecycle point — typically in a table `insert` / `update` override, a posting engine, or a workflow action. `BusinessEventsBase` exposes the send operation as a `public final` **instance** method (`send()`), not a static publisher — construct the event, then call `.send()` on it:
 
 ```xpp
 // In CustTrans.insert() CoC or a posting service method:
@@ -155,8 +155,7 @@ final class CustTrans_MyExt
         next insert();
 
         // Fire after successful insert
-        BusinessEventsBase::publish(
-            CustPaymentBusinessEvent::newFromCustTrans(this));
+        CustPaymentBusinessEvent::newFromCustTrans(this).send();
     }
 }
 ```
@@ -178,9 +177,9 @@ After scaffolding and compiling:
 
 ## Hard rules
 
-- **`[BusinessEvents(...)]` must be on the event class declaration** — not on methods. Four arguments: `classStr(EventClass)`, `classStr(ContractClass)`, `"CategoryString"`, `"@File:DescriptionLabel"`.
+- **`[BusinessEvents(...)]` must be on the event class declaration** — not on methods. The `BusinessEventsAttribute` constructor is `new(ClassName _businessEventsContractClassStr, LabelString _nameLabel, LabelString _descriptionLabel, ModuleAxapta _module)` — four arguments: `classStr(ContractClass)`, a name-label token, a description-label token, and a `ModuleAxapta::<Module>` enum value (not a free-text category, and no `classStr(EventClass)` — the attribute already decorates the event class itself).
 - **`buildContract()` is called by the framework** — return the populated contract instance; never return `null`.
 - **Contract `parmXxx()` accessors must be decorated with `[DataMemberAttribute]`** — the serialization layer uses these to build the JSON payload.
 - **Use EDTs for payload fields** (e.g. `CustAccount`, `AmountCur`) — not primitive types. Run `d365fo get edt <Name>` to confirm the EDT exists.
-- **Never call `BusinessEventsBase::publish()` inside a `ttsbegin`/`ttscommit` block** unless you intend to publish on rollback too. Call it after the outermost `ttscommit` or in the `postInsert`/`postUpdate` framework hook.
-- **Category string is free text** — use a meaningful module-scoped category (e.g. `"CustomerPayments"`, `"InventoryEvents"`) so the catalog is navigable.
+- **Never call `.send()` inside a `ttsbegin`/`ttscommit` block** unless you intend to publish on rollback too. Call it after the outermost `ttscommit` or in the `postInsert`/`postUpdate` framework hook. `send()` is a `public final` instance method on `BusinessEventsBase` (there is also `sendOnUserConnection(UserConnection)`) — there is no static `publish()` method.
+- **The catalog category comes from the `ModuleAxapta` enum value passed to `[BusinessEvents(...)]`**, not free text — pick the enum member matching the module the event belongs to (e.g. `ModuleAxapta::Customer`, `ModuleAxapta::Inventory`; run `d365fo get enum ModuleAxapta` for the full list).
