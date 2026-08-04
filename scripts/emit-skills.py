@@ -13,7 +13,7 @@ Frontmatter keys:
 Outputs:
   skills/copilot/<id>.instructions.md
   skills/anthropic/<id>/SKILL.md
-  skills/d365fo-cli/resources/<id>.md
+  skills/d365fo-cli/references/<id>.md
 """
 from __future__ import annotations
 
@@ -88,7 +88,7 @@ def emit_anthropic(meta: dict, body: str, out_dir: Path) -> Path:
 
 
 def emit_copilot_skill(meta: dict, body: str, out_dir: Path) -> Path:
-    """Emit body-only (no frontmatter) to skills/d365fo-cli/resources/<id>.md."""
+    """Emit body-only (no frontmatter) to skills/d365fo-cli/references/<id>.md."""
     sid = meta["id"]
     out_dir.mkdir(parents=True, exist_ok=True)
     path = out_dir / f"{sid}.md"
@@ -99,11 +99,11 @@ def emit_copilot_skill(meta: dict, body: str, out_dir: Path) -> Path:
 def main() -> int:
     copilot_out      = OUT_ROOT / "copilot"
     anthropic_out    = OUT_ROOT / "anthropic"
-    copilot_skill_out = OUT_ROOT / "d365fo-cli" / "resources"
+    copilot_skill_out = OUT_ROOT / "d365fo-cli" / "references"
     for p in (copilot_out, anthropic_out):
         if p.exists():
             shutil.rmtree(p)
-    # Only remove the resources dir so SKILL.md is preserved
+    # Only remove the references dir so SKILL.md is preserved
     if copilot_skill_out.exists():
         shutil.rmtree(copilot_skill_out)
 

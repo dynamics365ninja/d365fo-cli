@@ -162,7 +162,7 @@ flowchart LR
      -XppRepo K:\D365FO\MyProject
    ```
 
-   The script deploys `skills/d365fo-cli/SKILL.md` and all `resources/*.md` to `.github/skills/d365fo-cli/`. One copy in a common parent covers every solution beneath it — VS searches upward from the `.sln`. Copilot auto-discovers skills in `.github/skills/` with no extra configuration.
+   The script deploys `skills/d365fo-cli/SKILL.md` and all `references/*.md` to `.github/skills/d365fo-cli/`. One copy in a common parent covers every solution beneath it — VS searches upward from the `.sln`. Copilot auto-discovers skills in `.github/skills/` with no extra configuration.
 3. **Agent mode (recommended).** Open Copilot Chat → mode dropdown (top-right) → **Agent**. Copilot now calls `d365fo` directly via its terminal tool — no copy-paste.
 4. **Chat mode (fallback).** Without agent tools, Copilot asks you to run `d365fo` commands in Developer PowerShell and paste the JSON back. The skill teaches Copilot to ask first — if it skips that step the `.github/skills/d365fo-cli/SKILL.md` file is missing from the parent folder.
 

@@ -112,7 +112,7 @@ description: $desc
 }
 
 function Emit-CopilotSkill {
-    # Writes body-only (no frontmatter) to skills/d365fo-cli/resources/<id>.md
+    # Writes body-only (no frontmatter) to skills/d365fo-cli/references/<id>.md
     # so Copilot can lazily load topic guidance from the bundled d365fo-cli skill.
     param($Meta, [string]$Body, [string]$OutDir)
     $id = $Meta.id
@@ -125,11 +125,11 @@ function Emit-CopilotSkill {
 Write-Host "Source: $Source"
 $copilotOut      = Join-Path $OutRoot 'copilot'
 $anthropicOut    = Join-Path $OutRoot 'anthropic'
-$copilotSkillOut = Join-Path $OutRoot 'd365fo-cli' 'resources'
+$copilotSkillOut = Join-Path $OutRoot 'd365fo-cli' 'references'
 
 if (Test-Path $copilotOut)  { Remove-Item -Recurse -Force $copilotOut }
 if (Test-Path $anthropicOut) { Remove-Item -Recurse -Force $anthropicOut }
-# Note: d365fo-cli/resources is regenerated (not fully removed) so SKILL.md is preserved.
+# Note: d365fo-cli/references is regenerated (not fully removed) so SKILL.md is preserved.
 if (Test-Path $copilotSkillOut) { Remove-Item -Recurse -Force $copilotSkillOut }
 
 $files = Get-ChildItem -Path $Source -Filter '*.md' -File

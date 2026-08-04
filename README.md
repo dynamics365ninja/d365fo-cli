@@ -153,7 +153,7 @@ Full walkthrough: **[docs/SETUP.md](docs/SETUP.md)**
 
 ### GitHub Copilot (VS Code / Visual Studio)
 
-The preferred method is the **one-command skill installer** — it deploys the bundled `d365fo-cli` Copilot skill (SKILL.md + 19 lazily-loaded topic resources) into your X++ project's `.github/skills/d365fo-cli/` folder. Copilot auto-discovers skills in `.github/skills/` with no extra configuration.
+The preferred method is the **one-command skill installer** — it deploys the bundled `d365fo-cli` Copilot skill (SKILL.md + 19 lazily-loaded topic references) into your X++ project's `.github/skills/d365fo-cli/` folder. Copilot auto-discovers skills in `.github/skills/` with no extra configuration.
 
 ```powershell
 # From the d365fo-cli repo's scripts folder:
@@ -161,8 +161,8 @@ The preferred method is the **one-command skill installer** — it deploys the b
 ```
 
 The installer:
-1. Regenerates `skills/d365fo-cli/resources/` via `emit-skills.ps1` if needed.
-2. Copies `skills/d365fo-cli/SKILL.md` and all `resources/*.md` to `<XppRepo>/.github/skills/d365fo-cli/`.
+1. Regenerates `skills/d365fo-cli/references/` via `emit-skills.ps1` if needed.
+2. Copies `skills/d365fo-cli/SKILL.md` and all `references/*.md` to `<XppRepo>/.github/skills/d365fo-cli/`.
 3. Prints a migration note if the legacy `copilot-instructions.md` / `instructions/` files still exist.
 
 **Skill layout installed into your X++ repo:**
@@ -172,7 +172,7 @@ The installer:
 └── skills/
     └── d365fo-cli/
         ├── SKILL.md              # core rule canon + tool mapping (always loaded)
-        └── resources/            # 19 lazily-loaded X++ topic files
+        └── references/            # 19 lazily-loaded X++ topic files
             ├── coc-extension-authoring.md
             ├── xpp-database-queries.md
             ├── x++-class-authoring.md

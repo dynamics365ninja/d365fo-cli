@@ -5,11 +5,11 @@
 .DESCRIPTION
     Copies the bundled `d365fo-cli` Copilot skill folder:
       - skills/d365fo-cli/SKILL.md            (main rule canon + tool mapping)
-      - skills/d365fo-cli/resources/*.md      (19 lazily-loaded X++ topic files)
+      - skills/d365fo-cli/references/*.md      (19 lazily-loaded X++ topic files)
     into <XppRepo>/.github/skills/d365fo-cli/ so that GitHub Copilot in
     Visual Studio 2022 / 2026 (and VS Code) automatically picks up the skill.
 
-    If the skill folder's resources/ is empty (first run or clean clone), this
+    If the skill folder's references/ is empty (first run or clean clone), this
     script re-runs emit-skills.ps1 to regenerate them before copying.
 
     Re-run after pulling updates to d365fo-cli to keep the skill current.
@@ -53,7 +53,7 @@ $ErrorActionPreference = 'Stop'
 
 # ── Resolve paths ──────────────────────────────────────────────────────────────
 $skillSrc    = Join-Path $CliRepo 'skills\d365fo-cli'
-$resourceSrc = Join-Path $skillSrc 'resources'
+$referenceSrc = Join-Path $skillSrc 'references'
 $dstSkill    = Join-Path $XppRepo '.github\skills\d365fo-cli'
 
 Write-Host "d365fo-cli repo : $CliRepo"
@@ -68,14 +68,14 @@ if (-not (Test-Path $XppRepo)) {
     Write-Error "XppRepo not found: $XppRepo"
 }
 
-# ── Regenerate resources if the folder is empty (first run / clean clone) ─────
-$resourceFiles = Get-ChildItem -Path $resourceSrc -Filter '*.md' -ErrorAction SilentlyContinue
-if ($resourceFiles.Count -eq 0) {
-    Write-Warning "No resource files found in $resourceSrc — running emit-skills.ps1 first..."
+# ── Regenerate references if the folder is empty (first run / clean clone) ─────
+$referenceFiles = Get-ChildItem -Path $referenceSrc -Filter '*.md' -ErrorAction SilentlyContinue
+if ($referenceFiles.Count -eq 0) {
+    Write-Warning "No reference files found in $referenceSrc — running emit-skills.ps1 first..."
     $emitScript = Join-Path $CliRepo 'scripts\emit-skills.ps1'
     if (Test-Path $emitScript) {
         & pwsh -NoProfile -File $emitScript
-        $resourceFiles = Get-ChildItem -Path $resourceSrc -Filter '*.md' -ErrorAction SilentlyContinue
+        $referenceFiles = Get-ChildItem -Path $referenceSrc -Filter '*.md' -ErrorAction SilentlyContinue
     } else {
         Write-Warning "emit-skills.ps1 not found at: $emitScript — run it manually, then re-run this script."
     }
@@ -83,7 +83,7 @@ if ($resourceFiles.Count -eq 0) {
 
 # ── Create target directories ─────────────────────────────────────────────────
 New-Item -ItemType Directory -Force -Path $dstSkill | Out-Null
-New-Item -ItemType Directory -Force -Path (Join-Path $dstSkill 'resources') | Out-Null
+New-Item -ItemType Directory -Force -Path (Join-Path $dstSkill 'references') | Out-Null
 
 # ── Copy SKILL.md ─────────────────────────────────────────────────────────────
 $skillMd = Join-Path $skillSrc 'SKILL.md'
@@ -94,11 +94,11 @@ if (Test-Path $skillMd) {
     Write-Warning "SKILL.md not found at: $skillMd"
 }
 
-# ── Copy resources ────────────────────────────────────────────────────────────
+# ── Copy references ────────────────────────────────────────────────────────────
 $copied = 0
-foreach ($f in $resourceFiles) {
-    Copy-Item -Path $f.FullName -Destination (Join-Path $dstSkill 'resources') -Force
-    Write-Host "[OK] .github\skills\d365fo-cli\resources\$($f.Name)"
+foreach ($f in $referenceFiles) {
+    Copy-Item -Path $f.FullName -Destination (Join-Path $dstSkill 'references') -Force
+    Write-Host "[OK] .github\skills\d365fo-cli\references\$($f.Name)"
     $copied++
 }
 
@@ -117,7 +117,7 @@ if ((Test-Path $legacyCanon) -or (Test-Path $legacyInstrDir)) {
 
 # ── Summary ───────────────────────────────────────────────────────────────────
 Write-Host ""
-Write-Host "Deployed SKILL.md + $copied resource(s) to:"
+Write-Host "Deployed SKILL.md + $copied reference(s) to:"
 Write-Host "  $dstSkill"
 Write-Host ""
 Write-Host "Next steps:"
