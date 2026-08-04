@@ -970,6 +970,10 @@ public static class XppScaffolder
         // the root element (it is emitted by Visual Studio on every AxEnum file). IsExtensible
         // is a CLR bool, so the DataContractSerializer expects "true"/"false" — the NoYes-style
         // "Yes"/"No" written previously produced an invalid file VS refused to read.
+        // VS's build-time validation additionally rejects IsExtensible=true unless
+        // UseEnumValue is explicitly "No" ("UseEnumValue property must be set to 'No' when
+        // the IsExtensible property is 'True'."). UseEnumValue is itself a NoYes-style enum
+        // property (unlike IsExtensible), so it takes "Yes"/"No", not "true"/"false".
         XNamespace xsi = "http://www.w3.org/2001/XMLSchema-instance";
         return new XDocument(
             new XElement("AxEnum",
@@ -977,6 +981,7 @@ public static class XppScaffolder
                 new XElement("Name", name),
                 string.IsNullOrEmpty(label) ? null : new XElement("Label", label),
                 new XElement("IsExtensible", isExtensible ? "true" : "false"),
+                isExtensible ? new XElement("UseEnumValue", "No") : null,
                 enumVals.Count > 0 ? new XElement("EnumValues", valEls) : null));
     }
 
