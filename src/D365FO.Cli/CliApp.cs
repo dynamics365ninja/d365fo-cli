@@ -47,6 +47,15 @@ public static class CliApp
             cfg.SetApplicationVersion("0.1.0-dev");
             cfg.CaseSensitivity(CaseSensitivity.None);
             cfg.PropagateExceptions();
+
+            // Spectre's parser defaults to StrictParsing=false, which silently
+            // collects any unrecognised option into IRemainingArguments — nothing
+            // in this CLI reads those, so `generate table X --storage TempDB`
+            // (the option is really --table-type) wrote a regular table and still
+            // reported ok:true. A misspelled flag that the tool confidently
+            // reports success for is the worst failure mode in this repo's triage
+            // rubric (eval/README.md), so unknown options must fail loudly.
+            cfg.Settings.StrictParsing = true;
             if (console is not null) cfg.ConfigureConsole(console);
 
             cfg.AddBranch("search", b =>

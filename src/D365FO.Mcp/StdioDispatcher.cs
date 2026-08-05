@@ -203,6 +203,14 @@ public sealed class StdioDispatcher
                 new JsonObject { ["code"] = D365FoErrorCodes.ModeNotAllowed });
         }
 
+        // Reject arguments the tool's schema does not declare, before the call is
+        // dedup-cached or run — a misspelled key must not be silently dropped.
+        if (ToolCatalog.FindUnknownArgument(descriptor, args) is { } argError)
+        {
+            return ErrorResponse(idNode, -32602, argError,
+                new JsonObject { ["code"] = D365FoErrorCodes.BadInput });
+        }
+
         // Duplicate-call dedup (agentic-loop mitigation): repeated identical
         // read calls are answered from a 60 s cache with a loop hint.
         var dedupable = !CallDedup.ExcludedTools.Contains(name) && !ToolCatalog.WriteTools.Contains(name);
