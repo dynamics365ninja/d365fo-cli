@@ -7,7 +7,7 @@ Both tools share an **identical purpose** — give GitHub Copilot access to real
 | Protocol | MCP tools (JSON-RPC over stdio / HTTP) | Shell commands |
 | Implementation | TypeScript + Node.js | C# / .NET 10 |
 | Data layer | SQLite index + C# Bridge | **Shared** — same index, schema v5 is a superset |
-| Deployment | Local or Azure App Service (shared team instance) | Local |
+| Deployment | Local or Azure App Service (shared team instance) | Local, or `d365fo-mcp --http` on Azure App Service (shared team instance) |
 | Copilot integration | MCP tool calls | Shell tool |
 | Token economy | Larger JSON envelopes | Smaller output — see [TOKEN_ECONOMICS.md](TOKEN_ECONOMICS.md) |
 | CLI-only commands | — | `review diff`, `build/sync/test/bp`, `schema`, batch operations, `read`, `models` |
@@ -64,6 +64,62 @@ d365fo index status
 ```
 
 `EnsureSchema` migrates the schema forward automatically on first connection. Re-extract is idempotent per model.
+
+---
+
+## HTTP transport & shared deployment (Azure App Service)
+
+`d365fo-mcp` defaults to stdio (one process per developer, spawned by the MCP
+client). For a team that wants to share one hosted instance instead — the
+scenario upstream `d365fo-mcp-server` addresses with its Azure App Service
+deployment — pass `--http` to serve the same tool surface over HTTP instead:
+
+```sh
+d365fo-mcp --http --port 8080
+# or: MCP_HTTP_PORT=8080 d365fo-mcp --http
+```
+
+This mirrors upstream's actual shipped auth/deployment model for shared
+instances — a single `X-Api-Key` header checked against an `API_KEY`
+environment variable, plus a server-mode split — **not** Entra ID / OAuth.
+(GitHub issue #114 originally proposed Entra ID; API-key auth was chosen
+instead for parity with the proven upstream design and to avoid the added
+operational cost of an app registration for what is, in practice, a
+single-team shared secret.)
+
+| Endpoint | Auth | Purpose |
+|---|---|---|
+| `POST /mcp` | `X-Api-Key` header (if `API_KEY` is set) | One JSON-RPC request per call — same semantics as stdio, same tool routing, same `MCP_SERVER_MODE` gate. Not a session/SSE transport: no `Mcp-Session-Id`, no reconnect stream. |
+| `GET /health` | None | Liveness probe: `{"status":"ok","mode":"<resolved mode>","indexReachable":true\|false}`. |
+
+Environment variables:
+
+| Variable | Values | Effect |
+|---|---|---|
+| `API_KEY` | any string | Required value of the `X-Api-Key` header on `/mcp`. **Unset = no auth** — a startup warning is logged; don't run unset outside localhost. |
+| `MCP_SERVER_MODE` | `full` (default) \| `read-only` \| `write-only` | Gates which tools are advertised in `tools/list` and callable via `tools/call`. A disallowed call fails with error code `MODE_NOT_ALLOWED`, both on `tools/list` (the tool is omitted) and `tools/call` (the gate re-checks at call time, so a stale client-side tool list can never bypass it). |
+| `MCP_HTTP_PORT` | port number | Listen port when `--port` isn't passed (default `3000`). |
+
+### The read-only / write-only split (upstream's `LOCAL_TOOLS` pattern)
+
+`read-only` excludes, and `write-only` exposes *only*, the tools that need the
+local D365FO package tree on disk: `generate_object`, `labels`,
+`get_workspace_info`, `get_method`. Every other tool (search, `get_object_info`,
+`analyze`, `models`, …) is read-only-safe because it only touches the SQLite
+index.
+
+This lets a team run the deployment upstream documents:
+
+- **Shared read-only instance** (`MCP_SERVER_MODE=read-only`) — hosted on Azure
+  App Service, no D365FO packages on the box, just the SQLite index (e.g. from
+  Blob Storage). Safe for the whole team to point their MCP client at for
+  search/read/analysis.
+- **Local write-only companion** (`MCP_SERVER_MODE=write-only`) — each
+  developer runs this locally (stdio or `--http` on localhost) where the real
+  package tree lives, for scaffolding writes and label edits.
+
+`full` (the default) is a single process exposing every tool — the right
+choice for local single-machine use, same as before this existed.
 
 ---
 

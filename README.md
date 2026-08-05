@@ -47,7 +47,7 @@ This CLI pre-indexes your entire D365FO installation (hundreds of thousands of s
 | 🏗️ **SDLC integration** | MSBuild compilation with structured `xppcDiagnostics`, DB sync, xppbp best practices, SysTestRunner — on Windows D365FO VMs |
 | 📐 **X++ knowledge base** | 19 lazy-loaded Skills: select grammar, CoC authoring, FormRun lifecycle, BP rule canon — loaded only when relevant, for Copilot and Claude alike |
 | ⚡ **Agent-first ergonomics** | Stable `{ ok, data, warnings }` JSON envelope, `search batch` / `get batch` / `prepare` single-round aggregators, `agent-prompt` + `schema` manifests |
-| 🔌 **Daemon & MCP adapter** | Warm-cache named-pipe daemon with file-system watcher; `d365fo-mcp` speaks JSON-RPC 2.0 over the same index for MCP-only hosts |
+| 🔌 **Daemon & MCP adapter** | Warm-cache named-pipe daemon with file-system watcher; `d365fo-mcp` speaks JSON-RPC 2.0 over the same index for MCP-only hosts, over stdio or `--http` for a shared team deployment (`API_KEY`, `MCP_SERVER_MODE`) |
 
 ### Pattern-grounded form development
 
@@ -189,6 +189,8 @@ The bundled `d365fo-mcp` adapter speaks JSON-RPC 2.0 over the same index. Its to
   }
 }
 ```
+
+Sharing one instance across a team instead of a local stdio process per developer? Run `d365fo-mcp --http` — see [docs/MIGRATION_FROM_MCP.md](docs/MIGRATION_FROM_MCP.md#http-transport--shared-deployment-azure-app-service) for the `API_KEY` / `MCP_SERVER_MODE` (`read-only` shared instance + `write-only` local companion) deployment pattern.
 
 ### Verify
 

@@ -60,4 +60,9 @@ public static class D365FoErrorCodes
     public const string BridgeRequired = "BRIDGE_REQUIRED";
     public const string ValidationFailed = "VALIDATION_FAILED";
     public const string GroundingRequired = "GROUNDING_REQUIRED";
+
+    // MCP HTTP transport
+    public const string Unauthorized = "UNAUTHORIZED";
+    public const string ModeNotAllowed = "MODE_NOT_ALLOWED";
+    public const string RateLimited = "RATE_LIMITED";
 }
