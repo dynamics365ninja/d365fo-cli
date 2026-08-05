@@ -1,0 +1,13 @@
+{
+  "id": "L2-datasource-method-basic",
+  "title": "Override validateWrite on an existing form's datasource",
+  "tier": 2,
+  "instruction": "On the existing form eval/goldens/L1-form-basic/ConFmVehicleList.xml, override the validateWrite method on its FmVehicle datasource. First run `d365fo generate datasource-method eval/goldens/L1-form-basic/ConFmVehicleList.xml --list` to confirm validateWrite is a catalogued override. Use only the d365fo CLI (search/get/generate/validate) — do not hand-write XML.",
+  "canonical_args": ["generate", "datasource-method", "eval/goldens/L1-form-basic/ConFmVehicleList.xml", "--datasource", "FmVehicle", "--method", "validateWrite"],
+  "target_artifact_types": ["AxForm"],
+  "golden_path": "L2-datasource-method-basic",
+  "tags": ["datasource-method", "form", "metadata"],
+  "ignore": [],
+  "requires_fixture_index": false,
+  "golden_pending": false
+}

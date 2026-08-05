@@ -1,0 +1,13 @@
+{
+  "id": "L1-menu-item-basic",
+  "title": "Display menu item pointing at an AxForm",
+  "tier": 1,
+  "instruction": "Create a display menu item named ConFmVehicleListMenuItem pointing at the form ConFmVehicleList, labeled 'Fleet vehicles'. Use only the d365fo CLI (search/get/generate/validate) — do not hand-write XML.",
+  "canonical_args": ["generate", "menu-item", "ConFmVehicleListMenuItem", "--object", "ConFmVehicleList", "--object-type", "Form", "--kind", "Display", "--label", "Fleet vehicles"],
+  "target_artifact_types": ["AxMenuItemDisplay"],
+  "golden_path": "L1-menu-item-basic",
+  "tags": ["menu-item", "metadata"],
+  "ignore": [],
+  "requires_fixture_index": false,
+  "golden_pending": false
+}
