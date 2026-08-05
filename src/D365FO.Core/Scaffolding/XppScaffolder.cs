@@ -936,6 +936,16 @@ public static class XppScaffolder
     /// heuristic over well-known system EDTs (defaulting to <c>String</c>).
     /// </summary>
     private static string TableFieldConcreteSuffix(string edtName, Func<string, string?>? resolver)
+        => ConcreteFieldSuffix(edtName, resolver);
+
+    /// <summary>
+    /// Resolve the concrete field-subtype suffix (<c>String</c>, <c>Int64</c>, …) for an
+    /// EDT. Shared by every polymorphic AOT field family that uses the same suffix
+    /// vocabulary — <c>AxTableField*</c>, <c>AxMapField*</c> — so a map field and a table
+    /// field on the same EDT can never disagree about its primitive type. Prefers the
+    /// index-backed base type; falls back to a heuristic over well-known system EDT names.
+    /// </summary>
+    internal static string ConcreteFieldSuffix(string edtName, Func<string, string?>? resolver)
     {
         var baseType = resolver?.Invoke(edtName);
         var fromIndex = SuffixFromBaseType(baseType);
@@ -1138,16 +1148,20 @@ public static class ScaffoldFileWriter
     private const string XsiNamespace = "http://www.w3.org/2001/XMLSchema-instance";
 
     // AOT roots whose files are unreadable without the XMLSchema-instance namespace
-    // declared on the root element. AxEdt* carries i:type on the root itself and
-    // AxTable carries it on every AxTableField (both are polymorphic, abstract-based
-    // types — see issue #91); AxEnum needs it because Visual Studio's metadata reader
-    // rejects the file outright when the declaration is absent (issue #70).
+    // declared on the root element. AxEdt* carries i:type on the root itself, while
+    // AxTable / AxView / AxMap carry it on every field (AxTableField, AxViewField,
+    // AxMapBaseField are all polymorphic, abstract-based types — see issue #91);
+    // AxEnum needs it because Visual Studio's metadata reader rejects the file
+    // outright when the declaration is absent (issue #70). Every entry here is
+    // ground-truthed against shipped standard-model files on a real AOS.
     // Deliberately NOT a blanket rule for every AxXxx root: AxClass/AxMenuItem/AxQuery/…
     // are written without it today and are read back fine.
     private static readonly HashSet<string> _xsiRequiredAxRoots = new(StringComparer.Ordinal)
     {
         "AxEnum",
         "AxTable",
+        "AxView",
+        "AxMap",
     };
 
     // AOT elements that deserialize into a CLR bool, not a NoYes-style enum. The

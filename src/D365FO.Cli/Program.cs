@@ -219,6 +219,8 @@ app.Configure(cfg =>
         b.AddCommand<GenerateEdtCommand>("edt").WithDescription("Create an AxEdt Extended Data Type.");
         b.AddCommand<GenerateEnumCommand>("enum").WithDescription("Create an AxEnum base enumeration.");
         b.AddCommand<GenerateQueryCommand>("query").WithDescription("Create an AxQuery with data sources and joins.");
+        b.AddCommand<GenerateViewCommand>("view").WithDescription("Create an AxView projecting an AxQuery (bound and computed fields).");
+        b.AddCommand<GenerateMapCommand>("map").WithDescription("Create an AxMap: a shared field template mapped onto tables.");
         b.AddCommand<GenerateBusinessEventCommand>("business-event").WithDescription("Scaffold a business event class + contract.");
         b.AddCommand<GenerateCustomServiceCommand>("custom-service").WithDescription("Scaffold an AxService class, XML, and service group.");
         b.AddCommand<GenerateMigrationScriptCommand>("migration-script").WithDescription("Scaffold a SysRunnable data-migration class.");

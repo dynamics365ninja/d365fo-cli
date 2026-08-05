@@ -1250,7 +1250,12 @@ public sealed class MetadataExtractor
         var label = Local(root, "Label");
         var query = Local(root, "Query");
         var fields = new List<ExtractedViewField>();
-        var fieldsContainer = root.Descendants().FirstOrDefault(x => x.Name.LocalName == "Fields");
+        // Direct children only, like every other parser here. A Descendants() scan
+        // matched the empty <Fields> nested inside the first <AxTableFieldGroup>,
+        // which the AOT emits BEFORE the view's real <Fields> — so every shipped view
+        // indexed with zero fields. Same shape of bug as the table-side one fixed by
+        // MetadataExtractor_reads_table_fields_when_FieldGroups_precede_Fields.
+        var fieldsContainer = root.Elements().FirstOrDefault(x => x.Name.LocalName == "Fields");
         if (fieldsContainer is not null)
         {
             foreach (var fe in fieldsContainer.Elements())

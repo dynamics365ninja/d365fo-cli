@@ -181,6 +181,8 @@ All scaffolders write atomically (`.tmp` + move, `.bak` on overwrite). Pass `--i
 | `generate edt` | `AxEdt` |
 | `generate enum` | `AxEnum` |
 | `generate query` | `AxQuery` with root datasource and optional nested joins |
+| `generate view` | `AxView` projecting a query: bound and computed fields |
+| `generate map` | `AxMap` field template plus table mappings |
 | `generate sysoperation` | Contract + Service + Controller class triple |
 | `generate number-sequence` | Module extension + EDT + form handler class |
 | `generate workflow` | `AxWorkflow` + document class + submit stub |

@@ -436,6 +436,45 @@ d365fo generate query SalesTableWithLines \
 
 `--ds` sets the root datasource. `--join target:joinKind:parentDs` (repeatable) adds embedded datasources. `joinKind` accepts `InnerJoin`, `OuterJoin`, `ExistsJoin`, `NotExistsJoin`.
 
+### View — a read-only projection over a query
+
+```sh
+d365fo generate view FmOpenRentals \
+  --query FmOpenRentalsQuery \
+  --field VehicleId:FmVehicle \
+  --field RentalId:FmRental:RecId \
+  --computed DaysOut:getDaysOutSQL:Int \
+  --install-to FleetManagement
+```
+
+`--field <name>:<dataSource>[:<dataField>]` projects a query column (`dataField`
+defaults to `name`). `--computed <name>:<viewMethod>:<type>` adds a field backed by
+an X++ method returning SQL; the type (`String|Int|Int64|Real|Date|UtcDateTime|Enum`)
+is required because the AOT encodes it in the field's discriminator and cannot infer
+it from the method. `--query` is mandatory — a view without one has nothing to
+project. No `<Ranges>` and no `<Title*>` are emitted: ranges belong on the backing
+query.
+
+### Map — a shared field template across tables
+
+```sh
+d365fo generate map FmAddressMap \
+  --field Street:Name --field City:Name \
+  --map-to "FmVehicle:Street=AddrStreet,City" \
+  --map-to FmRental \
+  --install-to FleetManagement
+```
+
+`--field <name>:<edt>[:<label>]` declares a map field; the EDT drives its concrete
+type, resolved through the same index-backed lookup `generate table` uses, so a map
+field and a table field on one EDT can never disagree. `--map-to <table>[:pairs]`
+wires the map to a table; omit the pairs to connect every field by identical name.
+Connecting a field the map does not declare is rejected rather than written.
+
+Both write straight to disk — the metadata bridge's `createObject` only accepts
+class/table/EDT/enum/form, so `--install-to` resolves the model folder and the
+scaffold is written there (same as `generate query`).
+
 ### Security role (new or merge)
 
 ```sh
