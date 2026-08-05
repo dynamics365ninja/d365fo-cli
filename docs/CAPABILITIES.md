@@ -196,7 +196,7 @@ All scaffolders write atomically (`.tmp` + move, `.bak` on overwrite). Pass `--i
 | `generate map` | `AxMap` field template plus table mappings |
 | `generate sysoperation` | Contract + Service + Controller class triple |
 | `generate number-sequence` | Module extension + EDT + form handler class |
-| `generate workflow` | `AxWorkflow` + document class + submit stub |
+| `generate workflow` | `AxWorkflowTemplate` + document class + submit stub, plus `AxWorkflowApproval` / `AxWorkflowTask` elements when named |
 | `generate business-event` | Event class + contract class |
 | `generate custom-service` | `AxService` + service class + `AxServiceGroup` |
 | `generate runbase` | `RunBase` / `RunBaseBatch` skeleton with dialog parameters |

@@ -1,0 +1,21 @@
+{
+  "runId": "20260805T180438374Z__L1-query-basic__bab461518f154cff84cb4da8ef6410b8",
+  "caseId": "L1-query-basic",
+  "tier": 1,
+  "timestampUtc": "2026-08-05T18:04:38.3749397+00:00",
+  "source": "replay",
+  "score": {
+    "xppClean": true,
+    "xppErrors": 0,
+    "referencesClean": true,
+    "referenceErrors": 0,
+    "goldenMatch": true,
+    "goldenDiff": {
+      "missing": [],
+      "extra": [],
+      "changed": [],
+      "isMatch": true
+    }
+  },
+  "note": "Phase 0 gate: workflow AxWorkflowTemplate fix, form-pattern strictness, golden caption hygiene"
+}

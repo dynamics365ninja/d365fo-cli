@@ -1,0 +1,21 @@
+{
+  "runId": "20260805T180450403Z__L2-event-handler-basic__2c6cc9c720c64fd69c4359627cc601c4",
+  "caseId": "L2-event-handler-basic",
+  "tier": 2,
+  "timestampUtc": "2026-08-05T18:04:50.4036531+00:00",
+  "source": "replay",
+  "score": {
+    "xppClean": true,
+    "xppErrors": 0,
+    "referencesClean": true,
+    "referenceErrors": 0,
+    "goldenMatch": true,
+    "goldenDiff": {
+      "missing": [],
+      "extra": [],
+      "changed": [],
+      "isMatch": true
+    }
+  },
+  "note": "Phase 0 gate: workflow AxWorkflowTemplate fix, form-pattern strictness, golden caption hygiene"
+}

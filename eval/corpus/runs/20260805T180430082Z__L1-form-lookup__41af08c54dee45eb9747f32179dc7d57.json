@@ -1,0 +1,21 @@
+{
+  "runId": "20260805T180430082Z__L1-form-lookup__41af08c54dee45eb9747f32179dc7d57",
+  "caseId": "L1-form-lookup",
+  "tier": 1,
+  "timestampUtc": "2026-08-05T18:04:30.082699+00:00",
+  "source": "replay",
+  "score": {
+    "xppClean": true,
+    "xppErrors": 0,
+    "referencesClean": true,
+    "referenceErrors": 0,
+    "goldenMatch": true,
+    "goldenDiff": {
+      "missing": [],
+      "extra": [],
+      "changed": [],
+      "isMatch": true
+    }
+  },
+  "note": "Phase 0 gate: workflow AxWorkflowTemplate fix, form-pattern strictness, golden caption hygiene"
+}

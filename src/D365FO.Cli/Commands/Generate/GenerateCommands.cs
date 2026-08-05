@@ -531,7 +531,7 @@ public sealed class GenerateFormCommand : Command<GenerateFormCommand.Settings>
         public string FormName { get; init; } = "";
 
         [CommandOption("--pattern <PATTERN>")]
-        [System.ComponentModel.Description("Form pattern: SimpleList | SimpleListDetails | DetailsMaster | DetailsTransaction | Dialog | TableOfContents | Lookup | ListPage | Workspace. Aliases (master, transaction, toc, panorama, …) are accepted.")]
+        [System.ComponentModel.Description("Form pattern: SimpleList | SimpleListDetails | DetailsMaster | DetailsTransaction | Dialog | TableOfContents | Lookup | ListPage | Workspace. Aliases (master, transaction, toc, panorama, …) are accepted. Catalog-only patterns (Wizard, DropDialog, FormPart*, …) are rejected with the list of generatable ones — they are not silently downgraded.")]
         public string? Pattern { get; init; }
 
         [CommandOption("--table <TABLE>")]
@@ -593,7 +593,8 @@ internal static class GenerateFormImpl
         if (string.IsNullOrWhiteSpace(formName))
             return RenderHelpers.Render(kind, ToolResult<object>.Fail("BAD_INPUT", "Form name required."));
 
-        var pattern = FormPatternNormalizer.Normalize(patternRaw);
+        if (!FormPatternNormalizer.TryNormalize(patternRaw, out var pattern, out var patternError))
+            return RenderHelpers.Render(kind, ToolResult<object>.Fail("BAD_INPUT", patternError!));
 
         // Patterns that need a datasource: everything except Dialog / TableOfContents (where it is optional).
         var dsRequired = pattern is not (FormPattern.Dialog or FormPattern.TableOfContents);

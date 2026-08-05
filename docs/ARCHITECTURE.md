@@ -59,7 +59,7 @@ Single file at `$D365FO_INDEX_DB` (default `%LOCALAPPDATA%\d365fo-cli\d365fo-ind
 | Report | `AxReport` | Datasets, design |
 | Service | `AxService` | Operations |
 | ServiceGroup | `AxServiceGroup` | Service references |
-| WorkflowType | `AxWorkflow` | Document class, elements |
+| WorkflowType | `AxWorkflowTemplate` | Category, document class, supported elements (`AxWorkflowApproval` / `AxWorkflowTask`) |
 | Map | `AxMap` | Fields, mapped tables |
 | SecurityRole | `AxSecurityRole` | Duties, privileges |
 | SecurityDuty | `AxSecurityDuty` | Privileges |

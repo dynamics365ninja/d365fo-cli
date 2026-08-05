@@ -1,0 +1,21 @@
+{
+  "runId": "20260805T180447146Z__L2-coc-extension__67bb9a8551a4420589b3e99fbfa93f9f",
+  "caseId": "L2-coc-extension",
+  "tier": 2,
+  "timestampUtc": "2026-08-05T18:04:47.1465367+00:00",
+  "source": "replay",
+  "score": {
+    "xppClean": true,
+    "xppErrors": 0,
+    "referencesClean": true,
+    "referenceErrors": 0,
+    "goldenMatch": true,
+    "goldenDiff": {
+      "missing": [],
+      "extra": [],
+      "changed": [],
+      "isMatch": true
+    }
+  },
+  "note": "Phase 0 gate: workflow AxWorkflowTemplate fix, form-pattern strictness, golden caption hygiene"
+}

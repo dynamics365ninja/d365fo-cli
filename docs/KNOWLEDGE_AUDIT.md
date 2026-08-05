@@ -25,7 +25,7 @@ uneven:
   (`generate --install-to` / `--verify`): 16 kinds in `MetadataBootstrap.KindToCollection`.
   Reports, workflows, menu items, all security types, services and number sequences are written
   as raw `XDocument` output with no round-trip proof. Four divergent type registries exist; one
-  known divergence bug ships today (workflow `AxWorkflow` vs. `AxWorkflowType`).
+  known divergence bug ships today (workflow `AxWorkflow` vs. the real `AxWorkflowTemplate`).
 - **Validation** is strongest for forms (FP001–FP010 + repairer + 37-pattern catalog) and tables
   (XML001–XML005), and absent for every other XML family. The X++ validator is regex-based BP
   linting plus index-backed reference proving — there is no parser and no in-process compiler;
@@ -75,7 +75,12 @@ validators from what the round-trip teaches.**
   KNOWLEDGE_GAP clusters can't be ranked.
 - **K5 — Frontmatter inconsistency.** `skills/_source/object-extension-authoring.md` lacks
   `appliesWhen` in-source while its emitted variant carries one.
+  *Re-verified 2026-08-05 (Phase 0.4): already fixed at HEAD — the source carries `appliesWhen`,
+  and re-running `emit-skills.py` produces zero drift across all three targets.*
 - **K6 — Stale counts.** README claims 26 generate subcommands; `CliApp.cs` registers 29.
+  *Re-verified 2026-08-05 (Phase 0.4): already fixed at HEAD — README says 29 and its command
+  list matches the 29 names `CliApp.cs` registers, one for one. The remaining "26–27" figures in
+  the README are MCP tool-schema counts, which are correct.*
 
 ---
 
@@ -118,10 +123,15 @@ to `generate extension`), `AxLabelFile` manifest.
 
 ### 3.3 Defects and structural risks
 
-- **G1 — Workflow folder/type bug.** `GenerateWorkflowCommand.cs:77` installs to `AxWorkflow`,
-  scaffolder emits `<AxWorkflow>`, but the real AOT folder/type is `AxWorkflowType`
-  (`MetadataExtractor.cs:231` reads only the latter) → generated workflows are invisible to the
-  index and wrong for the compiler.
+- **G1 — Workflow folder/type bug.** `GenerateWorkflowCommand.cs:77` installed to `AxWorkflow`
+  and the scaffolder emitted `<AxWorkflow>`; `MetadataExtractor.cs:231` read `AxWorkflowType`.
+  Ground truth (a real AOS: 0 `AxWorkflowType` folders, 211 `AxWorkflowTemplate` folders across
+  packages) says **both** names are wrong — the workflow type is `AxWorkflowTemplate`, with
+  `AxWorkflowApproval` / `AxWorkflowTask` as separate element objects. The property set was
+  invented too (`DocumentTableName`, `DocumentMenuItemType`, `WorkflowDocumentClass` do not
+  exist; the real names are `Category`, `Document`, `DocumentMenuItem`,
+  `SubmitToWorkflowMenuItem`, `SupportedElements`). Fixed 2026-08-05 in Phase 0.1, with the
+  emitted shape locked by `WorkflowScaffolderTests`.
 - **G2 — Four divergent type registries.** Bridge `KindToCollection`/`KindToTypeName` (16),
   ~30 hard-coded subfolder literals in `Commands/Generate/*`, `ObjectLookup` (15 read kinds),
   `MetadataExtractor` (30 folders). No single source of truth; G1 is the first visible casualty.
@@ -129,9 +139,11 @@ to `generate extension`), `AxLabelFile` manifest.
   label manifest never reach the provider, so their XML is never proven deserializable.
 - **G4 — Grounding gate applied to only 3 of 29 generate commands** (coc, extension,
   event-handler). The anti-hallucination token from `prepare` is optional everywhere else.
-- **G5 — Form pattern silent fallback.** `FormPatternNormalizer.Normalize` maps any unknown
+- **G5 — Form pattern silent fallback.** `FormPatternNormalizer.Normalize` mapped any unknown
   `--pattern` (incl. catalog-known but non-generatable ones like `Wizard`, `FormPart*`) to
-  `SimpleList` instead of erroring.
+  `SimpleList` instead of erroring. Fixed 2026-08-05 in Phase 0.2: `TryNormalize` resolves
+  through `FormPatternCatalog` and rejects catalog-only names (naming the generatable variant
+  parent where one exists); CLI and MCP both return `BAD_INPUT`.
 - **G6 — MCP surface lags CLI.** `generate_object` accepts 11 of ~27 types; no
   `validate_xpp`/`resolve_references` tool over MCP; view/map/entity/report/security/menu-item
   not exposed.
@@ -163,7 +175,8 @@ to `generate extension`), `AxLabelFile` manifest.
 - 31 cases (L0: 2, L1: 18, L2: 11), 31 reviewed goldens, schema-checked by `EvalCaseCatalog`;
   39 committed corpus runs, 37 replay / 2 agent.
 - Open items: no `eval` job in CI; `classification` null everywhere → `eval clusters` idle;
-  corpus schema says runs are gitignored but they are tracked; one stale corpus record predates
+  corpus prose said runs are gitignored while they are tracked (fixed 2026-08-05 in Phase 0.3,
+  along with adding `eval run --all`); one stale corpus record predated
   the XML001 table-extension fix at HEAD; no L3 (build/xppc oracle) or L4 (runtime/SysTest) tier;
   fixture AOT (`tests/Samples/MiniAot`) contains only one table + one class, limiting
   reference-resolution realism.

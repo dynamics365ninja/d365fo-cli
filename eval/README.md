@@ -33,12 +33,14 @@ the case to carry `canonical_args`:
 
 ```
 dotnet run --project src/D365FO.Cli -- eval run L0-edt-basic --write
+dotnet run --project src/D365FO.Cli -- eval run --all            # whole catalog, non-zero exit on any golden mismatch
 ```
 
 This builds a throwaway temp SQLite index (plus fixture data from
 `tests/Samples/MiniAot/TestModel` when the case sets
-`requires_fixture_index: true`), replays `canonical_args` through the exact
-same `CommandApp` the real CLI runs (`D365FO.Cli.CliApp.Build()`), then
+`requires_fixture_index: true`), replays `canonical_args` through a real
+`d365fo` child process (never in-process — see the note in
+`EvalRunCommand.RunReplay`), then
 scores the produced XML against `eval/goldens/<id>/` — `validate xpp` and
 `validate references` are called directly against the Core APIs
 (`D365FO.Core.Validation.XppValidator` / `ReferenceResolver`), not via a
@@ -98,8 +100,11 @@ lie in place while a deeper fix waits.
 
 ## Explicitly out of scope (for now)
 
-- **CI wiring.** `eval run` for all cases is not yet a gate in
-  `.github/workflows/ci.yml`.
+- **CI wiring.** `eval run --all` exists and exits non-zero on any golden
+  mismatch, but it is not yet wired into `.github/workflows/ci.yml`
+  (Phase 4.1 of `docs/KNOWLEDGE_AUDIT_PLAN.md`). `--all` gates on
+  `goldenMatch` only; the `known-reference-gap` cases below keep reporting
+  their reference violations as data.
 - **No runtime/SysTest oracle.** No `SysTestRunner` integration exists in
   this offline loop — only the golden-diff and static-validator dimensions.
   A handful of cases (tagged `known-reference-gap`) generate a class or

@@ -1,0 +1,21 @@
+{
+  "runId": "20260805T180452452Z__L2-security-duty-extension__f6b1a52ad1b1447199cfaca795484f36",
+  "caseId": "L2-security-duty-extension",
+  "tier": 2,
+  "timestampUtc": "2026-08-05T18:04:52.4525235+00:00",
+  "source": "replay",
+  "score": {
+    "xppClean": true,
+    "xppErrors": 0,
+    "referencesClean": true,
+    "referenceErrors": 0,
+    "goldenMatch": true,
+    "goldenDiff": {
+      "missing": [],
+      "extra": [],
+      "changed": [],
+      "isMatch": true
+    }
+  },
+  "note": "Phase 0 gate: workflow AxWorkflowTemplate fix, form-pattern strictness, golden caption hygiene"
+}

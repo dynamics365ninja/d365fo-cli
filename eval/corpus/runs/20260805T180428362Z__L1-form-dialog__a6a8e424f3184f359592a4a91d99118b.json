@@ -1,0 +1,21 @@
+{
+  "runId": "20260805T180428362Z__L1-form-dialog__a6a8e424f3184f359592a4a91d99118b",
+  "caseId": "L1-form-dialog",
+  "tier": 1,
+  "timestampUtc": "2026-08-05T18:04:28.3622286+00:00",
+  "source": "replay",
+  "score": {
+    "xppClean": true,
+    "xppErrors": 0,
+    "referencesClean": true,
+    "referenceErrors": 0,
+    "goldenMatch": true,
+    "goldenDiff": {
+      "missing": [],
+      "extra": [],
+      "changed": [],
+      "isMatch": true
+    }
+  },
+  "note": "Phase 0 gate: workflow AxWorkflowTemplate fix, form-pattern strictness, golden caption hygiene"
+}

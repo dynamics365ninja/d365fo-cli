@@ -1,0 +1,21 @@
+{
+  "runId": "20260805T180447633Z__L2-control-method-basic__e118eefe10bd4edea38de9b5785b9023",
+  "caseId": "L2-control-method-basic",
+  "tier": 2,
+  "timestampUtc": "2026-08-05T18:04:47.6340009+00:00",
+  "source": "replay",
+  "score": {
+    "xppClean": true,
+    "xppErrors": 0,
+    "referencesClean": true,
+    "referenceErrors": 0,
+    "goldenMatch": true,
+    "goldenDiff": {
+      "missing": [],
+      "extra": [],
+      "changed": [],
+      "isMatch": true
+    }
+  },
+  "note": "Phase 0 gate: workflow AxWorkflowTemplate fix, form-pattern strictness, golden caption hygiene"
+}

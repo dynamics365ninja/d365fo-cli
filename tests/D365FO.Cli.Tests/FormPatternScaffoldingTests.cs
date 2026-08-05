@@ -206,16 +206,49 @@ public class FormPatternScaffoldingTests
     [Theory]
     [InlineData("master",        FormPattern.DetailsMaster)]
     [InlineData("transaction",   FormPattern.DetailsTransaction)]
-    [InlineData("DropDialog",    FormPattern.Dialog)]
     [InlineData("toc",           FormPattern.TableOfContents)]
     [InlineData("panorama",      FormPattern.Workspace)]
-    [InlineData("operational",   FormPattern.Workspace)]
     [InlineData("Simple-List",   FormPattern.SimpleList)]
     [InlineData("",              FormPattern.SimpleList)]
     [InlineData(null,            FormPattern.SimpleList)]
     public void Normalizer_maps_aliases(string? raw, FormPattern expected)
     {
-        Assert.Equal(expected, FormPatternNormalizer.Normalize(raw));
+        Assert.True(FormPatternNormalizer.TryNormalize(raw, out var actual, out var error));
+        Assert.Null(error);
+        Assert.Equal(expected, actual);
+    }
+
+    /// <summary>
+    /// Audit finding G5: catalog-known-but-not-generatable patterns used to fall through
+    /// to SimpleList, so `--pattern Wizard` produced a plain list form and reported success.
+    /// </summary>
+    [Theory]
+    [InlineData("Wizard")]
+    [InlineData("DropDialog")]
+    [InlineData("operational")]
+    [InlineData("FormPartFactboxGrid")]
+    [InlineData("TaskSingle")]
+    public void Normalizer_rejects_catalog_only_patterns(string raw)
+    {
+        Assert.False(FormPatternNormalizer.TryNormalize(raw, out _, out var error));
+        Assert.Contains("cannot scaffold it", error);
+        Assert.Contains("get form-pattern", error);
+    }
+
+    [Fact]
+    public void Normalizer_points_a_variant_at_its_generatable_parent()
+    {
+        Assert.False(FormPatternNormalizer.TryNormalize("DropDialog", out _, out var error));
+        Assert.Contains("--pattern Dialog", error);
+    }
+
+    [Fact]
+    public void Normalizer_rejects_unknown_patterns_and_lists_what_is_generatable()
+    {
+        Assert.False(FormPatternNormalizer.TryNormalize("nonsense", out _, out var error));
+        Assert.Contains("Unknown form pattern 'nonsense'", error);
+        foreach (var p in Enum.GetNames<FormPattern>())
+            Assert.Contains(p, error);
     }
 
     [Theory]

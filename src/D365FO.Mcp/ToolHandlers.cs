@@ -1195,7 +1195,8 @@ public sealed class ToolHandlers
         if (string.IsNullOrWhiteSpace(name))
             return ToolResult<object>.Fail("BAD_INPUT", "name is required.");
 
-        var fp = D365FO.Core.Scaffolding.FormPatternNormalizer.Normalize(pattern);
+        if (!D365FO.Core.Scaffolding.FormPatternNormalizer.TryNormalize(pattern, out var fp, out var patternError))
+            return ToolResult<object>.Fail("BAD_INPUT", patternError!);
 
         var xml = D365FO.Core.Scaffolding.XppScaffolder.Form(
             name, table, fp, caption,

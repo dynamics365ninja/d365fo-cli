@@ -12,10 +12,10 @@ with a verification gate.
 
 | # | Item | Findings | Where |
 |---|---|---|---|
-| 0.1 | Fix workflow type: emit `<AxWorkflowType>`, install to `AxWorkflowType`, update eval golden `L1-workflow-basic` | G1 | `Scaffolding/WorkflowScaffolder.cs`, `Commands/Generate/GenerateWorkflowCommand.cs` |
-| 0.2 | `FormPatternNormalizer`: unknown or non-generatable `--pattern` → error listing generatable + catalog-only patterns (no silent `SimpleList` fallback) | G5 | `Core/Scaffolding/FormPattern.cs` normalizer + `GenerateCommands.cs` |
-| 0.3 | Corpus hygiene: align `eval/corpus/schema.json` prose with reality (runs are committed), re-run the stale `L2-table-extension` record against HEAD, fix the `L1-form-basic` golden caption (`@Fleet:Vehicle`) | audit §5 | `eval/corpus/`, `eval/goldens/` |
-| 0.4 | Doc/frontmatter drift: README generate-count (26→29), add `appliesWhen` to `skills/_source/object-extension-authoring.md` | K5, K6 | `README.md`, `skills/_source/` |
+| 0.1 | ✅ Fix workflow type: emit `<AxWorkflowTemplate>` (**not** `AxWorkflowType` — that folder exists on no AOS) with the real property set, add `AxWorkflowApproval`/`AxWorkflowTask` element generation, point the extractor at `AxWorkflowTemplate`, update eval golden `L1-workflow-basic`, add scaffolder tests | G1 | `Scaffolding/WorkflowScaffolder.cs`, `Commands/Generate/GenerateWorkflowCommand.cs`, `Extract/MetadataExtractor.cs` |
+| 0.2 | ✅ `FormPatternNormalizer`: unknown or non-generatable `--pattern` → error listing generatable + catalog-only patterns (no silent `SimpleList` fallback) | G5 | `Core/Scaffolding/FormPattern.cs` normalizer + `GenerateCommands.cs` |
+| 0.3 | ✅ Corpus hygiene (+ `eval run --all`, since the gate assumed it): align `eval/corpus/schema.json` prose with reality (runs are committed), re-run the stale `L2-table-extension` record against HEAD, fix the `L1-form-basic` golden caption (`@Fleet:Vehicle`) | audit §5 | `eval/corpus/`, `eval/goldens/` |
+| 0.4 | ✅ Doc/frontmatter drift — both already correct at HEAD (README says 29 and matches `CliApp.cs`; `object-extension-authoring.md` carries `appliesWhen`; `emit-skills.py` re-run shows zero drift). Docs drift found elsewhere was fixed instead: workflow AOT type in ARCHITECTURE/CAPABILITIES/EXAMPLES, `eval run` replay mechanics in `eval/README.md` | K5, K6 | `README.md`, `skills/_source/`, `docs/` |
 
 **Gate:** `dotnet test` green; `d365fo eval run --all` replay green; workflow object now visible
 to `index build` over a fixture containing it.
@@ -32,7 +32,7 @@ parity test asserting the registry covers every `generate` subcommand and every 
 folder (prevents the next G1). Mirrors the predecessor's dispatch-parity tests (R6).
 
 1.2 **Extend the bridge to all generated families.** Add registry-driven kinds for
-`AxReport`, `AxWorkflowType`, `AxMenuItem{Display,Action,Output}`, `AxSecurity{Role,Duty,
+`AxReport`, `AxWorkflowTemplate`, `AxMenuItem{Display,Action,Output}`, `AxSecurity{Role,Duty,
 Privilege,Policy}`, `AxService`, `AxServiceGroup`, `AxDataEntityView` extensions, so
 `generate --install-to/--verify` round-trips them through `IMetadataProvider`. Port bridge
 workarounds from R4 as they become relevant: abstract-type mapping table
