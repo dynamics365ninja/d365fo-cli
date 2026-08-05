@@ -106,6 +106,9 @@ public static class McpServerHost
 
         var args = SerializeArguments(request.Arguments);
 
+        if (ToolCatalog.FindUnknownArgument(descriptor, args) is { } argError)
+            return ErrorResult(D365FoErrorCodes.BadInput, argError);
+
         object raw;
         try
         {

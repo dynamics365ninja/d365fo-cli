@@ -265,6 +265,37 @@ public class McpDispatcherTests : IDisposable
         Assert.Equal(0, payload.RootElement.GetProperty("data").GetProperty("count").GetInt32());
     }
 
+    /// <summary>
+    /// Every tool schema declares additionalProperties:false, but the dispatcher
+    /// never enforced it: a misspelled key was dropped and the handler ran as if
+    /// the caller had omitted the argument — the "confident lie" failure mode.
+    /// Same rule the CLI enforces via StrictParsing.
+    /// </summary>
+    [Fact]
+    public async Task ToolsCall_with_a_misspelled_argument_is_rejected()
+    {
+        var resp = await Roundtrip(
+            """{"jsonrpc":"2.0","id":31,"method":"tools/call","params":{"name":"find_references","arguments":{"nmae":"CustTable"}}}""");
+        var doc = Assert.Single(resp);
+
+        var error = doc.RootElement.GetProperty("error");
+        Assert.Equal(-32602, error.GetProperty("code").GetInt32());
+        Assert.Contains("Unknown argument 'nmae'", error.GetProperty("message").GetString());
+        Assert.Equal("BAD_INPUT", error.GetProperty("data").GetProperty("code").GetString());
+    }
+
+    [Fact]
+    public async Task ToolsCall_still_accepts_the_tolerated_label_aliases()
+    {
+        // `labels` deliberately accepts client-guessed aliases (text/label for
+        // value, model for installTo, …); they are declared in its schema, so the
+        // strict check must not reject them.
+        var resp = await Roundtrip(
+            """{"jsonrpc":"2.0","id":32,"method":"tools/call","params":{"name":"labels","arguments":{"action":"search","query":"Vehicle","limit":5}}}""");
+        var doc = Assert.Single(resp);
+        Assert.True(doc.RootElement.TryGetProperty("result", out _));
+    }
+
     [Theory]
     [InlineData("class")]
     [InlineData("table")]

@@ -501,6 +501,32 @@ public static class ToolCatalog
             (h, p) => h.JournalList(Int(p, "limit", 50))),
     };
 
+    /// <summary>
+    /// Enforces the <c>additionalProperties: false</c> every tool's schema already
+    /// declares. Neither transport checked it, so a client that misspelled a key
+    /// ("tabel" for "table") had it silently dropped and the handler ran as though
+    /// the argument were simply absent — answering confidently from an input the
+    /// caller never gave. Mirrors the CLI's <c>StrictParsing</c> (see
+    /// <c>D365FO.Cli.CliApp</c>): unknown input fails loudly on both surfaces.
+    /// </summary>
+    /// <returns>An error message naming the offending key, or null when the arguments are clean.</returns>
+    public static string? FindUnknownArgument(in Descriptor descriptor, JsonElement args)
+    {
+        if (args.ValueKind != JsonValueKind.Object) return null;
+        if (descriptor.InputSchema["properties"] is not JsonObject properties) return null;
+
+        foreach (var prop in args.EnumerateObject())
+        {
+            // JSON Schema property names are case-sensitive, and so is the binder
+            // that reads them (JsonElement.TryGetProperty) — match the same way.
+            if (properties.ContainsKey(prop.Name)) continue;
+
+            var known = string.Join(", ", properties.Select(p => p.Key).OrderBy(k => k, StringComparer.Ordinal));
+            return $"Unknown argument '{prop.Name}' for tool '{descriptor.Name}'. Accepted arguments: {known}.";
+        }
+        return null;
+    }
+
     // ---- JSON helpers ----
 
     private static JsonObject Schema(params (string name, string type, bool required)[] props)

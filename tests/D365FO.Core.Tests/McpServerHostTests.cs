@@ -74,6 +74,28 @@ public class McpServerHostTests : IDisposable
         Assert.Equal("ENTITY_NOT_FOUND", doc.RootElement.GetProperty("error").GetProperty("code").GetString());
     }
 
+    /// <summary>
+    /// The SDK host is the second transport into the same catalog, so it has to
+    /// reject undeclared arguments too — otherwise a misspelled key is dropped
+    /// and the handler answers as though the caller never passed it.
+    /// </summary>
+    [Fact]
+    public void Invoke_unknown_argument_returns_badInput_instead_of_dropping_it()
+    {
+        var args = new Dictionary<string, JsonElement>
+        {
+            ["objectType"] = JsonDocument.Parse("\"table\"").RootElement,
+            ["nmae"] = JsonDocument.Parse("\"CustTable\"").RootElement,
+        };
+        var result = McpServerHost.Invoke(Handlers(),
+            new CallToolRequestParams { Name = "get_object_info", Arguments = args });
+
+        Assert.True(result.IsError);
+        var doc = JsonDocument.Parse(Assert.IsType<TextContentBlock>(result.Content[0]).Text);
+        Assert.Equal("BAD_INPUT", doc.RootElement.GetProperty("error").GetProperty("code").GetString());
+        Assert.Contains("Unknown argument 'nmae'", doc.RootElement.GetProperty("error").GetProperty("message").GetString());
+    }
+
     [Fact]
     public void Invoke_unknown_tool_returns_error_envelope()
     {
