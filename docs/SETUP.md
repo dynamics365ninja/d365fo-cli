@@ -166,6 +166,14 @@ flowchart LR
 3. **Agent mode (recommended).** Open Copilot Chat → mode dropdown (top-right) → **Agent**. Copilot now calls `d365fo` directly via its terminal tool — no copy-paste.
 4. **Chat mode (fallback).** Without agent tools, Copilot asks you to run `d365fo` commands in Developer PowerShell and paste the JSON back. The skill teaches Copilot to ask first — if it skips that step the `.github/skills/d365fo-cli/SKILL.md` file is missing from the parent folder.
 
+> **How the skill decides to activate — and what to do when it doesn't.**
+>
+> The skill replaces what used to be 19 separate `.github/instructions/*.instructions.md` files, each scoped by an `applyTo` glob. Those applied deterministically: edit a file matching the glob, get the instructions. A skill works differently — the agent sees only its `name` and `description` and decides for itself whether the task is relevant. That's what makes it cheap (see [TOKEN_ECONOMICS.md](TOKEN_ECONOMICS.md)), but it also means activation is a judgement call, not a rule.
+>
+> In practice it fires reliably on D365FO work, because the `description` enumerates the artifact types. If it doesn't, name it in your prompt — *"use the d365fo-cli skill"* — or reference the topic file directly, e.g. *"follow references/coc-extension-authoring"*. Visual Studio shows which skills were applied in the chat reply; VS Code lists them under **References**.
+>
+> If you need the old deterministic behaviour, `skills/copilot/*.instructions.md` is still emitted — copy it to `.github/instructions/` as before. The two layouts coexist; the skill does not clobber them.
+
 > ⚠️ **Never** use `@workspace` or built-in code search on AOT XML. It always fails. Copilot must use `d365fo` exclusively for codebase queries; the Skills enforce this.
 
 > ⚠️ **"Workspace" means two unrelated things here — don't conflate them.**
