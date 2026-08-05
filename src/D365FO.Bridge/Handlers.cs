@@ -47,6 +47,78 @@ namespace D365FO.Bridge
         internal JsonObject ReadForm(JsonObject args) { return ReadArtifact(args, "Forms", "form"); }
 
         /// <summary>
+        /// Read an artefact and hand back its <b>raw XmlSerializer XML</b> (not the
+        /// reflection-based JSON projection <see cref="AxSerializer"/> produces) —
+        /// the byte-for-byte counterpart of the <c>xml</c> blob <see cref="UpdateObject"/>
+        /// accepts. Used by <c>d365fo modify method</c> (issue #112) to round-trip a
+        /// single method body through <c>IMetadataProvider</c> without ever touching
+        /// on-disk XML directly: read here, do a structured (XDocument-element)
+        /// replace of one &lt;Method&gt;'s &lt;Source&gt;, write back via
+        /// <see cref="UpdateObject"/>. The XML shape is whatever this process's
+        /// <see cref="XmlSerializer"/> produces for the live Ax* instance — it need
+        /// not match Visual Studio's on-disk formatting because it never reaches
+        /// disk itself; <see cref="MetadataBootstrap.SaveArtifact"/> re-serialises
+        /// through the provider on write, same as every other write path here.
+        /// </summary>
+        internal JsonObject ReadObjectXml(JsonObject args)
+        {
+            string kind = args != null ? (string)args["kind"] : null;
+            string name = args != null ? (string)args["name"] : null;
+            if (string.IsNullOrWhiteSpace(kind)) return Fail("MISSING_ARG", "kind is required");
+            if (string.IsNullOrWhiteSpace(name)) return Fail("MISSING_ARG", "name is required");
+            if (!MetadataBootstrap.KindToCollection.TryGetValue(kind, out var collectionName))
+            {
+                return Fail("INVALID_KIND", "kind must be one of: class, table, edt, enum, form");
+            }
+
+            if (!MetadataBootstrap.TryInitialize())
+            {
+                return Fail("METADATA_UNAVAILABLE",
+                    MetadataBootstrap.LastError ??
+                    "IMetadataProvider failed to initialise; set D365FO_PACKAGES_PATH on a D365FO VM.");
+            }
+
+            object artifact;
+            try
+            {
+                artifact = MetadataBootstrap.ReadArtifact(collectionName, name);
+            }
+            catch (Exception ex)
+            {
+                return Fail("READ_FAILED", ex.GetType().Name + ": " + ex.Message);
+            }
+
+            if (artifact == null)
+            {
+                return Fail("NOT_FOUND", kind + " '" + name + "' was not returned by IMetadataProvider.");
+            }
+
+            string xml;
+            try
+            {
+                var serializer = new XmlSerializer(artifact.GetType());
+                using (var sw = new StringWriter())
+                {
+                    serializer.Serialize(sw, artifact);
+                    xml = sw.ToString();
+                }
+            }
+            catch (Exception ex)
+            {
+                return Fail("SERIALIZE_FAILED", ex.GetType().Name + ": " + ex.Message);
+            }
+
+            return new JsonObject
+            {
+                ["ok"] = true,
+                ["kind"] = kind,
+                ["name"] = name,
+                ["source"] = "bridge",
+                ["xml"] = xml,
+            };
+        }
+
+        /// <summary>
         /// UseEnumValue=No (required for extensible enums) omits the &lt;Value&gt;
         /// element from the XML entirely, so AxEnumValue.Value deserialises to its
         /// int default (0) for every member — no exception, no fallback. The value

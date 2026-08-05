@@ -106,6 +106,8 @@ namespace D365FO.Bridge
                     return Ok(idNode, handlers.ReadEnum(paramsNode as JsonObject));
                 case "readForm":
                     return Ok(idNode, handlers.ReadForm(paramsNode as JsonObject));
+                case "readObjectXml":
+                    return Ok(idNode, handlers.ReadObjectXml(paramsNode as JsonObject));
                 case "createObject":
                 case "saveObject":
                     return Ok(idNode, handlers.SaveObject(paramsNode as JsonObject));

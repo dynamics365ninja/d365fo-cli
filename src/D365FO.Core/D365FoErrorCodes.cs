@@ -56,6 +56,11 @@ public static class D365FoErrorCodes
     // MCP dispatcher
     public const string UnknownTool = "UNKNOWN_TOOL";
 
+    // Bridge / structured method modify (#112)
+    public const string BridgeRequired = "BRIDGE_REQUIRED";
+    public const string ValidationFailed = "VALIDATION_FAILED";
+    public const string GroundingRequired = "GROUNDING_REQUIRED";
+
     // MCP HTTP transport
     public const string Unauthorized = "UNAUTHORIZED";
     public const string ModeNotAllowed = "MODE_NOT_ALLOWED";

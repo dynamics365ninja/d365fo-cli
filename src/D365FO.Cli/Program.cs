@@ -7,6 +7,7 @@ using D365FO.Cli.Commands.Generate;
 using D365FO.Cli.Commands.Get;
 using D365FO.Cli.Commands.Index;
 using D365FO.Cli.Commands.Models;
+using D365FO.Cli.Commands.Modify;
 using D365FO.Cli.Commands.Ops;
 using D365FO.Cli.Commands.Read;
 using D365FO.Cli.Commands.Resolve;
@@ -224,6 +225,12 @@ app.Configure(cfg =>
         b.AddCommand<GenerateRunBaseCommand>("runbase").WithDescription("Scaffold a RunBase/RunBaseBatch class with dialog and pack/unpack.");
         b.AddCommand<GenerateSecurityPolicyCommand>("security-policy").WithDescription("Scaffold an AxSecurityPolicy (XDS) XML.");
         b.AddCommand<GenerateSysTestCommand>("systest").WithDescription("Scaffold an ATL-ready SysTestCase class (Arrange/Act/Assert skeleton).");
+    });
+
+    cfg.AddBranch("modify", b =>
+    {
+        b.SetDescription("Structured, live edits to existing AOT objects via D365FO.Bridge (Windows VM). No on-disk fallback.");
+        b.AddCommand<ModifyMethodCommand>("method").WithDescription("Replace the body of an existing method on a class/table/edt/form.");
     });
 
     cfg.AddBranch("analyze", b =>
