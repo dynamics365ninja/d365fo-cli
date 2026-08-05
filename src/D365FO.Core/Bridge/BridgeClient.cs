@@ -202,8 +202,16 @@ public sealed class BridgeClient : IDisposable
             var completed = Task.WhenAny(readTask, timeoutTask).GetAwaiter().GetResult();
             if (completed != readTask)
             {
+                // The abandoned ReadLine is still parked on the pipe and will consume
+                // whatever the bridge eventually writes. Leaving the process alive would
+                // hand that late reply to the NEXT request, silently shifting every
+                // subsequent response by one. Tear the child down instead so the next
+                // call starts a clean bridge.
+                cancel.ThrowIfCancellationRequested();
+                DiscardProcess();
                 throw new BridgeException(
-                    $"Bridge did not respond within {options.RequestTimeout.TotalSeconds:F0}s (method: {method}).");
+                    $"Bridge did not respond within {options.RequestTimeout.TotalSeconds:F0}s (method: {method}). " +
+                    "The bridge process was restarted; retry the call.");
             }
 
             responseLine = readTask.GetAwaiter().GetResult();
@@ -227,6 +235,19 @@ public sealed class BridgeClient : IDisposable
         if (parsed is not JsonObject response)
         {
             throw new BridgeException("Bridge returned a non-object response.");
+        }
+
+        // Correlate the reply with the request. The protocol is strictly one
+        // request/response at a time, so a mismatched id means the stream has
+        // drifted out of step and every later reply would be misattributed —
+        // surfacing stale data as if it answered the current call.
+        var responseId = (int?)response["id"];
+        if (responseId is not null && responseId != id)
+        {
+            DiscardProcess();
+            throw new BridgeException(
+                $"Bridge replied to request {responseId} while {id} was pending (method: {method}). " +
+                "The stream was out of sync; the bridge process was restarted.");
         }
 
         if (response["error"] is JsonObject err)
@@ -258,6 +279,36 @@ public sealed class BridgeClient : IDisposable
         if (!string.IsNullOrWhiteSpace(options.XrefConnectionString))
             env.Add(new("D365FO_XREF_CONNECTIONSTRING", options.XrefConnectionString!));
         return env;
+    }
+
+    /// <summary>
+    /// Kill and forget the current child process so the next <see cref="SendAsync"/> spawns a
+    /// fresh one. Called when the stdio stream can no longer be trusted to be in step with the
+    /// request sequence (timeout, mismatched response id). No-op in test-stream mode, where the
+    /// caller owns the streams and there is no process to replace.
+    /// </summary>
+    private void DiscardProcess()
+    {
+        if (options.UseInProcessStreams) return;
+
+        var dead = process;
+        process = null;
+        writer = null;
+        reader = null;
+
+        if (dead is null) return;
+        try
+        {
+            if (!dead.HasExited) dead.Kill(entireProcessTree: true);
+        }
+        catch
+        {
+            // Best-effort: the process may have exited on its own between the check and the kill.
+        }
+        finally
+        {
+            dead.Dispose();
+        }
     }
 
     private void EnsureStarted()

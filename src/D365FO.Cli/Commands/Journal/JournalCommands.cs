@@ -37,7 +37,15 @@ public sealed class UndoCommand : Command<UndoCommand.Settings>
                 "The modification journal is empty — nothing to undo.",
                 "Every write from `generate`, `labels create|rename|delete`, and `delete` appends an entry here."));
 
-        var steps = settings.Steps <= 0 ? 1 : settings.Steps;
+        // Undo is destructive. A caller that passes 0 or a negative count has made a mistake —
+        // silently rounding that up to 1 reverts a write nobody asked to revert, so fail loudly
+        // instead.
+        if (settings.Steps <= 0)
+            return RenderHelpers.Render(kind, ToolResult<object>.Fail(D365FoErrorCodes.InvalidArgs,
+                $"--steps must be 1 or greater; got {settings.Steps}.",
+                "Use `--steps 1` to revert the most recent entry, or `--dry-run` to preview first."));
+
+        var steps = settings.Steps;
         var result = UndoEngine.Undo(journal, steps, settings.DryRun);
 
         var touchedModels = result.Steps

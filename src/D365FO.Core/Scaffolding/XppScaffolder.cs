@@ -1224,6 +1224,7 @@ public static class ScaffoldFileWriter
             throw new FileNotFoundException($"Target does not exist: {full}", full);
 
         var preImage = SafeReadAllText(full);
+        var preImageHadBom = DetectUtf8Bom(full);
         var (kind, objectName) = InferKindAndName(full);
         var effectiveModel = model ?? InferModel(full);
 
@@ -1254,7 +1255,8 @@ public static class ScaffoldFileWriter
                 TargetPath: full,
                 PreImage: preImage,
                 IsTombstone: false,
-                RnrProjDelta: delta);
+                RnrProjDelta: delta,
+                PreImageHadBom: preImageHadBom);
             ModificationJournal.ForIndex().Append(entry);
         }
         catch { /* best-effort */ }
@@ -1377,6 +1379,7 @@ public static class ScaffoldFileWriter
         // independent of the .bak file below, which the write path keeps for immediate manual
         // recovery but is not itself part of the journal's reversible-write contract.
         string? preImage = File.Exists(full) ? SafeReadAllText(full) : null;
+        bool? preImageHadBom = File.Exists(full) ? DetectUtf8Bom(full) : null;
 
         string? backup = null;
         if (File.Exists(full))
@@ -1420,7 +1423,7 @@ public static class ScaffoldFileWriter
         }
 
         var bytes = new FileInfo(full).Length;
-        RecordJournalEntry(full, preImage);
+        RecordJournalEntry(full, preImage, preImageHadBom);
         return new WriteResult(full, bytes, backup);
     }
 
@@ -1435,7 +1438,7 @@ public static class ScaffoldFileWriter
     /// best-effort: when the path doesn't match that convention, Model is left null and the
     /// entry is still recorded (disk replay only needs the path + pre-image, not the model).
     /// </summary>
-    private static void RecordJournalEntry(string fullPath, string? preImage)
+    private static void RecordJournalEntry(string fullPath, string? preImage, bool? preImageHadBom = null)
     {
         try
         {
@@ -1464,7 +1467,8 @@ public static class ScaffoldFileWriter
                 TargetPath: fullPath,
                 PreImage: preImage,
                 IsTombstone: preImage is null,
-                RnrProjDelta: delta);
+                RnrProjDelta: delta,
+                PreImageHadBom: preImageHadBom);
 
             ModificationJournal.ForIndex().Append(entry);
         }
@@ -1479,6 +1483,24 @@ public static class ScaffoldFileWriter
     {
         try { return File.ReadAllText(path); }
         catch { return string.Empty; }
+    }
+
+    /// <summary>
+    /// Whether <paramref name="path"/> starts with a UTF-8 BOM. Recorded alongside the pre-image
+    /// so <c>d365fo undo</c> can restore the file byte-for-byte: the pre-image is a decoded string
+    /// and the decoder swallows the BOM, so without this the restored AOT XML would be three bytes
+    /// shorter than the original that D365FO and Visual Studio wrote.
+    /// </summary>
+    internal static bool? DetectUtf8Bom(string path)
+    {
+        try
+        {
+            using var fs = File.OpenRead(path);
+            Span<byte> head = stackalloc byte[3];
+            return fs.ReadAtLeast(head, 3, throwOnEndOfStream: false) == 3
+                   && head[0] == 0xEF && head[1] == 0xBB && head[2] == 0xBF;
+        }
+        catch { return null; }
     }
 
     /// <summary>

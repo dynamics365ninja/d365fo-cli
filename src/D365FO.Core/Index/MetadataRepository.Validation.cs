@@ -1,4 +1,4 @@
-using D365FO.Core.Validation;
+﻿using D365FO.Core.Validation;
 using Dapper;
 
 namespace D365FO.Core.Index;
@@ -161,6 +161,7 @@ public sealed partial class MetadataRepository : IReferenceIndex, IPropertyStats
     /// <inheritdoc />
     public IReadOnlyList<(string Value, long Count)> GetPropertyValueDistribution(string nodeType, string property, int limit = 5)
     {
+        limit = ClampLimit(limit, 5);
         using var conn = OpenReadOnly();
         return conn.Query<(string Value, long Count)>(@"
             SELECT Value, SUM(Count) AS Count FROM PropertyStats
@@ -211,6 +212,7 @@ public sealed partial class MetadataRepository : IReferenceIndex, IPropertyStats
     /// </summary>
     public IReadOnlyList<(string Name, string Model)> FindSimilarObjects(string kind, string needle, int limit = 5)
     {
+        limit = ClampLimit(limit, 5);
         var table = kind.ToLowerInvariant() switch
         {
             "table" => "Tables",

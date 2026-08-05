@@ -291,6 +291,7 @@ public sealed partial class MetadataRepository
     /// </remarks>
     public IReadOnlyList<ClassInfo> SearchClasses(string query, string? model = null, int limit = 50)
     {
+        limit = ClampLimit(limit, 50);
         using var conn = OpenReadOnly();
         var like = $"%{EscapeLike(query)}%";
         var sql = @"
@@ -462,6 +463,7 @@ public sealed partial class MetadataRepository
 
     public IReadOnlyList<LabelMatch> SearchLabels(string query, IReadOnlyCollection<string>? languages = null, int limit = 100)
     {
+        limit = ClampLimit(limit, 100);
         using var conn = OpenReadOnly();
         var like = $"%{EscapeLike(query)}%";
         var langsLower = languages?.Select(l => l.ToLowerInvariant()).ToList();
@@ -497,6 +499,7 @@ public sealed partial class MetadataRepository
     /// </summary>
     public IReadOnlyList<LabelMatch> SearchLabelsFts(string query, IReadOnlyCollection<string>? languages = null, int limit = 100)
     {
+        limit = ClampLimit(limit, 100);
         using var conn = OpenReadOnly();
         var langsLower = languages?.Select(l => l.ToLowerInvariant()).ToList();
         try
@@ -587,6 +590,7 @@ public sealed partial class MetadataRepository
     /// </summary>
     public IReadOnlyList<MethodSourceMatch> SearchMethodSource(string query, int limit = 100, string? model = null, string? kind = null)
     {
+        limit = ClampLimit(limit, 100);
         using var conn = OpenReadOnly();
         try
         {
@@ -730,6 +734,7 @@ public sealed partial class MetadataRepository
         string? model = null,
         int limit = 50)
     {
+        limit = ClampLimit(limit, 50);
         using var conn = OpenReadOnly();
         // Driving datasource = OrderIndex 0 (or any when none populated yet).
         var sql = @"
@@ -740,14 +745,16 @@ public sealed partial class MetadataRepository
                      ORDER BY d.OrderIndex, d.Id LIMIT 1) AS PrimaryTable,
                    (SELECT COUNT(*) FROM FormDataSources d WHERE d.FormId = f.FormId) AS DataSourceCount
             FROM Forms f JOIN Models m ON m.ModelId = f.ModelId
-            WHERE (@pat IS NULL OR f.Pattern LIKE @patLike)
+            WHERE (@pat IS NULL OR f.Pattern LIKE @patLike ESCAPE '!')
               AND (@tbl IS NULL OR EXISTS (
                     SELECT 1 FROM FormDataSources d
                     WHERE d.FormId = f.FormId AND d.TableName = @tbl))
               AND (@mdl IS NULL OR m.Name = @mdl)
             ORDER BY f.Pattern, f.Name
             LIMIT @lim";
-        var patLike = pattern is null ? null : pattern + "%";
+        // Prefix match on a caller-supplied pattern name — escape the wildcards so that
+        // e.g. "Simple_List" matches that literal name and not "SimpleXList".
+        var patLike = pattern is null ? null : EscapeLike(pattern) + "%";
         return conn.Query<FormPatternRow>(sql, new
         {
             pat = pattern,
@@ -1228,6 +1235,7 @@ public sealed partial class MetadataRepository
 
     public IReadOnlyList<QueryInfo> SearchQueries(string query, int limit = 50)
     {
+        limit = ClampLimit(limit, 50);
         using var conn = OpenReadOnly();
         var like = $"%{EscapeLike(query)}%";
         return conn.Query<QueryInfo>(@"
@@ -1253,6 +1261,7 @@ public sealed partial class MetadataRepository
 
     public IReadOnlyList<ViewInfo> SearchViews(string query, int limit = 50)
     {
+        limit = ClampLimit(limit, 50);
         using var conn = OpenReadOnly();
         var like = $"%{EscapeLike(query)}%";
         return conn.Query<ViewInfo>(@"
@@ -1278,6 +1287,7 @@ public sealed partial class MetadataRepository
 
     public IReadOnlyList<DataEntityInfo> SearchDataEntities(string query, int limit = 50)
     {
+        limit = ClampLimit(limit, 50);
         using var conn = OpenReadOnly();
         var like = $"%{EscapeLike(query)}%";
         return conn.Query<DataEntityInfo>(@"
@@ -1306,6 +1316,7 @@ public sealed partial class MetadataRepository
 
     public IReadOnlyList<ReportInfo> SearchReports(string query, int limit = 50)
     {
+        limit = ClampLimit(limit, 50);
         using var conn = OpenReadOnly();
         var like = $"%{EscapeLike(query)}%";
         return conn.Query<ReportInfo>(@"
@@ -1331,6 +1342,7 @@ public sealed partial class MetadataRepository
 
     public IReadOnlyList<ServiceInfo> SearchServices(string query, int limit = 50)
     {
+        limit = ClampLimit(limit, 50);
         using var conn = OpenReadOnly();
         var like = $"%{EscapeLike(query)}%";
         return conn.Query<ServiceInfo>(@"
@@ -1370,6 +1382,7 @@ public sealed partial class MetadataRepository
 
     public IReadOnlyList<WorkflowTypeInfo> SearchWorkflowTypes(string query, int limit = 50)
     {
+        limit = ClampLimit(limit, 50);
         using var conn = OpenReadOnly();
         var like = $"%{EscapeLike(query)}%";
         return conn.Query<WorkflowTypeInfo>(@"
@@ -1385,6 +1398,7 @@ public sealed partial class MetadataRepository
     /// <summary>Search for AxMap objects by name (LIKE wildcard).</summary>
     public IReadOnlyList<MapInfo> SearchMaps(string query, int limit = 50)
     {
+        limit = ClampLimit(limit, 50);
         using var conn = OpenReadOnly();
         var like = $"%{EscapeLike(query)}%";
         return conn.Query<MapInfo>(@"
@@ -1420,6 +1434,7 @@ public sealed partial class MetadataRepository
 
     public IReadOnlyList<BusinessEventInfo> SearchBusinessEvents(string query, string? category = null, int limit = 50)
     {
+        limit = ClampLimit(limit, 50);
         using var conn = OpenReadOnly();
         var like = $"%{EscapeLike(query)}%";
         return conn.Query<BusinessEventInfo>(@"
@@ -1442,6 +1457,7 @@ public sealed partial class MetadataRepository
 
     public IReadOnlyList<SecurityPolicyInfo> SearchSecurityPolicies(string query, int limit = 50)
     {
+        limit = ClampLimit(limit, 50);
         using var conn = OpenReadOnly();
         var like = $"%{EscapeLike(query)}%";
         return conn.Query<SecurityPolicyInfo>(@"
@@ -1465,6 +1481,7 @@ public sealed partial class MetadataRepository
 
     public IReadOnlyList<ConfigurationKeyInfo> SearchConfigurationKeys(string query, int limit = 50)
     {
+        limit = ClampLimit(limit, 50);
         using var conn = OpenReadOnly();
         var like = $"%{EscapeLike(query)}%";
         return conn.Query<ConfigurationKeyInfo>(@"
@@ -1477,6 +1494,7 @@ public sealed partial class MetadataRepository
 
     public IReadOnlyList<TileInfo> SearchTiles(string query, int limit = 50)
     {
+        limit = ClampLimit(limit, 50);
         using var conn = OpenReadOnly();
         var like = $"%{EscapeLike(query)}%";
         return conn.Query<TileInfo>(@"
@@ -1489,6 +1507,7 @@ public sealed partial class MetadataRepository
 
     public IReadOnlyList<WorkspaceInfo> SearchWorkspaces(string query, int limit = 50)
     {
+        limit = ClampLimit(limit, 50);
         using var conn = OpenReadOnly();
         var like = $"%{EscapeLike(query)}%";
         return conn.Query<WorkspaceInfo>(@"
@@ -1552,6 +1571,7 @@ public sealed partial class MetadataRepository
     public IReadOnlyList<(string Kind, string Name, string Model)> FindUsagesFiltered(
         string needle, IReadOnlyList<string>? kinds, int limit = 100)
     {
+        limit = ClampLimit(limit, 100);
         if (kinds is null || kinds.Count == 0)
             return FindUsages(needle, limit);
 
@@ -1637,6 +1657,7 @@ public sealed partial class MetadataRepository
 
     public IReadOnlyList<CommandTimingRow> GetCommandTimings(int limit = 50)
     {
+        limit = ClampLimit(limit, 50);
         using var conn = OpenReadOnly();
         return conn.Query<CommandTimingRow>(@"
             SELECT Command,
@@ -1832,6 +1853,7 @@ public sealed partial class MetadataRepository
     /// </summary>
     public IReadOnlyList<TableFieldMatch> FindTablesByField(string name, string? model = null, int limit = 200)
     {
+        limit = ClampLimit(limit, 200);
         using var conn = OpenReadOnly();
 
         // Base-table fields (TableFields). Queried as real columns so the SQLite
@@ -1886,6 +1908,7 @@ public sealed partial class MetadataRepository
 
     public IReadOnlyList<TableInfo> SearchTables(string query, string? model = null, int limit = 50)
     {
+        limit = ClampLimit(limit, 50);
         using var conn = OpenReadOnly();
         var like = $"%{EscapeLike(query)}%";
         return conn.Query<TableInfo>(@"
@@ -1901,6 +1924,7 @@ public sealed partial class MetadataRepository
 
     public IReadOnlyList<EdtInfo> SearchEdts(string query, int limit = 50)
     {
+        limit = ClampLimit(limit, 50);
         using var conn = OpenReadOnly();
         var like = $"%{EscapeLike(query)}%";
         return conn.Query<EdtInfo>(@"
@@ -1915,6 +1939,7 @@ public sealed partial class MetadataRepository
 
     public IReadOnlyList<EnumInfo> SearchEnums(string query, int limit = 50)
     {
+        limit = ClampLimit(limit, 50);
         using var conn = OpenReadOnly();
         var like = $"%{EscapeLike(query)}%";
         return conn.Query<EnumInfo>(@"
@@ -2034,6 +2059,7 @@ public sealed partial class MetadataRepository
     /// </summary>
     public IReadOnlyList<(string Kind, string Name, string Model)> FindUsages(string needle, int limit = 100)
     {
+        limit = ClampLimit(limit, 100);
         using var conn = OpenReadOnly();
         var like = $"%{EscapeLike(needle)}%";
         var rows = conn.Query<UsageRow>(@"
@@ -2148,6 +2174,7 @@ public sealed partial class MetadataRepository
     /// <summary>Recent <c>ExtractionRuns</c>, newest first.</summary>
     public IReadOnlyList<ExtractionRunRow> GetExtractionRuns(int limit = 200, string? model = null)
     {
+        limit = ClampLimit(limit, 200);
         using var conn = OpenReadOnly();
         var sql = @"SELECT RunId, StartedUtc, Model, ElapsedMs, Tables, Classes, Edts, Enums, Labels, IsCustom
                     FROM ExtractionRuns
@@ -2924,14 +2951,6 @@ public sealed partial class MetadataRepository
     }
 
     /// <summary>
-    /// Opens a read-only connection to the index database. Used by all pure
-    /// query methods to avoid acquiring a write-capable lock unnecessarily.
-    /// Falls back to <see cref="Open"/> when the database does not yet exist
-    /// (i.e. during <see cref="EnsureSchema"/> bootstrapping) — callers of
-    /// this method must therefore have previously called EnsureSchema().
-    /// </summary>
-
-    /// <summary>
     /// Escapes SQLite LIKE wildcard characters (<c>%</c>, <c>_</c>, and the
     /// chosen escape character <c>!</c>) in a user-supplied query fragment so
     /// that they are treated as literals.
@@ -2940,6 +2959,26 @@ public sealed partial class MetadataRepository
     private static string EscapeLike(string value) =>
         value.Replace("!", "!!").Replace("%", "!%").Replace("_", "!_");
 
+    /// <summary>
+    /// Clamps a caller-supplied row limit into a sane range. SQLite treats a
+    /// NEGATIVE <c>LIMIT</c> as "no limit at all", so passing <c>--limit -1</c>
+    /// through unchecked turns a bounded lookup into a full-index dump — the
+    /// exact token blow-up the result caps exist to prevent. Zero and negative
+    /// values fall back to <paramref name="fallback"/>; anything above
+    /// <see cref="MaxRowLimit"/> is capped.
+    /// </summary>
+    internal static int ClampLimit(int limit, int fallback = 50) =>
+        limit <= 0 ? fallback : Math.Min(limit, MaxRowLimit);
+
+    /// <summary>Hard ceiling on rows any single query may return.</summary>
+    public const int MaxRowLimit = 1000;
+
+    /// <summary>
+    /// Opens a read-only connection to the index database. Used by all pure
+    /// query methods to avoid acquiring a write-capable lock unnecessarily.
+    /// The database must already exist — callers reach this only after
+    /// <see cref="EnsureSchema"/> has created it.
+    /// </summary>
     private SqliteConnection OpenReadOnly()
     {
         var conn = new SqliteConnection(_readOnlyConnectionString);

@@ -58,6 +58,38 @@ public class MetadataRepositoryTests : IDisposable
     }
 
     [Fact]
+    public void Negative_limit_does_not_disable_the_row_cap()
+    {
+        // SQLite reads a NEGATIVE LIMIT as "no limit", so an unchecked `--limit -1`
+        // turns a bounded search into a full-index dump.
+        var repo = new MetadataRepository(_dbPath);
+        repo.EnsureSchema();
+
+        using var conn = new Microsoft.Data.Sqlite.SqliteConnection(repo.ConnectionString);
+        conn.Open();
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = "INSERT INTO Models(Name,IsCustom) VALUES('AppFound',0);";
+        for (var i = 0; i < 60; i++)
+            cmd.CommandText += $"INSERT INTO Classes(Name,ModelId,IsAbstract,IsFinal,SourcePath) VALUES('CustCls{i:D3}',1,0,0,'/x');";
+        cmd.ExecuteNonQuery();
+
+        // -1 and 0 both fall back to the method's documented default (50), not "everything".
+        Assert.Equal(50, repo.SearchClasses("CustCls", limit: -1).Count);
+        Assert.Equal(50, repo.SearchClasses("CustCls", limit: 0).Count);
+        Assert.Equal(5, repo.SearchClasses("CustCls", limit: 5).Count);
+    }
+
+    [Fact]
+    public void Limit_is_capped_at_the_hard_ceiling()
+    {
+        Assert.Equal(MetadataRepository.MaxRowLimit, MetadataRepository.ClampLimit(int.MaxValue));
+        Assert.Equal(MetadataRepository.MaxRowLimit, MetadataRepository.ClampLimit(5000));
+        Assert.Equal(50, MetadataRepository.ClampLimit(-1));
+        Assert.Equal(100, MetadataRepository.ClampLimit(0, fallback: 100));
+        Assert.Equal(7, MetadataRepository.ClampLimit(7));
+    }
+
+    [Fact]
     public void Search_ranks_custom_models_above_Microsoft_models()
     {
         var repo = new MetadataRepository(_dbPath);
