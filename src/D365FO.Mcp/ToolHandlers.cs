@@ -1071,8 +1071,11 @@ public sealed class ToolHandlers
             try { return _repo.GetEdt(edt)?.BaseType; }
             catch { return null; }
         };
+        // configurationKey / formRef stay CLI-only: the MCP surface already exposes a
+        // reduced subset of generate table's options (no tableType, no primaryKey) and
+        // every added property widens the shared generate_object schema for all types.
         var doc = D365FO.Core.Scaffolding.XppScaffolder.Table(name, label, fieldSpecs, pat,
-            D365FO.Core.Scaffolding.TableStorage.RegularTable, null, edtResolver);
+            D365FO.Core.Scaffolding.TableStorage.RegularTable, null, edtBaseTypeResolver: edtResolver);
         var extra = new { fieldCount = fieldSpecs.Count > 0 ? fieldSpecs.Count : (int?)null, pattern = pat == D365FO.Core.Scaffolding.TablePattern.None ? null : pat.ToString() };
         return WriteScaffold(doc, name, "AxTable", "AxTable", installTo, outPath, overwrite, extra);
     }

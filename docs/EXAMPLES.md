@@ -201,6 +201,8 @@ Auto-detects the Windows `PackagesLocalDirectory`, prepares the SQLite schema, a
 
 `generate` writes atomically (`.tmp` + move) and keeps a `.bak` when `--overwrite` is used. Pass `--install-to <Model>` to drop the artefact straight into a model folder via the bridge (requires `D365FO_BRIDGE_ENABLED=1`, `D365FO_PACKAGES_PATH`, `D365FO_BIN_PATH`).
 
+Add `--verify` to read the artefact back through the D365FO Metadata API after writing it, the way Visual Studio would. It applies to `--install-to` (the provider resolves objects by name inside the packages paths, so an arbitrary `--out` path is not something it can look up) and is skipped with a note when the runtime is unavailable — generation keeps working offline either way. A write that the provider then refuses to load fails with `VERIFY_FAILED`; the file is left on disk so you can open it in Visual Studio.
+
 ### Table
 
 ```sh
@@ -226,9 +228,18 @@ d365fo generate table FmVehicle \
   --field Make:Name \
   --primary-key VIN \
   --out src/MyModel/AxTable/FmVehicle.xml
+
+# Gate the table behind a configuration key and give it a drill-down form
+d365fo generate table FmVehicle \
+  --pattern master \
+  --configuration-key FmModule \
+  --form-ref FmVehicleForm \
+  --install-to FleetManagement
 ```
 
 Patterns: `main`/`master`, `transaction`, `parameter`/`setup`/`config`, `group`, `worksheetheader`/`header`, `worksheetline`/`line`, `reference`/`lookup`, `framework`, `miscellaneous`. Temp tables: `--table-type TempDB --pattern main`.
+
+`--configuration-key` and `--form-ref` are omitted from the XML when not passed, so the AOT defaults (ungated, no drill-down form) still apply.
 
 ### Class
 

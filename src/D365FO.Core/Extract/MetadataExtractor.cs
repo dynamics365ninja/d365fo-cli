@@ -948,9 +948,16 @@ public sealed class MetadataExtractor
     // [ExtensionOf(formStr(Name))], [ExtensionOf(formDataSourceStr(Form, DS))], etc.
     // For data-source / control variants the *first* identifier is the target
     // form/table — that's what downstream queries key on.
+    // Case-insensitive: X++ is a case-insensitive language and the intrinsic
+    // casing varies freely across real AOTs (classStr / classstr /
+    // dataentityviewstr all occur), so a case-sensitive match silently drops
+    // those class extensions from CoC indexing. The `[ExtensionOf(` prefix keeps
+    // the looser match anchored — unlike the bare *Str( scan in StrArgRx, where
+    // IgnoreCase would also swallow the X++ subStr() intrinsic.
     private static readonly System.Text.RegularExpressions.Regex ExtensionOfRx = new(
         @"\[\s*ExtensionOf\s*\(\s*(?<kind>\w+)Str\s*\(\s*(?<name>[A-Za-z_][A-Za-z0-9_]*)",
-        System.Text.RegularExpressions.RegexOptions.Compiled);
+        System.Text.RegularExpressions.RegexOptions.Compiled |
+        System.Text.RegularExpressions.RegexOptions.IgnoreCase);
 
     private static IEnumerable<ExtractedCoc> DetectCoc(ExtractedClass c)
     {

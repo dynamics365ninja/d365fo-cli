@@ -58,6 +58,38 @@ public class MetadataRepositoryTests : IDisposable
     }
 
     [Fact]
+    public void Search_ranks_custom_models_above_Microsoft_models()
+    {
+        var repo = new MetadataRepository(_dbPath);
+        repo.EnsureSchema();
+
+        using var conn = new Microsoft.Data.Sqlite.SqliteConnection(repo.ConnectionString);
+        conn.Open();
+        using var cmd = conn.CreateCommand();
+        // The custom class sorts LAST by name, so name-only ordering would push it
+        // past the limit — exactly the "buried under Microsoft objects" failure.
+        cmd.CommandText = @"
+            INSERT INTO Models(Name,IsCustom) VALUES('ApplicationSuite',0);
+            INSERT INTO Models(Name,IsCustom) VALUES('Contoso',1);
+            INSERT INTO Classes(Name,ModelId,IsAbstract,IsFinal,SourcePath) VALUES('CustAaa',1,0,1,'/x');
+            INSERT INTO Classes(Name,ModelId,IsAbstract,IsFinal,SourcePath) VALUES('CustBbb',1,0,1,'/x');
+            INSERT INTO Classes(Name,ModelId,IsAbstract,IsFinal,SourcePath) VALUES('CustZzz',2,0,1,'/x');
+            INSERT INTO Tables(Name,ModelId,SourcePath) VALUES('CustAaaTable',1,'/x');
+            INSERT INTO Tables(Name,ModelId,SourcePath) VALUES('CustZzzTable',2,'/x');";
+        cmd.ExecuteNonQuery();
+
+        var classes = repo.SearchClasses("Cust");
+        Assert.Equal(new[] { "CustZzz", "CustAaa", "CustBbb" }, classes.Select(c => c.Name).ToArray());
+
+        // With a tight limit the custom hit must survive rather than be truncated.
+        var topClass = Assert.Single(repo.SearchClasses("Cust", limit: 1));
+        Assert.Equal("Contoso", topClass.Model);
+
+        var tables = repo.SearchTables("Cust");
+        Assert.Equal(new[] { "CustZzzTable", "CustAaaTable" }, tables.Select(t => t.Name).ToArray());
+    }
+
+    [Fact]
     public void GetTable_missing_returns_null()
     {
         var repo = new MetadataRepository(_dbPath);
@@ -178,5 +210,107 @@ public class MetadataRepositoryTests : IDisposable
         Assert.Equal(2, detail.Methods.Count);
         Assert.Contains(detail.Methods, m => m.Name == "run");
         Assert.Contains(detail.Methods, m => m.Name == "init");
+        Assert.Empty(detail.InheritedMethods);
+    }
+
+    [Fact]
+    public void GetClassDetails_walks_the_extends_chain_for_inherited_methods()
+    {
+        var repo = new MetadataRepository(_dbPath);
+        repo.EnsureSchema();
+
+        // GrandBase.helper / GrandBase.run  →  Base.run (override) →  Leaf.init
+        var batch = ExtractBatch.Empty("Fleet") with
+        {
+            Classes = new[]
+            {
+                new ExtractedClass("GrandBase", null, false, false, "/g.xml",
+                    new[]
+                    {
+                        new ExtractedMethod("helper", "public void helper()", "void", false),
+                        new ExtractedMethod("run", "public void run()", "void", false),
+                    }),
+                new ExtractedClass("Base", "GrandBase", false, false, "/b.xml",
+                    new[]
+                    {
+                        new ExtractedMethod("run", "public void run()", "void", false),
+                        new ExtractedMethod("setup", "public void setup()", "void", false),
+                    }),
+                new ExtractedClass("Leaf", "Base", false, true, "/l.xml",
+                    new[] { new ExtractedMethod("init", "public void init()", "void", false) }),
+            }
+        };
+        repo.ApplyExtract(batch);
+
+        var leaf = repo.GetClassDetails("Leaf");
+        Assert.NotNull(leaf);
+        Assert.Equal(new[] { "init" }, leaf!.Methods.Select(m => m.Name).ToArray());
+        Assert.All(leaf.Methods, m => Assert.Null(m.DeclaringClass));
+
+        // Nearest base first; "run" resolves to Base's override, not GrandBase's.
+        Assert.Equal(new[] { "run", "setup", "helper" },
+            leaf.InheritedMethods.Select(m => m.Name).ToArray());
+        Assert.Equal(new[] { "Base", "Base", "GrandBase" },
+            leaf.InheritedMethods.Select(m => m.DeclaringClass).ToArray());
+
+        // An override is attributed to the class that declares it, never duplicated
+        // into the inherited list.
+        var mid = repo.GetClassDetails("Base");
+        Assert.Equal(new[] { "run", "setup" }, mid!.Methods.Select(m => m.Name).OrderBy(n => n).ToArray());
+        var inheritedOnBase = Assert.Single(mid.InheritedMethods);
+        Assert.Equal("helper", inheritedOnBase.Name);
+        Assert.Equal("GrandBase", inheritedOnBase.DeclaringClass);
+    }
+
+    [Fact]
+    public void GetSecurityCoverage_reports_row_level_state_instead_of_omitting_it()
+    {
+        var repo = new MetadataRepository(_dbPath);
+        repo.EnsureSchema();
+
+        // Before any policy is indexed, "no policy found" is not evidence of absence.
+        Assert.Equal("Unknown", repo.GetSecurityCoverage("CustTable", "Table").RowLevel.State);
+
+        repo.ApplyExtract(ExtractBatch.Empty("Fleet") with
+        {
+            SecurityPolicies = new[]
+            {
+                new ExtractedSecurityPolicy("FmVehiclePolicy", "FmVehicle", "FmVehicleQuery",
+                    "Update", "RoleName", true, false, "/p.xml"),
+            }
+        });
+
+        var constrained = repo.GetSecurityCoverage("FmVehicle", "Table").RowLevel;
+        Assert.Equal("Constrained", constrained.State);
+        Assert.Equal("FmVehiclePolicy", Assert.Single(constrained.Policies).Name);
+
+        // Policies exist in the index and none names this table — now the empty
+        // answer is authoritative.
+        var unconstrained = repo.GetSecurityCoverage("CustTable", "Table").RowLevel;
+        Assert.Equal("NotConstrained", unconstrained.State);
+        Assert.Empty(unconstrained.Policies);
+
+        // XDS constrains tables only.
+        Assert.Equal("NotApplicable", repo.GetSecurityCoverage("FmVehicleForm", "Menuitem").RowLevel.State);
+    }
+
+    [Fact]
+    public void GetClassDetails_returns_no_inherited_methods_when_base_is_outside_the_index()
+    {
+        var repo = new MetadataRepository(_dbPath);
+        repo.EnsureSchema();
+        var batch = ExtractBatch.Empty("Fleet") with
+        {
+            Classes = new[]
+            {
+                new ExtractedClass("FleetBatch", "RunBaseBatch", false, true, "/x.xml",
+                    new[] { new ExtractedMethod("run", "public void run()", "void", false) }),
+            }
+        };
+        repo.ApplyExtract(batch);
+
+        var detail = repo.GetClassDetails("FleetBatch");
+        Assert.Equal("RunBaseBatch", detail!.Class.Extends);
+        Assert.Empty(detail.InheritedMethods);
     }
 }

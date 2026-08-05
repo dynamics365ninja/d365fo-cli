@@ -276,6 +276,38 @@ public class ExtractPipelineTests : IDisposable
         Assert.False(batches["MsExtensions"]);
     }
 
+    [Theory]
+    [InlineData("classStr")]
+    [InlineData("classstr")]
+    [InlineData("CLASSSTR")]
+    public void MetadataExtractor_detects_ExtensionOf_regardless_of_intrinsic_casing(string intrinsic)
+    {
+        // X++ is case-insensitive and real AOTs mix the casing freely
+        // (classStr / classstr / dataentityviewstr). A case-sensitive match
+        // silently dropped those class extensions from CoC indexing.
+        var model = Path.Combine(_workRoot, "CocCase", "CocCase");
+        Directory.CreateDirectory(Path.Combine(model, "AxClass"));
+        File.WriteAllText(Path.Combine(model, "AxClass", "CustTableHelper.xml"), $$"""
+            <AxClass>
+              <Name>CustTableHelper</Name>
+              <SourceCode>
+                <Declaration>[ExtensionOf({{intrinsic}}(CustTable))]
+            final class CustTableHelper
+            {
+            }</Declaration>
+                <Methods>
+                  <Method><Name>insert</Name><Source>public void insert() { next insert(); }</Source></Method>
+                </Methods>
+              </SourceCode>
+            </AxClass>
+            """);
+
+        var batch = Assert.Single(new MetadataExtractor().ExtractAll(_workRoot).ToList());
+        var coc = Assert.Single(batch.CocExtensions);
+        Assert.Equal("CustTable", coc.TargetClass);
+        Assert.Equal("insert", coc.TargetMethod);
+    }
+
     [Fact]
     public void Scaffolder_writes_table_atomically_with_backup()
     {

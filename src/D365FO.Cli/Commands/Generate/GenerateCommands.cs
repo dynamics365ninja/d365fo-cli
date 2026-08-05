@@ -22,6 +22,10 @@ public abstract class GenerateSettings : D365OutputSettings
     [CommandOption("--grounding-token <TOKEN>")]
     [System.ComponentModel.Description("Grounding token from `d365fo prepare change`/`prepare create` proving the index was consulted. Required for extension-shaped objects when D365FO_GROUNDING_ENFORCE=true.")]
     public string? GroundingToken { get; init; }
+
+    [CommandOption("--verify")]
+    [System.ComponentModel.Description("After writing, read the artefact back through the D365FO Metadata API the way Visual Studio would. Skipped (never fails) when the runtime is unavailable. Requires D365FO_BRIDGE_ENABLED=1.")]
+    public bool Verify { get; init; }
 }
 
 internal static class GenerateInstaller
@@ -159,9 +163,10 @@ internal static class GenerateInstaller
         string? installTo, string? outPath, bool overwrite,
         System.Xml.Linq.XDocument doc,
         Func<EmitResult, object> buildPayload,
-        List<string>? warnings = null)
+        List<string>? warnings = null,
+        bool verify = false)
         => EmitCore(kind, axKind, axSubfolder, name, installTo, outPath, doc.ToString(),
-            path => ScaffoldFileWriter.Write(doc, path, overwrite), buildPayload, warnings);
+            path => ScaffoldFileWriter.Write(doc, path, overwrite), buildPayload, warnings, verify);
 
     /// <summary>String-rendered counterpart of <see cref="Emit"/> (used for forms).</summary>
     internal static int EmitString(
@@ -169,16 +174,59 @@ internal static class GenerateInstaller
         string? installTo, string? outPath, bool overwrite,
         string xml,
         Func<EmitResult, object> buildPayload,
-        List<string>? warnings = null)
+        List<string>? warnings = null,
+        bool verify = false)
         => EmitCore(kind, axKind, axSubfolder, name, installTo, outPath, xml,
-            path => ScaffoldFileWriter.Write(xml, path, overwrite), buildPayload, warnings);
+            path => ScaffoldFileWriter.Write(xml, path, overwrite), buildPayload, warnings, verify);
+
+    /// <summary>
+    /// Opt-in post-write check for <c>--verify</c>: read the artefact back through the
+    /// live metadata provider, the way Visual Studio would. Returns a rendered failure
+    /// only when the provider was reachable and still could not load the object —
+    /// an absent runtime is reported as a note and never blocks generation, which has
+    /// to keep working offline (CI, agent sessions, machines without the VS metadata
+    /// assemblies).
+    /// </summary>
+    private static int? VerifyWritten(
+        OutputMode.Kind kind, string axKind, string name, string? installTo, string? writtenPath,
+        List<string> warnings)
+    {
+        // The provider resolves objects by name inside the configured packages paths,
+        // so an artefact parked at an arbitrary --out path is not something it can
+        // look up — verifying would either miss it or match a different object of the
+        // same name. Say so rather than emit a meaningless verdict.
+        if (string.IsNullOrWhiteSpace(installTo))
+        {
+            warnings.Add("--verify skipped: verification reads the object back by name from the " +
+                         "configured packages paths, which only applies to --install-to.");
+            return null;
+        }
+
+        var (outcome, detail) = BridgeGate.TryVerifyObject(axKind, name);
+        switch (outcome)
+        {
+            case BridgeGate.VerifyOutcome.Readable:
+                warnings.Add($"--verify: the metadata provider read '{name}' back successfully.");
+                return null;
+            case BridgeGate.VerifyOutcome.Skipped:
+                warnings.Add($"--verify skipped: {detail}");
+                return null;
+            default:
+                return RenderHelpers.Render(kind, ToolResult<object>.Fail(
+                    "VERIFY_FAILED",
+                    $"Wrote '{name}' but {detail} " +
+                    (writtenPath is null ? string.Empty : $"The file at {writtenPath} was left in place. ") +
+                    "Open it in Visual Studio to see the metadata reader's own error."));
+        }
+    }
 
     private static int EmitCore(
         OutputMode.Kind kind, string axKind, string axSubfolder, string name,
         string? installTo, string? outPath, string xml,
         Func<string, ScaffoldFileWriter.WriteResult> write,
         Func<EmitResult, object> buildPayload,
-        List<string>? warnings)
+        List<string>? warnings,
+        bool verify)
     {
         warnings ??= new List<string>();
         var hasInstall = !string.IsNullOrWhiteSpace(installTo);
@@ -193,13 +241,19 @@ internal static class GenerateInstaller
             var all = warnings.Concat(plan.warnings).ToList();
 
             if (plan.outcome == InstallOutcome.CreatedViaApi)
+            {
+                if (verify && VerifyWritten(kind, axKind, name, installTo, null, all) is int apiFailure)
+                    return apiFailure;
                 return RenderHelpers.Render(kind, ToolResult<object>.Success(
                     buildPayload(new EmitResult("bridge", null, null, null)),
                     all.Count > 0 ? all : null));
+            }
 
             try
             {
                 var res = write(plan.writePath!);
+                if (verify && VerifyWritten(kind, axKind, name, installTo, res.Path, all) is int failure)
+                    return failure;
                 return RenderHelpers.Render(kind, ToolResult<object>.Success(
                     buildPayload(new EmitResult("scaffold", res.Path, res.Bytes, res.BackupPath)),
                     all.Count > 0 ? all : null));
@@ -213,6 +267,8 @@ internal static class GenerateInstaller
         try
         {
             var res = write(outPath!);
+            if (verify && VerifyWritten(kind, axKind, name, installTo, res.Path, warnings) is int outFailure)
+                return outFailure;
             return RenderHelpers.Render(kind, ToolResult<object>.Success(
                 buildPayload(new EmitResult("scaffold", res.Path, res.Bytes, res.BackupPath)),
                 warnings.Count > 0 ? warnings : null));
@@ -249,6 +305,14 @@ public sealed class GenerateTableCommand : Command<GenerateTableCommand.Settings
         [CommandOption("--primary-key <FIELD>")]
         [System.ComponentModel.Description("Repeatable: field name(s) to compose the alternate-key index. Defaults to all mandatory fields, or the first field if none mandatory.")]
         public string[] PrimaryKey { get; init; } = Array.Empty<string>();
+
+        [CommandOption("--configuration-key <NAME>")]
+        [System.ComponentModel.Description("AxConfigurationKey gating the table. Omitted when not set (the table is ungated).")]
+        public string? ConfigurationKey { get; init; }
+
+        [CommandOption("--form-ref <MENUITEM>")]
+        [System.ComponentModel.Description("Display menu item opened when drilling into a record of this table. Omitted when not set.")]
+        public string? FormRef { get; init; }
     }
 
     public override int Execute(CommandContext ctx, Settings settings)
@@ -265,7 +329,8 @@ public sealed class GenerateTableCommand : Command<GenerateTableCommand.Settings
         // Resolve each field's EDT base type from the index so the scaffold
         // stamps the concrete i:type discriminator on every <AxTableField>.
         var edtResolver = GenerateInstaller.BuildEdtBaseTypeResolver();
-        var doc = XppScaffolder.Table(settings.Name, settings.Label, fields2, pattern, storage, settings.PrimaryKey, edtResolver);
+        var doc = XppScaffolder.Table(settings.Name, settings.Label, fields2, pattern, storage, settings.PrimaryKey,
+            settings.ConfigurationKey, settings.FormRef, edtResolver);
 
         var fieldCount = fields2.Count > 0 ? fields2.Count : TablePatternPresets.DefaultFieldsFor(pattern).Count;
         var patternStr = pattern == TablePattern.None ? null : pattern.ToString();
@@ -288,9 +353,12 @@ public sealed class GenerateTableCommand : Command<GenerateTableCommand.Settings
                 fieldCount,
                 pattern = patternStr,
                 tableType = tableTypeStr,
+                configurationKey = settings.ConfigurationKey,
+                formRef = settings.FormRef,
                 usedPatternDefaults = usedDefaults,
                 model = settings.InstallTo,
-            });
+            },
+            verify: settings.Verify);
     }
 
     private static TableFieldSpec ParseField(string raw)
@@ -331,7 +399,8 @@ public sealed class GenerateClassCommand : Command<GenerateClassCommand.Settings
             {
                 kind = "AxClass", name = settings.Name, source = r.Source,
                 path = r.Path, bytes = r.Bytes, backup = r.Backup, model = settings.InstallTo,
-            });
+            },
+            verify: settings.Verify);
     }
 }
 
@@ -399,7 +468,8 @@ public sealed class GenerateCocCommand : Command<GenerateCocCommand.Settings>
                 model = settings.InstallTo,
                 grounding = gate.Grounding,
             },
-            warnings);
+            warnings,
+            verify: settings.Verify);
     }
 }
 
@@ -427,7 +497,8 @@ public sealed class GenerateSimpleListCommand : Command<GenerateSimpleListComman
             linesTable:   null,
             outPath:      settings.Out,
             installTo:    settings.InstallTo,
-            overwrite:    settings.Overwrite);
+            overwrite:    settings.Overwrite,
+            verify:       settings.Verify);
     }
 }
 
@@ -482,7 +553,8 @@ public sealed class GenerateFormCommand : Command<GenerateFormCommand.Settings>
             linesTable:   settings.LinesTable,
             outPath:      settings.Out,
             installTo:    settings.InstallTo,
-            overwrite:    settings.Overwrite);
+            overwrite:    settings.Overwrite,
+            verify:       settings.Verify);
     }
 }
 
@@ -499,7 +571,8 @@ internal static class GenerateFormImpl
         string? linesTable,
         string? outPath,
         string? installTo,
-        bool overwrite)
+        bool overwrite,
+        bool verify = false)
     {
         var kind = OutputMode.Resolve(output);
         if (string.IsNullOrWhiteSpace(formName))
@@ -622,7 +695,8 @@ internal static class GenerateFormImpl
                     warnings = patternReport.WarningCount,
                 },
             },
-            patternWarnings.Count > 0 ? patternWarnings : null);
+            patternWarnings.Count > 0 ? patternWarnings : null,
+            verify: verify);
     }
 
     /// <summary>Field groups a pattern's controls reference via &lt;DataGroup&gt; (see FormTemplates/*.template.xml).</summary>
