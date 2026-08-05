@@ -71,4 +71,13 @@ public static class D365FoErrorCodes
     public const string UndoFailed = "UNDO_FAILED";
     public const string InstallFailed = "INSTALL_FAILED";
     public const string DeleteFailed = "DELETE_FAILED";
+
+    // Knowledge base (`d365fo knowledge`, MCP get_knowledge)
+    public const string TopicNotFound = "TOPIC_NOT_FOUND";
+
+    // Structured object modification beyond method bodies
+    public const string FieldNotFound = "FIELD_NOT_FOUND";
+    public const string ControlNotFound = "CONTROL_NOT_FOUND";
+    public const string PropertyNotFound = "PROPERTY_NOT_FOUND";
+    public const string AlreadyExists = "ALREADY_EXISTS";
 }

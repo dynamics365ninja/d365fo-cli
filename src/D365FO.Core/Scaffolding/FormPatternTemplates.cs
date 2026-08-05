@@ -154,11 +154,15 @@ public static class FormPatternTemplates
             _ => "  <DataSources />\n",
         };
 
+        // The dialog body carries the FieldsFieldGroups sub-pattern, which allows only
+        // input controls and ONE level of Group — a Tab there is an FP004 error, so
+        // sections become field groups, not tab pages. (Wrapping them in a Tab made
+        // `generate form --pattern Dialog --section …` fail its own write gate.)
         string body;
         if (opt.Sections.Count > 0)
         {
-            var pages = string.Concat(opt.Sections.Select(s => RenderTabPage(s, indent: 12)));
-            body = $"          <AxFormControl xmlns=\"\" i:type=\"AxFormTabControl\">\n            <Name>Tab</Name>\n            <Type>Tab</Type>\n            <FormControlExtension i:nil=\"true\" />\n            <Controls>\n{pages}            </Controls>\n          </AxFormControl>\n";
+            body = string.Concat(opt.Sections.Select(s =>
+                RenderDialogFieldGroup(s, opt.GridFields, dsName, indent: 10)));
         }
         else
         {
@@ -300,6 +304,35 @@ public static class FormPatternTemplates
         return sb.ToString();
     }
 
+    /// <summary>
+    /// One section of a Dialog body: a single-level <c>Group</c> holding the dialog's
+    /// fields — the deepest nesting the FieldsFieldGroups sub-pattern permits.
+    /// </summary>
+    private static string RenderDialogFieldGroup(
+        FormSectionSpec s, IReadOnlyList<string> fields, string? ds, int indent)
+    {
+        var pad = new string(' ', indent);
+        var sb = new StringBuilder();
+        sb.Append(pad).Append("<AxFormControl xmlns=\"\" i:type=\"AxFormGroupControl\">\n");
+        sb.Append(pad).Append("  <Name>").Append(s.Name).Append("</Name>\n");
+        sb.Append(pad).Append("  <Type>Group</Type>\n");
+        sb.Append(pad).Append("  <Caption>").Append(s.Caption).Append("</Caption>\n");
+        sb.Append(pad).Append("  <FormControlExtension i:nil=\"true\" />\n");
+        if (fields.Count == 0)
+        {
+            sb.Append(pad).Append("  <Controls />\n");
+        }
+        else
+        {
+            sb.Append(pad).Append("  <Controls>\n");
+            foreach (var f in fields) sb.Append(RenderDialogField(f, ds, indent + 4));
+            sb.Append(pad).Append("  </Controls>\n");
+        }
+        sb.Append(pad).Append("  <FrameType>None</FrameType>\n");
+        sb.Append(pad).Append("</AxFormControl>\n");
+        return sb.ToString();
+    }
+
     private static string RenderTabPage(FormSectionSpec s, int indent)
     {
         var pad = new string(' ', indent);
@@ -353,7 +386,25 @@ public static class FormPatternTemplates
         sb.Append(pad).Append("      <Type>Group</Type>\n");
         sb.Append(pad).Append("      <WidthMode>SizeToAvailable</WidthMode>\n");
         sb.Append(pad).Append("      <FormControlExtension i:nil=\"true\" />\n");
-        sb.Append(pad).Append("      <Controls />\n");
+        // The CustomAndQuickFilters sub-pattern *requires* a QuickFilterControl child.
+        // Declaring the pattern over an empty <Controls /> made every
+        // `generate form --pattern Workspace --section …` fail its own FP003 write gate.
+        sb.Append(pad).Append("      <Controls>\n");
+        sb.Append(pad).Append("        <AxFormControl xmlns=\"\">\n");
+        sb.Append(pad).Append("          <Name>").Append(s.Name).Append("QuickFilter</Name>\n");
+        sb.Append(pad).Append("          <FormControlExtension>\n");
+        sb.Append(pad).Append("            <Name>QuickFilterControl</Name>\n");
+        sb.Append(pad).Append("            <ExtensionComponents />\n");
+        sb.Append(pad).Append("            <ExtensionProperties>\n");
+        sb.Append(pad).Append("              <AxFormControlExtensionProperty>\n");
+        sb.Append(pad).Append("                <Name>targetControlName</Name>\n");
+        sb.Append(pad).Append("                <Type>String</Type>\n");
+        sb.Append(pad).Append("                <Value>").Append(s.Name).Append("Grid</Value>\n");
+        sb.Append(pad).Append("              </AxFormControlExtensionProperty>\n");
+        sb.Append(pad).Append("            </ExtensionProperties>\n");
+        sb.Append(pad).Append("          </FormControlExtension>\n");
+        sb.Append(pad).Append("        </AxFormControl>\n");
+        sb.Append(pad).Append("      </Controls>\n");
         sb.Append(pad).Append("      <ArrangeMethod>HorizontalLeft</ArrangeMethod>\n");
         sb.Append(pad).Append("      <FrameType>None</FrameType>\n");
         sb.Append(pad).Append("      <Style>CustomFilter</Style>\n");

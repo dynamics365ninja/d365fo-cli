@@ -106,6 +106,50 @@ public class ScaffoldingSmokeTests
         Assert.Null(doc.Root!.Element("DataEntityPermissions"));
     }
 
+    [Theory]
+    [InlineData("Table", "AxTableExtension")]
+    [InlineData("Form", "AxFormExtension")]
+    [InlineData("Enum", "AxEnumExtension")]
+    public void Extension_uses_the_dotted_name_convention(string kind, string expectedRoot)
+    {
+        var doc = XppScaffolder.Extension(kind, "CustTable", "Contoso");
+        Assert.Equal(expectedRoot, doc.Root!.Name.LocalName);
+        Assert.Equal("CustTable.Contoso", doc.Root.Element("Name")!.Value);
+    }
+
+    [Fact]
+    public void EdtExtension_pins_a_concrete_subtype_so_it_can_actually_be_written()
+    {
+        // AxEdtExtension is an abstract base: emitting it bare made
+        // `generate extension edt` fail unconditionally at write time, because
+        // ScaffoldFileWriter refuses abstract roots (and VS cannot open them either).
+        var doc = XppScaffolder.Extension("Edt", "CustAccount", "Contoso", _ => "String");
+        var xsi = XNamespace.Get("http://www.w3.org/2001/XMLSchema-instance");
+
+        Assert.Equal("AxEdtExtension", doc.Root!.Name.LocalName);
+        Assert.Equal("AxEdtStringExtension", (string?)doc.Root.Attribute(xsi + "type"));
+
+        // The write path must now accept it.
+        var path = Path.Combine(Path.GetTempPath(), $"edtext-{Guid.NewGuid():N}.xml");
+        try
+        {
+            ScaffoldFileWriter.Write(doc, path, overwrite: true);
+            Assert.Contains("AxEdtStringExtension", File.ReadAllText(path));
+        }
+        finally
+        {
+            if (File.Exists(path)) File.Delete(path);
+        }
+    }
+
+    [Fact]
+    public void EdtExtension_subtype_follows_the_targets_base_type()
+    {
+        var xsi = XNamespace.Get("http://www.w3.org/2001/XMLSchema-instance");
+        var intDoc = XppScaffolder.Extension("Edt", "CustQty", "Contoso", _ => "Int64");
+        Assert.Equal("AxEdtInt64Extension", (string?)intDoc.Root!.Attribute(xsi + "type"));
+    }
+
     [Fact]
     public void SecurityDutyExtension_adds_privileges_to_base_duty()
     {

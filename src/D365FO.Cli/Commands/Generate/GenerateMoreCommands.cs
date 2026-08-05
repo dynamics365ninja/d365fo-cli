@@ -172,7 +172,10 @@ public sealed class GenerateExtensionCommand : Command<GenerateExtensionCommand.
         {
             "AxSecurityDutyExtension" => XppScaffolder.SecurityDutyExtension(settings.Target, suffix, settings.Privileges),
             "AxSecurityRoleExtension" => XppScaffolder.SecurityRoleExtension(settings.Target, suffix, settings.Duties, settings.Privileges),
-            _ => XppScaffolder.Extension(axFolder["Ax".Length..^"Extension".Length], settings.Target, suffix),
+            // The EDT case needs the index-backed base-type resolver to pin the concrete
+            // AxEdt*Extension subtype; the other kinds ignore it.
+            _ => XppScaffolder.Extension(axFolder["Ax".Length..^"Extension".Length], settings.Target, suffix,
+                     GenerateInstaller.BuildEdtBaseTypeResolver()),
         };
 
         // Grounding gate: the target object must exist in the index; fail

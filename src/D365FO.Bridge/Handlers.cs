@@ -75,7 +75,7 @@ namespace D365FO.Bridge
             if (string.IsNullOrWhiteSpace(name)) return Fail("MISSING_ARG", "name is required");
             if (!MetadataBootstrap.KindToCollection.TryGetValue(kind, out var collectionName))
             {
-                return Fail("INVALID_KIND", "kind must be one of: class, table, edt, enum, form");
+                return Fail("INVALID_KIND", "kind must be one of: " + string.Join(", ", MetadataBootstrap.KindToCollection.Keys));
             }
 
             if (!MetadataBootstrap.TryInitialize())
@@ -210,7 +210,7 @@ namespace D365FO.Bridge
             }
             if (!MetadataBootstrap.KindToCollection.ContainsKey(kind))
             {
-                return Fail("INVALID_KIND", "kind must be one of: class, table, edt, enum, form");
+                return Fail("INVALID_KIND", "kind must be one of: " + string.Join(", ", MetadataBootstrap.KindToCollection.Keys));
             }
 
             if (!MetadataBootstrap.TryInitialize())

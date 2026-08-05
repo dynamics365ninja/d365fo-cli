@@ -91,7 +91,8 @@ public static class MethodModifyEngine
     /// pattern). Callers are responsible for the <see cref="D365FoErrorCodes.BridgeRequired"/>
     /// availability gate — <see cref="Modify"/> does that for real callers.
     /// </summary>
-    internal static ToolResult<object> ModifyCore(ModifyRequest request, MetadataRepository? repo, BridgeClient client)
+    internal static ToolResult<object> ModifyCore(
+        ModifyRequest request, MetadataRepository? repo, BridgeClient client, string? journalDbOverride = null)
     {
         var kind = (request.Kind ?? string.Empty).Trim().ToLowerInvariant();
         if (!SupportedKinds.ContainsKey(kind))
@@ -204,6 +205,17 @@ public static class MethodModifyEngine
 
         // ---- 6. Write back via the bridge (IMetadataProvider, never disk) ----
         var newXml = doc.ToString(SaveOptions.DisableFormatting);
+
+        // Journal the exact pre-image before the write. This path used to read the live
+        // XML, edit it, and drop the original on the floor — making `modify method` the
+        // one write in the CLI that `d365fo undo` could not revert. The entry goes in
+        // first so a crash mid-write still leaves an undo record.
+        ObjectModifyEngine.RecordJournalEntry(
+            new ObjectModifyEngine.WriteTarget(kind, request.ObjectName, model!, IsExtension: false, Exists: true),
+            xml,
+            $"modify method {kind} {request.ObjectName} {request.MethodName}",
+            journalDbOverride);
+
         JsonObject? updateResult;
         try
         {

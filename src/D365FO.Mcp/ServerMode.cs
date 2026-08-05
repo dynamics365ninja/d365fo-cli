@@ -46,6 +46,17 @@ public static class ServerModeConfig
     ///   <item><description><c>get_method</c> — reads raw X++ source directly off
     ///   disk at the indexed <c>SourcePath</c> (not from SQLite), so it needs the
     ///   local package tree to be reachable.</description></item>
+    ///   <item><description><c>modify_method</c> / <c>modify_object</c> — every edit
+    ///   round-trips through the local <c>D365FO.Bridge</c> process, which loads
+    ///   <c>IMetadataProvider</c> over the on-disk package tree. Both also mutate live
+    ///   metadata, so a read-only deployment must not advertise them at all: see
+    ///   <see cref="WriteToolsAreLocal"/>.</description></item>
+    ///   <item><description><c>undo_last_modification</c> — replays journal entries back
+    ///   through the same disk/bridge write path that produced them.</description></item>
+    ///   <item><description><c>journal_list</c> — reads <c>&lt;index-dir&gt;/journal/</c>,
+    ///   which is only populated on the instance that did the writing. Read-only itself,
+    ///   but it belongs with the writer: a write-only companion needs it to inspect what
+    ///   it just did, and a shared read-only instance has no journal to report.</description></item>
     /// </list>
     /// Excluded in <see cref="McpServerMode.ReadOnly"/>; the only tools exposed in
     /// <see cref="McpServerMode.WriteOnly"/>.
@@ -53,7 +64,18 @@ public static class ServerModeConfig
     public static readonly HashSet<string> LocalTools = new(StringComparer.Ordinal)
     {
         "generate_object", "labels", "get_workspace_info", "get_method",
+        "modify_method", "modify_object", "undo_last_modification", "journal_list",
     };
+
+    /// <summary>
+    /// Every tool that mutates state is local, so <see cref="McpServerMode.ReadOnly"/>
+    /// never advertises or accepts one. Exposed for the test that locks the invariant —
+    /// the four bridge-backed write tools were originally absent from
+    /// <see cref="LocalTools"/>, which let a read-only deployment advertise (and run)
+    /// live metadata edits.
+    /// </summary>
+    public static IEnumerable<string> WriteToolsAreLocal =>
+        ToolCatalog.WriteTools.Where(t => !LocalTools.Contains(t));
 
     /// <summary>
     /// Parse the <c>MCP_SERVER_MODE</c> value. Accepts <c>full</c> (default),

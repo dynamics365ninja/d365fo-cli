@@ -1094,6 +1094,49 @@ public sealed class ToolHandlers
         return D365FO.Core.Bridge.MethodModifyEngine.Modify(request, _repo);
     }
 
+    /// <summary>
+    /// Structured edits beyond a method body — property, field, enum value, control.
+    /// Writes to a model outside <c>D365FO_CUSTOM_MODELS</c> are redirected to an
+    /// extension object, and every write is journaled for <c>undo_last_modification</c>.
+    /// </summary>
+    public ToolResult<object> ModifyObject(
+        string action, string kind, string name, string member,
+        string? value, string? type, string? label, bool mandatory,
+        string? parent, string? dataSource, string? dataField,
+        string? model, string? extensionSuffix, string? extensionModel, bool requireExtension)
+    {
+        var op = (action ?? "").ToLowerInvariant() switch
+        {
+            "property" or "set-property" or "modify-property" => D365FO.Core.Bridge.ObjectModifyEngine.Operation.SetProperty,
+            "add-field" or "addfield" => D365FO.Core.Bridge.ObjectModifyEngine.Operation.AddField,
+            "add-enum-value" or "addenumvalue" => D365FO.Core.Bridge.ObjectModifyEngine.Operation.AddEnumValue,
+            "add-control" or "addcontrol" => D365FO.Core.Bridge.ObjectModifyEngine.Operation.AddControl,
+            _ => (D365FO.Core.Bridge.ObjectModifyEngine.Operation?)null,
+        } ?? D365FO.Core.Bridge.ObjectModifyEngine.Operation.SetProperty;
+
+        if (string.IsNullOrWhiteSpace(action))
+            return ToolResult<object>.Fail(D365FoErrorCodes.BadInput, "action is required: property | add-field | add-enum-value | add-control.");
+
+        return D365FO.Core.Bridge.ObjectModifyEngine.Modify(new D365FO.Core.Bridge.ObjectModifyEngine.ModifyRequest
+        {
+            Operation = op,
+            Kind = kind,
+            ObjectName = name,
+            Member = member,
+            Value = value,
+            Type = type,
+            Label = label,
+            Mandatory = mandatory,
+            Parent = parent,
+            DataSource = dataSource,
+            DataField = dataField,
+            Model = model,
+            ExtensionSuffix = extensionSuffix,
+            ExtensionModel = extensionModel,
+            RequireExtension = requireExtension,
+        }, _repo);
+    }
+
     public ToolResult<object> GenerateClass(
         string name, string? extends, bool nonFinal,
         string? installTo, string? outPath, bool overwrite)
@@ -1344,6 +1387,163 @@ public sealed class ToolHandlers
             coverage = new { containersTotal = report.ContainersTotal, containersPatterned = report.ContainersPatterned },
             violations = report.Violations.Select(v => new { rule = v.Rule, severity = v.Severity, path = v.Path, excerpt = v.Excerpt, fix = v.Fix }),
         });
+    }
+
+    /// <summary>
+    /// Deterministic form auto-repair over AxForm XML — the write-side counterpart of
+    /// <see cref="ValidateFormPattern"/>. Returns the repaired XML plus what it changed
+    /// and what it refused to change; the caller decides whether to persist it.
+    /// </summary>
+    public ToolResult<object> RepairFormPattern(string xml, string? pattern)
+    {
+        if (string.IsNullOrWhiteSpace(xml))
+            return ToolResult<object>.Fail(D365FoErrorCodes.BadInput, "xml is required: complete AxForm XML.");
+
+        var result = D365FO.Core.FormPatterns.FormPatternRepairer.Repair(xml, pattern);
+        return ToolResult<object>.Success(new
+        {
+            formName = result.Before.FormName,
+            pattern = result.After.Pattern,
+            changed = result.Changed,
+            fullyRepaired = result.FullyRepaired,
+            errorsBefore = result.Before.ErrorCount,
+            errorsAfter = result.After.ErrorCount,
+            changes = result.Changes.Select(c => new { rule = c.Rule, path = c.Path, action = c.Action, detail = c.Detail }),
+            skipped = result.Skipped.Select(c => new { rule = c.Rule, path = c.Path, reason = c.Detail }),
+            remaining = result.After.Violations
+                .Where(v => v.Severity == "error")
+                .Select(v => new { rule = v.Rule, path = v.Path, excerpt = v.Excerpt, fix = v.Fix }),
+            repairedXml = result.Xml,
+        });
+    }
+
+    // ---- knowledge (verified X++/D365FO topic corpus + build-error triage) ----
+
+    /// <summary>
+    /// Serve the embedded <c>skills/_source</c> knowledge corpus — the CLI's
+    /// equivalent of upstream <c>d365fo-mcp-server</c>'s <c>get_knowledge</c>.
+    /// <paramref name="action"/> is <c>list</c> (catalog), <c>get</c> (one topic,
+    /// optionally one <c>##</c> section or just the outline), or <c>search</c>
+    /// (rank sections across the corpus against a free-text question).
+    /// </summary>
+    public ToolResult<object> GetKnowledge(string action, string? topic, string? section, string? query, int limit, bool outline)
+    {
+        switch ((action ?? "list").ToLowerInvariant())
+        {
+            case "search":
+                if (string.IsNullOrWhiteSpace(query))
+                    return ToolResult<object>.Fail(D365FoErrorCodes.BadInput, "query is required for action=search.");
+                var hits = D365FO.Core.Knowledge.KnowledgeBase.Search(query, limit, topic);
+                return ToolResult<object>.Success(new
+                {
+                    query,
+                    count = hits.Count,
+                    hits = hits.Select(h => new { topic = h.TopicId, heading = h.Heading, score = h.Score, excerpt = h.Excerpt }),
+                });
+
+            case "get":
+                var found = D365FO.Core.Knowledge.KnowledgeBase.Get(topic);
+                if (found is null)
+                {
+                    var suggestions = D365FO.Core.Knowledge.KnowledgeBase.Suggest(topic);
+                    return ToolResult<object>.Fail(D365FoErrorCodes.TopicNotFound,
+                        $"No knowledge topic matches '{topic}'.",
+                        suggestions.Count > 0
+                            ? $"Did you mean: {string.Join(", ", suggestions)}?"
+                            : "Call get_knowledge(action=list) for the catalog.");
+                }
+                if (outline)
+                {
+                    return ToolResult<object>.Success(new
+                    {
+                        id = found.Id,
+                        description = found.Description,
+                        sections = found.Sections.Select(s => new { heading = s.Heading, approxTokens = s.ApproxTokens }),
+                    });
+                }
+                if (!string.IsNullOrWhiteSpace(section))
+                {
+                    var matches = found.Sections
+                        .Where(s => s.Heading.Contains(section!, StringComparison.OrdinalIgnoreCase))
+                        .ToList();
+                    if (matches.Count == 0)
+                    {
+                        return ToolResult<object>.Fail(D365FoErrorCodes.TopicNotFound,
+                            $"Topic '{found.Id}' has no section matching '{section}'.",
+                            $"Available sections: {string.Join(" | ", found.Sections.Select(s => s.Heading))}");
+                    }
+                    return ToolResult<object>.Success(new
+                    {
+                        id = found.Id,
+                        description = found.Description,
+                        sections = matches.Select(s => new { heading = s.Heading, text = s.Text }),
+                    });
+                }
+                return ToolResult<object>.Success(new
+                {
+                    id = found.Id,
+                    description = found.Description,
+                    appliesWhen = found.AppliesWhen,
+                    approxTokens = found.ApproxTokens,
+                    body = found.Body,
+                });
+
+            default:
+                return ToolResult<object>.Success(new
+                {
+                    count = D365FO.Core.Knowledge.KnowledgeBase.Topics.Count,
+                    topics = D365FO.Core.Knowledge.KnowledgeBase.Topics.Select(t => new
+                    {
+                        id = t.Id,
+                        description = t.Description,
+                        appliesWhen = t.AppliesWhen,
+                        sections = t.Sections.Count,
+                        approxTokens = t.ApproxTokens,
+                    }),
+                });
+        }
+    }
+
+    /// <summary>
+    /// Score xppc/build output against the <see cref="D365FO.Core.Validation.XppcFixHints"/>
+    /// rules and return ranked fixes plus the knowledge topic behind each. Offline —
+    /// no VM needed, so an agent can triage a log it was handed.
+    /// </summary>
+    public ToolResult<object> ExplainBuildError(string log, bool all)
+    {
+        if (string.IsNullOrWhiteSpace(log))
+            return ToolResult<object>.Fail(D365FoErrorCodes.BadInput, "log is required: a compiler message or a whole xppc log.");
+
+        var parsed = D365FO.Core.Validation.XppcDiagnostics.Parse(log);
+        var messages = parsed.Count > 0
+            ? parsed.Select(d => (d.Severity, d.Object, d.Member, d.Line, d.Message)).ToList()
+            : [("error", (string?)null, (string?)null, (int?)null, log.Trim())];
+
+        var explained = messages.Select(m =>
+        {
+            var matches = D365FO.Core.Validation.XppcFixHints.Match(m.Message);
+            return new
+            {
+                severity = m.Item1,
+                obj = m.Item2,
+                member = m.Item3,
+                line = m.Item4,
+                message = m.Message,
+                hints = (all ? matches : matches.Take(1))
+                    .Select(h => new { rule = h.RuleId, hint = h.Hint, score = h.Score, knowledge = h.Knowledge }),
+            };
+        }).ToList();
+
+        var warnings = new List<string>();
+        if (D365FO.Core.Validation.XppcDiagnostics.IndicatesStaleSymbols(log))
+            warnings.Add("Log indicates stale incremental-build symbols — do a full build before trusting these errors.");
+
+        return ToolResult<object>.Success(new
+        {
+            count = explained.Count,
+            explained = explained.Count(e => e.hints.Any()),
+            diagnostics = explained,
+        }, warnings.Count > 0 ? warnings : null);
     }
 
     // ---- prepare (single-round context aggregators + grounding token) ----

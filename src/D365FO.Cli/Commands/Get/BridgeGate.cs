@@ -253,7 +253,7 @@ internal static class BridgeGate
     /// same path Visual Studio takes when it opens the file. Purely a check: nothing
     /// is written and the artefact is left alone either way.
     /// </summary>
-    /// <param name="axKind">Bridge collection kind: class | table | edt | enum | form.</param>
+    /// <param name="axKind">Bridge collection kind (class | table | edt | enum | form | view | map | query | dataEntityView | *Extension).</param>
     /// <returns>
     /// <see cref="VerifyOutcome.Skipped"/> when the bridge is unavailable or the kind
     /// has no read verb, <see cref="VerifyOutcome.Readable"/> when the provider
@@ -271,15 +271,21 @@ internal static class BridgeGate
             "form"  => "readForm",
             _       => null,
         };
-        if (method is null)
-            return (VerifyOutcome.Skipped, $"no metadata-provider read verb for kind '{axKind}'.");
 
         // Same availability check the read/write helpers use — no second notion of
         // "is the runtime here".
         if (!BridgeClient.IsAvailable())
             return (VerifyOutcome.Skipped, "the D365FO Metadata API runtime is not available.");
 
-        return TryRead(method, name) is not null
+        // The typed read verbs exist only for the five original kinds. Everything the
+        // bridge can now write (views, maps, queries, and the *Extension kinds) is
+        // verified through the generic readObjectXml instead, so `--verify` covers the
+        // whole write surface rather than the subset that predates it.
+        var readable = method is not null
+            ? TryRead(method, name) is not null
+            : TryReadObjectXml(axKind ?? "", name) is not null;
+
+        return readable
             ? (VerifyOutcome.Readable, null)
             : (VerifyOutcome.Unreadable,
                "the metadata provider is reachable but could not load the object back.");

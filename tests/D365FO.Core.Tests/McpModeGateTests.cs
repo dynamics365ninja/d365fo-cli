@@ -53,8 +53,67 @@ public class McpModeGateTests : IDisposable
         Assert.DoesNotContain("labels", names);
         Assert.DoesNotContain("get_workspace_info", names);
         Assert.DoesNotContain("get_method", names);
+        // Bridge-backed edits mutate live metadata — a read-only deployment must not
+        // even advertise them.
+        Assert.DoesNotContain("modify_method", names);
+        Assert.DoesNotContain("modify_object", names);
+        Assert.DoesNotContain("undo_last_modification", names);
         Assert.Contains("search", names);
         Assert.Contains("index_status", names);
+    }
+
+    /// <summary>
+    /// The invariant behind the list above: no tool that writes may be reachable in
+    /// read-only mode. Asserted over <see cref="ToolCatalog.WriteTools"/> rather than a
+    /// hand-kept list, so adding a write tool without classifying it fails here instead
+    /// of silently shipping in a read-only deployment.
+    /// </summary>
+    [Fact]
+    public void No_write_tool_is_reachable_in_read_only_mode()
+    {
+        Assert.Empty(ServerModeConfig.WriteToolsAreLocal);
+
+        foreach (var tool in ToolCatalog.WriteTools)
+        {
+            Assert.False(ServerModeConfig.IsToolAllowed(McpServerMode.ReadOnly, tool),
+                $"{tool} writes but is allowed in read-only mode");
+            Assert.True(ServerModeConfig.IsToolAllowed(McpServerMode.WriteOnly, tool),
+                $"{tool} writes but is not available in write-only mode");
+        }
+    }
+
+    [Fact]
+    public async Task ReadOnly_mode_rejects_a_bridge_write_call_with_ModeNotAllowed()
+    {
+        var dispatcher = new StdioDispatcher(Handlers(), McpServerMode.ReadOnly);
+        var req = """{"jsonrpc":"2.0","id":9,"method":"tools/call","params":{"name":"modify_object","arguments":{"action":"property","kind":"table","name":"CustTable","member":"Label","value":"x"}}}""";
+        using var input = new StringReader(req + "\n");
+        using var output = new StringWriter();
+        await dispatcher.RunAsync(input, output);
+
+        var doc = JsonDocument.Parse(output.ToString());
+        var err = doc.RootElement.GetProperty("error");
+        Assert.Equal(D365FoErrorCodes.ModeNotAllowed, err.GetProperty("data").GetProperty("code").GetString());
+    }
+
+    [Fact]
+    public async Task WriteOnly_mode_exposes_the_modify_and_journal_surface()
+    {
+        // A write-only companion instance is where the edits happen, so it must carry
+        // the whole write→inspect→undo loop, not just generate_object.
+        var dispatcher = new StdioDispatcher(Handlers(), McpServerMode.WriteOnly);
+        using var input = new StringReader("""{"jsonrpc":"2.0","id":10,"method":"tools/list"}""" + "\n");
+        using var output = new StringWriter();
+        await dispatcher.RunAsync(input, output);
+
+        var doc = JsonDocument.Parse(output.ToString());
+        var names = doc.RootElement.GetProperty("result").GetProperty("tools")
+            .EnumerateArray().Select(t => t.GetProperty("name").GetString()).ToHashSet();
+
+        Assert.Contains("modify_method", names);
+        Assert.Contains("modify_object", names);
+        Assert.Contains("undo_last_modification", names);
+        Assert.Contains("journal_list", names);
     }
 
     [Fact]

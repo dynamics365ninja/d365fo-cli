@@ -353,8 +353,18 @@ public static class XppScaffolder
     /// <summary>
     /// Scaffolds a Table/Form/Edt/Enum extension. Name follows the D365FO
     /// convention <c>&lt;Target&gt;.&lt;Suffix&gt;</c> (dot-separated).
+    ///
+    /// <para><c>AxEdtExtension</c> is an abstract base in the metadata model, exactly like
+    /// <c>AxEdt</c>: the concrete subtype (<c>AxEdtStringExtension</c>, …) has to be
+    /// pinned via <c>i:type</c> or Visual Studio's reader throws "Cannot create an
+    /// abstract class" — and <see cref="ScaffoldFileWriter"/> refuses the write outright.
+    /// Emitting the bare abstract root made <c>generate extension edt</c> fail
+    /// unconditionally at write time, so the subtype is resolved here from the target
+    /// EDT's base type via <paramref name="edtBaseTypeResolver"/> (the same index-backed
+    /// resolver <c>generate table</c> uses for field subtypes).</para>
     /// </summary>
-    public static XDocument Extension(string kind, string targetName, string suffix)
+    public static XDocument Extension(
+        string kind, string targetName, string suffix, Func<string, string?>? edtBaseTypeResolver = null)
     {
         var elementName = kind switch
         {
@@ -365,9 +375,17 @@ public static class XppScaffolder
             _ => throw new ArgumentException($"Unsupported extension kind: {kind}", nameof(kind)),
         };
 
-        return new XDocument(
-            new XElement(elementName,
-                new XElement("Name", $"{targetName}.{suffix}")));
+        var root = new XElement(elementName, new XElement("Name", $"{targetName}.{suffix}"));
+
+        if (elementName == "AxEdtExtension")
+        {
+            XNamespace xsi = "http://www.w3.org/2001/XMLSchema-instance";
+            var concrete = $"AxEdt{ConcreteFieldSuffix(targetName, edtBaseTypeResolver)}Extension";
+            root.SetAttributeValue(XNamespace.Xmlns + "i", xsi.NamespaceName);
+            root.SetAttributeValue(xsi + "type", concrete);
+        }
+
+        return new XDocument(root);
     }
 
     /// <summary>
@@ -1184,7 +1202,7 @@ public static class ScaffoldFileWriter
     public static WriteResult Write(XDocument doc, string path, bool overwrite = false)
     {
         ArgumentNullException.ThrowIfNull(doc);
-        EnsureConcreteAxRoot(doc.Root?.Name.LocalName);
+        EnsureConcreteAxRoot(doc.Root);
         EnsureValidEdtRoot(doc.Root);
         EnsureValueShapes(doc.Root);
         return WriteCore(doc.ToString(SaveOptions.None), path, overwrite, declarationOnSaveFromXDoc: true, doc);
@@ -1199,7 +1217,7 @@ public static class ScaffoldFileWriter
     {
         ArgumentException.ThrowIfNullOrEmpty(xml);
         var root = ParseRootElement(xml);
-        EnsureConcreteAxRoot(root?.Name.LocalName);
+        EnsureConcreteAxRoot(root);
         EnsureValidEdtRoot(root);
         EnsureValueShapes(root);
         return WriteCore(xml, path, overwrite, declarationOnSaveFromXDoc: false, null);
@@ -1264,32 +1282,47 @@ public static class ScaffoldFileWriter
         return new DeleteResult(full, preImage);
     }
 
-    private static void EnsureConcreteAxRoot(string? rootLocalName)
+    /// <summary>
+    /// An abstract root is writable only when the concrete subtype is pinned via
+    /// <c>i:type</c> — the same escape hatch the bridge's <c>WriteArtifact</c> honours for
+    /// <c>&lt;AxEdt i:type="AxEdtString"&gt;</c>. Without that discriminator the file is
+    /// unreadable, so refusing outright is right; with it the document is well-formed and
+    /// blocking it would make <c>generate extension edt</c> impossible to satisfy.
+    /// </summary>
+    private static void EnsureConcreteAxRoot(XElement? root)
     {
-        if (rootLocalName is not null && _abstractAxRoots.Contains(rootLocalName))
-            throw new InvalidOperationException(
-                $"Refusing to write AOT XML with abstract root element <{rootLocalName}>. " +
-                "Use the concrete subtype (e.g. AxEdtString, AxEdtInt, AxEdtReal, AxEdtDate, " +
-                "AxEdtUtcDateTime, AxEdtTime, AxEdtGuid, AxEdtContainer, AxEdtEnum). Visual Studio's metadata reader throws " +
-                "\"Cannot create an abstract class\" on this root.");
+        var rootLocalName = root?.Name.LocalName;
+        if (rootLocalName is null || !_abstractAxRoots.Contains(rootLocalName)) return;
+        if (HasConcreteXsiType(root!, rootLocalName)) return;
+
+        throw new InvalidOperationException(
+            $"Refusing to write AOT XML with abstract root element <{rootLocalName}> and no concrete i:type. " +
+            "Pin the concrete subtype (e.g. AxEdtStringExtension, AxEdtIntExtension) via the " +
+            "XMLSchema-instance type attribute, or use a concrete root element. Visual Studio's " +
+            "metadata reader throws \"Cannot create an abstract class\" otherwise.");
     }
 
     private static void EnsureValidEdtRoot(XElement? root)
     {
-        if (root?.Name.LocalName != "AxEdt")
-            return;
+        var rootLocalName = root?.Name.LocalName;
+        if (rootLocalName is not "AxEdt" and not "AxEdtExtension") return;
+        if (HasConcreteXsiType(root!, rootLocalName!)) return;
 
+        throw new InvalidOperationException(
+            $"Refusing to write <{rootLocalName}> without a concrete XMLSchema-instance type. " +
+            "Set i:type to a concrete subtype (e.g. AxEdtString, AxEdtInt, AxEdtReal, " +
+            "AxEdtDate, AxEdtUtcDateTime, AxEdtTime, AxEdtGuid, AxEdtContainer, AxEdtEnum — " +
+            "suffixed with 'Extension' for an EDT extension). Visual Studio's metadata reader " +
+            "throws \"Cannot create an abstract class\" when type metadata is missing.");
+    }
+
+    /// <summary>True when the root pins a concrete <c>Ax*</c> subtype that is not the abstract base itself.</summary>
+    private static bool HasConcreteXsiType(XElement root, string rootLocalName)
+    {
         var typeValue = root.Attribute(XName.Get("type", XsiNamespace))?.Value;
-        if (string.IsNullOrWhiteSpace(typeValue) ||
-            string.Equals(typeValue, "AxEdt", StringComparison.Ordinal) ||
-            !typeValue.StartsWith("AxEdt", StringComparison.Ordinal))
-        {
-            throw new InvalidOperationException(
-                "Refusing to write <AxEdt> without a concrete XMLSchema-instance type. " +
-                "Set i:type to a concrete subtype (e.g. AxEdtString, AxEdtInt, AxEdtReal, " +
-                "AxEdtDate, AxEdtUtcDateTime, AxEdtTime, AxEdtGuid, AxEdtContainer, AxEdtEnum). Visual Studio's metadata reader " +
-                "throws \"Cannot create an abstract class\" when type metadata is missing.");
-        }
+        return !string.IsNullOrWhiteSpace(typeValue)
+               && !string.Equals(typeValue, rootLocalName, StringComparison.Ordinal)
+               && typeValue!.StartsWith("Ax", StringComparison.Ordinal);
     }
 
     /// <summary>
