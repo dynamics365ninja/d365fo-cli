@@ -101,6 +101,98 @@ public sealed class UndoEngineTests : IDisposable
         Assert.Equal(originalBytes, File.ReadAllText(target));
     }
 
+    [Fact]
+    public void Disk_update_undo_restores_the_utf8_bom()
+    {
+        // AOT XML is written WITH a BOM by D365FO, Visual Studio, and this tool's own
+        // scaffolder. PreImage is a decoded string, so the BOM is not in it — undo has to
+        // re-emit it from the recorded flag or the "restored" file is three bytes short.
+        var target = PathIn("BomTable.xml");
+        var body = "<AxTable><Name>BomTable</Name></AxTable>";
+        File.WriteAllText(target, "<AxTable><Name>BomTable</Name><Changed /></AxTable>",
+            new System.Text.UTF8Encoding(encoderShouldEmitUTF8Identifier: true));
+
+        var journal = NewJournal();
+        journal.Append(new JournalEntry(
+            Id: Guid.NewGuid().ToString("N"), TimestampUtc: DateTimeOffset.UtcNow, Command: "generate table",
+            TargetType: JournalTargetType.AotObject, Kind: "table", ObjectName: "BomTable", SecondaryKey: null,
+            Model: null, Operation: JournalOperation.Update, WritePath: JournalWritePath.Disk,
+            TargetPath: target, PreImage: body, IsTombstone: false, RnrProjDelta: null,
+            PreImageHadBom: true));
+
+        var result = UndoEngine.Undo(journal, 1, dryRun: false);
+
+        Assert.True(result.AllOk);
+        var bytes = File.ReadAllBytes(target);
+        Assert.Equal(new byte[] { 0xEF, 0xBB, 0xBF }, bytes.Take(3).ToArray());
+        Assert.Equal(body, File.ReadAllText(target));
+    }
+
+    [Fact]
+    public void Disk_update_undo_does_not_add_a_bom_the_original_lacked()
+    {
+        var target = PathIn("NoBomTable.xml");
+        var body = "<AxTable><Name>NoBomTable</Name></AxTable>";
+        File.WriteAllText(target, "<AxTable><Name>NoBomTable</Name><Changed /></AxTable>",
+            new System.Text.UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
+
+        var journal = NewJournal();
+        journal.Append(new JournalEntry(
+            Id: Guid.NewGuid().ToString("N"), TimestampUtc: DateTimeOffset.UtcNow, Command: "generate table",
+            TargetType: JournalTargetType.AotObject, Kind: "table", ObjectName: "NoBomTable", SecondaryKey: null,
+            Model: null, Operation: JournalOperation.Update, WritePath: JournalWritePath.Disk,
+            TargetPath: target, PreImage: body, IsTombstone: false, RnrProjDelta: null,
+            PreImageHadBom: false));
+
+        Assert.True(UndoEngine.Undo(journal, 1, dryRun: false).AllOk);
+        Assert.Equal(System.Text.Encoding.UTF8.GetBytes(body), File.ReadAllBytes(target));
+    }
+
+    [Fact]
+    public void Undo_with_zero_or_negative_steps_reverts_nothing()
+    {
+        var target = PathIn("Untouched.xml");
+        File.WriteAllText(target, "<AxTable><Name>Untouched</Name></AxTable>");
+
+        var journal = NewJournal();
+        journal.Append(new JournalEntry(
+            Id: Guid.NewGuid().ToString("N"), TimestampUtc: DateTimeOffset.UtcNow, Command: "generate table",
+            TargetType: JournalTargetType.AotObject, Kind: "table", ObjectName: "Untouched", SecondaryKey: null,
+            Model: null, Operation: JournalOperation.Create, WritePath: JournalWritePath.Disk,
+            TargetPath: target, PreImage: null, IsTombstone: true, RnrProjDelta: null));
+
+        foreach (var steps in new[] { 0, -1 })
+        {
+            var result = UndoEngine.Undo(journal, steps, dryRun: false);
+            Assert.Empty(result.Steps);
+            Assert.True(File.Exists(target));   // the write was NOT reverted
+            Assert.Single(journal.List());      // the entry is still on the stack
+        }
+    }
+
+    [Fact]
+    public void Disk_replay_refuses_a_target_outside_the_allowed_roots()
+    {
+        // A journal entry pointing outside packages/workspace/temp must not be replayed —
+        // the path comes from the journal store, not from the command line.
+        var outside = OperatingSystem.IsWindows()
+            ? @"C:\d365fo-undo-boundary-probe.xml"
+            : "/d365fo-undo-boundary-probe.xml";
+
+        var journal = NewJournal();
+        journal.Append(new JournalEntry(
+            Id: Guid.NewGuid().ToString("N"), TimestampUtc: DateTimeOffset.UtcNow, Command: "generate table",
+            TargetType: JournalTargetType.AotObject, Kind: "table", ObjectName: "Probe", SecondaryKey: null,
+            Model: null, Operation: JournalOperation.Update, WritePath: JournalWritePath.Disk,
+            TargetPath: outside, PreImage: "<AxTable/>", IsTombstone: false, RnrProjDelta: null));
+
+        var result = UndoEngine.Undo(journal, 1, dryRun: false);
+
+        Assert.False(result.AllOk);
+        Assert.Contains("Path traversal blocked", result.Steps[0].Error);
+        Assert.False(File.Exists(outside));
+    }
+
     // ---- disk: delete -------------------------------------------------------
 
     [Fact]

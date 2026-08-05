@@ -52,6 +52,14 @@ public sealed record RnrProjDelta(string RnrProjPath, string ItemElementName, st
 /// A single reversible write, captured by every write path that funnels through
 /// <c>ScaffoldFileWriter</c>, <c>LabelFileWriter</c>, or the bridge create/update/delete verbs.
 /// </summary>
+/// <remarks>
+/// <c>PreImageHadBom</c> records whether the pre-image file started with a UTF-8 BOM.
+/// <c>PreImage</c> is captured as a decoded string and the decoder strips the BOM — without this
+/// flag undo would rewrite AOT XML three bytes shorter than the original, which is a real diff to
+/// D365FO and Visual Studio (both write these files WITH a BOM). <c>null</c> means "not recorded"
+/// (entries written by an older build); undo then falls back to the BOM state of the file
+/// currently on disk.
+/// </remarks>
 public sealed record JournalEntry(
     string Id,
     DateTimeOffset TimestampUtc,
@@ -66,4 +74,5 @@ public sealed record JournalEntry(
     string? TargetPath,
     string? PreImage,
     bool IsTombstone,
-    RnrProjDelta? RnrProjDelta);
+    RnrProjDelta? RnrProjDelta,
+    bool? PreImageHadBom = null);

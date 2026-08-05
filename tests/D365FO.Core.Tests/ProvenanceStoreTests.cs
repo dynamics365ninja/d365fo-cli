@@ -47,6 +47,36 @@ public class ProvenanceStoreTests : IDisposable
     }
 
     [Fact]
+    public void Validate_rejects_object_that_merely_contains_the_bound_name()
+    {
+        // A token issued for the short name "Cust" must not become a wildcard over every
+        // object with "Cust" somewhere inside it.
+        var token = ProvenanceStore.CreateToken(new ProvenanceContext("goal", "Cust"));
+        var (ok, reason) = ProvenanceStore.Validate(token, "SalesCustTable");
+        Assert.False(ok);
+        Assert.Contains("bound", reason);
+    }
+
+    [Fact]
+    public void Validate_rejects_shorter_object_the_bound_name_contains()
+    {
+        // The reverse direction: a token for CustTable does not authorize the unrelated "Cust".
+        var token = ProvenanceStore.CreateToken(new ProvenanceContext("goal", "CustTable"));
+        var (ok, _) = ProvenanceStore.Validate(token, "Cust");
+        Assert.False(ok);
+    }
+
+    [Fact]
+    public void Validate_accepts_derived_name_without_a_proposed_name()
+    {
+        // Extensions/handlers are named by prefixing the base object; that stays authorized
+        // even when prepare did not propose the exact name up front.
+        var token = ProvenanceStore.CreateToken(new ProvenanceContext("goal", "CustTable"));
+        var (ok, _) = ProvenanceStore.Validate(token, "CustTableEventHandler");
+        Assert.True(ok);
+    }
+
+    [Fact]
     public void Validate_rejects_other_object()
     {
         var token = ProvenanceStore.CreateToken(new ProvenanceContext("goal", "CustTable"));

@@ -90,6 +90,15 @@ public static class ProvenanceStore
     /// Tokens are object-bound: a token issued for CustTable does not authorize
     /// writes touching SalesTable.
     /// </summary>
+    /// <remarks>
+    /// The target must either BE the bound object, be an artefact DERIVED from it (D365FO names
+    /// extensions and handlers by prefixing the base object — <c>CustTable_MyExt_Extension</c>,
+    /// <c>CustTableEventHandler</c>), or match the name <c>prepare create</c> proposed.
+    /// Deliberately a prefix test rather than a substring one in either direction: a plain
+    /// "contains" match let a token issued for <c>Cust</c> authorize writes to every object with
+    /// "Cust" anywhere in its name, and a token for <c>CustTable</c> authorize a write to the
+    /// unrelated shorter <c>Cust</c> — which defeats the point of binding the token to an object.
+    /// </remarks>
     public static (bool Ok, string Reason) Validate(string? token, string objectName)
     {
         if (string.IsNullOrWhiteSpace(token))
@@ -99,9 +108,13 @@ public static class ProvenanceStore
             return (false, "Grounding token not found or expired (30-min TTL). Re-run `d365fo prepare change`/`prepare create`.");
         var bound = bundle.Context.ObjectName;
         var proposed = bundle.Context.ProposedName;
-        if (!objectName.Contains(bound, StringComparison.OrdinalIgnoreCase)
-            && !bound.Contains(objectName, StringComparison.OrdinalIgnoreCase)
-            && !string.Equals(proposed, objectName, StringComparison.OrdinalIgnoreCase))
+
+        var authorized =
+            string.Equals(objectName, bound, StringComparison.OrdinalIgnoreCase)
+            || (!string.IsNullOrEmpty(bound) && objectName.StartsWith(bound, StringComparison.OrdinalIgnoreCase))
+            || (!string.IsNullOrWhiteSpace(proposed) && string.Equals(proposed, objectName, StringComparison.OrdinalIgnoreCase));
+
+        if (!authorized)
         {
             return (false, $"Grounding token is bound to \"{bound}\" — it does not authorize writes to \"{objectName}\". " +
                            "Run `d365fo prepare change`/`prepare create` for this object.");

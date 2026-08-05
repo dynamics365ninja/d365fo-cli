@@ -1,5 +1,6 @@
 using System.Text.Json.Nodes;
 using D365FO.Core.Bridge;
+using D365FO.Core.Guardrails;
 using D365FO.Core.Labels;
 
 namespace D365FO.Core.Journal;
@@ -26,6 +27,12 @@ public static class UndoEngine
     /// stack. In <paramref name="dryRun"/> mode nothing is written or removed; each step is
     /// previewed only.
     /// </summary>
+    /// <param name="journal">Journal to pop entries from; successfully replayed entries are removed.</param>
+    /// <param name="steps">
+    /// How many entries to revert, most-recent-first. Zero or negative reverts nothing — a caller
+    /// asking for no steps must not silently get one.
+    /// </param>
+    /// <param name="dryRun">Preview only: nothing is written and no entry is removed.</param>
     /// <param name="bridgeClientFactory">
     /// Test seam: when supplied, its return value is used for every bridge-written entry
     /// instead of spawning a real <c>D365FO.Bridge.exe</c> — the caller owns disposal (see
@@ -40,7 +47,12 @@ public static class UndoEngine
         Func<BridgeClient>? bridgeClientFactory = null)
     {
         ArgumentNullException.ThrowIfNull(journal);
-        var entries = journal.List(Math.Max(1, steps));
+        if (steps <= 0)
+        {
+            return new UndoResult(Array.Empty<UndoStepResult>(), dryRun);
+        }
+
+        var entries = journal.List(steps);
         var results = new List<UndoStepResult>(entries.Count);
 
         BridgeClient? ownedClient = null;
@@ -132,6 +144,16 @@ public static class UndoEngine
         if (string.IsNullOrWhiteSpace(entry.TargetPath))
             return (false, "Journal entry has no target path.", null, null);
 
+        // Same boundary the forward write paths enforce (XppScaffolder.Write / LabelFileWriter).
+        // The target path comes out of the journal store, not from the current command line, so
+        // undo must re-check it rather than trust it: a journal carried over from a different
+        // D365FO_PACKAGES_PATH — or hand-edited — would otherwise let `undo` delete or rewrite
+        // files anywhere on disk.
+        var cfg = D365FoSettings.FromEnvironment();
+        PathGuard.EnsureWithinBoundary(
+            entry.TargetPath,
+            new[] { cfg.PackagesPath, cfg.WorkspacePath }.Concat(cfg.CustomPackagesPaths).ToArray());
+
         string? rnrWarn = null;
         switch (entry.Operation)
         {
@@ -147,13 +169,13 @@ public static class UndoEngine
             case JournalOperation.Update:
                 if (entry.PreImage is null)
                     return (false, "No pre-image recorded for this update — cannot restore exact bytes.", null, null);
-                AtomicWriteText(entry.TargetPath, entry.PreImage);
+                AtomicWriteText(entry.TargetPath, entry.PreImage, entry.PreImageHadBom);
                 return (true, null, $"restored pre-image of {entry.TargetPath}", null);
 
             case JournalOperation.Delete:
                 if (entry.PreImage is null)
                     return (false, "No pre-image recorded for this delete — cannot restore the file.", null, null);
-                AtomicWriteText(entry.TargetPath, entry.PreImage);
+                AtomicWriteText(entry.TargetPath, entry.PreImage, entry.PreImageHadBom);
                 if (entry.RnrProjDelta is not null && !RnrProjRegistry.Invert(entry.RnrProjDelta))
                     rnrWarn = $".rnrproj entry for '{entry.ObjectName}' could not be restored automatically — check {entry.RnrProjDelta.RnrProjPath}.";
                 return (true, null, $"recreated {entry.TargetPath}", rnrWarn);
@@ -163,13 +185,27 @@ public static class UndoEngine
         }
     }
 
-    private static void AtomicWriteText(string path, string content)
+    /// <summary>
+    /// Restore <paramref name="content"/> to <paramref name="path"/> via tmp+move.
+    /// </summary>
+    /// <remarks>
+    /// <c>preImageHadBom</c> is the BOM state of the original file, recorded at write time.
+    /// <see cref="JournalEntry.PreImage"/> is a decoded string, so the UTF-8 BOM the original
+    /// carried is not in it — writing without re-emitting it would leave the "restored" AOT XML
+    /// three bytes shorter than what D365FO and Visual Studio wrote, which shows up as a real
+    /// change in git. <c>null</c> (entry written by an older build) falls back to the BOM state
+    /// of the file currently on disk, and to "no BOM" when there is no file to inspect.
+    /// </remarks>
+    private static void AtomicWriteText(string path, string content, bool? preImageHadBom = null)
     {
         var full = Path.GetFullPath(path);
         var dir = Path.GetDirectoryName(full);
         if (!string.IsNullOrEmpty(dir)) Directory.CreateDirectory(dir);
+
+        var emitBom = preImageHadBom ?? (File.Exists(full) && Scaffolding.ScaffoldFileWriter.DetectUtf8Bom(full) == true);
+
         var tmp = full + ".undo.tmp";
-        File.WriteAllText(tmp, content);
+        File.WriteAllText(tmp, content, new System.Text.UTF8Encoding(encoderShouldEmitUTF8Identifier: emitBom));
         File.Move(tmp, full, overwrite: true);
     }
 
