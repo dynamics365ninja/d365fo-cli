@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://github.com/dynamics365ninja/d365fo-cli/eval/corpus/schema.json",
   "title": "Eval corpus run record",
-  "description": "Documented shape of an eval/corpus/runs/<run-id>.json file, written by D365FO.Core.Eval.EvalCorpusStore.Append. One file per (case_id, run_id). Gitignored — local/CI evidence, not committed.",
+  "description": "Documented shape of an eval/corpus/runs/<run-id>.json file, written by D365FO.Core.Eval.EvalCorpusStore.Append. One file per (case_id, run_id). Committed — the corpus is the evidence the eval-improver ranks failure clusters from, so it has to survive across machines and CI runs.",
   "type": "object",
   "required": ["runId", "caseId", "tier", "timestampUtc", "source", "score"],
   "properties": {

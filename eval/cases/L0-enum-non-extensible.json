@@ -1,0 +1,30 @@
+{
+  "id": "L0-enum-non-extensible",
+  "title": "Non-extensible base enum",
+  "tier": 0,
+  "instruction": "Create a base enum named ConFmVehicleKind with values Car=0 and Truck=1, labelled 'Vehicle kind', and mark it non-extensible. Use only the d365fo CLI (search/get/generate/validate) — do not hand-write XML.",
+  "canonical_args": [
+    "generate",
+    "enum",
+    "ConFmVehicleKind",
+    "--value",
+    "Car:0",
+    "--value",
+    "Truck:1",
+    "--non-extensible",
+    "--label",
+    "Vehicle kind"
+  ],
+  "target_artifact_types": [
+    "AxEnum"
+  ],
+  "golden_path": "L0-enum-non-extensible",
+  "tags": [
+    "enum",
+    "extensibility",
+    "metadata"
+  ],
+  "ignore": [],
+  "requires_fixture_index": false,
+  "golden_pending": false
+}

@@ -1,0 +1,20 @@
+{
+  "runId": "20260805T163047719Z__L1-map-multi-table__636cc5e0d6f24a6692e265d317a9226c",
+  "caseId": "L1-map-multi-table",
+  "tier": 1,
+  "timestampUtc": "2026-08-05T16:30:47.7217646+00:00",
+  "source": "replay",
+  "score": {
+    "xppClean": true,
+    "xppErrors": 0,
+    "referencesClean": true,
+    "referenceErrors": 0,
+    "goldenMatch": true,
+    "goldenDiff": {
+      "missing": [],
+      "extra": [],
+      "changed": [],
+      "isMatch": true
+    }
+  }
+}

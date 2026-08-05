@@ -1,0 +1,34 @@
+{
+  "id": "L1-table-tempdb",
+  "title": "TempDB table (storage kind, not table group)",
+  "tier": 1,
+  "instruction": "Create a TempDB (temporary, session-scoped) table named ConFmVehicleTmp with a mandatory VIN field using the VinEdt EDT and a ServiceNote field using the Notes EDT, labelled 'Vehicle scratch table'. It carries no business role, so give it the Miscellaneous table group. Use only the d365fo CLI (search/get/generate/validate) — do not hand-write XML.",
+  "canonical_args": [
+    "generate",
+    "table",
+    "ConFmVehicleTmp",
+    "--table-type",
+    "TempDB",
+    "--pattern",
+    "miscellaneous",
+    "--field",
+    "VIN:VinEdt:mandatory",
+    "--field",
+    "ServiceNote:Notes",
+    "--label",
+    "Vehicle scratch table"
+  ],
+  "target_artifact_types": [
+    "AxTable"
+  ],
+  "golden_path": "L1-table-tempdb",
+  "tags": [
+    "table",
+    "tempdb",
+    "storage",
+    "metadata"
+  ],
+  "ignore": [],
+  "requires_fixture_index": false,
+  "golden_pending": false
+}

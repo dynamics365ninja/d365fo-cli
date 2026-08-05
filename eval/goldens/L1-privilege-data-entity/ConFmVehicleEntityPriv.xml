@@ -1,0 +1,20 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<AxSecurityPrivilege>
+  <Name>ConFmVehicleEntityPriv</Name>
+  <Label>Fleet vehicle entity maintain</Label>
+  <DataEntityPermissions>
+    <AxSecurityDataEntityPermission>
+      <Grant>
+        <Correct>Allow</Correct>
+        <Create>Allow</Create>
+        <Delete>Allow</Delete>
+        <Read>Allow</Read>
+        <Update>Allow</Update>
+      </Grant>
+      <Name>ConFmVehicleEntity</Name>
+      <Fields />
+      <Methods />
+    </AxSecurityDataEntityPermission>
+  </DataEntityPermissions>
+  <EntryPoints />
+</AxSecurityPrivilege>

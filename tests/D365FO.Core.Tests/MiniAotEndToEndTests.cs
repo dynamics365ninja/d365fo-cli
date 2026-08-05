@@ -79,8 +79,7 @@ public class MiniAotEndToEndTests : IDisposable
         var ex = new MetadataExtractor();
         var batch = ex.ExtractAll(SamplesDir).Single();
 
-        var table = Assert.Single(batch.Tables);
-        Assert.Equal("FmVehicle", table.Name);
+        var table = batch.Tables.Single(t => t.Name == "FmVehicle");
         Assert.Equal(3, table.Fields.Count);
 
         var vin = table.Fields.Single(f => f.Name == "VIN");
@@ -114,9 +113,24 @@ public class MiniAotEndToEndTests : IDisposable
     public void Repository_counts_match_fixture()
     {
         var counts = _repo.CountAll();
-        Assert.Equal(1, counts.Tables);
-        Assert.Equal(3, counts.Fields);
+        // FmVehicle (3 fields) + FmVehicleLine (3 fields). The second table exists
+        // so eval cases can exercise header/lines and join-shaped generators
+        // (query --join, form --pattern DetailsTransaction) against a real
+        // relation instead of a phantom target.
+        Assert.Equal(2, counts.Tables);
+        Assert.Equal(6, counts.Fields);
         Assert.Equal(1, counts.Classes);
+    }
+
+    [Fact]
+    public void ExtractAll_parses_FmVehicleLine_relation_to_FmVehicle()
+    {
+        var ex = new MetadataExtractor();
+        var batch = ex.ExtractAll(SamplesDir).Single();
+
+        var line = batch.Tables.Single(t => t.Name == "FmVehicleLine");
+        var rel = Assert.Single(line.Relations);
+        Assert.Equal("FmVehicle", rel.RelatedTable);
     }
 
     // ─── Repository: GetTableDetails snapshot ──────────────────────────────
@@ -195,8 +209,8 @@ public class MiniAotEndToEndTests : IDisposable
             _repo.ApplyExtract(b);
 
         var counts = _repo.CountAll();
-        Assert.Equal(1, counts.Tables);
-        Assert.Equal(3, counts.Fields);
+        Assert.Equal(2, counts.Tables);
+        Assert.Equal(6, counts.Fields);
         Assert.Equal(1, counts.Classes);
     }
 }

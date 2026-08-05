@@ -1,0 +1,31 @@
+{
+  "id": "L1-view-computed",
+  "title": "View with a computed column and its backing view method",
+  "tier": 1,
+  "instruction": "Create a view named ConFmVehicleAgeView over the query ConFmVehicleLineQuery, projecting VIN from the FmVehicle data source plus a computed integer column ServiceCount backed by a view method named computeServiceCount. Use only the d365fo CLI (search/get/generate/validate) — do not hand-write XML.",
+  "canonical_args": [
+    "generate",
+    "view",
+    "ConFmVehicleAgeView",
+    "--query",
+    "ConFmVehicleLineQuery",
+    "--field",
+    "VIN:FmVehicle",
+    "--computed",
+    "ServiceCount:computeServiceCount:Int"
+  ],
+  "target_artifact_types": [
+    "AxView"
+  ],
+  "golden_path": "L1-view-computed",
+  "tags": [
+    "view",
+    "computed-column",
+    "metadata",
+    "regression",
+    "known-reference-gap"
+  ],
+  "ignore": [],
+  "requires_fixture_index": true,
+  "golden_pending": false
+}

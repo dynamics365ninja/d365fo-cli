@@ -1,0 +1,34 @@
+{
+  "id": "L1-report-parameters",
+  "title": "Report with a prompted parameter and a second dataset",
+  "tier": 1,
+  "instruction": "Create an SSRS report named ConFmVehicleParamReport with VIN and Make as tablix columns, a prompted FromDate parameter of type DateTime, and a second dataset ConFmVehicleSummaryDS fed by the data provider class ConFmVehicleSummaryDP, captioned 'Fleet vehicle parameter report'. Use only the d365fo CLI (search/get/generate/validate) — do not hand-write XML.",
+  "canonical_args": [
+    "generate",
+    "report",
+    "ConFmVehicleParamReport",
+    "--field",
+    "VIN",
+    "--field",
+    "Make",
+    "--parameter",
+    "FromDate:DateTime",
+    "--extra-dataset",
+    "ConFmVehicleSummaryDS:ConFmVehicleSummaryDP",
+    "--caption",
+    "Fleet vehicle parameter report"
+  ],
+  "target_artifact_types": [
+    "AxReport"
+  ],
+  "golden_path": "L1-report-parameters",
+  "tags": [
+    "report",
+    "parameters",
+    "dataset",
+    "metadata"
+  ],
+  "ignore": [],
+  "requires_fixture_index": false,
+  "golden_pending": false
+}

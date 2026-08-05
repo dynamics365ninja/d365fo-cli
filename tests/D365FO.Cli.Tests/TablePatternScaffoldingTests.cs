@@ -64,6 +64,29 @@ public class TablePatternScaffoldingTests
         Assert.Null(doc.Root.Element("TableType"));
     }
 
+    /// <summary>
+    /// Leaving &lt;TableGroup&gt; out is deliberate — the AOT default (Miscellaneous)
+    /// then applies and no default is flipped by accident. But the very same tool's
+    /// `validate xpp` raises XML003 on that table, so `generate table` warns about
+    /// the consequence instead of leaving the caller to hit it one command later.
+    /// This test pins the tension the warning describes: if XML003 ever stops
+    /// firing here, the warning is stale and must go.
+    /// </summary>
+    [Fact]
+    public void Pattern_None_table_trips_the_XML003_rule_the_command_warns_about()
+    {
+        var withoutPattern = XppScaffolder.Table("FmThing", label: "@Fm:Thing").ToString();
+        var violations = D365FO.Core.Validation.XppValidator.Validate(
+            withoutPattern, D365FO.Core.Validation.XppValidator.CodeTypeXmlTable);
+        Assert.Contains(violations, v => v.Rule == "XML003" && v.Severity == "error");
+
+        var withPattern = XppScaffolder.Table("FmThing", label: "@Fm:Thing",
+            pattern: TablePattern.Miscellaneous).ToString();
+        var clean = D365FO.Core.Validation.XppValidator.Validate(
+            withPattern, D365FO.Core.Validation.XppValidator.CodeTypeXmlTable);
+        Assert.DoesNotContain(clean, v => v.Rule == "XML003");
+    }
+
     [Theory]
     [InlineData(TablePattern.Main,            "Main")]
     [InlineData(TablePattern.Transaction,     "Transaction")]

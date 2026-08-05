@@ -14,7 +14,7 @@ public class EvalCaseCatalogTests
         var (cases, errors) = EvalCaseCatalog.LoadAll(EvalPaths.CasesDir(RepoRoot));
 
         Assert.Empty(errors);
-        Assert.Equal(31, cases.Count);
+        Assert.Equal(51, cases.Count);
         Assert.Contains(cases, c => c.Id == "L0-edt-basic");
         Assert.Contains(cases, c => c.Id == "L0-enum-basic");
         Assert.Contains(cases, c => c.Id == "L1-table-basic");
@@ -39,20 +39,27 @@ public class EvalCaseCatalogTests
         }
     }
 
+    /// <summary>
+    /// `requires_fixture_index: true` makes every replay of that case pay for a
+    /// full extract of tests/Samples/MiniAot, so it must be earned: the case has
+    /// to actually name one of the fixture's objects. Asserted as a property
+    /// rather than a hard-coded id list, which went stale the first time the
+    /// catalog grew.
+    /// </summary>
     [Fact]
     public void Only_cases_grounded_against_the_FmVehicle_fixture_require_the_fixture_index()
     {
         var (cases, _) = EvalCaseCatalog.LoadAll(EvalPaths.CasesDir(RepoRoot));
+        string[] fixtureObjects = { "FmVehicleService", "FmVehicleLine", "FmVehicle" };
 
-        var fixtureCases = cases.Where(c => c.RequiresFixtureIndex).Select(c => c.Id).OrderBy(id => id).ToList();
-        Assert.Equal(
-            new[]
-            {
-                "L1-form-basic", "L1-map-basic", "L1-migration-script-basic", "L1-query-basic", "L1-systest-basic",
-                "L1-workflow-basic", "L2-coc-extension", "L2-event-handler-basic", "L2-security-policy-basic",
-                "L2-table-extension", "L2-virtual-entity-basic",
-            },
-            fixtureCases);
+        foreach (var c in cases.Where(c => c.RequiresFixtureIndex))
+        {
+            var args = string.Join(' ', c.CanonicalArgs ?? new List<string>());
+            Assert.True(
+                fixtureObjects.Any(o => args.Contains(o, StringComparison.Ordinal)),
+                $"{c.Id}: requires_fixture_index is true but its canonical_args name no fixture object " +
+                $"({string.Join('/', fixtureObjects)}) — drop the flag or ground the case.");
+        }
     }
 
     [Fact]

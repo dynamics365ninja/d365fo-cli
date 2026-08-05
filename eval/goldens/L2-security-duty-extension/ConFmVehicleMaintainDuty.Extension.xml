@@ -1,0 +1,10 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<AxSecurityDutyExtension>
+  <Name>ConFmVehicleMaintainDuty.Extension</Name>
+  <Privileges>
+    <AxSecurityPrivilegeReference>
+      <Name>ConFmVehicleMaintainPriv</Name>
+    </AxSecurityPrivilegeReference>
+  </Privileges>
+  <PropertyModifications />
+</AxSecurityDutyExtension>

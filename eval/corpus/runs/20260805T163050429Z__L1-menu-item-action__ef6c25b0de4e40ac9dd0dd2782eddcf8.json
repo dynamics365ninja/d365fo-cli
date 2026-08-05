@@ -1,0 +1,20 @@
+{
+  "runId": "20260805T163050429Z__L1-menu-item-action__ef6c25b0de4e40ac9dd0dd2782eddcf8",
+  "caseId": "L1-menu-item-action",
+  "tier": 1,
+  "timestampUtc": "2026-08-05T16:30:50.4313904+00:00",
+  "source": "replay",
+  "score": {
+    "xppClean": true,
+    "xppErrors": 0,
+    "referencesClean": true,
+    "referenceErrors": 0,
+    "goldenMatch": true,
+    "goldenDiff": {
+      "missing": [],
+      "extra": [],
+      "changed": [],
+      "isMatch": true
+    }
+  }
+}

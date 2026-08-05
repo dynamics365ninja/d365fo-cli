@@ -1,0 +1,33 @@
+{
+  "id": "L1-form-dialog",
+  "title": "Dialog form with OK/Cancel over an existing table",
+  "tier": 1,
+  "instruction": "Create a Dialog form named ConFmVehicleCreateDialog bound to the FmVehicle table, prompting for VIN and Make, captioned 'Create vehicle'. Use `d365fo get table FmVehicle` first to confirm the field names before generating. Use only the d365fo CLI (search/get/generate/validate) — do not hand-write XML.",
+  "canonical_args": [
+    "generate",
+    "form",
+    "ConFmVehicleCreateDialog",
+    "--pattern",
+    "Dialog",
+    "--table",
+    "FmVehicle",
+    "--field",
+    "VIN",
+    "--field",
+    "Make",
+    "--caption",
+    "Create vehicle"
+  ],
+  "target_artifact_types": [
+    "AxForm"
+  ],
+  "golden_path": "L1-form-dialog",
+  "tags": [
+    "form",
+    "dialog",
+    "metadata"
+  ],
+  "ignore": [],
+  "requires_fixture_index": true,
+  "golden_pending": false
+}

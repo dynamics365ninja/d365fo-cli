@@ -119,6 +119,80 @@ public class FormPatternScaffoldingTests
         Assert.Contains("<Style>Panorama</Style>", xml);
     }
 
+    /// <summary>
+    /// The generate-form command reports <c>fieldCount = --field count</c> for
+    /// every pattern. TableOfContents and Workspace used to render their
+    /// templates without ever consulting <c>GridFields</c>, so the caller got a
+    /// success payload claiming two fields over XML that bound none — the
+    /// "confident lie" failure mode eval/README.md ranks worst. No pattern may
+    /// silently discard the fields it was handed.
+    /// </summary>
+    [Theory]
+    [MemberData(nameof(AllPatterns))]
+    public void No_pattern_silently_discards_requested_fields(FormPattern pattern)
+    {
+        var xml = XppScaffolder.Form(
+            formName:        "FmFieldSink",
+            dataSourceTable: "FmVehicle",
+            pattern:         pattern,
+            gridFields:      new[] { "VIN", "Make" });
+
+        var bound = XDocument.Parse(xml).Descendants("DataField").Select(e => e.Value).ToList();
+        Assert.Contains("VIN", bound);
+        Assert.Contains("Make", bound);
+    }
+
+    [Fact]
+    public void TableOfContents_binds_requested_fields_on_the_first_tab_page()
+    {
+        var xml = XppScaffolder.Form("FmParameters", "FmVehicle", FormPattern.TableOfContents,
+            gridFields: new[] { "VIN", "Make" });
+
+        // Fields belong to the first page only — binding them on every page would
+        // bind the same field twice.
+        var pages = XDocument.Parse(xml).Descendants("AxFormControl")
+            .Where(c => c.Element("Type")?.Value == "TabPage")
+            .ToList();
+        Assert.Equal(2, pages.Count);
+        Assert.Equal(new[] { "VIN", "Make" }, pages[0].Descendants("DataField").Select(e => e.Value));
+        Assert.Empty(pages[1].Descendants("DataField"));
+    }
+
+    [Fact]
+    public void Workspace_gives_fields_an_implicit_list_section_when_none_requested()
+    {
+        var xml = XppScaffolder.Form("FmWorkspace", "FmVehicle", FormPattern.Workspace,
+            gridFields: new[] { "VIN", "Make" });
+
+        // No --section, but --field was supplied: one implicit list section named
+        // after the datasource carries them, rather than the fields vanishing.
+        Assert.Contains("<Name>FmVehicleSection</Name>", xml);
+        Assert.Contains("<Name>FmVehicleGrid_VIN</Name>", xml);
+        Assert.Contains("<Name>FmVehicleGrid_Make</Name>", xml);
+    }
+
+    [Fact]
+    public void Workspace_binds_fields_into_every_requested_section_grid()
+    {
+        var xml = XppScaffolder.Form("FmWorkspace", "FmVehicle", FormPattern.Workspace,
+            gridFields: new[] { "VIN" },
+            sections: new[]
+            {
+                new FormSectionSpec("OpenOrders", "Open orders"),
+                new FormSectionSpec("BackOrders", "Back orders"),
+            });
+        Assert.Contains("<Name>OpenOrdersGrid_VIN</Name>", xml);
+        Assert.Contains("<Name>BackOrdersGrid_VIN</Name>", xml);
+    }
+
+    [Fact]
+    public void Workspace_without_fields_still_renders_only_the_summary_section()
+    {
+        var xml = XppScaffolder.Form("FmWorkspace", "FmVehicle", FormPattern.Workspace);
+        Assert.Contains("<Name>SummarySection</Name>", xml);
+        Assert.DoesNotContain("<Name>FmVehicleSection</Name>", xml);
+    }
+
     [Fact]
     public void ListPage_locks_datasource_to_read_only()
     {

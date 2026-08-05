@@ -1,0 +1,33 @@
+{
+  "id": "L1-form-lookup",
+  "title": "Lookup form over an existing table",
+  "tier": 1,
+  "instruction": "Create a Lookup form named ConFmVehicleLookupForm bound to the FmVehicle table, showing VIN and Make, captioned 'Vehicle lookup'. Use `d365fo get table FmVehicle` first to confirm the field names before generating. Use only the d365fo CLI (search/get/generate/validate) — do not hand-write XML.",
+  "canonical_args": [
+    "generate",
+    "form",
+    "ConFmVehicleLookupForm",
+    "--pattern",
+    "Lookup",
+    "--table",
+    "FmVehicle",
+    "--field",
+    "VIN",
+    "--field",
+    "Make",
+    "--caption",
+    "Vehicle lookup"
+  ],
+  "target_artifact_types": [
+    "AxForm"
+  ],
+  "golden_path": "L1-form-lookup",
+  "tags": [
+    "form",
+    "lookup",
+    "metadata"
+  ],
+  "ignore": [],
+  "requires_fixture_index": true,
+  "golden_pending": false
+}

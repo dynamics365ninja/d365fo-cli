@@ -1,0 +1,20 @@
+{
+  "runId": "20260805T163006628Z__L1-business-event-basic__687bac5469a74117ace85a80bd44ea9f",
+  "caseId": "L1-business-event-basic",
+  "tier": 1,
+  "timestampUtc": "2026-08-05T16:30:06.630288+00:00",
+  "source": "replay",
+  "score": {
+    "xppClean": true,
+    "xppErrors": 0,
+    "referencesClean": false,
+    "referenceErrors": 1,
+    "goldenMatch": true,
+    "goldenDiff": {
+      "missing": [],
+      "extra": [],
+      "changed": [],
+      "isMatch": true
+    }
+  }
+}

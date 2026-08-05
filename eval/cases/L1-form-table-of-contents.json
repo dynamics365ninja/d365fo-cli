@@ -1,0 +1,34 @@
+{
+  "id": "L1-form-table-of-contents",
+  "title": "TableOfContents parameters form binding its fields",
+  "tier": 1,
+  "instruction": "Create a TableOfContents (parameters) form named ConFmVehicleParametersForm bound to the FmVehicle table, exposing VIN and Make, captioned 'Fleet parameters'. Use `d365fo get table FmVehicle` first to confirm the field names before generating. Use only the d365fo CLI (search/get/generate/validate) — do not hand-write XML.",
+  "canonical_args": [
+    "generate",
+    "form",
+    "ConFmVehicleParametersForm",
+    "--pattern",
+    "TableOfContents",
+    "--table",
+    "FmVehicle",
+    "--field",
+    "VIN",
+    "--field",
+    "Make",
+    "--caption",
+    "Fleet parameters"
+  ],
+  "target_artifact_types": [
+    "AxForm"
+  ],
+  "golden_path": "L1-form-table-of-contents",
+  "tags": [
+    "form",
+    "tableofcontents",
+    "metadata",
+    "regression"
+  ],
+  "ignore": [],
+  "requires_fixture_index": true,
+  "golden_pending": false
+}

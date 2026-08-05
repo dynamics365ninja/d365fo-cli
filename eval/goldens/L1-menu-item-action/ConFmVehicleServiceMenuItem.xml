@@ -1,0 +1,10 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<AxMenuItemAction>
+  <Name>ConFmVehicleServiceMenuItem</Name>
+  <Label>Run vehicle service</Label>
+  <Image>
+    <ImageType>Symbol</ImageType>
+  </Image>
+  <Object>FmVehicleService</Object>
+  <ObjectType>Class</ObjectType>
+</AxMenuItemAction>

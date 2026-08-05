@@ -187,7 +187,13 @@ public static class FormPatternTemplates
                   new FormSectionSpec("TabPageGeneral", "General"),
                   new FormSectionSpec("TabPageSetup",   "Setup"),
               };
-        var pages = string.Concat(sections.Select(s => RenderTocTabPage(s, indent: 8)));
+        // Requested fields land on the FIRST tab page — its FieldsFieldGroups
+        // sub-pattern allows input controls directly. Rendering them on every
+        // page would bind the same field twice. Dropping them (what this did
+        // before) silently discarded --field while the command still reported
+        // fieldCount = N.
+        var pages = string.Concat(sections.Select((s, i) =>
+            RenderTocTabPage(s, i == 0 ? opt.GridFields : Array.Empty<string>(), opt.DsName, indent: 8)));
 
         var (dsName, dsTable) = (opt.DsName, opt.DsTable);
         var dsXml = !string.IsNullOrEmpty(dsName) && !string.IsNullOrEmpty(dsTable)
@@ -238,7 +244,19 @@ public static class FormPatternTemplates
     public static string BuildWorkspace(FormTemplateOptions opt)
     {
         var (dsName, dsTable) = ResolveDs(opt);
-        var sections = string.Concat(opt.Sections.Select((s, i) => RenderWorkspaceListSection(s, i, dsName, indent: 10)));
+
+        // A workspace with requested fields but no --section used to render the
+        // Summary tiles only, silently dropping every --field. Give those fields
+        // a home: one implicit list section named after the datasource, matching
+        // what a real panorama workspace does (Summary + one list per subject).
+        var specs = opt.Sections.Count > 0
+            ? opt.Sections
+            : opt.GridFields.Count > 0
+                ? new[] { new FormSectionSpec(dsName, dsName) }
+                : Array.Empty<FormSectionSpec>();
+
+        var sections = string.Concat(specs.Select((s, i) =>
+            RenderWorkspaceListSection(s, i, dsName, opt.GridFields, indent: 10)));
         return Fill("Workspace.template.xml", new()
         {
             ["FormName"]      = opt.FormName,
@@ -333,23 +351,8 @@ public static class FormPatternTemplates
         return sb.ToString();
     }
 
-    private static string RenderTabPage(FormSectionSpec s, int indent)
-    {
-        var pad = new string(' ', indent);
-        var sb = new StringBuilder();
-        sb.Append(pad).Append("<AxFormControl xmlns=\"\" i:type=\"AxFormTabPageControl\">\n");
-        sb.Append(pad).Append("  <Name>").Append(s.Name).Append("</Name>\n");
-        sb.Append(pad).Append("  <Pattern>FieldsFieldGroups</Pattern>\n");
-        sb.Append(pad).Append("  <PatternVersion>1.1</PatternVersion>\n");
-        sb.Append(pad).Append("  <Type>TabPage</Type>\n");
-        sb.Append(pad).Append("  <Caption>").Append(s.Caption).Append("</Caption>\n");
-        sb.Append(pad).Append("  <FormControlExtension i:nil=\"true\" />\n");
-        sb.Append(pad).Append("  <Controls />\n");
-        sb.Append(pad).Append("</AxFormControl>\n");
-        return sb.ToString();
-    }
-
-    private static string RenderTocTabPage(FormSectionSpec s, int indent)
+    private static string RenderTocTabPage(
+        FormSectionSpec s, IReadOnlyList<string> fields, string? ds, int indent)
     {
         var pad = new string(' ', indent);
         var sb = new StringBuilder();
@@ -361,12 +364,22 @@ public static class FormPatternTemplates
         sb.Append(pad).Append("  <Caption>").Append(s.Caption).Append("</Caption>\n");
         sb.Append(pad).Append("  <FrameType>None</FrameType>\n");
         sb.Append(pad).Append("  <FormControlExtension i:nil=\"true\" />\n");
-        sb.Append(pad).Append("  <Controls />\n");
+        if (fields.Count == 0)
+        {
+            sb.Append(pad).Append("  <Controls />\n");
+        }
+        else
+        {
+            sb.Append(pad).Append("  <Controls>\n");
+            foreach (var f in fields) sb.Append(RenderDialogField(f, ds, indent + 4));
+            sb.Append(pad).Append("  </Controls>\n");
+        }
         sb.Append(pad).Append("</AxFormControl>\n");
         return sb.ToString();
     }
 
-    private static string RenderWorkspaceListSection(FormSectionSpec s, int idx, string dsName, int indent)
+    private static string RenderWorkspaceListSection(
+        FormSectionSpec s, int idx, string dsName, IReadOnlyList<string> fields, int indent)
     {
         // ElementPosition follows MCP's heuristic: 536870912 * (idx + 2)
         var pos = 536870912L * (idx + 2);
@@ -414,7 +427,19 @@ public static class FormPatternTemplates
         sb.Append(pad).Append("      <Type>Grid</Type>\n");
         sb.Append(pad).Append("      <WidthMode>SizeToAvailable</WidthMode>\n");
         sb.Append(pad).Append("      <FormControlExtension i:nil=\"true\" />\n");
-        sb.Append(pad).Append("      <Controls />\n");
+        // The section's grid is where --field belongs; leaving it empty dropped
+        // the caller's fields while the command still reported fieldCount = N.
+        if (fields.Count == 0)
+        {
+            sb.Append(pad).Append("      <Controls />\n");
+        }
+        else
+        {
+            sb.Append(pad).Append("      <Controls>\n");
+            foreach (var f in fields)
+                sb.Append(RenderGridFieldControl($"{s.Name}Grid", f, dsName, indent + 8));
+            sb.Append(pad).Append("      </Controls>\n");
+        }
         sb.Append(pad).Append("      <DataSource>").Append(dsName).Append("</DataSource>\n");
         sb.Append(pad).Append("      <ShowRowLabels>No</ShowRowLabels>\n");
         sb.Append(pad).Append("      <Style>Tabular</Style>\n");

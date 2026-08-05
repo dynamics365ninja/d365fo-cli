@@ -1,0 +1,29 @@
+{
+  "id": "L1-map-multi-table",
+  "title": "Map whose field template is mapped onto two tables",
+  "tier": 1,
+  "instruction": "Create an AOT map named ConFmVehicleSharedMap with one field VIN of type VinEdt, mapped by identical name onto both FmVehicle and FmVehicleLine. Use only the d365fo CLI (search/get/generate/validate) — do not hand-write XML.",
+  "canonical_args": [
+    "generate",
+    "map",
+    "ConFmVehicleSharedMap",
+    "--field",
+    "VIN:VinEdt",
+    "--map-to",
+    "FmVehicle",
+    "--map-to",
+    "FmVehicleLine"
+  ],
+  "target_artifact_types": [
+    "AxMap"
+  ],
+  "golden_path": "L1-map-multi-table",
+  "tags": [
+    "map",
+    "mapping",
+    "metadata"
+  ],
+  "ignore": [],
+  "requires_fixture_index": true,
+  "golden_pending": false
+}

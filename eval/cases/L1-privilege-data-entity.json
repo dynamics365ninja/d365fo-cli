@@ -1,0 +1,29 @@
+{
+  "id": "L1-privilege-data-entity",
+  "title": "Privilege granting maintain access on a data entity",
+  "tier": 1,
+  "instruction": "Create a security privilege named ConFmVehicleEntityPriv that grants maintain (create/read/update/delete/correct) access on the data entity ConFmVehicleEntity, labelled 'Fleet vehicle entity maintain'. It grants no menu-item entry point. Use only the d365fo CLI (search/get/generate/validate) — do not hand-write XML.",
+  "canonical_args": [
+    "generate",
+    "privilege",
+    "ConFmVehicleEntityPriv",
+    "--data-entity",
+    "ConFmVehicleEntity",
+    "--data-entity-access",
+    "maintain",
+    "--label",
+    "Fleet vehicle entity maintain"
+  ],
+  "target_artifact_types": [
+    "AxSecurityPrivilege"
+  ],
+  "golden_path": "L1-privilege-data-entity",
+  "tags": [
+    "security",
+    "privilege",
+    "data-entity"
+  ],
+  "ignore": [],
+  "requires_fixture_index": false,
+  "golden_pending": false
+}

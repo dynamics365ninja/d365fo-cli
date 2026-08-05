@@ -75,10 +75,26 @@ public static class ViewScaffolder
 
         // <SourceCode> holds the view's own class declaration; the AOT stamps every
         // view with one extending `common`, even when it has no methods.
+        //
+        // Every computed field points <ViewMethod> at a method that must exist on
+        // this very class — a view whose ViewMethod resolves to nothing does not
+        // compile. Emitting the field without its method produced XML that looked
+        // complete and could never build, so each computed field gets a stub the
+        // developer then fills in.
+        var methodEls = fieldList
+            .Where(f => f.IsComputed)
+            .Select(f => f.ViewMethod!)
+            .Distinct(StringComparer.Ordinal)
+            .Select(m => new XElement("Method",
+                new XElement("Name", m),
+                new XElement("Source", BuildComputedMethodSource(
+                    m, fieldList.First(f => f.IsComputed && f.ViewMethod == m).ComputedType))))
+            .ToList();
+
         var sourceCode = new XElement("SourceCode",
             new XElement("Declaration",
                 new XCData($"\npublic class {name} extends common\n{{\n}}\n")),
-            new XElement("Methods"));
+            new XElement("Methods", methodEls));
 
         return new XDocument(
             new XElement("AxView",
@@ -144,6 +160,36 @@ public static class ViewScaffolder
             new XElement("Name", f.Name),
             new XElement("DataField", f.DataField),
             new XElement("DataSource", f.DataSource));
+    }
+
+    /// <summary>
+    /// Stub body for a computed field's view method. Computed columns are
+    /// evaluated at sync time: the method always returns <c>str</c> — a SQL
+    /// fragment — regardless of the column's own type, which is why the literal
+    /// (not the return type) varies with <paramref name="computedType"/>.
+    /// </summary>
+    private static string BuildComputedMethodSource(string methodName, string? computedType)
+    {
+        var literal = (computedType ?? "String").ToLowerInvariant() switch
+        {
+            "int" or "int64" or "enum" => "0",
+            "real"                     => "0.0",
+            "date"                     => "dateNull()",
+            "utcdatetime"              => "DateTimeUtil::minValue()",
+            _                          => "''",
+        };
+
+        return
+            "/// <summary>\n" +
+            "/// Computed column backing the view field that names this method.\n" +
+            "/// </summary>\n" +
+            "/// <returns>The SQL expression evaluated when the view is synchronised.</returns>\n" +
+            "private static server str " + methodName + "()\n" +
+            "{\n" +
+            "    // TODO: replace the placeholder literal with the real expression, e.g.\n" +
+            "    // SysComputedColumn::returnField(tableStr(MyView), identifierStr(MyDataSource), fieldStr(MyTable, MyField))\n" +
+            $"    return SysComputedColumn::returnLiteral({literal});\n" +
+            "}\n";
     }
 
     private static XElement BuildEmptyFieldGroup(string name, bool autoPopulate = false) =>

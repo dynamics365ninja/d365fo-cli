@@ -1,0 +1,26 @@
+{
+  "id": "L2-security-duty-extension",
+  "title": "Security duty extension adding a privilege",
+  "tier": 2,
+  "instruction": "Extend the existing security duty ConFmVehicleMaintainDuty so it also grants the privilege ConFmVehicleMaintainPriv, without editing the duty itself. Use only the d365fo CLI (search/get/generate/validate) — do not hand-write XML.",
+  "canonical_args": [
+    "generate",
+    "extension",
+    "SecurityDuty",
+    "ConFmVehicleMaintainDuty",
+    "--privilege",
+    "ConFmVehicleMaintainPriv"
+  ],
+  "target_artifact_types": [
+    "AxSecurityDutyExtension"
+  ],
+  "golden_path": "L2-security-duty-extension",
+  "tags": [
+    "extension",
+    "security",
+    "duty"
+  ],
+  "ignore": [],
+  "requires_fixture_index": false,
+  "golden_pending": false
+}

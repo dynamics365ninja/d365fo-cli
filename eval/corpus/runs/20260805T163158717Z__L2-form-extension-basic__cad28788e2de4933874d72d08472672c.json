@@ -1,0 +1,20 @@
+{
+  "runId": "20260805T163158717Z__L2-form-extension-basic__cad28788e2de4933874d72d08472672c",
+  "caseId": "L2-form-extension-basic",
+  "tier": 2,
+  "timestampUtc": "2026-08-05T16:31:58.7194184+00:00",
+  "source": "replay",
+  "score": {
+    "xppClean": true,
+    "xppErrors": 0,
+    "referencesClean": true,
+    "referenceErrors": 0,
+    "goldenMatch": true,
+    "goldenDiff": {
+      "missing": [],
+      "extra": [],
+      "changed": [],
+      "isMatch": true
+    }
+  }
+}

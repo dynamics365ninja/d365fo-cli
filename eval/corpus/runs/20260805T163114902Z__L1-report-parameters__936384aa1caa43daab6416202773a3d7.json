@@ -1,0 +1,20 @@
+{
+  "runId": "20260805T163114902Z__L1-report-parameters__936384aa1caa43daab6416202773a3d7",
+  "caseId": "L1-report-parameters",
+  "tier": 1,
+  "timestampUtc": "2026-08-05T16:31:14.9050684+00:00",
+  "source": "replay",
+  "score": {
+    "xppClean": true,
+    "xppErrors": 0,
+    "referencesClean": true,
+    "referenceErrors": 0,
+    "goldenMatch": true,
+    "goldenDiff": {
+      "missing": [],
+      "extra": [],
+      "changed": [],
+      "isMatch": true
+    }
+  }
+}

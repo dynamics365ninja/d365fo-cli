@@ -1,0 +1,85 @@
+<?xml version="1.0" encoding="utf-8"?>
+<AxForm xmlns:i="http://www.w3.org/2001/XMLSchema-instance" xmlns="Microsoft.Dynamics.AX.Metadata.V6">
+  <Name>ConFmVehicleCreateDialog</Name>
+  <SourceCode>
+    <Methods xmlns="">
+      <Method>
+        <Name>classDeclaration</Name>
+        <Source><![CDATA[
+[Form]
+public class ConFmVehicleCreateDialog extends FormRun
+{
+}
+
+]]></Source>
+      </Method>
+    </Methods>
+    <DataSources xmlns="" />
+    <DataControls xmlns="" />
+    <Members xmlns="" />
+  </SourceCode>
+  <DataSources>
+    <AxFormDataSource xmlns="">
+      <Name>FmVehicle</Name>
+      <Table>FmVehicle</Table>
+      <Fields />
+      <ReferencedDataSources />
+      <DataSourceLinks />
+      <DerivedDataSources />
+    </AxFormDataSource>
+  </DataSources>
+  <Design>
+    <Caption xmlns="">Create vehicle</Caption>
+    <Frame xmlns="">Dialog</Frame>
+    <Pattern xmlns="">Dialog</Pattern>
+    <PatternVersion xmlns="">1.2</PatternVersion>
+    <Style xmlns="">Dialog</Style>
+    <Controls xmlns="">
+      <AxFormControl xmlns="" i:type="AxFormGroupControl">
+        <Name>DialogBody</Name>
+        <Pattern>FieldsFieldGroups</Pattern>
+        <PatternVersion>1.1</PatternVersion>
+        <Type>Group</Type>
+        <FormControlExtension i:nil="true" />
+        <Controls>
+          <AxFormControl xmlns="" i:type="AxFormStringControl">
+            <Name>VIN</Name>
+            <Type>String</Type>
+            <FormControlExtension i:nil="true" />
+            <DataField>VIN</DataField>
+            <DataSource>FmVehicle</DataSource>
+          </AxFormControl>
+          <AxFormControl xmlns="" i:type="AxFormStringControl">
+            <Name>Make</Name>
+            <Type>String</Type>
+            <FormControlExtension i:nil="true" />
+            <DataField>Make</DataField>
+            <DataSource>FmVehicle</DataSource>
+          </AxFormControl>
+        </Controls>
+        <Style>DialogContent</Style>
+      </AxFormControl>
+      <AxFormControl xmlns="" i:type="AxFormButtonGroupControl">
+        <Name>ButtonGroup</Name>
+        <Type>ButtonGroup</Type>
+        <FormControlExtension i:nil="true" />
+        <Controls>
+          <AxFormControl xmlns="" i:type="AxFormCommandButtonControl">
+            <Name>OkButton</Name>
+            <Type>CommandButton</Type>
+            <FormControlExtension i:nil="true" />
+            <Command>OK</Command>
+          </AxFormControl>
+          <AxFormControl xmlns="" i:type="AxFormCommandButtonControl">
+            <Name>CloseButton</Name>
+            <Type>CommandButton</Type>
+            <FormControlExtension i:nil="true" />
+            <Command>Cancel</Command>
+          </AxFormControl>
+        </Controls>
+        <Style>DialogCommitContainer</Style>
+      </AxFormControl>
+    </Controls>
+  </Design>
+  <Parts />
+</AxForm>

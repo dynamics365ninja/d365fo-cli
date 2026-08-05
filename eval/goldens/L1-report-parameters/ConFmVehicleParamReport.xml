@@ -1,0 +1,152 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<AxReport>
+  <Name>ConFmVehicleParamReport</Name>
+  <ReportParameters>
+    <AxReportParameter>
+      <Name>FromDate</Name>
+      <AllowBlank>Yes</AllowBlank>
+      <DataType>DateTime</DataType>
+      <Prompt>Yes</Prompt>
+    </AxReportParameter>
+  </ReportParameters>
+  <Datasets>
+    <AxReportDataset>
+      <Name>ConFmVehicleParamReportDS</Name>
+      <DataProvider>ConFmVehicleParamReportDP</DataProvider>
+      <QueryType>DataProvider</QueryType>
+      <DynamicFilters>Yes</DynamicFilters>
+    </AxReportDataset>
+    <AxReportDataset>
+      <Name>ConFmVehicleSummaryDS</Name>
+      <DataProvider>ConFmVehicleSummaryDP</DataProvider>
+      <QueryType>DataProvider</QueryType>
+      <DynamicFilters>Yes</DynamicFilters>
+    </AxReportDataset>
+  </Datasets>
+  <Designs>
+    <AxReportDesign>
+      <Name>Report</Name>
+      <Caption>Fleet vehicle parameter report</Caption>
+      <AutoDesignSpecs>
+        <AxReportAutoDesignNode>
+          <Name>AutoDesign</Name>
+          <DataSet>ConFmVehicleParamReportDS</DataSet>
+          <ReportAutoDesignItems>
+            <AxReportAutoDesignDataSet>
+              <Name>AutoDesignDataSet1</Name>
+              <DataSet>ConFmVehicleParamReportDS</DataSet>
+              <AutoFields>Yes</AutoFields>
+            </AxReportAutoDesignDataSet>
+          </ReportAutoDesignItems>
+        </AxReportAutoDesignNode>
+        <AxReportAutoDesignNode>
+          <Name>AutoDesign2</Name>
+          <DataSet>ConFmVehicleSummaryDS</DataSet>
+          <ReportAutoDesignItems>
+            <AxReportAutoDesignDataSet>
+              <Name>AutoDesignDataSet2</Name>
+              <DataSet>ConFmVehicleSummaryDS</DataSet>
+              <AutoFields>Yes</AutoFields>
+            </AxReportAutoDesignDataSet>
+          </ReportAutoDesignItems>
+        </AxReportAutoDesignNode>
+      </AutoDesignSpecs>
+      <ReportDesignItems>
+        <AxReportTablix>
+          <Name>Tablix1</Name>
+          <DataSetName>ConFmVehicleParamReportDS</DataSetName>
+          <TablixBody>
+            <TablixColumns>
+              <TablixColumn>
+                <Width>2in</Width>
+              </TablixColumn>
+              <TablixColumn>
+                <Width>2in</Width>
+              </TablixColumn>
+            </TablixColumns>
+            <TablixRows>
+              <TablixRow>
+                <Height>0.25in</Height>
+                <TablixCells>
+                  <TablixCell>
+                    <CellContents>
+                      <Textbox Name="Tablix1_VIN_Header">
+                        <Value>VIN</Value>
+                        <Style>
+                          <FontWeight>Bold</FontWeight>
+                          <BackgroundColor>#e0e0e0</BackgroundColor>
+                        </Style>
+                      </Textbox>
+                    </CellContents>
+                  </TablixCell>
+                  <TablixCell>
+                    <CellContents>
+                      <Textbox Name="Tablix1_Make_Header">
+                        <Value>Make</Value>
+                        <Style>
+                          <FontWeight>Bold</FontWeight>
+                          <BackgroundColor>#e0e0e0</BackgroundColor>
+                        </Style>
+                      </Textbox>
+                    </CellContents>
+                  </TablixCell>
+                </TablixCells>
+              </TablixRow>
+              <TablixRow>
+                <Height>0.25in</Height>
+                <TablixCells>
+                  <TablixCell>
+                    <CellContents>
+                      <Textbox Name="Tablix1_VIN">
+                        <Value>=Fields!VIN.Value</Value>
+                      </Textbox>
+                    </CellContents>
+                  </TablixCell>
+                  <TablixCell>
+                    <CellContents>
+                      <Textbox Name="Tablix1_Make">
+                        <Value>=Fields!Make.Value</Value>
+                      </Textbox>
+                    </CellContents>
+                  </TablixCell>
+                </TablixCells>
+              </TablixRow>
+            </TablixRows>
+          </TablixBody>
+          <TablixColumnHierarchy>
+            <TablixMembers>
+              <TablixMember />
+              <TablixMember />
+            </TablixMembers>
+          </TablixColumnHierarchy>
+          <TablixRowHierarchy>
+            <TablixMembers>
+              <TablixMember />
+              <TablixMember>
+                <Group Name="Detail" />
+              </TablixMember>
+            </TablixMembers>
+          </TablixRowHierarchy>
+        </AxReportTablix>
+        <AxReportTablix>
+          <Name>Tablix2</Name>
+          <DataSetName>ConFmVehicleSummaryDS</DataSetName>
+          <TablixBody>
+            <TablixColumns />
+            <TablixRows />
+          </TablixBody>
+          <TablixColumnHierarchy>
+            <TablixMembers />
+          </TablixColumnHierarchy>
+          <TablixRowHierarchy>
+            <TablixMembers>
+              <TablixMember>
+                <Group Name="Detail" />
+              </TablixMember>
+            </TablixMembers>
+          </TablixRowHierarchy>
+        </AxReportTablix>
+      </ReportDesignItems>
+    </AxReportDesign>
+  </Designs>
+</AxReport>

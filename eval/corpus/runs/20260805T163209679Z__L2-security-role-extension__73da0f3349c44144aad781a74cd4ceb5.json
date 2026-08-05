@@ -1,0 +1,20 @@
+{
+  "runId": "20260805T163209679Z__L2-security-role-extension__73da0f3349c44144aad781a74cd4ceb5",
+  "caseId": "L2-security-role-extension",
+  "tier": 2,
+  "timestampUtc": "2026-08-05T16:32:09.6812797+00:00",
+  "source": "replay",
+  "score": {
+    "xppClean": true,
+    "xppErrors": 0,
+    "referencesClean": true,
+    "referenceErrors": 0,
+    "goldenMatch": true,
+    "goldenDiff": {
+      "missing": [],
+      "extra": [],
+      "changed": [],
+      "isMatch": true
+    }
+  }
+}

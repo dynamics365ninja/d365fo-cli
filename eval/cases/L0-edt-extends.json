@@ -1,0 +1,27 @@
+{
+  "id": "L0-edt-extends",
+  "title": "EDT derived from a parent EDT rather than a primitive",
+  "tier": 0,
+  "instruction": "Create an Extended Data Type named ConFmVehicleName that extends the standard Name EDT (do not give it a primitive base type), labelled 'Vehicle name'. Use only the d365fo CLI (search/get/generate/validate) — do not hand-write XML.",
+  "canonical_args": [
+    "generate",
+    "edt",
+    "ConFmVehicleName",
+    "--extends",
+    "Name",
+    "--label",
+    "Vehicle name"
+  ],
+  "target_artifact_types": [
+    "AxEdt"
+  ],
+  "golden_path": "L0-edt-extends",
+  "tags": [
+    "edt",
+    "extends",
+    "metadata"
+  ],
+  "ignore": [],
+  "requires_fixture_index": false,
+  "golden_pending": false
+}

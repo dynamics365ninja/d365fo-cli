@@ -1,0 +1,20 @@
+{
+  "runId": "20260805T163032783Z__L1-form-lookup__b3a7a61251d9477ba6aba4c66a8847f4",
+  "caseId": "L1-form-lookup",
+  "tier": 1,
+  "timestampUtc": "2026-08-05T16:30:32.7857044+00:00",
+  "source": "replay",
+  "score": {
+    "xppClean": true,
+    "xppErrors": 0,
+    "referencesClean": true,
+    "referenceErrors": 0,
+    "goldenMatch": true,
+    "goldenDiff": {
+      "missing": [],
+      "extra": [],
+      "changed": [],
+      "isMatch": true
+    }
+  }
+}

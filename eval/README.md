@@ -105,21 +105,24 @@ lie in place while a deeper fix waits.
   A handful of cases (tagged `known-reference-gap`) generate a class or
   extension whose body legitimately references a *sibling* artifact or a
   standard system object that a minimal offline index can't contain (e.g.
-  the SysOperation controller's own Service class, or a CoC extension over a
-  standard `NumberSeqApplicationModule_*` class) — `referencesClean: false`
-  there is the expected, honest result of scoring one artifact in isolation,
-  not a defect.
+  the SysOperation controller's own Service class, a CoC extension over a
+  standard `NumberSeqApplicationModule_*` class, or a computed view's
+  `SysComputedColumn` call) — `referencesClean: false` there is the expected,
+  honest result of scoring one artifact in isolation, not a defect.
 - **`MODEL_ERROR` → knowledge-base feedback tooling.** The sibling repo has
   an automated "cluster MODEL_ERROR runs into `skills/_source` proposals"
   step (`knowledgeFeedback.ts`); not built here yet. The rubric and agent
   roles already support adding it.
-- **Catalog breadth.** 31 cases across L0–L2 (`edt`, `enum`, `table`,
-  `class`, `coc`, `form`, `query`, `map`, `report`, `sysoperation`,
-  `runbase`, `business-event`, `custom-service`, `workflow`, `systest`,
-  `extension table/edt/enum/form`, `event-handler`, `number-sequence`,
-  `entity`, `security-policy`, `privilege`, `duty`, `role`, `menu-item`,
-  `view`, `migration-script`, `datasource-method`, `control-method`) — every
-  `generate` subcommand except the bridge-only `modify`/`test`/`bp` branches.
+- **Catalog breadth.** 51 cases across L0–L2. Every `generate` subcommand
+  except the bridge-only `modify`/`test`/`bp` branches has a case, and so does
+  every *option axis that selects a different code path* inside one: all nine
+  `form --pattern` templates, `extension SecurityDuty`/`SecurityRole`,
+  `edt --extends`, `enum --non-extensible`, `table --table-type TempDB`,
+  `query --join`, `view --computed`, `report --parameter`/`--extra-dataset`,
+  `privilege --data-entity`, `menu-item --kind Action`/`Output`, and
+  `map --map-to` over two tables. Option axes that only vary a literal
+  (a different `--label`, another `--field`) are deliberately *not* separate
+  cases — they exercise no new branch.
   L3/L4 (batch, workflow *runtime* submission, posting, DMF, ER, SSRS
   rendering, …) need a live build/BP-check/SysTest oracle this offline loop
   doesn't have — the natural next slice is adding that oracle. See

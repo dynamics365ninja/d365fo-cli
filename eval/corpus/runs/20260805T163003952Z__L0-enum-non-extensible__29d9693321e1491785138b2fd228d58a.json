@@ -1,0 +1,20 @@
+{
+  "runId": "20260805T163003952Z__L0-enum-non-extensible__29d9693321e1491785138b2fd228d58a",
+  "caseId": "L0-enum-non-extensible",
+  "tier": 0,
+  "timestampUtc": "2026-08-05T16:30:03.954105+00:00",
+  "source": "replay",
+  "score": {
+    "xppClean": true,
+    "xppErrors": 0,
+    "referencesClean": true,
+    "referenceErrors": 0,
+    "goldenMatch": true,
+    "goldenDiff": {
+      "missing": [],
+      "extra": [],
+      "changed": [],
+      "isMatch": true
+    }
+  }
+}

@@ -1,0 +1,26 @@
+{
+  "id": "L2-security-role-extension",
+  "title": "Security role extension adding a privilege",
+  "tier": 2,
+  "instruction": "Extend the existing security role ConFmVehicleOperatorRole so it also grants the privilege ConFmVehicleMaintainPriv, without editing the role itself. Use only the d365fo CLI (search/get/generate/validate) — do not hand-write XML.",
+  "canonical_args": [
+    "generate",
+    "extension",
+    "SecurityRole",
+    "ConFmVehicleOperatorRole",
+    "--privilege",
+    "ConFmVehicleMaintainPriv"
+  ],
+  "target_artifact_types": [
+    "AxSecurityRoleExtension"
+  ],
+  "golden_path": "L2-security-role-extension",
+  "tags": [
+    "extension",
+    "security",
+    "role"
+  ],
+  "ignore": [],
+  "requires_fixture_index": false,
+  "golden_pending": false
+}

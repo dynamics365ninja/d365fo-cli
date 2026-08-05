@@ -57,10 +57,12 @@ d365fo-cli's core path is different: `generate` → `validate xpp` →
 - needs **no rollback/undo machinery** — each case runs `generate` against a
   disposable temp SQLite index and writes to a temp file; the whole
   workspace is deleted after scoring, so there is nothing to roll back;
-- needs **no shared-fixture problem** (source repo §4a) — the one case that
-  extends an existing object (`L2-coc-extension`) reads from the
-  already-checked-in `tests/Samples/MiniAot/TestModel` fixture, rebuilt
-  fresh into a temp index at the start of every run.
+- needs **no shared-fixture problem** (source repo §4a) — the cases that
+  extend or bind to an existing object (`L2-coc-extension`, the form-pattern
+  cases, `L1-query-join`, …) read from the already-checked-in
+  `tests/Samples/MiniAot/TestModel` fixture — two related tables
+  (`FmVehicle`, `FmVehicleLine`) plus one class — rebuilt fresh into a temp
+  index at the start of every run.
 
 What's missing relative to the source repo, honestly: no compiler
 round-trip (`build`/`bp check` are Windows-VM-only and out of scope here) and
@@ -260,13 +262,21 @@ Tiers (unchanged from the source repo's convention):
 | L3 — composite | relation + generated form + datasource rebind |
 | L4 — feature slice | data entity + security chain, batch job, SSRS report |
 
-Current catalog: 31 cases, L0–L2 (`generate edt`, `enum`, `table`, `class`,
-`coc`, `form`, `query`, `map`, `report`, `sysoperation`, `runbase`,
-`business-event`, `custom-service`, `workflow`, `systest`,
+Current catalog: 51 cases, L0–L2. Every `generate` subcommand except the
+bridge-only `modify`/`test`/`bp` branches has at least one case (`edt`, `enum`,
+`table`, `class`, `coc`, `form`, `query`, `map`, `report`, `sysoperation`,
+`runbase`, `business-event`, `custom-service`, `workflow`, `systest`,
 `extension table/edt/enum/form`, `event-handler`, `number-sequence`, `entity`,
 `security-policy`, `privilege`, `duty`, `role`, `menu-item`, `view`,
-`migration-script`, `datasource-method`, `control-method`) — every `generate`
-subcommand except the bridge-only `modify`/`test`/`bp` branches. See
+`migration-script`, `datasource-method`, `control-method`), and the option axes
+that select a *different code path* inside a subcommand are covered too: all
+nine `form --pattern` templates, `extension SecurityDuty`/`SecurityRole`,
+`edt --extends` vs `--base-type`, `enum --non-extensible`,
+`table --table-type TempDB`, `query --join`, `view --computed`,
+`report --parameter`/`--extra-dataset`, `privilege --data-entity`,
+`menu-item --kind Action`/`Output`, and `map --map-to` across two tables.
+Three of those axes were added after they were found to be *broken*, not merely
+untested — see the regression tags in the case files. See
 [eval/README.md](../eval/README.md) for the standing "grow the catalog" queue.
 
 ---

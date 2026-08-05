@@ -1,0 +1,39 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<AxMap xmlns:i="http://www.w3.org/2001/XMLSchema-instance">
+  <Name>ConFmVehicleSharedMap</Name>
+  <SourceCode>
+    <Declaration><![CDATA[
+public class ConFmVehicleSharedMap extends common
+{
+}
+]]></Declaration>
+    <Methods />
+  </SourceCode>
+  <FieldGroups />
+  <Fields>
+    <AxMapBaseField i:type="AxMapFieldString">
+      <Name>VIN</Name>
+      <ExtendedDataType>VinEdt</ExtendedDataType>
+    </AxMapBaseField>
+  </Fields>
+  <Mappings>
+    <AxTableMapping>
+      <MappingTable>FmVehicle</MappingTable>
+      <Connections>
+        <AxTableMappingConnection>
+          <MapField>VIN</MapField>
+          <MapFieldTo>VIN</MapFieldTo>
+        </AxTableMappingConnection>
+      </Connections>
+    </AxTableMapping>
+    <AxTableMapping>
+      <MappingTable>FmVehicleLine</MappingTable>
+      <Connections>
+        <AxTableMappingConnection>
+          <MapField>VIN</MapField>
+          <MapFieldTo>VIN</MapFieldTo>
+        </AxTableMappingConnection>
+      </Connections>
+    </AxTableMapping>
+  </Mappings>
+</AxMap>

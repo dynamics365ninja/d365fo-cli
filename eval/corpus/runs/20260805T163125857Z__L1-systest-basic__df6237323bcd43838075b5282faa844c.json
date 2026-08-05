@@ -1,0 +1,20 @@
+{
+  "runId": "20260805T163125857Z__L1-systest-basic__df6237323bcd43838075b5282faa844c",
+  "caseId": "L1-systest-basic",
+  "tier": 1,
+  "timestampUtc": "2026-08-05T16:31:25.8595607+00:00",
+  "source": "replay",
+  "score": {
+    "xppClean": true,
+    "xppErrors": 0,
+    "referencesClean": true,
+    "referenceErrors": 0,
+    "goldenMatch": true,
+    "goldenDiff": {
+      "missing": [],
+      "extra": [],
+      "changed": [],
+      "isMatch": true
+    }
+  }
+}

@@ -1,0 +1,20 @@
+{
+  "runId": "20260805T163133961Z__L1-view-basic__f0f06f1dcf5a4634943a285b0fa2738f",
+  "caseId": "L1-view-basic",
+  "tier": 1,
+  "timestampUtc": "2026-08-05T16:31:33.962926+00:00",
+  "source": "replay",
+  "score": {
+    "xppClean": true,
+    "xppErrors": 0,
+    "referencesClean": true,
+    "referenceErrors": 0,
+    "goldenMatch": true,
+    "goldenDiff": {
+      "missing": [],
+      "extra": [],
+      "changed": [],
+      "isMatch": true
+    }
+  }
+}
