@@ -95,10 +95,13 @@ renaming `form_pattern` → `object_patterns`.
 | `find_references` | — | reverse references via regex scan of indexed X++ source (was CLI-only) |
 | `validate_object_naming`, `get_workspace_info`, `suggest_edt`, `batch_get_info`, `lint`, `stats`, `index_status`, `index_history` | — | kept (parity names) |
 
-This adapter exposes **20 unified MCP tools** (the upstream `d365fo-mcp-server`
-sits at 26 — it additionally ships `get_knowledge`, `analyze_code`,
-`d365fo_file`, `undo_last_modification`, `validate_code`, `verify_d365fo_project`
-and the SDLC/build tools, which here are CLI-only or covered by Skills).
+This adapter exposes **22 unified MCP tools**, including `modify_method`
+(structured method-body replace via D365FO.Bridge — the `d365fo_file(action=modify)`
+counterpart). The upstream `d365fo-mcp-server` sits at 26 — it additionally ships
+`get_knowledge`, `analyze_code`, `d365fo_file` (`action=create`, covered here by
+`generate_object`), `undo_last_modification`, `validate_code`,
+`verify_d365fo_project` and the SDLC/build tools, which here are CLI-only or
+covered by Skills.
 
 Run `d365fo schema --full` for the machine-readable command/tool manifest; every
 CLI command's `mcpTool` field names the unified MCP tool it maps to.
@@ -155,7 +158,7 @@ commands. Both surfaces use the same discriminator-based naming.
 | `generate_object` (`objectType=table`) | `d365fo generate table <Name> --pattern <P> --field …` |
 | `generate_object` (`objectType=form`) | `d365fo generate form <Name> --pattern <P>` (pattern-gated write) |
 | `generate_object` (XML-only `objectType=…`) | `d365fo generate edt\|enum\|query\|sysoperation\|business-event\|runbase\|security-policy` (XML only) |
-| `d365fo_file` (`action=modify`) | targeted editor edit of CDATA method bodies + `d365fo index refresh`; structural changes via `generate … --overwrite` |
+| `d365fo_file` (`action=modify`) / `modify_method` | `d365fo modify method <kind> <Object> <Method> --body "…"` (structured `XDocument` replace via D365FO.Bridge/`IMetadataProvider` — never CDATA string surgery; reference/BP validation always blocks on error-severity findings) |
 | `undo_last_modification` | `.bak` backups written by every overwrite + `git checkout` |
 | `labels` (`action=create\|rename\|delete`) | `d365fo labels create\|rename\|delete` (multi-language via `--lang`) |
 | `review_workspace_changes` | `d365fo review diff` |

@@ -35,7 +35,7 @@ public static class ToolCatalog
         // XML-only, but the whole tool is flagged write so clients confirm before
         // any write objectType runs). `labels` mixes read actions (search/info)
         // with write actions (create/rename/delete) — flagged here too.
-        "generate_object", "labels",
+        "generate_object", "labels", "modify_method",
     };
 
     /// <summary>
@@ -343,6 +343,19 @@ public static class ToolCatalog
                         $"Unknown objectType '{Str(p, "objectType")}' for generate_object.",
                         "Write: table, class, coc, form. XML-only: edt, enum, query, sysoperation, business-event, runbase, security-policy."),
             }),
+
+        new Descriptor("modify_method",
+            "Replace the body of an EXISTING method on a live class/table/edt/form via D365FO.Bridge " +
+            "(Windows VM, requires D365FO_BRIDGE_ENABLED=1). Reads the object through IMetadataProvider, " +
+            "structurally replaces one <Method>'s source (never raw XML/CDATA string surgery), runs the same " +
+            "reference/BP validation gate as generate_object and blocks the write on any error-severity finding " +
+            "(unconditionally — not gated by D365FO_GROUNDING_ENFORCE), then writes back through the provider. " +
+            "No on-disk fallback: fails BRIDGE_REQUIRED when the bridge is unavailable. Use generate_object to " +
+            "create new objects/methods; use this only to change an existing method's body.",
+            Schema(("kind", "string", true), ("name", "string", true), ("method", "string", true),
+                   ("body", "string", true), ("model", "string", false), ("groundingToken", "string", false)),
+            (h, p) => h.ModifyMethod(Str(p, "kind"), Str(p, "name"), Str(p, "method"), Str(p, "body"),
+                        StrOrNull(p, "model"), StrOrNull(p, "groundingToken"))),
 
         new Descriptor("suggest_edt",
             "Suggest indexed EDTs for a field name using similarity heuristics. Returns confidence-ranked candidates.",

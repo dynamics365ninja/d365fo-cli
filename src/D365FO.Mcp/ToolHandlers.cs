@@ -981,6 +981,20 @@ public sealed class ToolHandlers
         return WriteScaffold(doc, name, "AxTable", "AxTable", installTo, outPath, overwrite, extra);
     }
 
+    /// <summary>
+    /// Structured method-level modify via D365FO.Bridge (issue #112) — parity with
+    /// upstream's <c>d365fo_file(action=modify)</c>. No on-disk fallback: fails
+    /// <c>BRIDGE_REQUIRED</c> when the bridge is unavailable.
+    /// </summary>
+    public ToolResult<object> ModifyMethod(
+        string kind, string name, string method, string body,
+        string? model = null, string? groundingToken = null)
+    {
+        var request = new D365FO.Core.Bridge.MethodModifyEngine.ModifyRequest(
+            kind, name, method, body, model, groundingToken);
+        return D365FO.Core.Bridge.MethodModifyEngine.Modify(request, _repo);
+    }
+
     public ToolResult<object> GenerateClass(
         string name, string? extends, bool nonFinal,
         string? installTo, string? outPath, bool overwrite)

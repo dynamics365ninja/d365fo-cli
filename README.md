@@ -143,6 +143,9 @@ d365fo generate form FmVehicles \
 d365fo generate datasource-method FmVehicles --datasource FmVehicle --list      # show overridable methods
 d365fo generate datasource-method FmVehicles --datasource FmVehicle --method active
 d365fo generate control-method    FmVehicles --control VIN --method modified
+
+# Replace an existing method's body on a live class/table/edt/form (Windows VM, D365FO_BRIDGE_ENABLED=1)
+d365fo modify method class CustBalance calc --body "return 2;"
 ```
 
 Full walkthrough: **[docs/SETUP.md](docs/SETUP.md)**
@@ -173,7 +176,7 @@ Reference the `SKILL.md` files from `skills/anthropic/` in your session prompt o
 
 ### MCP (Claude Desktop, Continue, VS Code MCP)
 
-The bundled `d365fo-mcp` adapter speaks JSON-RPC 2.0 over the same index. Its tool surface is **consolidated** into 20 discriminator-based tools (e.g. `search`, `get_object_info`, `get_method`, `labels`, `security_info`, `extension_info`, `object_patterns`, `generate_object`, `analyze`, `models`) — see [docs/MIGRATION_FROM_MCP.md](docs/MIGRATION_FROM_MCP.md):
+The bundled `d365fo-mcp` adapter speaks JSON-RPC 2.0 over the same index. Its tool surface is **consolidated** into 22 discriminator-based tools (e.g. `search`, `get_object_info`, `get_method`, `labels`, `security_info`, `extension_info`, `object_patterns`, `generate_object`, `modify_method`, `analyze`, `models`) — see [docs/MIGRATION_FROM_MCP.md](docs/MIGRATION_FROM_MCP.md):
 
 ```json
 {
