@@ -247,7 +247,7 @@ public static class CliApp
                 b.AddCommand<GenerateReportCommand>("report").WithDescription("Create an AxReport + SrsReportDataProviderBase skeleton (DP class).");
                 b.AddCommand<GenerateSysOperationCommand>("sysoperation").WithDescription("Create a SysOperation DataContract + Service + Controller triplet.");
                 b.AddCommand<GenerateNumberSequenceCommand>("number-sequence").WithDescription("Create a NumberSeq module extension, EDT, and form handler.");
-                b.AddCommand<GenerateWorkflowCommand>("workflow").WithDescription("Create an AxWorkflow type, WorkflowDocument class, and canSubmitToWorkflow stub.");
+                b.AddCommand<GenerateWorkflowCommand>("workflow").WithDescription("Create an AxWorkflowTemplate (workflow type), its approval/task elements, a WorkflowDocument class, and a canSubmitToWorkflow stub.");
                 b.AddCommand<GenerateMenuItemCommand>("menu-item").WithDescription("Create an AxMenuItemDisplay, AxMenuItemAction, or AxMenuItemOutput.");
                 b.AddCommand<GenerateEdtCommand>("edt").WithDescription("Create an AxEdt Extended Data Type.");
                 b.AddCommand<GenerateEnumCommand>("enum").WithDescription("Create an AxEnum base enumeration.");

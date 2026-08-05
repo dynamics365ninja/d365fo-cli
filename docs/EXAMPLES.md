@@ -389,15 +389,21 @@ Emits a CoC extension of `NumberSeqApplicationModule` wired to the new EDT and a
 ### Workflow — PurchTable approval workflow
 
 ```sh
-# Approval workflow with document class and submit stub
+# Approval workflow with document class, approval element and submit stub
 d365fo generate workflow PurchTableApproval \
   --table PurchTable --approval-name PurchTableApprovalElement \
-  --out          c:/AOT/MyModel/AxWorkflow/PurchTableApproval.xml \
+  --out          c:/AOT/MyModel/AxWorkflowTemplate/PurchTableApproval.xml \
   --out-document c:/AOT/MyModel/AxClass/PurchTableWorkflowDocument.xml \
+  --out-approval c:/AOT/MyModel/AxWorkflowApproval/PurchTableApprovalElement.xml \
   --out-submit   c:/AOT/MyModel/AxClass/PurchTable_WorkflowSubmitExtension.xml
 ```
 
-`--out-document` emits a `WorkflowDocument` subclass. `--out-submit` emits a CoC extension of the target table that adds `canSubmitToWorkflow()`.
+The workflow type itself is an `AxWorkflowTemplate` — there is no `AxWorkflow` AOT folder.
+`--out-document` emits a `WorkflowDocument` subclass. `--approval-name` / `--task-name` emit
+`AxWorkflowApproval` / `AxWorkflowTask` elements and reference them from `SupportedElements`.
+`--out-submit` emits a CoC extension of the target table that adds `canSubmitToWorkflow()`.
+The command reports the menu items, query and `--category` workflow category it references but
+does not create — the model does not build until those exist.
 
 ### Menu item — display menu item for a form
 

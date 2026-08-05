@@ -1,0 +1,21 @@
+{
+  "runId": "20260805T180421776Z__L0-enum-basic__d61dc8dfc551453b9eb83511d17ccf65",
+  "caseId": "L0-enum-basic",
+  "tier": 0,
+  "timestampUtc": "2026-08-05T18:04:21.7770176+00:00",
+  "source": "replay",
+  "score": {
+    "xppClean": true,
+    "xppErrors": 0,
+    "referencesClean": true,
+    "referenceErrors": 0,
+    "goldenMatch": true,
+    "goldenDiff": {
+      "missing": [],
+      "extra": [],
+      "changed": [],
+      "isMatch": true
+    }
+  },
+  "note": "Phase 0 gate: workflow AxWorkflowTemplate fix, form-pattern strictness, golden caption hygiene"
+}

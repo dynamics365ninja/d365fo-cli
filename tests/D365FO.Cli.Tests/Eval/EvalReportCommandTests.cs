@@ -5,7 +5,7 @@ namespace D365FO.Cli.Tests.Eval;
 
 /// <summary>
 /// Smoke tests only — these commands read the repo's real
-/// <c>eval/corpus/runs/</c> directory (shared, gitignored, and mutated by
+/// <c>eval/corpus/runs/</c> directory (shared, committed, and mutated by
 /// whatever else has run `eval run --write`/`eval score --write` locally),
 /// so asserting exact counts here would be flaky by construction. The
 /// aggregation logic itself is covered against synthetic records in

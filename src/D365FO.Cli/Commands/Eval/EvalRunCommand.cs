@@ -20,8 +20,12 @@ public sealed class EvalRunCommand : Command<EvalRunCommand.Settings>
 {
     public sealed class Settings : D365OutputSettings
     {
-        [CommandArgument(0, "<CASE_ID>")]
-        public string CaseId { get; init; } = "";
+        [CommandArgument(0, "[CASE_ID]")]
+        public string? CaseId { get; init; }
+
+        [CommandOption("--all")]
+        [System.ComponentModel.Description("Replay every case that has canonical_args (cases without them are reported as skipped). Exits non-zero if any case fails.")]
+        public bool All { get; init; }
 
         [CommandOption("--write")]
         [System.ComponentModel.Description("Append a corpus record to eval/corpus/runs/.")]
@@ -38,7 +42,24 @@ public sealed class EvalRunCommand : Command<EvalRunCommand.Settings>
         if (failure is int f) return f;
 
         var (cases, catalogErrors) = EvalCaseCatalog.LoadAll(EvalPaths.CasesDir(root!));
-        var @case = EvalCaseCatalog.Find(cases, settings.CaseId);
+
+        if (settings.All)
+        {
+            if (!string.IsNullOrWhiteSpace(settings.CaseId))
+            {
+                return RenderHelpers.Render(kind, ToolResult<object>.Fail(
+                    D365FoErrorCodes.BadInput, "Pass either <CASE_ID> or --all, not both."));
+            }
+            return RunAll(kind, root!, cases, catalogErrors, settings);
+        }
+
+        if (string.IsNullOrWhiteSpace(settings.CaseId))
+        {
+            return RenderHelpers.Render(kind, ToolResult<object>.Fail(
+                D365FoErrorCodes.BadInput, "A <CASE_ID> is required (or pass --all to replay the whole catalog)."));
+        }
+
+        var @case = EvalCaseCatalog.Find(cases, settings.CaseId!);
         if (@case is null)
         {
             return RenderHelpers.Render(kind, ToolResult<object>.Fail(
@@ -65,6 +86,97 @@ public sealed class EvalRunCommand : Command<EvalRunCommand.Settings>
             return RenderHelpers.Render(kind, ToolResult<object>.Fail("EVAL_CLI_NOT_FOUND", ex.Message));
         }
 
+        var (score, replayFailure) = Replay(@case, root!, dllPath, settings.Write, settings.Note);
+        if (replayFailure is not null)
+            return RenderHelpers.Render(kind, ToolResult<object>.Fail(replayFailure.Code, replayFailure.Message));
+
+        return RenderHelpers.Render(kind, ToolResult<object>.Success(Payload(@case, score!, settings.Write)));
+    }
+
+    /// <summary>
+    /// Replays every case that has <c>canonical_args</c>. Cases without them are agent-only
+    /// (scored via <c>eval score</c>) and are reported as skipped rather than failed.
+    /// Returns a non-zero exit code when any case fails, which is what makes this usable
+    /// as a CI gate.
+    /// </summary>
+    private static int RunAll(
+        OutputMode.Kind kind, string root,
+        IReadOnlyList<EvalCase> cases, IReadOnlyList<string> catalogErrors,
+        Settings settings)
+    {
+        string dllPath;
+        try
+        {
+            dllPath = LocateCliDll();
+        }
+        catch (FileNotFoundException ex)
+        {
+            return RenderHelpers.Render(kind, ToolResult<object>.Fail("EVAL_CLI_NOT_FOUND", ex.Message));
+        }
+
+        var results = new List<object>();
+        var failed = new List<string>();
+        var skipped = new List<string>();
+        var passed = 0;
+
+        foreach (var @case in cases.OrderBy(c => c.Id, StringComparer.Ordinal))
+        {
+            if (@case.CanonicalArgs is null || @case.CanonicalArgs.Count == 0)
+            {
+                skipped.Add(@case.Id);
+                continue;
+            }
+
+            var (score, replayFailure) = Replay(@case, root, dllPath, settings.Write, settings.Note);
+            if (replayFailure is not null)
+            {
+                failed.Add(@case.Id);
+                results.Add(new { caseId = @case.Id, tier = @case.Tier, ok = false, error = replayFailure.Code, detail = replayFailure.Message });
+                continue;
+            }
+
+            // Golden mismatch is the regression signal: goldens are captured from reviewed
+            // output, so a diff means behaviour changed. Validator errors are reported per
+            // case but do not fail the gate — some cases legitimately reference objects the
+            // mini fixture AOT does not contain, and the corpus tracks those counts as their
+            // own axis (see EvalReport).
+            var ok = score!.GoldenMatch;
+            if (ok) passed++; else failed.Add(@case.Id);
+            results.Add(Payload(@case, score, settings.Write, ok));
+        }
+
+        var summary = new
+        {
+            total = results.Count,
+            passed,
+            failed = failed.Count,
+            skippedAgentOnly = skipped,
+            failedCases = failed,
+            catalogErrors,
+            recorded = settings.Write,
+            cases = results,
+        };
+
+        return failed.Count == 0 && catalogErrors.Count == 0
+            ? RenderHelpers.Render(kind, ToolResult<object>.Success(summary))
+            : RenderHelpers.Render(kind, ToolResult<object>.Fail(
+                "EVAL_REGRESSION",
+                failed.Count > 0
+                    ? $"{failed.Count} of {results.Count} replayed cases failed: {string.Join(", ", failed)}."
+                    : $"Catalog errors: {string.Join("; ", catalogErrors)}",
+                D365Json.Serialize(summary, indented: true)));
+    }
+
+    private sealed record ReplayFailure(string Code, string Message);
+
+    /// <summary>
+    /// One case end to end: disposable temp index (+ fixture data when the case needs it),
+    /// canonical args through a fresh child process, score against the golden, optional
+    /// corpus record.
+    /// </summary>
+    private static (EvalScoreCard? Score, ReplayFailure? Failure) Replay(
+        EvalCase @case, string root, string dllPath, bool write, string? note)
+    {
         var workDir = Path.Combine(Path.GetTempPath(), $"d365fo-eval-{Guid.NewGuid():N}");
         Directory.CreateDirectory(workDir);
         var outPath = Path.Combine(workDir, "actual.xml");
@@ -77,34 +189,26 @@ public sealed class EvalRunCommand : Command<EvalRunCommand.Settings>
 
             if (@case.RequiresFixtureIndex)
             {
-                var fixtureDir = EvalPaths.FixtureDir(root!);
+                var fixtureDir = EvalPaths.FixtureDir(root);
                 if (!Directory.Exists(fixtureDir))
-                {
-                    return RenderHelpers.Render(kind, ToolResult<object>.Fail(
-                        "EVAL_FIXTURE_MISSING", $"Fixture directory not found: {fixtureDir}"));
-                }
+                    return (null, new ReplayFailure("EVAL_FIXTURE_MISSING", $"Fixture directory not found: {fixtureDir}"));
+
                 var extractor = new MetadataExtractor();
                 foreach (var batch in extractor.ExtractAll(fixtureDir))
                     repo.ApplyExtract(batch);
             }
 
-            var args = @case.CanonicalArgs.Concat(new[] { "--out", outPath, "--overwrite", "--output", "json" }).ToArray();
+            var args = @case.CanonicalArgs!.Concat(new[] { "--out", outPath, "--overwrite", "--output", "json" }).ToArray();
             var (exitCode, replayError) = RunReplay(dllPath, dbPath, args);
 
             if (replayError is not null)
-            {
-                return RenderHelpers.Render(kind, ToolResult<object>.Fail(
-                    "EVAL_GENERATE_FAILED", $"Replay of `d365fo {string.Join(' ', args)}` threw: {replayError}"));
-            }
+                return (null, new ReplayFailure("EVAL_GENERATE_FAILED", $"Replay of `d365fo {string.Join(' ', args)}` threw: {replayError}"));
             if (exitCode != 0 || !File.Exists(outPath))
-            {
-                return RenderHelpers.Render(kind, ToolResult<object>.Fail(
-                    "EVAL_GENERATE_FAILED", $"`d365fo {string.Join(' ', args)}` exited {exitCode} or produced no output file at {outPath}."));
-            }
+                return (null, new ReplayFailure("EVAL_GENERATE_FAILED", $"`d365fo {string.Join(' ', args)}` exited {exitCode} or produced no output file at {outPath}."));
 
-            var score = EvalScorer.Score(@case, outPath, EvalPaths.GoldensDir(root!), repo);
+            var score = EvalScorer.Score(@case, outPath, EvalPaths.GoldensDir(root), repo);
 
-            if (settings.Write)
+            if (write)
             {
                 var record = new EvalCorpusRecord(
                     RunId: BuildRunId(@case.Id),
@@ -114,27 +218,11 @@ public sealed class EvalRunCommand : Command<EvalRunCommand.Settings>
                     Source: "replay",
                     Score: score,
                     Classification: null,
-                    Note: settings.Note);
-                EvalCorpusStore.Append(EvalPaths.CorpusRunsDir(root!), record);
+                    Note: note);
+                EvalCorpusStore.Append(EvalPaths.CorpusRunsDir(root), record);
             }
 
-            return RenderHelpers.Render(kind, ToolResult<object>.Success(new
-            {
-                caseId = @case.Id,
-                tier = @case.Tier,
-                xppClean = score.XppClean,
-                xppErrors = score.XppErrors,
-                referencesClean = score.ReferencesClean,
-                referenceErrors = score.ReferenceErrors,
-                goldenMatch = score.GoldenMatch,
-                goldenDiff = new
-                {
-                    missing = score.GoldenDiff.Missing,
-                    extra = score.GoldenDiff.Extra,
-                    changed = score.GoldenDiff.Changed.Select(c => new { path = c.Path, expected = c.Expected, actual = c.Actual }),
-                },
-                recorded = settings.Write,
-            }));
+            return (score, null);
         }
         finally
         {
@@ -142,6 +230,25 @@ public sealed class EvalRunCommand : Command<EvalRunCommand.Settings>
             try { Directory.Delete(workDir, recursive: true); } catch { /* best-effort temp cleanup */ }
         }
     }
+
+    private static object Payload(EvalCase @case, EvalScoreCard score, bool recorded, bool? ok = null) => new
+    {
+        caseId = @case.Id,
+        tier = @case.Tier,
+        ok,
+        xppClean = score.XppClean,
+        xppErrors = score.XppErrors,
+        referencesClean = score.ReferencesClean,
+        referenceErrors = score.ReferenceErrors,
+        goldenMatch = score.GoldenMatch,
+        goldenDiff = new
+        {
+            missing = score.GoldenDiff.Missing,
+            extra = score.GoldenDiff.Extra,
+            changed = score.GoldenDiff.Changed.Select(c => new { path = c.Path, expected = c.Expected, actual = c.Actual }),
+        },
+        recorded,
+    };
 
     private static string BuildRunId(string caseId)
         => $"{DateTimeOffset.UtcNow:yyyyMMddTHHmmssfffZ}__{caseId}__{Guid.NewGuid():N}";

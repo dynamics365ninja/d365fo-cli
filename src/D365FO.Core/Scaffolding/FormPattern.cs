@@ -38,26 +38,72 @@ public enum FormPattern
 
 /// <summary>
 /// Maps fuzzy / casing-insensitive pattern names to the canonical
-/// <see cref="FormPattern"/>. Mirrors <c>FormPatternTemplates.normalizePattern</c>
-/// in upstream MCP. Falls back to <see cref="FormPattern.SimpleList"/> for
-/// unknown input — that is the most common shape for new setup tables.
+/// <see cref="FormPattern"/>, resolving through the 20-entry
+/// <see cref="FormPatterns.FormPatternCatalog"/> so a name means the same thing
+/// here as it does to <c>get form-pattern</c> and the form-pattern validator.
 /// </summary>
+/// <remarks>
+/// Only the nine patterns <see cref="FormPatternTemplates"/> can actually build
+/// resolve. A name the catalog knows but the scaffolder cannot emit (Wizard,
+/// DropDialog, FormPart*, the legacy Task* pair, …) is an error, not a silent
+/// downgrade: quietly handing back a <c>SimpleList</c> produced a form that
+/// looked generated-to-spec and was not (audit finding G5). An empty
+/// <c>--pattern</c> still means "no preference" and keeps the SimpleList default,
+/// which is the right shape for a new setup table.
+/// </remarks>
 public static class FormPatternNormalizer
 {
-    public static FormPattern Normalize(string? raw)
+    /// <summary>Patterns <c>generate form</c> can emit, in catalog order.</summary>
+    public static IReadOnlyList<string> GeneratableNames { get; } =
+        FormPatterns.FormPatternCatalog.Patterns
+            .Where(p => Enum.TryParse<FormPattern>(p.Id, ignoreCase: false, out _))
+            .Select(p => p.XmlName)
+            .ToArray();
+
+    /// <summary>
+    /// Patterns the catalog documents but the scaffolder cannot emit — usable
+    /// via <c>d365fo get form-pattern &lt;NAME&gt;</c> as an authoring spec.
+    /// </summary>
+    public static IReadOnlyList<string> CatalogOnlyNames { get; } =
+        FormPatterns.FormPatternCatalog.Patterns
+            .Where(p => !Enum.TryParse<FormPattern>(p.Id, ignoreCase: false, out _))
+            .Select(p => p.XmlName)
+            .ToArray();
+
+    /// <summary>
+    /// Resolves <paramref name="raw"/> to a generatable pattern. Returns false with a
+    /// caller-renderable <paramref name="error"/> when the name is unknown, or known to
+    /// the catalog but not generatable.
+    /// </summary>
+    public static bool TryNormalize(string? raw, out FormPattern pattern, out string? error)
     {
-        if (string.IsNullOrWhiteSpace(raw)) return FormPattern.SimpleList;
-        var s = new string(raw.Where(char.IsLetter).Select(char.ToLowerInvariant).ToArray());
-        if (s.Contains("simplelist") && s.Contains("detail")) return FormPattern.SimpleListDetails;
-        if (s.Contains("simplelist")) return FormPattern.SimpleList;
-        if (s.Contains("listpage")) return FormPattern.ListPage;
-        if (s.Contains("detailmaster") || s.Contains("detailsmaster") || s == "master") return FormPattern.DetailsMaster;
-        if (s.Contains("detailtransaction") || s.Contains("detailstransaction") || s == "transaction") return FormPattern.DetailsTransaction;
-        if (s.Contains("dropdialog") || s.Contains("dialog")) return FormPattern.Dialog;
-        if (s.Contains("tableofcontents") || s.Contains("toc") || s.Contains("parameter")) return FormPattern.TableOfContents;
-        if (s.Contains("lookup")) return FormPattern.Lookup;
-        if (s.Contains("workspace") || s.Contains("panorama") || s.Contains("operational")) return FormPattern.Workspace;
-        if (s == "list") return FormPattern.SimpleList;
-        return FormPattern.SimpleList;
+        pattern = FormPattern.SimpleList;
+        error = null;
+        if (string.IsNullOrWhiteSpace(raw)) return true;
+
+        var spec = FormPatterns.FormPatternCatalog.Resolve(raw);
+        if (spec is not null && Enum.TryParse<FormPattern>(spec.Id, ignoreCase: false, out var generatable))
+        {
+            pattern = generatable;
+            return true;
+        }
+
+        var generatableList = string.Join("|", GeneratableNames);
+        if (spec is null)
+        {
+            error = $"Unknown form pattern '{raw}'. Generatable: {generatableList}. " +
+                    $"Catalog-only (author manually, see `d365fo get form-pattern <NAME>`): {string.Join("|", CatalogOnlyNames)}.";
+            return false;
+        }
+
+        var variantHint = spec.VariantOf is not null
+                          && Enum.TryParse<FormPattern>(spec.VariantOf, ignoreCase: false, out var parent)
+            ? $" {spec.XmlName} is a variant of {parent} — pass --pattern {parent} if that shape will do."
+            : string.Empty;
+
+        error = $"Form pattern '{spec.XmlName}' ({spec.DisplayName}) is in the pattern catalog but " +
+                $"`generate form` cannot scaffold it. Generatable: {generatableList}." + variantHint +
+                $" Run `d365fo get form-pattern {spec.XmlName}` for the structure to author by hand.";
+        return false;
     }
 }

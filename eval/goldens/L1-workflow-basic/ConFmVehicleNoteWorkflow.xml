@@ -1,10 +1,9 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
-<AxWorkflow>
+<AxWorkflowTemplate>
   <Name>ConFmVehicleNoteWorkflow</Name>
-  <DocumentTableName>FmVehicle</DocumentTableName>
-  <DocumentMenuItemName>ConFmVehicleNoteWorkflowMenuItem</DocumentMenuItemName>
-  <DocumentMenuItemType>Display</DocumentMenuItemType>
+  <Document>ConFmVehicleNoteWorkflowDocument</Document>
+  <DocumentMenuItem>ConFmVehicleNoteWorkflowMenuItem</DocumentMenuItem>
   <SubmitToWorkflowMenuItem>ConFmVehicleNoteWorkflowSubmit</SubmitToWorkflowMenuItem>
-  <SubmitToWorkflowMenuItemType>Action</SubmitToWorkflowMenuItemType>
-  <WorkflowDocumentClass>ConFmVehicleNoteWorkflowDocument</WorkflowDocumentClass>
-</AxWorkflow>
+  <LineItemWorkflows />
+  <SupportedElements />
+</AxWorkflowTemplate>

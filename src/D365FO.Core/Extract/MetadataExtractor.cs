@@ -228,7 +228,7 @@ public sealed class MetadataExtractor
             },
             () => services     = ReadAll(Path.Combine(modelRoot, "AxService"),      ParseService),
             () => serviceGroups = ReadAll(Path.Combine(modelRoot, "AxServiceGroup"), ParseServiceGroup),
-            () => workflowTypes    = ReadAll(Path.Combine(modelRoot, "AxWorkflowType"),    ParseWorkflowType),
+            () => workflowTypes    = ReadAll(Path.Combine(modelRoot, "AxWorkflowTemplate"),ParseWorkflowType),
             () => maps             = ReadAll(Path.Combine(modelRoot, "AxMap"),             ParseMap),
             () => securityPolicies = ReadAll(Path.Combine(modelRoot, "AxSecurityPolicy"),  ParseSecurityPolicy),
             () => configKeys       = ReadAll(Path.Combine(modelRoot, "AxConfigurationKey"),ParseConfigurationKey),
@@ -302,7 +302,7 @@ public sealed class MetadataExtractor
             "AxSecurityRole", "AxSecurityDuty", "AxSecurityPrivilege",
             "AxMenuItemDisplay", "AxMenuItemAction", "AxMenuItemOutput",
             "AxQuery", "AxQuerySimple", "AxView", "AxDataEntityView",
-            "AxReport", "AxReportSsrs", "AxService", "AxServiceGroup", "AxWorkflowType",
+            "AxReport", "AxReportSsrs", "AxService", "AxServiceGroup", "AxWorkflowTemplate",
             "AxMap", "AxSecurityPolicy", "AxConfigurationKey", "AxTile", "AxWorkspace",
         })
             if (Directory.Exists(Path.Combine(dir, s))) return true;

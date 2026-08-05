@@ -18,7 +18,7 @@ run a platform build (that's Windows-VM-only and out of this loop's scope).
    dotnet run --project src/D365FO.Cli -- eval report      # per-tier pass rates + classification counts
    dotnet run --project src/D365FO.Cli -- eval clusters    # failing runs grouped by (classification, case), ranked by frequency
    ```
-   Corpus records live in `eval/corpus/runs/*.json` (gitignored, produced by
+   Corpus records live in `eval/corpus/runs/*.json` (committed, produced by
    `eval run --write` / `eval score --write`). If the directory is empty,
    say so — there is nothing to improve without evidence; do not invent
    failures.
@@ -53,9 +53,9 @@ run a platform build (that's Windows-VM-only and out of this loop's scope).
    - `dotnet test d365fo-cli.slnx` — full suite must stay green, including
      `GoldenQualityGateTests`/`ScaffoldingSnapshotTests` and the eval-loop's
      own `tests/**/Eval/*` tests.
-   - `dotnet run --project src/D365FO.Cli -- eval report` and, ideally,
-     re-run the full case catalog (`eval run <id>` for every case with
-     `canonical_args`) — confirm the fix doesn't regress any *other* case.
+   - `dotnet run --project src/D365FO.Cli -- eval run --all` (replays every
+     case with `canonical_args`, exits non-zero on any golden mismatch) plus
+     `eval report` — confirm the fix doesn't regress any *other* case.
      Never validate only against the failing one.
 
 7. **Open a PR.** Body must link the corpus `runId`(s) used as evidence, the

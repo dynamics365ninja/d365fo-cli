@@ -46,7 +46,7 @@ public class ConFmVehicleList extends FormRun
     </AxFormDataSource>
   </DataSources>
   <Design>
-    <Caption xmlns="">Fleet vehicles</Caption>
+    <Caption xmlns="">@Fleet:Vehicle</Caption>
     <DataSource xmlns="">FmVehicle</DataSource>
     <HideIfEmpty xmlns="">No</HideIfEmpty>
     <Pattern xmlns="">SimpleList</Pattern>

@@ -3,8 +3,9 @@ using System.Text.Json;
 namespace D365FO.Core.Eval;
 
 /// <summary>
-/// One JSON file per run under <c>eval/corpus/runs/</c> (gitignored — VM-free
-/// but still local evidence, not committed). Mirrors the sibling
+/// One JSON file per run under <c>eval/corpus/runs/</c>. The records are
+/// committed: they are the evidence the eval-improver ranks failure clusters
+/// from, so they have to survive across machines and CI runs. Mirrors the sibling
 /// d365fo-mcp-server repo's "newline-delimited JSON now, one file per run"
 /// choice, minus the NDJSON part — one file per record keeps a single
 /// malformed/partial write from corrupting the whole corpus.

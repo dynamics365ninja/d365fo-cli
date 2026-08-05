@@ -3,12 +3,31 @@ using System.Xml.Linq;
 namespace D365FO.Core.Scaffolding;
 
 /// <summary>
-/// Scaffolds the standard D365FO workflow pattern:
-/// <c>WorkflowDocument</c> subclass, <c>AxWorkflow</c> type XML, and a CoC
+/// Scaffolds the standard D365FO workflow pattern: an <c>AxWorkflowTemplate</c>
+/// (the AOT node Visual Studio labels "Workflow type"), the approval/task
+/// elements it supports, a <c>WorkflowDocument</c> subclass, and a CoC
 /// <c>canSubmitToWorkflow()</c> stub on the driving table.
 /// </summary>
+/// <remarks>
+/// Element names and their order are ground-truthed against the 88
+/// <c>AxWorkflowTemplate</c>, 82 <c>AxWorkflowApproval</c> and 34
+/// <c>AxWorkflowTask</c> files shipped in <c>ApplicationSuite\Foundation</c>:
+/// the serializer writes <c>Name</c> first, then the remaining scalar
+/// properties alphabetically, then the collections. There is no
+/// <c>AxWorkflowType</c> root or AOT folder — that name matches nothing on a
+/// real AOS.
+/// </remarks>
 public static class WorkflowScaffolder
 {
+    /// <summary>AOT subfolder / root element for a workflow type.</summary>
+    public const string TemplateRoot = "AxWorkflowTemplate";
+
+    /// <summary>AOT subfolder / root element for a workflow approval element.</summary>
+    public const string ApprovalRoot = "AxWorkflowApproval";
+
+    /// <summary>AOT subfolder / root element for a workflow task element.</summary>
+    public const string TaskRoot = "AxWorkflowTask";
+
     /// <summary>
     /// Scaffolds an <c>AxClass</c> extending <c>WorkflowDocument</c>.
     /// The generated <c>getQueryName()</c> returns the companion query name.
@@ -41,46 +60,113 @@ public static class WorkflowScaffolder
     }
 
     /// <summary>
-    /// Scaffolds an <c>AxWorkflow</c> type definition that ties the workflow
-    /// to a table. Optionally includes approval and/or task sub-type elements.
+    /// Scaffolds the <c>AxWorkflowTemplate</c> that ties the workflow document
+    /// class to its menu items and lists the approval/task elements it supports.
     /// </summary>
-    public static XDocument WorkflowType(
+    /// <param name="workflowTypeName">Name of the workflow type.</param>
+    /// <param name="documentClassName">The <c>WorkflowDocument</c> subclass driving the workflow.</param>
+    /// <param name="category">Existing <c>AxWorkflowCategory</c>; omitted when null (the workflow will not surface in the UI until one is set).</param>
+    /// <param name="documentMenuItem">Display menu item opening the document.</param>
+    /// <param name="submitMenuItem">Action menu item submitting the document.</param>
+    /// <param name="approvalName">Approval element to reference in <c>SupportedElements</c>.</param>
+    /// <param name="taskName">Task element to reference in <c>SupportedElements</c>.</param>
+    public static XDocument WorkflowTemplate(
         string workflowTypeName,
-        string tableName,
+        string documentClassName,
+        string? category = null,
+        string? documentMenuItem = null,
+        string? submitMenuItem = null,
         string? approvalName = null,
-        string? taskName = null,
-        string? documentClassName = null)
+        string? taskName = null)
     {
-        var docClass      = documentClassName ?? workflowTypeName + "Document";
-        var submitMenuItem = workflowTypeName + "Submit";
-        var docMenuItem    = workflowTypeName + "MenuItem";
+        var root = new XElement(TemplateRoot, new XElement("Name", workflowTypeName));
 
-        var root = new XElement("AxWorkflow",
-            new XElement("Name", workflowTypeName),
-            new XElement("DocumentTableName", tableName),
-            new XElement("DocumentMenuItemName", docMenuItem),
-            new XElement("DocumentMenuItemType", "Display"),
-            new XElement("SubmitToWorkflowMenuItem", submitMenuItem),
-            new XElement("SubmitToWorkflowMenuItemType", "Action"),
-            new XElement("WorkflowDocumentClass", docClass));
+        // Scalar properties in serializer order (alphabetical after Name).
+        if (!string.IsNullOrWhiteSpace(category))
+            root.Add(new XElement("Category", category));
+        root.Add(new XElement("Document", documentClassName));
+        if (!string.IsNullOrWhiteSpace(documentMenuItem))
+            root.Add(new XElement("DocumentMenuItem", documentMenuItem));
+        if (!string.IsNullOrWhiteSpace(submitMenuItem))
+            root.Add(new XElement("SubmitToWorkflowMenuItem", submitMenuItem));
 
-        var elements = new List<XElement>();
+        // Collections last: LineItemWorkflows then SupportedElements.
+        root.Add(new XElement("LineItemWorkflows"));
+
+        var supported = new XElement("SupportedElements");
         if (!string.IsNullOrWhiteSpace(approvalName))
-        {
-            elements.Add(new XElement("AxWorkflowElement",
-                new XElement("Name", approvalName),
-                new XElement("WorkflowElementType", "Approval"),
-                new XElement("OutcomeType", "TwoOutcome")));
-        }
+            supported.Add(ElementReference("Approval", approvalName!));
         if (!string.IsNullOrWhiteSpace(taskName))
-        {
-            elements.Add(new XElement("AxWorkflowElement",
-                new XElement("Name", taskName),
-                new XElement("WorkflowElementType", "Task"),
-                new XElement("OutcomeType", "SingleOutcome")));
-        }
-        if (elements.Count > 0)
-            root.Add(new XElement("WorkflowElements", elements));
+            supported.Add(ElementReference("Task", taskName!));
+        root.Add(supported);
+
+        return new XDocument(root);
+    }
+
+    /// <summary>
+    /// Scaffolds an <c>AxWorkflowApproval</c> element with the four outcomes every
+    /// shipped approval carries: Approve, Deny, Reject (Return) and RequestChange.
+    /// </summary>
+    /// <remarks>
+    /// <c>ActionMenuItem</c> is deliberately left unset on every outcome: pointing
+    /// it at a menu item this command does not create would be an unresolvable
+    /// reference at build time. Create the action menu items, then set them here.
+    /// </remarks>
+    public static XDocument WorkflowApproval(
+        string approvalName,
+        string documentClassName,
+        string? documentMenuItem = null)
+    {
+        var root = new XElement(ApprovalRoot, new XElement("Name", approvalName));
+
+        root.Add(new XElement("Document", documentClassName));
+        if (!string.IsNullOrWhiteSpace(documentMenuItem))
+            root.Add(new XElement("DocumentMenuItem", documentMenuItem));
+
+        // The four outcome properties are fixed members of AxWorkflowApproval —
+        // they are named elements, not a collection.
+        root.Add(new XElement("Approve",
+            new XElement("Name", "Approve")));
+        root.Add(new XElement("Deny",
+            new XElement("Name", "Deny"),
+            new XElement("Enabled", "No"),
+            new XElement("Type", "Deny")));
+        root.Add(new XElement("Reject",
+            new XElement("Name", "Reject"),
+            new XElement("Type", "Return")));
+        root.Add(new XElement("RequestChange",
+            new XElement("Name", "RequestChange"),
+            new XElement("Enabled", "No"),
+            new XElement("Type", "RequestChange")));
+
+        return new XDocument(root);
+    }
+
+    /// <summary>
+    /// Scaffolds an <c>AxWorkflowTask</c> element with the Complete / Reject /
+    /// RequestChange outcomes. Same <c>ActionMenuItem</c> caveat as
+    /// <see cref="WorkflowApproval"/>.
+    /// </summary>
+    public static XDocument WorkflowTask(
+        string taskName,
+        string documentClassName,
+        string? documentMenuItem = null)
+    {
+        var root = new XElement(TaskRoot, new XElement("Name", taskName));
+
+        root.Add(new XElement("Document", documentClassName));
+        if (!string.IsNullOrWhiteSpace(documentMenuItem))
+            root.Add(new XElement("DocumentMenuItem", documentMenuItem));
+
+        root.Add(new XElement("WorkflowOutcomes",
+            new XElement("AxWorkflowOutcome",
+                new XElement("Name", "Complete")),
+            new XElement("AxWorkflowOutcome",
+                new XElement("Name", "Reject"),
+                new XElement("Type", "Return")),
+            new XElement("AxWorkflowOutcome",
+                new XElement("Name", "RequestChange"),
+                new XElement("Type", "RequestChange"))));
 
         return new XDocument(root);
     }
@@ -121,4 +207,14 @@ public static class WorkflowScaffolder
                             new XElement("Name", "canSubmitToWorkflow"),
                             new XElement("Source", canSubmitSrc))))));
     }
+
+    /// <summary>
+    /// A <c>SupportedElements</c> entry. Shipped templates name the reference
+    /// after the element kind followed by the element name
+    /// (<c>ApprovalBankReconciliationApproval</c> → <c>BankReconciliationApproval</c>).
+    /// </summary>
+    private static XElement ElementReference(string kind, string elementName) =>
+        new("AxWorkflowElementReference",
+            new XElement("Name", kind + elementName),
+            new XElement("ElementName", elementName));
 }

@@ -499,7 +499,7 @@ public sealed class IndexExtractCommand : Command<IndexExtractCommand.Settings>
                 "AxSecurityRole", "AxSecurityDuty", "AxSecurityPrivilege",
                 "AxMenuItemDisplay", "AxMenuItemAction", "AxMenuItemOutput",
                 "AxQuery", "AxQuerySimple", "AxView", "AxDataEntityView",
-                "AxReport", "AxReportSsrs", "AxService", "AxServiceGroup", "AxWorkflowType",
+                "AxReport", "AxReportSsrs", "AxService", "AxServiceGroup", "AxWorkflowTemplate",
             })
                 if (Directory.Exists(Path.Combine(dir, s))) return true;
             return false;

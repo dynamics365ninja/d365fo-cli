@@ -77,15 +77,15 @@ reports only what this loop can actually check.
 eval/cases/<id>.json  (instruction + optional canonical_args)
         │
         ├─ d365fo eval run <id>        deterministic replay (no agent): canonical_args →
-        │                              generate → validate xpp/references → golden diff →
-        │                              score → corpus record
+        │  (or --all for the catalog,   generate → validate xpp/references → golden diff →
+        │   non-zero exit on mismatch)  score → corpus record
         │
         └─ eval-runner agent           reads ONLY the natural-language `instruction`, drives
                                         `d365fo search/get/prepare/validate/generate` by hand
                                         via Bash, then `d365fo eval score <id> --actual <file>
                                         --source agent --write`
 
-eval/corpus/runs/*.json  (gitignored — one record per run, either source)
+eval/corpus/runs/*.json  (committed — one record per run, either source)
         │
         ▼
 d365fo eval report / eval clusters      pass rates by tier, ranked failure clusters
@@ -151,7 +151,8 @@ steps 4–5.
 
 ## 5. Corpus record schema
 
-One JSON file per run under `eval/corpus/runs/` (gitignored — documented in
+One JSON file per run under `eval/corpus/runs/` (committed, so the improver can rank clusters
+across machines and CI runs — shape documented in
 [eval/corpus/schema.json](../eval/corpus/schema.json)):
 
 ```jsonc
@@ -350,6 +351,7 @@ is a real fix, not a placeholder for one.
 - **No runtime oracle.** Cases whose correctness is behavioral, not
   structural (method bodies beyond a wrapper), are under-covered by a golden
   diff alone — this loop has no SysTest-equivalent layer yet.
-- **CI wiring is not yet built.** `eval run` for the full catalog is not a
-  gate in `.github/workflows/ci.yml` today — see
+- **CI wiring is not yet built.** `eval run --all` replays the full catalog
+  and exits non-zero on any golden mismatch, but it is not a gate in
+  `.github/workflows/ci.yml` today — see
   [eval/README.md](../eval/README.md) for what's explicitly deferred.
