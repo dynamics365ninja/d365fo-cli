@@ -262,7 +262,8 @@ public sealed class GenerateEventHandlerCommand : Command<GenerateEventHandlerCo
                 model = settings.InstallTo,
                 grounding = gate.Grounding,
             },
-            gate.Warnings.Count > 0 ? gate.Warnings.ToList() : null);
+            gate.Warnings.Count > 0 ? gate.Warnings.ToList() : null,
+            verify: settings.Verify);
     }
 }
 

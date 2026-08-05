@@ -12,133 +12,30 @@ releases v1.1.0 through v1.8.0. Upstream repo cloned fresh from
 `https://github.com/dynamics365ninja/d365fo-mcp-server` (default branch) on
 2026-08-04; all SHAs below are from that clone.
 
-Two items from the 2026-07 doc are being worked on in parallel by other
-agents right now and are **not** re-investigated here — see the "in
-progress" notes under Deferred item 1 below:
-- GitHub issue #112 (structured method-level modify via bridge)
-- GitHub issue #113 (modification journal/undo)
+**Everything this doc still lists is open work.** Items resolved since the
+2026-08 pass have been removed; the git history holds the analysis behind each.
+Resolved so far:
 
-## Targeted fixes to port (bug fixes to functionality the CLI already has)
-
-These are cataloged only — not fixed — per the task scope. Each cites the
-upstream commit(s) and the concrete CLI file/function that would need the
-equivalent change.
-
-- **Label where-used is missing from `find references --xref`** (upstream
-  `9592ff6` add label where-used to `find_references`, `dd52de2` docs,
-  `7c4b2aa` richer detail + truncation markers). Upstream's xref-DB path now
-  recognizes a label target (`@WAX2194` old format, `@LabelFile:LabelId` new
-  format, or an explicit `/Labels/@...` xref path) and normalizes it before
-  querying `DYNAMICSXREFDB`. The CLI already has the equivalent
-  bridge-backed xref lookup —
-  `src/D365FO.Bridge/XrefRepository.cs` (`Find`, `ResolveTargetPaths`) wired
-  through `src/D365FO.Cli/Commands/Find/FindCommands.cs`'s
-  `--xref`/`BridgeGate.TryFindReferences` path — but `ResolveTargetPaths`
-  (lines ~213-250) has no case for a `@`-prefixed label symbol: it falls
-  into the bare-name branch and produces `/@WAX2194` instead of
-  `/Labels/@WAX2194`, so it silently returns zero matches instead of the
-  real where-used list. Porting is a small, self-contained addition to that
-  one function (recognize both label-id formats, emit the `/Labels/@<ref>`
-  exact path, skip the LIKE-widening that a member-qualified match already
-  skips).
-
-- **Class-extension `[ExtensionOf(...)]` parsing is case-sensitive on the
-  intrinsic-function name** (upstream `0374a54` "index class extensions
-  from `[ExtensionOf]`, not a folder the AOT lacks" — verified via diff,
-  which changes `xmlParser.ts`'s regex from
-  `/ExtensionOf\s*\(\s*\w+Str\s*\(\s*([\w.]+)\s*\)/i` — note the trailing
-  `/i` added — plus a rewrite to handle two-argument forms like
-  `formDataSourceStr(Form, DataSource)`). The CLI's equivalent regex,
-  `D365FO.Core/Extract/MetadataExtractor.cs` `ExtensionOfRx` (~line 951):
-  ```
-  @"\[\s*ExtensionOf\s*\(\s*(?<kind>\w+)Str\s*\(\s*(?<name>[A-Za-z_][A-Za-z0-9_]*)"
-  ```
-  is `RegexOptions.Compiled` only — no `IgnoreCase`. Upstream's own
-  measurement on a real AOT (MixedRealityManufacturing) found the intrinsic
-  casing "varies freely" (`classStr`/`classstr`/`dataentityviewstr`), so any
-  class extension whose source uses a non-canonical case on the `Str` suffix
-  is silently missed by `DetectCoc`/class-extension indexing. The two-arg
-  form (`formDataSourceStr(Form, DataSource)`) already works correctly here
-  since the regex only captures the first identifier by design (matches
-  upstream's fixed behavior, not the bug). Fix is narrow: add
-  `RegexOptions.IgnoreCase` to `ExtensionOfRx`.
-
-- **Search ranking never prioritizes custom/ISV models over Microsoft's**
-  (upstream `a064104`/PR #752 "prioritize custom/ISV models so they aren't
-  buried under Microsoft objects" — new `src/utils/exactMatchRanking.ts`,
-  changes to `symbolIndex.ts` and `bridgeAdapter.ts`). The CLI's
-  `D365FO.Core/Index/MetadataRepository.cs` search methods (e.g.
-  `SearchClasses`, line 278) order results by `ORDER BY c.Name` only — a
-  query like `search class Cust` on a production DB returns Microsoft's
-  hundreds of `Cust*` classes ahead of any customer/ISV-authored one with
-  the same prefix, exactly the failure mode upstream fixed. The CLI already
-  has an `IsCustomModel`-style predicate used by the `find lint` rules
-  (`onlyCustomModels` parameter throughout `MetadataRepository.cs`) that
-  could back a `CASE WHEN <custom> THEN 0 ELSE 1 END, Name` ordering
-  addition to each `Search*` method.
-
-- **`generate table` has no way to set `ConfigurationKey` (or `FormRef`) at
-  all** (upstream `31f24b2`/PR #750 "stop the table writer from swallowing
-  configurationKey", cluster #35). Upstream's bug was a silent drop (the
-  property was accepted but discarded); the CLI's is a smaller-scope gap —
-  `D365FO.Core/Scaffolding/XppScaffolder.cs`'s `Table(...)` method (line 45)
-  takes fixed named parameters (`fields`, `pattern`, `storage`,
-  `primaryKeyFields`) with no property bag and no `ConfigurationKey`/
-  `FormRef` parameter at all, so there's currently no path to emit
-  `<ConfigurationKey>` on a generated table. Porting means adding an
-  optional `configurationKey`/`formRef` parameter to `Table(...)` (and the
-  corresponding `generate table` CLI option), not a "stop silently
-  dropping" fix — the underlying honesty problem upstream solved doesn't
-  exist here because the CLI never accepted the property in the first
-  place.
-
-- **`get_object_info`/`find_coc_extensions`/friends never see class members
-  inherited from a base class** (upstream `264257f` "see inherited members,
-  and fix eligibility" for `extension_info`/`get_object_info`, `92444cd`/PR
-  #782 "inherited members in listings", `38e12cf` "resolve methods
-  inherited from a base class" for `get_method`, `72396a2` "walk the
-  extends chain for inherited methods" for the `prepare` tool, `2941ed6`
-  "add class-inheritance topic" to the knowledge base). This is a cluster
-  of 5+ commits fixing the same root cause across multiple tools: a class
-  lookup that only reads the class's own declared members, not the
-  `extends` chain. Worth checking whether `D365FO.Core/Index/
-  MetadataRepository.cs`'s `GetClassDetails` (line 294, joins `Methods` to
-  `Classes` on exact `ClassId`) has the same gap — it does not walk
-  `ExtendsName` to pull in base-class methods, so `d365fo get class` /
-  `get_object_info` on a class would only show locally-declared methods,
-  not inherited ones. Needs a recursive CTE or app-side walk of the
-  `ExtendsName` chain.
-
-- **OLS/row-level-security coverage has no "unknown" state** (upstream
-  `6298acb` "report unknown OLS coverage instead of omitting the section",
-  fixes #690). Lower confidence this maps directly: the CLI's
-  `d365fo get security` (`GetSecurityCommand` →
-  `MetadataRepository.GetSecurityCoverage`, line 562) only queries the
-  `SecurityMap` table (role/duty/privilege/entry-point), not
-  `AxSecurityPolicy`/row-level (XDS) coverage at all — there may be no
-  directly analogous surface to extend, or row-level security reporting
-  may not exist in this CLI yet. Flagged for verification rather than as a
-  confirmed gap.
-
-- **Bridge single-op RPC dispatch parity** (upstream `0f15f5b`/PR #812
-  "close single-op RPC dispatch gaps left by PR #804" — a real regression
-  where 4 write ops were wired into the batch-modify dispatch arm but not
-  the single-op `Dispatch()` arm, so real calls got "-32601 Unknown
-  method"). **Confirmed not applicable**: the CLI's bridge
-  (`src/D365FO.Bridge/Handlers.cs`, `Program.cs`) has no generic
-  `RequestDispatcher`/named-verb RPC surface at all (no
-  `add-full-text-index`, `add-table-mapping`, etc.) — it exposes only
-  generic `SaveObject`/`UpdateObject`/`DeleteObject` plus the read-only
-  `FindReferences` xref handler. This confirms (does not extend) the
-  existing "Not applicable" bullet about bridge verbs the CLI bridge
-  doesn't expose.
+- The targeted bug fixes catalogued by this pass — label where-used in
+  `find references --xref`, case-insensitive `[ExtensionOf]` parsing,
+  custom/ISV model search ranking, `generate table` configuration key / form
+  ref, inherited class members, and row-level security coverage.
+- GitHub issues #112 (structured method-level modify via bridge) and #113
+  (modification journal / undo), which closed part of Deferred item 1 below.
+- Issue #114's HTTP transport, plus the `d365fo connect <url>` follow-on that
+  wires an editor's MCP config at a deployed server.
+- The View and Map writers (`generate view` / `generate map`), which were the
+  precondition for the upstream view/map fixes.
+- Bulk multi-key label creation on the CLI (`label create --entry`).
 
 ## Deferred — candidate future features
 
-1. **Modify operations on existing objects — extends the 2026-07 item, IN
-   PROGRESS elsewhere (issues #112, #113).** Not investigated in depth per
-   task instructions. Upstream has continued heavy investment in exactly
-   this area since `fd78ece`: PR #800 `feat/form-extension-and-data-entity-
+1. **Modify operations on existing objects — extends the 2026-07 item;
+   partially landed.** Issues #112 (structured method-level modify via
+   `D365FO.Bridge`, giving `d365fo modify method`) and #113 (modification
+   journal + `d365fo undo`) are **done and on main**. What remains is the
+   rest of upstream's write surface, where it has continued heavy
+   investment since `fd78ece`: PR #800 `feat/form-extension-and-data-entity-
    extension-support` (laeliand), PR #799 `fix/table-extension-fallback-
    for-relation-and-index-ops` (laeliand), PR #804 `fix/extension-fallback-
    for-remaining-write-ops`, PR #776 `fix/extension-writer-properties`, PR
@@ -149,29 +46,14 @@ equivalent change.
    `a04a583` (addField RPC param forwarding), `015d697` (modify-property
    for data-entity), `95a474f` (add-control on form design root), `982d8b7`
    (stop discarding params in silence), `8be57d7` (honour dropped write
-   params). Whoever resumes work on #112/#113 should treat this list as
+   params). Concretely, the CLI's `modify` branch still exposes only
+   `method` — there is no add-field, add-control, modify-property or
+   extension-writer surface, and the bridge accepts only
+   `class|table|edt|enum|form` for create/update/delete. Treat this list as
    the up-to-date upstream state of that subsystem, not the 2026-07 doc's
    snapshot.
 
-2. **`connect` command — configure an editor for a deployed HTTP-mode
-   server** (upstream `e1f56bb`/PR #712-adjacent `feat(cli): add connect —
-   configure an editor for a deployed server`, 2026-07-21). Once a server
-   is reachable over HTTP, `npx d365fo-mcp connect <url>` merges the right
-   MCP config entry into VS Code / Claude Code / other editor config files
-   (probing `/health` first to distinguish a typo from a cold-starting
-   server; `--force` to override; merges rather than clobbers existing MCP
-   entries). **This has no CLI equivalent today and is a direct follow-on
-   to the in-progress #114 HTTP-transport work** — right now #114 is adding
-   `X-Api-Key` + `MCP_SERVER_MODE` to `D365FO.Mcp`'s HTTP transport, but
-   once a deployed server exists there is still no CLI-side helper to wire
-   an editor's MCP config at it; a user would have to hand-edit
-   `mcp.json`/`.vscode/mcp.json`/`~/.claude.json` per the upstream doc's own
-   admission that this was previously "documented as write this JSON by
-   hand." Worth a follow-up ticket once #114 lands, scoped as a new
-   `d365fo connect <url>` command (or `D365FO.Mcp` equivalent) under
-   `src/D365FO.Cli/Commands/`.
-
-3. **Knowledge base + build-error hint scoring — extends the 2026-07
+2. **Knowledge base + build-error hint scoring — extends the 2026-07
    item.** Upstream keeps growing this subsystem: `2941ed6` adds a
    class-inheritance topic, `d3f268b` fixes the custom-services topic to
    stop mandating the deprecated `SysEntryPointAttribute`, `1e9ddb0`
@@ -182,24 +64,15 @@ equivalent change.
    ported slice); the gap is unchanged in kind, just larger in upstream
    content volume.
 
-4. **View / Map / Query creation writers — extends the 2026-07 item.**
-   Further writer-honesty fixes landed: `6b66454` "write the ranges, and
-   stop inventing a literal Title" and `01d902d` "emit DynamicFields where
-   the contract puts it, before Table" (both in `queryViewXml.ts`), plus
-   `79caaee` "stop the create/generate path emitting metadata that cannot
-   build." Still not applicable until the CLI has a `ViewScaffolder`/
-   `MapScaffolder` writer to receive these fixes.
-
-5. **TRUDUtils-style generators + form auto-repair** — no material new
+3. **TRUDUtils-style generators + form auto-repair** — no material new
    upstream work in this specific area since `fd78ece` beyond eval-goldens
    closing out `form-lifecycle` coverage (`1d45e81`, verified now depends
    on PR #728's `add-control` landing for real rather than the
    `create overwrite=true` escape hatch — itself part of item 1 above).
-   No change to this item's status from the 2026-07 doc.
-
-6. **Bulk multi-key label creation** — no upstream changes to
-   `src/tools/labels.ts` since `fd78ece`. No change to this item's status
-   from the 2026-07 doc.
+   No change to this item's status from the 2026-07 doc. Partial overlap
+   still exists (`FormMethodScaffolder`, `FormPatternValidator`); the
+   deterministic control expander and the repair pipeline are the missing
+   pieces.
 
 ## Not applicable to this codebase (permanently)
 
@@ -240,9 +113,16 @@ equivalent change.
   differently-shaped mtime-based mechanism; no evidence of the same O(N)
   regression here, not investigated further). Still no CLI analogue to any
   of this — it is entirely upstream's own test/tooling harness.
-- **Bridge single-op RPC dispatch surface** (see the "Targeted fixes"
-  section above) — confirmed not applicable, extends the existing bullet
-  on bridge verbs the CLI bridge doesn't expose.
+- **Bridge single-op RPC dispatch surface** (upstream `0f15f5b`/PR #812
+  "close single-op RPC dispatch gaps left by PR #804", where 4 write ops were
+  wired into the batch-modify dispatch arm but not the single-op `Dispatch()`
+  arm, so real calls got "-32601 Unknown method"). Confirmed not applicable:
+  the CLI's bridge (`src/D365FO.Bridge/Handlers.cs`, `Program.cs`) has no
+  generic `RequestDispatcher`/named-verb RPC surface at all (no
+  `add-full-text-index`, `add-table-mapping`, etc.) — it exposes only generic
+  `SaveObject`/`UpdateObject`/`DeleteObject` plus the read-only
+  `FindReferences` xref handler. This confirms (does not extend) the existing
+  bullet above on bridge verbs the CLI bridge doesn't expose.
 
 ## HTTP transport / auth (issue #114 relevance check)
 

@@ -121,6 +121,32 @@ This lets a team run the deployment upstream documents:
 `full` (the default) is a single process exposing every tool — the right
 choice for local single-machine use, same as before this existed.
 
+### Pointing an editor at a deployed server
+
+Once a server is reachable, `d365fo connect` writes the MCP client entry for
+you instead of leaving you to hand-edit JSON:
+
+```sh
+d365fo connect https://d365fo-mcp.example.com                  # → .mcp.json (Claude Code)
+d365fo connect https://d365fo-mcp.example.com --editor vscode  # → .vscode/mcp.json
+d365fo connect http://localhost:3000 --name d365fo-local --api-key "$API_KEY"
+```
+
+It probes `GET /health` first, so a typo in the URL is reported as
+`SERVER_UNREACHABLE` rather than silently producing a config that yields no
+tools; `--force` writes anyway (useful against a cold-starting instance) and
+`--no-probe` skips the check. The server's resolved `MCP_SERVER_MODE` comes
+back in the result, with a warning when it is not `full` — so connecting to a
+read-only instance and then wondering where `generate_object` went is a
+one-line answer instead of a debugging session.
+
+The named entry is **merged** into the file: every other MCP server and
+top-level key is preserved, JSONC comments and trailing commas are tolerated,
+and a config that cannot be parsed is refused rather than overwritten. An
+entry of the same name is only replaced with `--force`; use `--name` to keep a
+prod and a local entry side by side. `--api-key` is written in plain text, so
+the command warns when the file may be committed.
+
 ---
 
 ## The CLI's own MCP tool surface (unified)

@@ -31,6 +31,16 @@ public static class XppScaffolder
     /// Optional field names for the primary/alternate-key index. Names that don't match
     /// an effective field are ignored; falls back to mandatory fields, then the first field.
     /// </param>
+    /// <param name="configurationKey">
+    /// Optional <c>AxConfigurationKey</c> name gating the whole table. Emitted as
+    /// <c>&lt;ConfigurationKey&gt;</c> only when supplied — an absent element means
+    /// "not gated", which is the AOT default, so we never stamp one by accident.
+    /// </param>
+    /// <param name="formRef">
+    /// Optional display menu item opened when a user drills into a record of this
+    /// table ("Go to main table form"). Emitted as <c>&lt;FormRef&gt;</c> only when
+    /// supplied.
+    /// </param>
     /// <param name="edtBaseTypeResolver">
     /// Optional callback resolving an EDT name to its primitive base type
     /// (<c>String</c>, <c>Int</c>, <c>Enum</c>, …) — typically backed by the
@@ -50,6 +60,8 @@ public static class XppScaffolder
         TablePattern pattern = TablePattern.None,
         TableStorage storage = TableStorage.RegularTable,
         IEnumerable<string>? primaryKeyFields = null,
+        string? configurationKey = null,
+        string? formRef = null,
         Func<string, string?>? edtBaseTypeResolver = null)
     {
         // Resolve effective field list: caller-supplied wins; otherwise use the
@@ -121,6 +133,11 @@ public static class XppScaffolder
                 new XAttribute(XNamespace.Xmlns + "i", xsi.NamespaceName),
                 new XElement("Name", name),
                 string.IsNullOrEmpty(label) ? null : new XElement("Label", label),
+                // ConfigurationKey / FormRef join the same scalar-property block as
+                // Label/TableGroup/TableType — omitted entirely when not supplied so
+                // the AOT default (ungated, no drill-down form) still applies.
+                string.IsNullOrEmpty(configurationKey) ? null : new XElement("ConfigurationKey", configurationKey),
+                string.IsNullOrEmpty(formRef) ? null : new XElement("FormRef", formRef),
                 tableGroup is null ? null : new XElement("TableGroup", tableGroup),
                 tableType  is null ? null : new XElement("TableType",  tableType),
                 // Standard models pin the clustered index to the PK index for
@@ -919,6 +936,16 @@ public static class XppScaffolder
     /// heuristic over well-known system EDTs (defaulting to <c>String</c>).
     /// </summary>
     private static string TableFieldConcreteSuffix(string edtName, Func<string, string?>? resolver)
+        => ConcreteFieldSuffix(edtName, resolver);
+
+    /// <summary>
+    /// Resolve the concrete field-subtype suffix (<c>String</c>, <c>Int64</c>, …) for an
+    /// EDT. Shared by every polymorphic AOT field family that uses the same suffix
+    /// vocabulary — <c>AxTableField*</c>, <c>AxMapField*</c> — so a map field and a table
+    /// field on the same EDT can never disagree about its primitive type. Prefers the
+    /// index-backed base type; falls back to a heuristic over well-known system EDT names.
+    /// </summary>
+    internal static string ConcreteFieldSuffix(string edtName, Func<string, string?>? resolver)
     {
         var baseType = resolver?.Invoke(edtName);
         var fromIndex = SuffixFromBaseType(baseType);
@@ -1118,11 +1145,48 @@ public static class ScaffoldFileWriter
         "AxEdtExtension",
     };
 
+    private const string XsiNamespace = "http://www.w3.org/2001/XMLSchema-instance";
+
+    // AOT roots whose files are unreadable without the XMLSchema-instance namespace
+    // declared on the root element. AxEdt* carries i:type on the root itself, while
+    // AxTable / AxView / AxMap carry it on every field (AxTableField, AxViewField,
+    // AxMapBaseField are all polymorphic, abstract-based types — see issue #91);
+    // AxEnum needs it because Visual Studio's metadata reader rejects the file
+    // outright when the declaration is absent (issue #70). Every entry here is
+    // ground-truthed against shipped standard-model files on a real AOS.
+    // Deliberately NOT a blanket rule for every AxXxx root: AxClass/AxMenuItem/AxQuery/…
+    // are written without it today and are read back fine.
+    private static readonly HashSet<string> _xsiRequiredAxRoots = new(StringComparer.Ordinal)
+    {
+        "AxEnum",
+        "AxTable",
+        "AxView",
+        "AxMap",
+    };
+
+    // AOT elements that deserialize into a CLR bool, not a NoYes-style enum. The
+    // DataContractSerializer reads these with XmlConvert.ToBoolean, so the NoYes
+    // spelling ("Yes"/"No") that most AOT properties use produces a file Visual
+    // Studio refuses to open (issue #70). Sibling properties like UseEnumValue
+    // really are NoYes enums and must NOT be listed here.
+    private static readonly HashSet<string> _clrBoolElements = new(StringComparer.Ordinal)
+    {
+        "IsExtensible",
+    };
+
+    // Exactly what XmlConvert.ToBoolean accepts for xs:boolean; "True"/"Yes"/"1 "
+    // and friends all throw at deserialization time.
+    private static readonly HashSet<string> _xmlBoolLiterals = new(StringComparer.Ordinal)
+    {
+        "true", "false", "1", "0",
+    };
+
     public static WriteResult Write(XDocument doc, string path, bool overwrite = false)
     {
         ArgumentNullException.ThrowIfNull(doc);
         EnsureConcreteAxRoot(doc.Root?.Name.LocalName);
         EnsureValidEdtRoot(doc.Root);
+        EnsureValueShapes(doc.Root);
         return WriteCore(doc.ToString(SaveOptions.None), path, overwrite, declarationOnSaveFromXDoc: true, doc);
     }
 
@@ -1137,6 +1201,7 @@ public static class ScaffoldFileWriter
         var root = ParseRootElement(xml);
         EnsureConcreteAxRoot(root?.Name.LocalName);
         EnsureValidEdtRoot(root);
+        EnsureValueShapes(root);
         return WriteCore(xml, path, overwrite, declarationOnSaveFromXDoc: false, null);
     }
 
@@ -1212,8 +1277,7 @@ public static class ScaffoldFileWriter
         if (root?.Name.LocalName != "AxEdt")
             return;
 
-        XNamespace xsi = "http://www.w3.org/2001/XMLSchema-instance";
-        var typeValue = root.Attribute(XName.Get("type", xsi.NamespaceName))?.Value;
+        var typeValue = root.Attribute(XName.Get("type", XsiNamespace))?.Value;
         if (string.IsNullOrWhiteSpace(typeValue) ||
             string.Equals(typeValue, "AxEdt", StringComparison.Ordinal) ||
             !typeValue.StartsWith("AxEdt", StringComparison.Ordinal))
@@ -1223,6 +1287,57 @@ public static class ScaffoldFileWriter
                 "Set i:type to a concrete subtype (e.g. AxEdtString, AxEdtInt, AxEdtReal, " +
                 "AxEdtDate, AxEdtUtcDateTime, AxEdtTime, AxEdtGuid, AxEdtContainer, AxEdtEnum). Visual Studio's metadata reader " +
                 "throws \"Cannot create an abstract class\" when type metadata is missing.");
+        }
+    }
+
+    /// <summary>
+    /// Runtime-free shape checks over the document about to be written: the
+    /// XMLSchema-instance declaration the polymorphic AOT roots depend on, and
+    /// primitive values whose encoding the metadata reader would reject. Both
+    /// run before anything touches disk, in either <c>Write</c> overload.
+    /// </summary>
+    private static void EnsureValueShapes(XElement? root)
+    {
+        if (root is null) return;
+        EnsureXsiNamespaceDeclared(root);
+        EnsureClrBoolValues(root);
+    }
+
+    private static void EnsureXsiNamespaceDeclared(XElement root)
+    {
+        var rootName = root.Name.LocalName;
+        var required = _xsiRequiredAxRoots.Contains(rootName) ||
+                       rootName.StartsWith("AxEdt", StringComparison.Ordinal);
+        if (!required) return;
+
+        // Any prefix bound to the XMLSchema-instance URI counts; Visual Studio
+        // always writes "i", but the prefix carries no meaning of its own.
+        var declared = root.Attributes()
+            .Any(a => a.IsNamespaceDeclaration &&
+                      string.Equals(a.Value, XsiNamespace, StringComparison.Ordinal));
+        if (declared) return;
+
+        throw new InvalidOperationException(
+            $"Refusing to write <{rootName}> without the XMLSchema-instance namespace on the root. " +
+            $"Declare xmlns:i=\"{XsiNamespace}\" so the i:type discriminators resolve. " +
+            "Visual Studio's metadata reader cannot open the file without it.");
+    }
+
+    private static void EnsureClrBoolValues(XElement root)
+    {
+        foreach (var el in root.DescendantsAndSelf())
+        {
+            if (!_clrBoolElements.Contains(el.Name.LocalName)) continue;
+            if (el.HasElements) continue;
+
+            var value = el.Value;
+            if (_xmlBoolLiterals.Contains(value)) continue;
+
+            throw new InvalidOperationException(
+                $"Refusing to write AOT XML with <{el.Name.LocalName}>{value}</{el.Name.LocalName}>. " +
+                $"{el.Name.LocalName} maps to a CLR bool, so it takes \"true\"/\"false\" — not the " +
+                "NoYes spelling \"Yes\"/\"No\" that enum-typed AOT properties use. Visual Studio's " +
+                "metadata reader refuses to open the file otherwise.");
         }
     }
 

@@ -241,6 +241,50 @@ internal static class BridgeGate
         }
     }
 
+    /// <summary>
+    /// Outcome of an opt-in post-write verification. <c>Skipped</c> means the
+    /// Metadata API runtime is not available at all — generation must keep working
+    /// offline, so this is never an error.
+    /// </summary>
+    internal enum VerifyOutcome { Skipped, Readable, Unreadable }
+
+    /// <summary>
+    /// Read a just-written artefact back through the live metadata provider — the
+    /// same path Visual Studio takes when it opens the file. Purely a check: nothing
+    /// is written and the artefact is left alone either way.
+    /// </summary>
+    /// <param name="axKind">Bridge collection kind: class | table | edt | enum | form.</param>
+    /// <returns>
+    /// <see cref="VerifyOutcome.Skipped"/> when the bridge is unavailable or the kind
+    /// has no read verb, <see cref="VerifyOutcome.Readable"/> when the provider
+    /// returned the object, <see cref="VerifyOutcome.Unreadable"/> when the provider
+    /// was reachable but could not load it.
+    /// </returns>
+    internal static (VerifyOutcome outcome, string? detail) TryVerifyObject(string axKind, string name)
+    {
+        var method = axKind?.ToLowerInvariant() switch
+        {
+            "class" => "readClass",
+            "table" => "readTable",
+            "edt"   => "readEdt",
+            "enum"  => "readEnum",
+            "form"  => "readForm",
+            _       => null,
+        };
+        if (method is null)
+            return (VerifyOutcome.Skipped, $"no metadata-provider read verb for kind '{axKind}'.");
+
+        // Same availability check the read/write helpers use — no second notion of
+        // "is the runtime here".
+        if (!BridgeClient.IsAvailable())
+            return (VerifyOutcome.Skipped, "the D365FO Metadata API runtime is not available.");
+
+        return TryRead(method, name) is not null
+            ? (VerifyOutcome.Readable, null)
+            : (VerifyOutcome.Unreadable,
+               "the metadata provider is reachable but could not load the object back.");
+    }
+
     private static object? TryRead(string method, string name)
     {
         if (!BridgeClient.IsAvailable())

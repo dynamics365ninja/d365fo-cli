@@ -948,6 +948,12 @@ public sealed class MetadataExtractor
     // [ExtensionOf(formStr(Name))], [ExtensionOf(formDataSourceStr(Form, DS))], etc.
     // For data-source / control variants the *first* identifier is the target
     // form/table — that's what downstream queries key on.
+    // Case-insensitive: X++ is a case-insensitive language and the intrinsic
+    // casing varies freely across real AOTs (classStr / classstr /
+    // dataentityviewstr all occur), so a case-sensitive match silently drops
+    // those class extensions from CoC indexing. The `[ExtensionOf(` prefix keeps
+    // the looser match anchored — unlike the bare *Str( scan in StrArgRx, where
+    // IgnoreCase would also swallow the X++ subStr() intrinsic.
     private static readonly System.Text.RegularExpressions.Regex ExtensionOfRx = new(
         @"\[\s*ExtensionOf\s*\(\s*(?<kind>\w+)Str\s*\(\s*(?<name>[A-Za-z_][A-Za-z0-9_]*)",
         System.Text.RegularExpressions.RegexOptions.Compiled |
@@ -1244,7 +1250,12 @@ public sealed class MetadataExtractor
         var label = Local(root, "Label");
         var query = Local(root, "Query");
         var fields = new List<ExtractedViewField>();
-        var fieldsContainer = root.Descendants().FirstOrDefault(x => x.Name.LocalName == "Fields");
+        // Direct children only, like every other parser here. A Descendants() scan
+        // matched the empty <Fields> nested inside the first <AxTableFieldGroup>,
+        // which the AOT emits BEFORE the view's real <Fields> — so every shipped view
+        // indexed with zero fields. Same shape of bug as the table-side one fixed by
+        // MetadataExtractor_reads_table_fields_when_FieldGroups_precede_Fields.
+        var fieldsContainer = root.Elements().FirstOrDefault(x => x.Name.LocalName == "Fields");
         if (fieldsContainer is not null)
         {
             foreach (var fe in fieldsContainer.Elements())
