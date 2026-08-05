@@ -483,9 +483,21 @@ public sealed class MetadataExtractor
         var root = doc.Root;
         if (root is null) return null;
         var name = Local(root, "Name") ?? Path.GetFileNameWithoutExtension(file);
-        var extends = Local(root, "Extends");
         var decl = root.Descendants().FirstOrDefault(x => x.Name.LocalName == "SourceCode")
                     ?.Elements().FirstOrDefault(x => x.Name.LocalName == "Declaration")?.Value ?? string.Empty;
+
+        // AxClass has no Extends property — the contract is Name/SourceCode/IsObsolete/Tags/
+        // Visibility, and no shipped class file carries one. The base class lives in the X++
+        // declaration, so read it from there; the element is still honoured when present so
+        // older generated files keep working.
+        var extends = Local(root, "Extends");
+        if (string.IsNullOrWhiteSpace(extends))
+        {
+            var m = System.Text.RegularExpressions.Regex.Match(
+                decl, @"\bclass\s+[\w]+\s+extends\s+([\w]+)",
+                System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+            if (m.Success) extends = m.Groups[1].Value;
+        }
         // Use word-boundary patterns so that "public abstract\nclass" (newline) or
         // "public abstract\tclass" (tab) are correctly detected. The previous " abstract "
         // space-delimited check silently missed those variants.

@@ -81,7 +81,6 @@ public static class SysOperationScaffolder
         return new XDocument(
             new XElement("AxClass",
                 new XElement("Name", serviceName),
-                new XElement("Extends", "SysOperationServiceBase"),
                 new XElement("SourceCode",
                     new XElement("Declaration", declaration),
                     new XElement("Methods",
@@ -124,7 +123,6 @@ public static class SysOperationScaffolder
         return new XDocument(
             new XElement("AxClass",
                 new XElement("Name", controllerName),
-                new XElement("Extends", "SysOperationServiceController"),
                 new XElement("SourceCode",
                     new XElement("Declaration", declaration),
                     new XElement("Methods",

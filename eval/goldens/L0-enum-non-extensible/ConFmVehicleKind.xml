@@ -2,7 +2,6 @@
 <AxEnum xmlns:i="http://www.w3.org/2001/XMLSchema-instance">
   <Name>ConFmVehicleKind</Name>
   <Label>Vehicle kind</Label>
-  <IsExtensible>false</IsExtensible>
   <EnumValues>
     <AxEnumValue>
       <Name>Car</Name>
@@ -13,4 +12,5 @@
       <Value>1</Value>
     </AxEnumValue>
   </EnumValues>
+  <IsExtensible>false</IsExtensible>
 </AxEnum>

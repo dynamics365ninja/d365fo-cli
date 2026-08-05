@@ -1,8 +1,6 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
 <AxDataEntityView>
   <Name>ConFmVehicleEntity</Name>
-  <PublicEntityName>ConFmVehicleEntity</PublicEntityName>
-  <PublicCollectionName>ConFmVehicleEntities</PublicCollectionName>
   <DataManagementEnabled>No</DataManagementEnabled>
   <DataManagementStagingTable />
   <IsPublic>Yes</IsPublic>
@@ -12,6 +10,8 @@
       <Table>FmVehicle</Table>
     </AxQuerySimpleRootDataSource>
   </DataSources>
+  <PublicCollectionName>ConFmVehicleEntities</PublicCollectionName>
+  <PublicEntityName>ConFmVehicleEntity</PublicEntityName>
   <Fields>
     <AxDataEntityViewField>
       <Name>VIN</Name>

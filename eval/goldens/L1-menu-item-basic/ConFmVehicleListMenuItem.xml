@@ -2,9 +2,6 @@
 <AxMenuItemDisplay xmlns="Microsoft.Dynamics.AX.Metadata.V1">
   <Name>ConFmVehicleListMenuItem</Name>
   <Label>Fleet vehicles</Label>
-  <Image>
-    <ImageType>Symbol</ImageType>
-  </Image>
   <Object>ConFmVehicleList</Object>
   <ObjectType>Form</ObjectType>
 </AxMenuItemDisplay>

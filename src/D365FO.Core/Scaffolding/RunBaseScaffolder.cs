@@ -129,7 +129,6 @@ public static class RunBaseScaffolder
         return new XDocument(
             new XElement("AxClass",
                 new XElement("Name", className),
-                new XElement("Extends", baseClass),
                 new XElement("SourceCode",
                     new XElement("Declaration", declaration),
                     new XElement("Methods", methodElements))));

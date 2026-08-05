@@ -38,11 +38,12 @@ public static class MenuItemScaffolder
             new XElement(rootElement,
                 new XElement("Name", name),
                 string.IsNullOrEmpty(label) ? null : new XElement("Label", label),
-                // Explicit Symbol image avoids BPErrorMissingOrUnsupportedImage:
-                // an omitted <Image> still resolves to the unsupported "File" type
-                // during best-practice checks, so state Symbol (inherit icon) up front.
-                new XElement("Image",
-                    new XElement("ImageType", "Symbol")),
+                // No image properties. This used to emit <Image><ImageType>Symbol</ImageType></Image>
+                // to head off BPErrorMissingOrUnsupportedImage — but AxMenuItem* has no Image
+                // member and no ImageType anywhere, so the whole block was discarded on read
+                // while the file looked deliberate. The real members are ImageLocation +
+                // NormalImage (e.g. AOTResource + a resource name); shipped menu items that
+                // show no icon simply omit them, which is what we do until a caller asks for one.
                 new XElement("Object", objectName),
                 new XElement("ObjectType", objTypeStr)));
     }

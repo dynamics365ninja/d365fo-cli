@@ -88,7 +88,6 @@ public static class SysTestScaffolder
         return new XDocument(
             new XElement("AxClass",
                 new XElement("Name", className),
-                new XElement("Extends", "SysTestCase"),
                 new XElement("SourceCode",
                     new XElement("Declaration", declaration),
                     new XElement("Methods", methodElements))));

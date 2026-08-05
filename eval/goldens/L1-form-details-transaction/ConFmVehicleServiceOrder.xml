@@ -1,4 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
+
 <AxForm xmlns:i="http://www.w3.org/2001/XMLSchema-instance" xmlns="Microsoft.Dynamics.AX.Metadata.V6">
   <Name>ConFmVehicleServiceOrder</Name>
   <SourceCode>
@@ -105,20 +106,22 @@ public class ConFmVehicleServiceOrder extends FormRun
         <FormControlExtension i:nil="true" />
         <Controls>
           <AxFormControl xmlns="" i:type="AxFormTabPageControl">
-            <Name>TabPageHeader</Name>
-            <Pattern>FieldsFieldGroups</Pattern>
-            <PatternVersion>1.1</PatternVersion>
-            <Type>TabPage</Type>
-            <Caption>Header</Caption>
-            <FormControlExtension i:nil="true" />
-            <Controls>
+            
+            
+            
+            
+            
+            
+            
+          <Name>TabPageHeader</Name><Pattern>FieldsFieldGroups</Pattern><PatternVersion>1.1</PatternVersion><Type>TabPage</Type><FormControlExtension i:nil="true" /><Controls>
               <AxFormControl xmlns="" i:type="AxFormGroupControl">
-                <Name>HeaderGeneralGroup</Name>
-                <Type>Group</Type>
-                <Caption>General</Caption>
-                <DataGroup>Overview</DataGroup>
-                <FormControlExtension i:nil="true" />
-                <Controls>
+                
+                
+                
+                
+                
+                
+              <Name>HeaderGeneralGroup</Name><Type>Group</Type><FormControlExtension i:nil="true" /><Controls>
                   <AxFormControl xmlns="" i:type="AxFormStringControl">
                     <Name>Header_VIN</Name>
                     <Type>String</Type>
@@ -126,16 +129,15 @@ public class ConFmVehicleServiceOrder extends FormRun
                     <DataField>VIN</DataField>
                     <DataSource>FmVehicle</DataSource>
                   </AxFormControl>
-                </Controls>
-              </AxFormControl>
-            </Controls>
-          </AxFormControl>
+                </Controls><Caption>General</Caption><DataGroup>Overview</DataGroup></AxFormControl>
+            </Controls><Caption>Header</Caption></AxFormControl>
           <AxFormControl xmlns="" i:type="AxFormTabPageControl">
-            <Name>TabPageLines</Name>
-            <Type>TabPage</Type>
-            <Caption>Lines</Caption>
-            <FormControlExtension i:nil="true" />
-            <Controls>
+            
+            
+            
+            
+            
+          <Name>TabPageLines</Name><Type>TabPage</Type><FormControlExtension i:nil="true" /><Controls>
               <AxFormControl xmlns="" i:type="AxFormActionPaneTabControl">
                 <Name>LinesActionPane</Name>
                 <Type>ActionPaneTab</Type>
@@ -151,16 +153,15 @@ public class ConFmVehicleServiceOrder extends FormRun
                 </Controls>
               </AxFormControl>
               <AxFormControl xmlns="" i:type="AxFormGridControl">
-                <Name>LinesGrid</Name>
-                <Type>Grid</Type>
-                <FormControlExtension i:nil="true" />
-                <Controls />
-                <DataSource>FmVehicleLine</DataSource>
-                <DataGroup>Overview</DataGroup>
-                <Style>Tabular</Style>
-              </AxFormControl>
-            </Controls>
-          </AxFormControl>
+                
+                
+                
+                
+                
+                
+                
+              <Name>LinesGrid</Name><Type>Grid</Type><FormControlExtension i:nil="true" /><Controls /><DataGroup>Overview</DataGroup><DataSource>FmVehicleLine</DataSource><Style>Tabular</Style></AxFormControl>
+            </Controls><Caption>Lines</Caption></AxFormControl>
         </Controls>
         <Style>FastTabs</Style>
       </AxFormControl>

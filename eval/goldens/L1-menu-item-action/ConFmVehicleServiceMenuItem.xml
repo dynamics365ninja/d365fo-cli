@@ -2,9 +2,6 @@
 <AxMenuItemAction xmlns="Microsoft.Dynamics.AX.Metadata.V1">
   <Name>ConFmVehicleServiceMenuItem</Name>
   <Label>Run vehicle service</Label>
-  <Image>
-    <ImageType>Symbol</ImageType>
-  </Image>
   <Object>FmVehicleService</Object>
   <ObjectType>Class</ObjectType>
 </AxMenuItemAction>

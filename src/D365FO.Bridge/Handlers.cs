@@ -259,7 +259,6 @@ namespace D365FO.Bridge
             }
 
             object ax;
-            string roundTripped;
             try
             {
                 // DataContractSerializer, not XmlSerializer: the MetaModel types are
@@ -274,14 +273,6 @@ namespace D365FO.Bridge
                 {
                     ax = serializer.ReadObject(xr, true);
                 }
-
-                using (var sw = new StringWriter())
-                using (var xw = System.Xml.XmlWriter.Create(sw, new System.Xml.XmlWriterSettings { Indent = true, OmitXmlDeclaration = true }))
-                {
-                    new System.Runtime.Serialization.DataContractSerializer(ax.GetType()).WriteObject(xw, ax);
-                    xw.Flush();
-                    roundTripped = sw.ToString();
-                }
             }
             catch (Exception ex)
             {
@@ -290,7 +281,7 @@ namespace D365FO.Bridge
                     "XML_DESERIALIZE_FAILED", ex.Message + inner, null);
             }
 
-            var dropped = DroppedLeaves(xml, roundTripped);
+            var dropped = UnappliedValues(xml, ax);
             var droppedArray = new JsonArray();
             foreach (var d in dropped) droppedArray.Add(d);
 
@@ -319,31 +310,28 @@ namespace D365FO.Bridge
         }
 
         /// <summary>
-        /// Leaf elements (path + value) present in <paramref name="original"/> but not in the
-        /// round-tripped XML. Namespaces are ignored — the provider re-serializes into its own
-        /// — and only losses are reported: elements the round-trip *adds* are defaults being
-        /// materialised, which is expected and harmless.
+        /// Values the file states that the deserialized object does not carry — the honest
+        /// definition of "silently dropped".
         /// </summary>
-        private static System.Collections.Generic.List<string> DroppedLeaves(string original, string roundTripped)
+        /// <remarks>
+        /// <para>
+        /// The obvious implementation — re-serialize and diff the XML — does not work, and its
+        /// failure mode is worth recording: <c>DataContractSerializer</c> omits members whose
+        /// value equals the CLR default, so a perfectly applied
+        /// <c>&lt;JoinMode&gt;InnerJoin&lt;/JoinMode&gt;</c> (InnerJoin being 0) is absent from
+        /// the round-trip and looks lost. A validator that cries wolf about correct files is
+        /// worse than none.
+        /// </para>
+        /// <para>
+        /// So this walks the input against the object the provider actually built: for every
+        /// element, resolve the member it names and compare what landed. A member the type
+        /// does not declare, or a value that did not arrive, is reported; anything the
+        /// serializer merely chose not to write back is not.
+        /// </para>
+        /// </remarks>
+        private static System.Collections.Generic.List<string> UnappliedValues(string xml, object ax)
         {
-            var before = LeafCounts(original);
-            var after = LeafCounts(roundTripped);
             var lost = new System.Collections.Generic.List<string>();
-
-            foreach (var pair in before)
-            {
-                int seen;
-                after.TryGetValue(pair.Key, out seen);
-                for (var i = 0; i < pair.Value - seen; i++) lost.Add(pair.Key);
-            }
-
-            lost.Sort(StringComparer.Ordinal);
-            return lost;
-        }
-
-        private static System.Collections.Generic.Dictionary<string, int> LeafCounts(string xml)
-        {
-            var counts = new System.Collections.Generic.Dictionary<string, int>(StringComparer.Ordinal);
             System.Xml.Linq.XDocument doc;
             try
             {
@@ -351,36 +339,145 @@ namespace D365FO.Bridge
             }
             catch
             {
-                return counts;
+                return lost;
             }
 
-            if (doc.Root == null) return counts;
-
-            // Paths are relative to the root, whose own name legitimately changes on the way
-            // back out: a document rooted at the abstract <AxEdt i:type="AxEdtString"> or
-            // <AxQuery i:type="AxQuerySimple"> re-serializes as <AxEdtString> / <AxQuerySimple>.
-            // Including the root name would then report every single leaf as dropped.
-            Walk(doc.Root, string.Empty, counts);
-            return counts;
+            if (doc.Root != null) CompareElement(doc.Root, ax, string.Empty, lost);
+            lost.Sort(StringComparer.Ordinal);
+            return lost;
         }
 
-        private static void Walk(
-            System.Xml.Linq.XElement element, string path,
-            System.Collections.Generic.Dictionary<string, int> counts)
+        private static void CompareElement(
+            System.Xml.Linq.XElement element, object instance, string path,
+            System.Collections.Generic.List<string> lost)
         {
-            var children = 0;
+            if (instance == null) return;
+
             foreach (var child in element.Elements())
             {
-                children++;
-                Walk(child, path.Length == 0 ? child.Name.LocalName : path + "/" + child.Name.LocalName, counts);
+                var name = child.Name.LocalName;
+                var childPath = path.Length == 0 ? name : path + "/" + name;
+
+                // X++ source is modelled as an untyped property bag (AxPropertyCollection),
+                // so it does not come back through the DataContract even for shipped
+                // Microsoft files — reporting it would flag every class and form ever
+                // written. The compiler is the oracle for source; this check is about
+                // metadata properties.
+                if (name == "SourceCode") continue;
+
+                var member = FindMember(instance.GetType(), name);
+                if (member == null)
+                {
+                    lost.Add(childPath + " — no such property on " + instance.GetType().Name);
+                    continue;
+                }
+
+                object value;
+                try { value = member.GetValue(instance, null); }
+                catch { continue; }
+
+                if (!child.HasElements)
+                {
+                    var written = child.Value.Trim();
+                    if (written.Length == 0) continue; // nothing asserted
+                    var actual = value == null ? string.Empty : Convert.ToString(value);
+                    if (!string.Equals(written, actual, StringComparison.OrdinalIgnoreCase))
+                        lost.Add(childPath + " = " + written + " (object has " +
+                                 (value == null ? "<null>" : actual) + ")");
+                    continue;
+                }
+
+                if (value == null)
+                {
+                    lost.Add(childPath + " — the whole element did not apply");
+                    continue;
+                }
+
+                var items = value as System.Collections.IEnumerable;
+                if (items != null && !(value is string))
+                {
+                    CompareCollection(child, items, childPath, lost);
+                    continue;
+                }
+
+                CompareElement(child, value, childPath, lost);
             }
+        }
 
-            if (children > 0) return;
+        /// <summary>
+        /// Collection members are matched by the item's <c>Name</c> — AOT collections are keyed
+        /// that way — falling back to position when an item has no name.
+        /// </summary>
+        private static void CompareCollection(
+            System.Xml.Linq.XElement element, System.Collections.IEnumerable items, string path,
+            System.Collections.Generic.List<string> lost)
+        {
+            var actual = new System.Collections.Generic.List<object>();
+            foreach (var item in items) actual.Add(item);
 
-            var key = (path.Length == 0 ? element.Name.LocalName : path) + " = " + element.Value.Trim();
-            int current;
-            counts.TryGetValue(key, out current);
-            counts[key] = current + 1;
+            var index = 0;
+            foreach (var child in element.Elements())
+            {
+                var wantedName = NameOf(child);
+                object match = null;
+
+                if (wantedName != null)
+                {
+                    foreach (var candidate in actual)
+                    {
+                        var member = candidate == null ? null : FindMember(candidate.GetType(), "Name");
+                        var candidateName = member == null ? null : Convert.ToString(member.GetValue(candidate, null));
+                        if (string.Equals(candidateName, wantedName, StringComparison.OrdinalIgnoreCase))
+                        {
+                            match = candidate;
+                            break;
+                        }
+                    }
+                }
+                else if (index < actual.Count)
+                {
+                    match = actual[index];
+                }
+
+                if (match == null)
+                {
+                    lost.Add(path + "/" + child.Name.LocalName +
+                             (wantedName == null ? string.Empty : " '" + wantedName + "'") +
+                             " — not present in the loaded object");
+                }
+                else
+                {
+                    CompareElement(child, match, path + "/" + child.Name.LocalName, lost);
+                }
+
+                index++;
+            }
+        }
+
+        private static string NameOf(System.Xml.Linq.XElement element)
+        {
+            foreach (var child in element.Elements())
+                if (child.Name.LocalName == "Name") return child.Value.Trim();
+            return null;
+        }
+
+        /// <summary>
+        /// Contract members are private <c>___serialize_*</c> properties on the declaring class,
+        /// which a flattened lookup on the derived type cannot see — so walk the hierarchy.
+        /// </summary>
+        private static PropertyInfo FindMember(Type type, string memberName)
+        {
+            const BindingFlags flags = BindingFlags.Public | BindingFlags.NonPublic |
+                                       BindingFlags.Instance | BindingFlags.DeclaredOnly;
+            for (var t = type; t != null && t != typeof(object); t = t.BaseType)
+            {
+                var direct = t.GetProperty(memberName, flags);
+                if (direct != null && direct.CanRead) return direct;
+
+                var serialized = t.GetProperty("___serialize_" + memberName, flags);
+                if (serialized != null && serialized.CanRead) return serialized;
+            }
+            return null;
         }
 
         /// <summary>

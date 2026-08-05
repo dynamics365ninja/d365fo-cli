@@ -4,17 +4,6 @@
   <Label>Vehicle activity log</Label>
   <TableGroup>Transaction</TableGroup>
   <ClusteredIndex>PrimaryIdx</ClusteredIndex>
-  <Fields>
-    <AxTableField i:type="AxTableFieldString">
-      <Name>VehicleId</Name>
-      <ExtendedDataType>ConVehiclePlateNumber</ExtendedDataType>
-      <Mandatory>Yes</Mandatory>
-    </AxTableField>
-    <AxTableField i:type="AxTableFieldString">
-      <Name>Notes</Name>
-      <ExtendedDataType>Notes</ExtendedDataType>
-    </AxTableField>
-  </Fields>
   <FieldGroups>
     <AxTableFieldGroup>
       <Name>AutoReport</Name>
@@ -60,11 +49,22 @@
       </Fields>
     </AxTableFieldGroup>
   </FieldGroups>
+  <Fields>
+    <AxTableField i:type="AxTableFieldString">
+      <Name>VehicleId</Name>
+      <ExtendedDataType>ConVehiclePlateNumber</ExtendedDataType>
+      <Mandatory>Yes</Mandatory>
+    </AxTableField>
+    <AxTableField i:type="AxTableFieldString">
+      <Name>Notes</Name>
+      <ExtendedDataType>Notes</ExtendedDataType>
+    </AxTableField>
+  </Fields>
   <Indexes>
     <AxTableIndex>
       <Name>PrimaryIdx</Name>
-      <AlternateKey>Yes</AlternateKey>
       <AllowDuplicates>No</AllowDuplicates>
+      <AlternateKey>Yes</AlternateKey>
       <Fields>
         <AxTableIndexField>
           <DataField>VehicleId</DataField>
