@@ -1,0 +1,13 @@
+{
+  "id": "L0-edt-basic",
+  "title": "New Extended Data Type (string, sized, labeled)",
+  "tier": 0,
+  "instruction": "Create a new Extended Data Type named ConVehiclePlateNumber. It should be a string-based EDT with a max length of 20 characters, and its label should be the text 'Vehicle plate number'. Use only the d365fo CLI (search/get/generate/validate) — do not hand-write XML.",
+  "canonical_args": ["generate", "edt", "ConVehiclePlateNumber", "--base-type", "String", "--size", "20", "--label", "Vehicle plate number"],
+  "target_artifact_types": ["AxEdt"],
+  "golden_path": "L0-edt-basic",
+  "tags": ["edt", "metadata"],
+  "ignore": [],
+  "requires_fixture_index": false,
+  "golden_pending": false
+}

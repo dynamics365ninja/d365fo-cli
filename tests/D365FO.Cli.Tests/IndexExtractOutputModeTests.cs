@@ -3,10 +3,16 @@ using D365FO.Cli.Commands.Index;
 
 namespace D365FO.Cli.Tests;
 
-[CollectionDefinition("Console output", DisableParallelization = true)]
-public sealed class ConsoleOutputCollectionDefinition { }
+// Named "EnvIndexDb" (not "Console output") because it now also covers the
+// D365FO_INDEX_DB-mutating tests (LabelBatchCreateTests, ScaffoldingSnapshotTests,
+// D365FO.Cli.Tests.Eval.*): this class redirects the process-wide Console.Out, and
+// those redirect the process-wide D365FO_INDEX_DB — two different xUnit collections
+// still run in parallel with each other by default, so anything touching either
+// global must share this one collection or the two hazards race across collections.
+[CollectionDefinition("EnvIndexDb", DisableParallelization = true)]
+public sealed class EnvIndexDbCollectionDefinition { }
 
-[Collection("Console output")]
+[Collection("EnvIndexDb")]
 public sealed class IndexExtractOutputModeTests : IDisposable
 {
     private readonly string _root = Path.Combine(Path.GetTempPath(), $"d365fo-extract-{Guid.NewGuid():N}");

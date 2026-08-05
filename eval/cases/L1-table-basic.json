@@ -1,0 +1,13 @@
+{
+  "id": "L1-table-basic",
+  "title": "New transaction-pattern table with two fields",
+  "tier": 1,
+  "instruction": "Create a new table named ConVehicleLog using the transaction table pattern, labeled 'Vehicle activity log'. It should have a mandatory field VehicleId (EDT ConVehiclePlateNumber) and an optional field Notes (EDT Notes). Use only the d365fo CLI (search/get/generate/validate) — do not hand-write XML.",
+  "canonical_args": ["generate", "table", "ConVehicleLog", "--label", "Vehicle activity log", "--field", "VehicleId:ConVehiclePlateNumber:mandatory", "--field", "Notes:Notes", "--pattern", "transaction"],
+  "target_artifact_types": ["AxTable"],
+  "golden_path": "L1-table-basic",
+  "tags": ["table", "metadata"],
+  "ignore": [],
+  "requires_fixture_index": false,
+  "golden_pending": false
+}

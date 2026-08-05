@@ -295,6 +295,7 @@ The full scenario-by-scenario decision table lives in **[docs/CAPABILITIES.md](d
 | [Setup](docs/SETUP.md) — install, configure, verify | [Examples](docs/EXAMPLES.md) — one per command | [Troubleshooting](docs/TROUBLESHOOTING.md) |
 | [Migration from MCP](docs/MIGRATION_FROM_MCP.md) | [Architecture](docs/ARCHITECTURE.md) — index schema, AOT coverage, lint rules, daemon | [Token economics](docs/TOKEN_ECONOMICS.md) |
 | [Capabilities](docs/CAPABILITIES.md) — tool decision table | [Configuration](docs/CONFIGURATION.md) — env vars and profiles | |
+| | [Agent eval loop](docs/AGENT_EVAL_LOOP.md) — self-improving eval harness (`eval/README.md`) | |
 
 ---
 

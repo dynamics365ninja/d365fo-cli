@@ -1,0 +1,49 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/dynamics365ninja/d365fo-cli/eval/corpus/schema.json",
+  "title": "Eval corpus run record",
+  "description": "Documented shape of an eval/corpus/runs/<run-id>.json file, written by D365FO.Core.Eval.EvalCorpusStore.Append. One file per (case_id, run_id). Gitignored — local/CI evidence, not committed.",
+  "type": "object",
+  "required": ["runId", "caseId", "tier", "timestampUtc", "source", "score"],
+  "properties": {
+    "runId": { "type": "string", "description": "<timestamp>__<caseId>__<shortid>" },
+    "caseId": { "type": "string" },
+    "tier": { "type": "integer" },
+    "timestampUtc": { "type": "string", "format": "date-time" },
+    "source": { "type": "string", "enum": ["replay", "agent"], "description": "replay = `d365fo eval run` (deterministic, canonical_args). agent = `d365fo eval score` fed by the eval-runner agent driving the natural-language instruction by hand." },
+    "score": {
+      "type": "object",
+      "properties": {
+        "xppClean": { "type": ["boolean", "null"] },
+        "xppErrors": { "type": "integer" },
+        "referencesClean": { "type": ["boolean", "null"] },
+        "referenceErrors": { "type": "integer" },
+        "goldenMatch": { "type": "boolean" },
+        "goldenDiff": {
+          "type": "object",
+          "properties": {
+            "missing": { "type": "array", "items": { "type": "string" } },
+            "extra": { "type": "array", "items": { "type": "string" } },
+            "changed": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "path": { "type": "string" },
+                  "expected": { "type": ["string", "null"] },
+                  "actual": { "type": ["string", "null"] }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "classification": {
+      "type": ["string", "null"],
+      "enum": ["TOOL_DEFECT", "VALIDATOR_GAP", "KNOWLEDGE_GAP", "MODEL_ERROR", "ENV_FLAKE", null],
+      "description": "A hypothesis recorded by the runner (replay leaves this null; the agent may pass --hypothesis), confirmed or corrected by the eval-improver before any fix lands. See docs/AGENT_EVAL_LOOP.md for the rubric."
+    },
+    "note": { "type": ["string", "null"] }
+  }
+}
