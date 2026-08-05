@@ -113,13 +113,15 @@ lie in place while a deeper fix waits.
   an automated "cluster MODEL_ERROR runs into `skills/_source` proposals"
   step (`knowledgeFeedback.ts`); not built here yet. The rubric and agent
   roles already support adding it.
-- **Catalog breadth.** 22 cases across L0–L2 (`edt`, `enum`, `table`,
+- **Catalog breadth.** 31 cases across L0–L2 (`edt`, `enum`, `table`,
   `class`, `coc`, `form`, `query`, `map`, `report`, `sysoperation`,
   `runbase`, `business-event`, `custom-service`, `workflow`, `systest`,
-  `extension table/edt/enum`, `event-handler`, `number-sequence`, `entity`,
-  `security-policy`). L3/L4 (batch, workflow *runtime* submission, posting,
-  DMF, ER, SSRS rendering, …) need a live build/BP-check/SysTest oracle this
-  offline loop doesn't have — the natural next slice is either growing L0–L2
-  breadth further (forms/security/menu-items not yet covered) or adding that
-  oracle. See `d365fo-mcp-server`'s `eval/cases/` for the fuller L3/L4
-  catalog shape to port once a VM-backed oracle exists here.
+  `extension table/edt/enum/form`, `event-handler`, `number-sequence`,
+  `entity`, `security-policy`, `privilege`, `duty`, `role`, `menu-item`,
+  `view`, `migration-script`, `datasource-method`, `control-method`) — every
+  `generate` subcommand except the bridge-only `modify`/`test`/`bp` branches.
+  L3/L4 (batch, workflow *runtime* submission, posting, DMF, ER, SSRS
+  rendering, …) need a live build/BP-check/SysTest oracle this offline loop
+  doesn't have — the natural next slice is adding that oracle. See
+  `d365fo-mcp-server`'s `eval/cases/` for the fuller L3/L4 catalog shape to
+  port once a VM-backed oracle exists here.

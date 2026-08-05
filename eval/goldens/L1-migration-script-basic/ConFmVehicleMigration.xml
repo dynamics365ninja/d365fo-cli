@@ -1,0 +1,55 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<AxClass>
+  <Name>ConFmVehicleMigration</Name>
+  <Extends>SysRunnable</Extends>
+  <SourceCode>
+    <Declaration>/// &lt;summary&gt;
+/// Data migration: FmVehicle → FmVehicle.
+/// Run once via Batch or SysRunnable; uses doInsert/doUpdate (permitted exception).
+/// &lt;/summary&gt;
+public class ConFmVehicleMigration extends SysRunnable
+{
+    private static int BatchSize = 1000;
+}
+</Declaration>
+    <Methods>
+      <Method>
+        <Name>run</Name>
+        <Source>public void run()
+{
+    FmVehicle source;
+    FmVehicle target;
+    int count = 0;
+
+    ttsbegin;
+    while select source
+    {
+        // TODO: map fields from source to target
+        target.clear();
+        // target.Field = source.Field;
+        if (target.RecId) target.doUpdate(); else target.doInsert();
+        count++;
+        if (count mod BatchSize == 0)
+        {
+            ttscommit;
+            info(strFmt("Migrated %1 records", count));
+            ttsbegin;
+        }
+    }
+    ttscommit;
+    info(strFmt("Migration complete. Total: %1", count));
+}
+</Source>
+      </Method>
+      <Method>
+        <Name>main</Name>
+        <Source>public static void main(Args _args)
+{
+    ConFmVehicleMigration runObject = new ConFmVehicleMigration();
+    runObject.run();
+}
+</Source>
+      </Method>
+    </Methods>
+  </SourceCode>
+</AxClass>

@@ -14,13 +14,15 @@ public class EvalCaseCatalogTests
         var (cases, errors) = EvalCaseCatalog.LoadAll(EvalPaths.CasesDir(RepoRoot));
 
         Assert.Empty(errors);
-        Assert.Equal(22, cases.Count);
+        Assert.Equal(31, cases.Count);
         Assert.Contains(cases, c => c.Id == "L0-edt-basic");
         Assert.Contains(cases, c => c.Id == "L0-enum-basic");
         Assert.Contains(cases, c => c.Id == "L1-table-basic");
         Assert.Contains(cases, c => c.Id == "L1-class-basic");
         Assert.Contains(cases, c => c.Id == "L2-coc-extension");
         Assert.Contains(cases, c => c.Id == "L2-security-policy-basic");
+        Assert.Contains(cases, c => c.Id == "L1-view-basic");
+        Assert.Contains(cases, c => c.Id == "L2-datasource-method-basic");
     }
 
     [Fact]
@@ -46,9 +48,9 @@ public class EvalCaseCatalogTests
         Assert.Equal(
             new[]
             {
-                "L1-form-basic", "L1-map-basic", "L1-query-basic", "L1-systest-basic", "L1-workflow-basic",
-                "L2-coc-extension", "L2-event-handler-basic", "L2-security-policy-basic", "L2-table-extension",
-                "L2-virtual-entity-basic",
+                "L1-form-basic", "L1-map-basic", "L1-migration-script-basic", "L1-query-basic", "L1-systest-basic",
+                "L1-workflow-basic", "L2-coc-extension", "L2-event-handler-basic", "L2-security-policy-basic",
+                "L2-table-extension", "L2-virtual-entity-basic",
             },
             fixtureCases);
     }

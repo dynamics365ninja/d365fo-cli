@@ -1,0 +1,13 @@
+{
+  "id": "L1-privilege-basic",
+  "title": "Security privilege granting Update on a display menu item",
+  "tier": 1,
+  "instruction": "Create a security privilege named ConFmVehicleMaintainPriv granting Update access to the display menu item ConFmVehicleListMenuItem. Use only the d365fo CLI (search/get/generate/validate) — do not hand-write XML.",
+  "canonical_args": ["generate", "privilege", "ConFmVehicleMaintainPriv", "--entry-point", "ConFmVehicleListMenuItem", "--entry-kind", "MenuItemDisplay", "--access", "Update"],
+  "target_artifact_types": ["AxSecurityPrivilege"],
+  "golden_path": "L1-privilege-basic",
+  "tags": ["privilege", "security", "metadata"],
+  "ignore": [],
+  "requires_fixture_index": false,
+  "golden_pending": false
+}

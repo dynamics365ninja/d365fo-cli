@@ -33,7 +33,7 @@ public class EvalListCommandTests
 
         Assert.Equal(0, exit);
         Assert.Contains("\"ok\":true", stdout);
-        Assert.Contains("\"count\":22", stdout);
+        Assert.Contains("\"count\":31", stdout);
         Assert.Contains("L0-edt-basic", stdout);
         Assert.Contains("L2-coc-extension", stdout);
     }

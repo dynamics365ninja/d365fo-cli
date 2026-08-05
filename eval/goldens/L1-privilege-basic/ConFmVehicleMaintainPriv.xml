@@ -1,0 +1,12 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<AxSecurityPrivilege>
+  <Name>ConFmVehicleMaintainPriv</Name>
+  <EntryPoints>
+    <AxSecurityEntryPointReference>
+      <Name>ConFmVehicleListMenuItem</Name>
+      <ObjectName>ConFmVehicleListMenuItem</ObjectName>
+      <ObjectType>MenuItemDisplay</ObjectType>
+      <AccessLevel>Update</AccessLevel>
+    </AxSecurityEntryPointReference>
+  </EntryPoints>
+</AxSecurityPrivilege>

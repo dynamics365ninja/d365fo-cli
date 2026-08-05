@@ -1,0 +1,13 @@
+{
+  "id": "L2-control-method-basic",
+  "title": "Override clicked on an existing form's grid control",
+  "tier": 2,
+  "instruction": "On the existing form eval/goldens/L1-form-basic/ConFmVehicleList.xml, override the clicked method on its Grid_VIN control. First run `d365fo generate control-method eval/goldens/L1-form-basic/ConFmVehicleList.xml --list` to confirm clicked is a catalogued override. Use only the d365fo CLI (search/get/generate/validate) — do not hand-write XML.",
+  "canonical_args": ["generate", "control-method", "eval/goldens/L1-form-basic/ConFmVehicleList.xml", "--control", "Grid_VIN", "--method", "clicked"],
+  "target_artifact_types": ["AxForm"],
+  "golden_path": "L2-control-method-basic",
+  "tags": ["control-method", "form", "metadata"],
+  "ignore": [],
+  "requires_fixture_index": false,
+  "golden_pending": false
+}

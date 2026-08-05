@@ -1,0 +1,13 @@
+{
+  "id": "L1-role-basic",
+  "title": "Security role referencing a single duty",
+  "tier": 1,
+  "instruction": "Create a security role named ConFmVehicleOperatorRole labeled 'Fleet vehicle operator' that references the duty ConFmVehicleMaintainDuty. Use only the d365fo CLI (search/get/generate/validate) — do not hand-write XML.",
+  "canonical_args": ["generate", "role", "ConFmVehicleOperatorRole", "--duty", "ConFmVehicleMaintainDuty", "--label", "Fleet vehicle operator"],
+  "target_artifact_types": ["AxSecurityRole"],
+  "golden_path": "L1-role-basic",
+  "tags": ["role", "security", "metadata"],
+  "ignore": [],
+  "requires_fixture_index": false,
+  "golden_pending": false
+}
