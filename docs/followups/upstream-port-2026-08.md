@@ -86,7 +86,9 @@ Resolved so far:
   npm-full-install), `722d0e7` "trusted publishing and script guard",
   `88270f7` `refactor/node-sqlite-drop-native-dep`, `753`/`754`
   (`better-sqlite3` → `node:sqlite`, SQLite startup preflight). This CLI
-  ships as a .NET global tool via NuGet; none of upstream's npm-registry /
+  currently ships via `install.ps1` (git clone + `dotnet publish`
+  self-contained binary) rather than a package registry — see
+  `install.ps1`'s header comment; none of upstream's npm-registry /
   Node-native-module distribution concerns apply.
 - **Setup wizard / Copilot & MCP-client bootstrap**: `281d7db`
   `feat(setup): configure the server through a wizard, not a hand-edited

@@ -147,12 +147,12 @@ d365fo lint --format sarif > lint.sarif             # SARIF 2.1.0 for CI
 | `insert-in-loop` | `.insert()` inside a loop body — suggest `RecordInsertList` | warning |
 | `tts-try-catch` | `try` inside `ttsbegin`/`ttscommit` without catching `UpdateConflict` | warning |
 | `empty-table-method` | Table method override with empty body | warning |
-| `runbase-no-can-go-batch` | `RunBaseBatch` subclass without `canGoBatch() { return true; }` | warning |
+| `batch-no-cango` | `RunBaseBatch` subclass without `canGoBatch() { return true; }` | warning |
 | `force-literals` | `forceLiterals` in a select — SQL injection risk | error |
+| `public-instance-field` | Public instance fields on a class — violates encapsulation | warning |
 | `cache-lookup-mismatch` | `CacheLookup` inconsistent with `TableGroup` | warning |
 | `missing-delete-action` | Table relation without `DeleteAction` or `OnDelete` | warning |
 | `no-alternate-key` | Tables with unique indexes but no `AlternateKey` | warning |
-| `unknown-label-ref` | `@File:Key` label references that don't resolve in the index | error |
 
 ---
 
@@ -343,7 +343,7 @@ Returns `UNSUPPORTED_PLATFORM` on non-Windows.
 
 ## MCP server
 
-Exposes the same index and scaffolding surface as the CLI over the `ModelContextProtocol` C# SDK via stdio (default) or HTTP (`--http`, for a shared team deployment). The tool surface is **consolidated** into **22 discriminator-based tools** (`search`, `get_object_info`, `get_method`, `labels`, `security_info`, `extension_info`, `object_patterns`, `generate_object`, `modify_method`, `analyze`, `models`, …) instead of one tool per object type — mirroring the upstream `d365fo-mcp-server` (which sits at 26). A single tool dispatches on a `type` / `objectType` / `mode` / `action` / `domain` / `include` field. See [MIGRATION_FROM_MCP.md](MIGRATION_FROM_MCP.md) for the full old→new mapping.
+Exposes the same index and scaffolding surface as the CLI over the `ModelContextProtocol` C# SDK via stdio (default) or HTTP (`--http`, for a shared team deployment). The tool surface is **consolidated** into **24 discriminator-based tools** (`search`, `get_object_info`, `get_method`, `labels`, `security_info`, `extension_info`, `object_patterns`, `generate_object`, `modify_method`, `analyze`, `models`, …) instead of one tool per object type — mirroring the upstream `d365fo-mcp-server` (which sits at 26). A single tool dispatches on a `type` / `objectType` / `mode` / `action` / `domain` / `include` field. See [MIGRATION_FROM_MCP.md](MIGRATION_FROM_MCP.md) for the full old→new mapping.
 
 ```jsonc
 {

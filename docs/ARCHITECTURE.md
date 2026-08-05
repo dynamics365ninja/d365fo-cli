@@ -121,12 +121,12 @@ Commands:
 | `insert-in-loop` | `.insert()` call inside a loop body — suggest `RecordInsertList` (`BPCheckInsertMethodInLoop`) | warning |
 | `tts-try-catch` | `try` block inside `ttsbegin`/`ttscommit` without catching `UpdateConflict` (`BPCheckNoTTSTryBlock`) | warning |
 | `empty-table-method` | Table method override with empty body — forces row-by-row DB ops (`BPCheckEmptyTableMethod`) | warning |
-| `runbase-no-can-go-batch` | `RunBaseBatch` subclass without `canGoBatch() { return true; }` (`BPCheckBatchJobsEnabled`) | warning |
+| `batch-no-cango` | `RunBaseBatch` subclass without `canGoBatch() { return true; }` (`BPCheckBatchJobsEnabled`) | warning |
 | `force-literals` | `forceLiterals` in a select — SQL injection risk | error |
+| `public-instance-field` | Public instance fields on a class — violates encapsulation | warning |
 | `cache-lookup-mismatch` | `CacheLookup` value inconsistent with `TableGroup` (`BPCheckTablePropertyMismatch`) | warning |
 | `missing-delete-action` | Table relations without `DeleteAction` or `OnDelete` configured (`BPCheckMissingDeleteActions`) | warning |
 | `no-alternate-key` | Tables with unique indexes but no `AlternateKey = Yes` index (`BPCheckAlternateKeyAbsent`) | warning |
-| `unknown-label-ref` | Label `@File:Key` references in source that don't resolve in the `Labels` table (`BPErrorUnknownLabel`) | error |
 
 Use `--category <name>[,<name>…]` to run specific rules. `--format sarif` emits SARIF 2.1.0 for CI.
 
@@ -137,10 +137,10 @@ Use `--category <name>[,<name>…]` to run specific rules. `--format sarif` emit
 `D365FO.Core.FormPatterns` ports the MCP server's form pattern engine: a
 data-driven catalog of Microsoft form patterns plus a pure structural validator.
 
-**Catalog** (`FormPatternCatalog`): 18 top-level patterns (SimpleList,
+**Catalog** (`FormPatternCatalog`): 20 top-level patterns (SimpleList,
 SimpleListDetails, DetailsMaster ±Tabs, DetailsTransaction, Dialog, DropDialog,
 TableOfContents, Lookup, ListPage, Workspace ±Operational, Form Part / FactBox
-variants, Simple Details, legacy Task patterns, Wizard) and 19 container
+variants, Simple Details, legacy Task patterns, Wizard) and 16 container
 sub-patterns (FieldsFieldGroups, CustomAndQuickFilters, SidePanel,
 ToolbarAndList, workspace sections, …). Each spec encodes what the Visual
 Studio pattern engine enforces — required containers, ordering, allowed child
@@ -194,11 +194,23 @@ Provides: authoritative per-object reads (`get` commands), file create/update/de
 
 ## MCP coexistence
 
-`D365FO.Mcp` forwards to the same `D365FO.Core` primitives as the CLI. It speaks the `ModelContextProtocol` C# SDK over stdio and exposes **20 consolidated, discriminator-based tools** (a single tool dispatches on a `type` / `objectType` / `mode` / `action` / `domain` / `include` field — mirroring the upstream `d365fo-mcp-server`). Index, bridge, and guardrails are shared — both adapters see identical data.
+`D365FO.Mcp` forwards to the same `D365FO.Core` primitives as the CLI. It speaks the `ModelContextProtocol` C# SDK over stdio and exposes **24 consolidated, discriminator-based tools** (a single tool dispatches on a `type` / `objectType` / `mode` / `action` / `domain` / `include` field — mirroring the upstream `d365fo-mcp-server`). Index, bridge, and guardrails are shared — both adapters see identical data.
 
 Adding or consolidating a tool: edit `ToolCatalog` (the discriminator binder) + the backing methods on `ToolHandlers`. The CLI picks it up once a command wraps the same `MetadataRepository` call; keep each command's `mcpTool` label in `SchemaCommand` pointing at the unified tool.
 
 **Daemon mode** (`d365fo daemon start`) keeps the SQLite handle and read caches hot. Also starts a `FileSystemWatcher` that auto-triggers incremental `index refresh` when `*.xml` files change (debounce 3 s; disable with `--no-watch`).
+
+## HTTP transport
+
+`D365FO.Mcp` can run `--http --port <p>` instead of stdio (`POST /mcp`, `GET /health`). Auth is an `X-Api-Key` header, checked against the `API_KEY` environment variable; if unset the endpoint runs unauthenticated and logs a startup warning. `MCP_SERVER_MODE` (`full` / `read-only` / `write-only`) gates the tool surface on both transports. See [docs/CAPABILITIES.md](CAPABILITIES.md) for the full env-var table.
+
+## Modification journal & undo
+
+Every metadata write appends an entry to a FIFO-pruned journal at `<index-dir>/journal/`. `d365fo undo [--steps N] [--dry-run]` replays entries in reverse through the same write path that produced them. `d365fo modify method` (structured method-body replace via the Bridge) belongs to this same write-tracking system — its writes are journaled and undoable like any other.
+
+## Editor connect
+
+`d365fo connect <url>` points a local MCP client config (`.mcp.json` for Claude, `.vscode/mcp.json` for VS Code) at a deployed HTTP `D365FO.Mcp` instance — writes the server entry, optional `X-Api-Key`, and probes `GET /health` before saving.
 
 ---
 
