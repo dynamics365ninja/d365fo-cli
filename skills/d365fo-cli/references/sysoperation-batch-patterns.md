@@ -106,6 +106,6 @@ d365fo generate migration-script FmVehicleMigration \
 
 - Always run migration scripts in a test environment before production.
 - Use `--batch-size` to avoid long-running transactions. Default is 1000.
-- Migration classes implement `SysRunnable` — run via `SysRunnable::run()` or from a `RunBase` dialog.
+- The scaffolded class extends `SysRunnable` and exposes a static `main(Args _args)` entry point that constructs the class and calls the instance `run()` method — invoke via **Right-click → Open** in Visual Studio (or wrap the call in a batch/RunBase wrapper). There is no static `SysRunnable::run()` call.
 - Never delete source data in the same script — use a separate cleanup script after validation.
 - After migration, validate row counts: `select count(*) from FmVehicle`.

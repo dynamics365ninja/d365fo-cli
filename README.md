@@ -164,9 +164,10 @@ The preferred method is the **one-command skill installer** — it deploys the b
 ```
 
 The installer:
-1. Regenerates `skills/d365fo-cli/references/` via `emit-skills.ps1` if needed.
+1. Regenerates `skills/d365fo-cli/references/` if needed, using whichever host is available (`pwsh`, Windows PowerShell, or `python`).
 2. Copies `skills/d365fo-cli/SKILL.md` and all `references/*.md` to `<XppRepo>/.github/skills/d365fo-cli/`.
-3. Prints a migration note if the legacy `copilot-instructions.md` / `instructions/` files still exist.
+3. Removes reference files in the target that no longer exist upstream, so retired topics don't linger.
+4. Prints a migration note if the legacy `copilot-instructions.md` / `instructions/` files still exist.
 
 **Skill layout installed into your X++ repo:**
 
@@ -174,8 +175,8 @@ The installer:
 .github/
 └── skills/
     └── d365fo-cli/
-        ├── SKILL.md              # core rule canon + tool mapping (always loaded)
-        └── references/            # 19 lazily-loaded X++ topic files
+        ├── SKILL.md              # core rule canon + tool mapping (loaded when the skill activates)
+        └── references/            # 19 X++ topic files, loaded per topic on demand
             ├── coc-extension-authoring.md
             ├── xpp-database-queries.md
             ├── x++-class-authoring.md

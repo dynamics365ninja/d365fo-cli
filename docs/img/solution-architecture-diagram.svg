@@ -134,7 +134,7 @@
   <rect x="340" y="544" width="560" height="68" rx="8" fill="#ffffff" stroke="#6366f1"/>
   <text x="352" y="566" font-size="12.5" font-weight="600" fill="#4338ca">X++ Knowledge Skills — lazy-loaded, ~30–60 tok each</text>
   <text x="352" y="586" font-size="11" fill="#475569">19 instruction files: CoC · SysDa · FormRun · select grammar · BP canon · labels · security · …</text>
-  <text x="352" y="602" font-size="11" fill="#475569">.github/instructions/ (Copilot) · skills/anthropic/ (Claude) · AGENTS.md (Codex/Gemini)</text>
+  <text x="352" y="602" font-size="11" fill="#475569">.github/skills/d365fo-cli/ (Copilot) · skills/anthropic/ (Claude) · AGENTS.md (Codex/Gemini)</text>
 
   <!-- Data access -->
   <rect x="340" y="624" width="560" height="68" rx="8" fill="#ffffff" stroke="#6366f1"/>

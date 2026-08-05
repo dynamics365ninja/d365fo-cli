@@ -10,7 +10,12 @@
     Visual Studio 2022 / 2026 (and VS Code) automatically picks up the skill.
 
     If the skill folder's references/ is empty (first run or clean clone), this
-    script re-runs emit-skills.ps1 to regenerate them before copying.
+    script regenerates it first, using whichever host is available: pwsh,
+    Windows PowerShell, or python.
+
+    Reference files in the target that no longer exist upstream are removed, so
+    renamed or retired topics do not linger and keep feeding Copilot guidance
+    this version of the skill has dropped.
 
     Re-run after pulling updates to d365fo-cli to keep the skill current.
 
@@ -120,11 +125,23 @@ if (Test-Path $skillMd) {
 }
 
 # ── Copy references ────────────────────────────────────────────────────────────
+$dstReferences = Join-Path $dstSkill 'references'
 $copied = 0
 foreach ($f in $referenceFiles) {
-    Copy-Item -Path $f.FullName -Destination (Join-Path $dstSkill 'references') -Force
+    Copy-Item -Path $f.FullName -Destination $dstReferences -Force
     Write-Host "[OK] .github\skills\d365fo-cli\references\$($f.Name)"
     $copied++
+}
+
+# ── Prune references that no longer exist upstream ────────────────────────────
+# Renamed or retired topics would otherwise linger in the target repo forever
+# and keep feeding Copilot guidance this version of the skill has dropped.
+$expected = @($referenceFiles | ForEach-Object { $_.Name })
+$stale = @(Get-ChildItem -Path $dstReferences -Filter '*.md' -ErrorAction SilentlyContinue |
+           Where-Object { $expected -notcontains $_.Name })
+foreach ($f in $stale) {
+    Remove-Item -Path $f.FullName -Force
+    Write-Host "[--] removed stale references\$($f.Name)"
 }
 
 # ── Migration notice ──────────────────────────────────────────────────────────
@@ -142,7 +159,9 @@ if ((Test-Path $legacyCanon) -or (Test-Path $legacyInstrDir)) {
 
 # ── Summary ───────────────────────────────────────────────────────────────────
 Write-Host ""
-Write-Host "Deployed SKILL.md + $copied reference(s) to:"
+$summary = "Deployed SKILL.md + $copied reference(s)"
+if ($stale.Count -gt 0) { $summary += ", removed $($stale.Count) stale reference(s)" }
+Write-Host "$summary to:"
 Write-Host "  $dstSkill"
 Write-Host ""
 Write-Host "Next steps:"
