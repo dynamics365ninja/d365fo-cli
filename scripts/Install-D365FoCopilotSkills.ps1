@@ -29,7 +29,7 @@
 
 .PARAMETER XppRepo
     Absolute path to the root of your X++ project repository (the folder that
-    contains — or will contain — the .github/ directory).
+    contains - or will contain - the .github/ directory).
 
 .EXAMPLE
     .\Install-D365FoCopilotSkills.ps1 `
@@ -37,7 +37,7 @@
         -XppRepo  "K:\D365FO\MyProject"
 
 .EXAMPLE
-    # Run from inside the d365fo-cli scripts folder — CliRepo is auto-detected
+    # Run from inside the d365fo-cli scripts folder - CliRepo is auto-detected
     .\Install-D365FoCopilotSkills.ps1 -XppRepo "K:\D365FO\MyProject"
 
 .NOTES
@@ -56,7 +56,7 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
-# ── Resolve paths ──────────────────────────────────────────────────────────────
+# -- Resolve paths --------------------------------------------------------------
 $skillSrc    = Join-Path $CliRepo 'skills\d365fo-cli'
 $referenceSrc = Join-Path $skillSrc 'references'
 $dstSkill    = Join-Path $XppRepo '.github\skills\d365fo-cli'
@@ -65,7 +65,7 @@ Write-Host "d365fo-cli repo : $CliRepo"
 Write-Host "X++ project repo: $XppRepo"
 Write-Host ""
 
-# ── Validate source ────────────────────────────────────────────────────────────
+# -- Validate source ------------------------------------------------------------
 if (-not (Test-Path $CliRepo)) {
     Write-Error "CliRepo not found: $CliRepo"
 }
@@ -73,7 +73,7 @@ if (-not (Test-Path $XppRepo)) {
     Write-Error "XppRepo not found: $XppRepo"
 }
 
-# ── Regenerate references if the folder is empty (first run / clean clone) ─────
+# -- Regenerate references if the folder is empty (first run / clean clone) -----
 # Note: @(...) keeps .Count valid under Set-StrictMode when the folder is absent.
 $referenceFiles = @(Get-ChildItem -Path $referenceSrc -Filter '*.md' -ErrorAction SilentlyContinue)
 if ($referenceFiles.Count -eq 0) {
@@ -111,11 +111,11 @@ if ($referenceFiles.Count -eq 0) {
     }
 }
 
-# ── Create target directories ─────────────────────────────────────────────────
+# -- Create target directories -------------------------------------------------
 New-Item -ItemType Directory -Force -Path $dstSkill | Out-Null
 New-Item -ItemType Directory -Force -Path (Join-Path $dstSkill 'references') | Out-Null
 
-# ── Copy SKILL.md ─────────────────────────────────────────────────────────────
+# -- Copy SKILL.md -------------------------------------------------------------
 $skillMd = Join-Path $skillSrc 'SKILL.md'
 if (Test-Path $skillMd) {
     Copy-Item -Path $skillMd -Destination $dstSkill -Force
@@ -124,7 +124,7 @@ if (Test-Path $skillMd) {
     Write-Warning "SKILL.md not found at: $skillMd"
 }
 
-# ── Copy references ────────────────────────────────────────────────────────────
+# -- Copy references ------------------------------------------------------------
 $dstReferences = Join-Path $dstSkill 'references'
 $copied = 0
 foreach ($f in $referenceFiles) {
@@ -133,7 +133,7 @@ foreach ($f in $referenceFiles) {
     $copied++
 }
 
-# ── Prune references that no longer exist upstream ────────────────────────────
+# -- Prune references that no longer exist upstream ----------------------------
 # Renamed or retired topics would otherwise linger in the target repo forever
 # and keep feeding Copilot guidance this version of the skill has dropped.
 $expected = @($referenceFiles | ForEach-Object { $_.Name })
@@ -144,7 +144,7 @@ foreach ($f in $stale) {
     Write-Host "[--] removed stale references\$($f.Name)"
 }
 
-# ── Migration notice ──────────────────────────────────────────────────────────
+# -- Migration notice ----------------------------------------------------------
 $legacyCanon   = Join-Path $XppRepo '.github\copilot-instructions.md'
 $legacyInstrDir = Join-Path $XppRepo '.github\instructions'
 if ((Test-Path $legacyCanon) -or (Test-Path $legacyInstrDir)) {
@@ -152,12 +152,14 @@ if ((Test-Path $legacyCanon) -or (Test-Path $legacyInstrDir)) {
     Write-Host "!  Legacy files detected in your X++ repo:"
     if (Test-Path $legacyCanon)   { Write-Host "     .github\copilot-instructions.md" }
     if (Test-Path $legacyInstrDir) { Write-Host "     .github\instructions\" }
-    Write-Host "   These are superseded by the d365fo-cli skill and can be safely deleted:"
-    Write-Host "     Remove-Item -Recurse '$legacyCanon' -ErrorAction SilentlyContinue"
-    Write-Host "     Remove-Item -Recurse '$legacyInstrDir' -ErrorAction SilentlyContinue"
+    Write-Host "   The skill supersedes them and does not conflict with them. Delete them"
+    Write-Host "   unless you deliberately want the deterministic applyTo scoping of the"
+    Write-Host "   legacy instruction files (see docs/SETUP.md):"
+    if (Test-Path $legacyCanon)    { Write-Host "     Remove-Item '$legacyCanon'" }
+    if (Test-Path $legacyInstrDir) { Write-Host "     Remove-Item -Recurse '$legacyInstrDir'" }
 }
 
-# ── Summary ───────────────────────────────────────────────────────────────────
+# -- Summary -------------------------------------------------------------------
 Write-Host ""
 $summary = "Deployed SKILL.md + $copied reference(s)"
 if ($stale.Count -gt 0) { $summary += ", removed $($stale.Count) stale reference(s)" }
