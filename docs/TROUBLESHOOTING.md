@@ -4,6 +4,26 @@ Common failure modes and their fixes. For installation details see [SETUP.md](SE
 
 ---
 
+## Installer (`install.ps1` / `install.sh`)
+
+### `d365fo` not recognized after the installer finishes
+
+The installer adds its publish directory to the **User** `PATH` via the registry / shell profile, but the *current* shell process doesn't reread that until you open a new one. Open a new PowerShell/terminal window, or `Refresh-Path`-equivalent: `$env:Path = [Environment]::GetEnvironmentVariable('Path','Machine') + ';' + [Environment]::GetEnvironmentVariable('Path','User')` (bash: `source ~/.bashrc` / `~/.zshrc` / `~/.profile`, whichever the script appended to).
+
+### `.NET SDK still not on PATH` / winget unavailable
+
+D365FO VMs are Windows Server, where `winget` is often missing. The installer falls back to the official `dotnet-install.ps1`/`.sh` script (no admin rights needed, installs under `%LOCALAPPDATA%\Microsoft\dotnet` / `~/.dotnet`). If it still isn't found afterward, open a new shell first (see above) before assuming the install failed.
+
+### Picked up the wrong existing checkout
+
+The installer probes `$env:D365FO_CLI_DIR` / `$D365FO_CLI_DIR`, then `K:\d365fo-cli` (Windows) or `~/d365fo-cli`, and updates in place (`git pull --ff-only`) whichever it finds first. If you have a checkout elsewhere, set that env var before running the installer so it targets the right directory instead of cloning a second copy.
+
+### `git pull --ff-only` failed
+
+Local commits or a detached `HEAD` in the install directory diverge from `origin/main`. The installer won't merge or discard anything for you — resolve it yourself (`git status` in that directory), then re-run the installer.
+
+---
+
 ## Package path patterns
 
 The `D365FO_PACKAGES_PATH` environment variable (or `--packages <PATH>`) must point to the root of `PackagesLocalDirectory`. Common locations:
@@ -147,20 +167,23 @@ Common message: `Assembly not found: Microsoft.Dynamics.Ax.Xpp.Support`. Fix: en
 
 Label files follow the pattern `<File>.<lang-tag>.label.txt` (e.g. `ApplicationCommon.en-US.label.txt`, `ApplicationCommon.cs-CZ.label.txt`). Language codes use IETF BCP 47 format (`en-US`, `cs-CZ`, `de-DE`, not `en`, `cs`, `de`).
 
-### `--languages` flag
+### Limiting which languages get indexed
 
-When running `index extract`, the extractor indexes all `.label.txt` files it finds. To limit extraction to specific languages (faster, smaller index):
+There is no `--languages` flag on `index extract` — the language list comes from `D365FO_LABEL_LANGUAGES` (default `en-us`), read the same way as every other setting: env var → `settings.json` → default. Extraction indexes only the languages named there (faster, smaller index than indexing every `.label.txt` file found):
 
 ```sh
-d365fo index extract --languages en-US,cs-CZ
+d365fo init --label-languages en-us,cs-CZ --persist-profile   # writes D365FO_LABEL_LANGUAGES + reruns nothing
+d365fo index extract                                          # picks it up; extract always re-populates, no --force
 ```
+
+Or set it directly for one session: `$env:D365FO_LABEL_LANGUAGES = "en-us,cs-CZ"` before running `index extract`.
 
 ### Label not found after extraction
 
 If `d365fo labels resolve @SYS12345 --lang cs-CZ` returns `LABEL_NOT_FOUND`:
 
 1. Check the language code is correct: `d365fo index status --output json` lists indexed languages under `data.languages`.
-2. Re-run extraction with the language included: `d365fo index extract --languages cs-CZ --force`.
+2. Add it to `D365FO_LABEL_LANGUAGES` (see above) and re-run `d365fo index extract` — extraction is idempotent and always reprocesses every model, so no `--force` is needed (that flag exists only on `index refresh`).
 3. Verify the label file exists on disk: `Get-ChildItem $env:D365FO_PACKAGES_PATH -Recurse -Filter "*.cs-CZ.label.txt"`.
 
 ---
@@ -178,16 +201,16 @@ The migration is applied automatically on first connection and is always additiv
 - New virtual tables (e.g. the `MethodSourceFts` method-body index) are created empty.
 - Lint flag columns (`HasInsertInLoop`, `HasNestedSelect`, etc.) default to `0` in existing rows.
 
-After migration, newly added columns are empty until you re-extract:
+After migration, newly added columns are empty until you re-extract — `index extract` has no `--force` flag (that's `index refresh` only), but it doesn't need one: every run reprocesses every model and replaces its rows:
 
 ```sh
-d365fo index extract --force    # re-populate all models with new columns
+d365fo index extract    # re-populate all models with new columns
 ```
 
-The opt-in method-body index stays empty until you re-extract *with the flag* — a plain `--force` does not populate it:
+The opt-in method-body index stays empty until you re-extract *with the flag*:
 
 ```sh
-d365fo index extract --force --index-source   # backfill MethodSourceFts too
+d365fo index extract --index-source   # backfill MethodSourceFts too
 ```
 
 ### When to use `index build` vs `index extract`
@@ -288,3 +311,12 @@ d365fo search batch CustTable SalesTable CustAccount --output json
 ```
 
 `--limit N` (default 25) caps result set size on every search command.
+
+---
+
+## See also
+
+- [SETUP.md](SETUP.md) — install, configure, connect an AI agent.
+- [EXAMPLES.md](EXAMPLES.md) — one worked example per command.
+- [ARCHITECTURE.md](ARCHITECTURE.md) — index schema, lint rules, the daemon.
+- [CONFIGURATION.md](CONFIGURATION.md) — every env var and the JSON config file.

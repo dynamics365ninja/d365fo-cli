@@ -452,3 +452,11 @@ The same 19 topics are also emitted as `skills/copilot/*.instructions.md` (legac
 | `src/D365FO.Mcp/ToolCatalog.cs` | MCP tool descriptors |
 | `src/D365FO.Mcp/ToolHandlers.cs` | MCP handler methods |
 | `skills/_source/` | Skill source files (emitted to `skills/d365fo-cli/references/`, `skills/copilot/`, `skills/anthropic/`) |
+
+---
+
+## See also
+
+- [SETUP.md](SETUP.md) — install, configure, connect an AI agent.
+- [EXAMPLES.md](EXAMPLES.md) — one worked example per command.
+- [ARCHITECTURE.md](ARCHITECTURE.md) — internals behind every feature above.

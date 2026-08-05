@@ -1,9 +1,31 @@
 # Setup
 
-Five steps from a fresh clone to a working index that any AI agent can query.
+Five steps from a fresh clone to a working index that any AI agent can query — or one line that does steps 1–3 for you.
 
-> **TL;DR** — install .NET 10 · build the CLI · `d365fo init --persist-profile` · `d365fo index extract` · point your AI agent at it. Done.
+> **TL;DR** — `irm .../install.ps1 | iex` (installs .NET, builds, runs `d365fo init`) · `d365fo index extract` · point your AI agent at it. Done.
 > Day-to-day commands: [EXAMPLES.md](EXAMPLES.md) · env vars: [CONFIGURATION.md](CONFIGURATION.md) · architecture: [ARCHITECTURE.md](ARCHITECTURE.md).
+
+## One-line install
+
+```powershell
+irm https://raw.githubusercontent.com/dynamics365ninja/d365fo-cli/main/install.ps1 | iex
+```
+
+```sh
+# macOS / Linux
+curl -fsSL https://raw.githubusercontent.com/dynamics365ninja/d365fo-cli/main/install.sh | bash
+```
+
+Checks for the .NET SDK (installs it if missing, no elevation needed), clones or updates the repo, publishes a self-contained `d365fo` binary onto `PATH`, and hands off to the `d365fo init` wizard, then `d365fo doctor`. Safe to re-run. Env vars instead of flags, since the script is piped through `iex`/`bash`:
+
+| Variable | Effect |
+|---|---|
+| `D365FO_CLI_DIR` | Where to clone / look for an existing checkout (default `K:\d365fo-cli` or `~/d365fo-cli`) |
+| `D365FO_CLI_YES=1` | Non-interactive: pass `--no-wizard` to `d365fo init` instead of prompting |
+| `D365FO_CLI_NO_WIZARD=1` | Install only, skip `d365fo init` entirely |
+| `D365FO_CLI_RUN_EXTRACT=1` | Also run `index build` + `index extract` during install (can take minutes for `ApplicationSuite`) |
+
+What's left after either installer: **Step 4** below to populate the index (unless `D365FO_CLI_RUN_EXTRACT` was set), then **Step 5** to connect your AI agent. The steps below are what the installer automates — read them if you want to run each one yourself, understand what happened, or install on a machine you don't want to pipe a remote script into.
 
 ---
 
@@ -81,11 +103,19 @@ Supported RIDs: `win-x64`, `linux-x64`, `osx-x64`, `osx-arm64`. Output lands in 
 
 ## Step 3 — Configure (one command)
 
+Run it bare in a terminal and it's a wizard — confirms the detected packages path (or asks for one), an optional UDE extra root, label languages, and whether to build the index now, then writes everything:
+
+```powershell
+d365fo init
+```
+
+Or skip the prompts with explicit flags (what the wizard itself ends up writing) — this is also what runs unattended in CI/scripts, since piped/non-TTY output never shows prompts regardless of flags:
+
 ```powershell
 d365fo init --packages K:\AosService\PackagesLocalDirectory --persist-profile
 ```
 
-`init` writes both the JSON config (`%LOCALAPPDATA%\d365fo-cli\settings.json`) **and** every `$PROFILE` it finds (Windows PowerShell 5.1, PowerShell 7, VS Developer PowerShell). Subsequent shells inherit the settings automatically; you never have to remember which `$PROFILE` you edited.
+Either way, `init` writes both the JSON config (`%LOCALAPPDATA%\d365fo-cli\settings.json`) **and** every `$PROFILE` it finds (Windows PowerShell 5.1, PowerShell 7, VS Developer PowerShell). Subsequent shells inherit the settings automatically; you never have to remember which `$PROFILE` you edited. Add `--no-wizard` to force the flag-driven path even in a terminal.
 
 **UDE / dual packages roots:**
 
@@ -226,57 +256,44 @@ A `d365fo search` call returning results from your codebase = you are connected.
 
 ---
 
-## Quickstart scripts
-
-Copy-paste to go from a fresh clone to a working index in one shot.
-
-### PowerShell (Windows D365FO VM)
-
-```powershell
-# Edit the first three lines, then run the rest as-is.
-$Repo  = "C:\source\d365fo-cli"
-$Pkg   = "K:\AosService\PackagesLocalDirectory"
-$Langs = "en-us"          # add languages you actually use, e.g. "en-us,cs,de"
-
-# 1. Build
-Push-Location $Repo
-dotnet build d365fo-cli.slnx -c Release
-Pop-Location
-
-# 2. Alias + env + JSON config in one shot
-Add-Content -Path $PROFILE -Value "function d365fo { dotnet run --project $Repo\src\D365FO.Cli -- @args }"
-Add-Content -Path $PROFILE -Value "`$env:D365FO_LABEL_LANGUAGES = '$Langs'"
-. $PROFILE
-d365fo init --packages $Pkg --persist-profile
-
-# 3. Populate the index
-d365fo index build
-d365fo index extract
-d365fo doctor
-```
-
-### bash / zsh (macOS / Linux)
+## Step 6 — Scaffold your first object
 
 ```sh
-REPO=$HOME/source/d365fo-cli
-PKG=/mnt/d365fo/PackagesLocalDirectory
-LANGS="en-us"
+# New table
+d365fo generate table FmVehicle \
+  --label "@Fleet:Vehicle" \
+  --field VIN:VinEdt:mandatory \
+  --field Make:Name \
+  --field Year:YearEdt \
+  --out src/MyModel/AxTable/FmVehicle.xml
 
-cd "$REPO" && dotnet build d365fo-cli.slnx -c Release
+# Chain-of-Command extension
+d365fo generate coc SalesTable --method insert --out src/MyModel/AxClass/SalesTable_MyExt.xml
 
-{
-  echo ""
-  echo "# d365fo-cli"
-  echo "alias d365fo='dotnet run --project $REPO/src/D365FO.Cli --'"
-  echo "export D365FO_LABEL_LANGUAGES=\"$LANGS\""
-} >> "$HOME/.zshrc"
-source "$HOME/.zshrc"
+# Form — consult the pattern spec, scaffold, and the write is pattern-gated
+d365fo form-pattern spec SimpleList --output json
+d365fo generate form FmVehicles \
+  --pattern SimpleList \
+  --table FmVehicle \
+  --field VIN --field Make --field Year \
+  --out src/MyModel/AxForm/FmVehicles.xml
 
-d365fo init --packages "$PKG" --persist-profile
-d365fo index build
-d365fo index extract
-d365fo doctor
+# Form datasource / control override methods (mutates the existing AxForm)
+d365fo generate datasource-method FmVehicles --datasource FmVehicle --list      # show overridable methods
+d365fo generate datasource-method FmVehicles --datasource FmVehicle --method active
+d365fo generate control-method    FmVehicles --control VIN --method modified
+
+# Replace an existing method's body on a live class/table/edt/form (Windows VM, D365FO_BRIDGE_ENABLED=1)
+d365fo modify method class CustBalance calc --body "return 2;"
 ```
+
+One example per `generate` sub-command (25 more object types, security, reports, workflows, …): **[EXAMPLES.md § Scaffold](EXAMPLES.md#scaffold)**.
+
+---
+
+## Quickstart scripts
+
+The [one-line install](#one-line-install) at the top of this page **is** the quickstart script — `install.ps1` / `install.sh` in the repo root do exactly steps 1–3 (build, publish onto `PATH`, `d365fo init`) and then run `doctor`. Set `D365FO_CLI_RUN_EXTRACT=1` first if you also want step 4 done for you. Reading the steps above is only needed if you want to run them by hand instead.
 
 ---
 
