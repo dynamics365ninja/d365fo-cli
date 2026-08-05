@@ -1,0 +1,73 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<AxView xmlns:i="http://www.w3.org/2001/XMLSchema-instance">
+  <Name>ConFmVehicleAgeView</Name>
+  <SourceCode>
+    <Declaration><![CDATA[
+public class ConFmVehicleAgeView extends common
+{
+}
+]]></Declaration>
+    <Methods>
+      <Method>
+        <Name>computeServiceCount</Name>
+        <Source>/// &lt;summary&gt;
+/// Computed column backing the view field that names this method.
+/// &lt;/summary&gt;
+/// &lt;returns&gt;The SQL expression evaluated when the view is synchronised.&lt;/returns&gt;
+private static server str computeServiceCount()
+{
+    // TODO: replace the placeholder literal with the real expression, e.g.
+    // SysComputedColumn::returnField(tableStr(MyView), identifierStr(MyDataSource), fieldStr(MyTable, MyField))
+    return SysComputedColumn::returnLiteral(0);
+}
+</Source>
+      </Method>
+    </Methods>
+  </SourceCode>
+  <Query>ConFmVehicleLineQuery</Query>
+  <FieldGroups>
+    <AxTableFieldGroup>
+      <Name>AutoReport</Name>
+      <Fields />
+    </AxTableFieldGroup>
+    <AxTableFieldGroup>
+      <Name>AutoLookup</Name>
+      <Fields />
+    </AxTableFieldGroup>
+    <AxTableFieldGroup>
+      <Name>AutoIdentification</Name>
+      <AutoPopulate>Yes</AutoPopulate>
+      <Fields />
+    </AxTableFieldGroup>
+    <AxTableFieldGroup>
+      <Name>AutoSummary</Name>
+      <Fields />
+    </AxTableFieldGroup>
+    <AxTableFieldGroup>
+      <Name>AutoBrowse</Name>
+      <Fields />
+    </AxTableFieldGroup>
+  </FieldGroups>
+  <Fields>
+    <AxViewField i:type="AxViewFieldBound">
+      <Name>VIN</Name>
+      <DataField>VIN</DataField>
+      <DataSource>FmVehicle</DataSource>
+    </AxViewField>
+    <AxViewField i:type="AxViewFieldComputedInt">
+      <Name>ServiceCount</Name>
+      <ViewMethod>computeServiceCount</ViewMethod>
+    </AxViewField>
+  </Fields>
+  <Indexes />
+  <Mappings />
+  <Relations />
+  <StateMachines />
+  <ViewMetadata>
+    <Name>Metadata</Name>
+    <SourceCode>
+      <Methods />
+    </SourceCode>
+    <DataSources />
+  </ViewMetadata>
+</AxView>

@@ -1,0 +1,32 @@
+{
+  "id": "L1-menu-item-output",
+  "title": "Output menu item pointing at an SSRS report",
+  "tier": 1,
+  "instruction": "Create an Output menu item named ConFmVehicleReportMenuItem that runs the report ConFmVehicleParamReport, labelled 'Fleet vehicle report'. Use only the d365fo CLI (search/get/generate/validate) — do not hand-write XML.",
+  "canonical_args": [
+    "generate",
+    "menu-item",
+    "ConFmVehicleReportMenuItem",
+    "--object",
+    "ConFmVehicleParamReport",
+    "--object-type",
+    "Report",
+    "--kind",
+    "Output",
+    "--label",
+    "Fleet vehicle report"
+  ],
+  "target_artifact_types": [
+    "AxMenuItemOutput"
+  ],
+  "golden_path": "L1-menu-item-output",
+  "tags": [
+    "menu-item",
+    "output",
+    "report",
+    "metadata"
+  ],
+  "ignore": [],
+  "requires_fixture_index": false,
+  "golden_pending": false
+}

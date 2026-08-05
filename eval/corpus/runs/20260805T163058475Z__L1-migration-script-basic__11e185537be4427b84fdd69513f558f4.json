@@ -1,0 +1,20 @@
+{
+  "runId": "20260805T163058475Z__L1-migration-script-basic__11e185537be4427b84fdd69513f558f4",
+  "caseId": "L1-migration-script-basic",
+  "tier": 1,
+  "timestampUtc": "2026-08-05T16:30:58.4774758+00:00",
+  "source": "replay",
+  "score": {
+    "xppClean": true,
+    "xppErrors": 0,
+    "referencesClean": true,
+    "referenceErrors": 0,
+    "goldenMatch": true,
+    "goldenDiff": {
+      "missing": [],
+      "extra": [],
+      "changed": [],
+      "isMatch": true
+    }
+  }
+}

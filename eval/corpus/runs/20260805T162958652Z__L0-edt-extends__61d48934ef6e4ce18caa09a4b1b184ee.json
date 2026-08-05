@@ -1,0 +1,20 @@
+{
+  "runId": "20260805T162958652Z__L0-edt-extends__61d48934ef6e4ce18caa09a4b1b184ee",
+  "caseId": "L0-edt-extends",
+  "tier": 0,
+  "timestampUtc": "2026-08-05T16:29:58.6537281+00:00",
+  "source": "replay",
+  "score": {
+    "xppClean": true,
+    "xppErrors": 0,
+    "referencesClean": true,
+    "referenceErrors": 0,
+    "goldenMatch": true,
+    "goldenDiff": {
+      "missing": [],
+      "extra": [],
+      "changed": [],
+      "isMatch": true
+    }
+  }
+}

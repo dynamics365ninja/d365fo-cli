@@ -337,6 +337,20 @@ public sealed class GenerateTableCommand : Command<GenerateTableCommand.Settings
         var tableTypeStr = storage == TableStorage.RegularTable ? null : storage.ToString();
         var usedDefaults = fields2.Count == 0 && pattern != TablePattern.None;
 
+        // Without --pattern the scaffold deliberately emits no <TableGroup>, so the
+        // AOT default (Miscellaneous) applies and nothing is flipped by accident.
+        // The consequence is not obvious though: this tool's own `validate xpp`
+        // raises XML003 on that very table. Say so here rather than letting the
+        // caller discover it one command later.
+        var warnings = new List<string>();
+        if (pattern == TablePattern.None)
+        {
+            warnings.Add(
+                "No --pattern given, so no <TableGroup> is emitted and the AOT default (Miscellaneous) applies. " +
+                "`d365fo validate xpp` reports XML003 for that. Pass --pattern (main|transaction|parameter|group|" +
+                "worksheet-header|worksheet-line|reference|framework|miscellaneous) to stamp the table's business role.");
+        }
+
         // Prefer the live metadata provider for --install-to (canonical output,
         // consistent with VS / d365fo-mcp-server); fall back to the scaffold.
         return GenerateInstaller.Emit(
@@ -358,6 +372,7 @@ public sealed class GenerateTableCommand : Command<GenerateTableCommand.Settings
                 usedPatternDefaults = usedDefaults,
                 model = settings.InstallTo,
             },
+            warnings.Count > 0 ? warnings : null,
             verify: settings.Verify);
     }
 

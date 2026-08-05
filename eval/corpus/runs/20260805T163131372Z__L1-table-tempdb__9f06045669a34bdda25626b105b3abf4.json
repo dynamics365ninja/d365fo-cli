@@ -1,0 +1,20 @@
+{
+  "runId": "20260805T163131372Z__L1-table-tempdb__9f06045669a34bdda25626b105b3abf4",
+  "caseId": "L1-table-tempdb",
+  "tier": 1,
+  "timestampUtc": "2026-08-05T16:31:31.3740131+00:00",
+  "source": "replay",
+  "score": {
+    "xppClean": true,
+    "xppErrors": 0,
+    "referencesClean": true,
+    "referenceErrors": 0,
+    "goldenMatch": true,
+    "goldenDiff": {
+      "missing": [],
+      "extra": [],
+      "changed": [],
+      "isMatch": true
+    }
+  }
+}

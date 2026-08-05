@@ -1,0 +1,51 @@
+<AxTable>
+  <Name>FmVehicleLine</Name>
+  <Label>@Fleet:VehicleLine</Label>
+  <Fields>
+    <AxTableField xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:type="AxTableFieldString">
+      <Name>VIN</Name>
+      <ExtendedDataType>VinEdt</ExtendedDataType>
+      <Mandatory>Yes</Mandatory>
+      <StringSize>17</StringSize>
+    </AxTableField>
+    <AxTableField xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:type="AxTableFieldInt">
+      <Name>LineNum</Name>
+    </AxTableField>
+    <AxTableField xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:type="AxTableFieldString">
+      <Name>ServiceNote</Name>
+      <ExtendedDataType>Notes</ExtendedDataType>
+    </AxTableField>
+  </Fields>
+  <FullTextIndexes />
+  <Indexes>
+    <AxTableIndex>
+      <Name>LineIdx</Name>
+      <AlternateKey>Yes</AlternateKey>
+      <Fields>
+        <AxTableIndexField>
+          <DataField>VIN</DataField>
+        </AxTableIndexField>
+        <AxTableIndexField>
+          <DataField>LineNum</DataField>
+        </AxTableIndexField>
+      </Fields>
+    </AxTableIndex>
+  </Indexes>
+  <Relations>
+    <AxTableRelation>
+      <Name>FmVehicle</Name>
+      <Cardinality>ZeroMore</Cardinality>
+      <RelatedTable>FmVehicle</RelatedTable>
+      <RelatedTableCardinality>ExactlyOne</RelatedTableCardinality>
+      <RelationshipType>Association</RelationshipType>
+      <Constraints>
+        <AxTableRelationConstraint xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:type="AxTableRelationConstraintField">
+          <Name>VIN</Name>
+          <Field>VIN</Field>
+          <RelatedField>VIN</RelatedField>
+        </AxTableRelationConstraint>
+      </Constraints>
+    </AxTableRelation>
+  </Relations>
+  <StateMachines />
+</AxTable>

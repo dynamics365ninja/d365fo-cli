@@ -1,0 +1,20 @@
+{
+  "runId": "20260805T163041951Z__L1-form-workspace__30de7adc649d4a35bea5d47fffaac924",
+  "caseId": "L1-form-workspace",
+  "tier": 1,
+  "timestampUtc": "2026-08-05T16:30:41.9530022+00:00",
+  "source": "replay",
+  "score": {
+    "xppClean": true,
+    "xppErrors": 0,
+    "referencesClean": true,
+    "referenceErrors": 0,
+    "goldenMatch": true,
+    "goldenDiff": {
+      "missing": [],
+      "extra": [],
+      "changed": [],
+      "isMatch": true
+    }
+  }
+}

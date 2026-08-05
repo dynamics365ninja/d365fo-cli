@@ -1,0 +1,20 @@
+{
+  "runId": "20260805T163020529Z__L1-form-details-master__0cec44e4cf934900a8e19fb1e5e2e94f",
+  "caseId": "L1-form-details-master",
+  "tier": 1,
+  "timestampUtc": "2026-08-05T16:30:20.5314311+00:00",
+  "source": "replay",
+  "score": {
+    "xppClean": true,
+    "xppErrors": 0,
+    "referencesClean": true,
+    "referenceErrors": 0,
+    "goldenMatch": true,
+    "goldenDiff": {
+      "missing": [],
+      "extra": [],
+      "changed": [],
+      "isMatch": true
+    }
+  }
+}

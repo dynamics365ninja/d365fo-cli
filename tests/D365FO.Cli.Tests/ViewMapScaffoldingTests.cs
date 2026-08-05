@@ -68,6 +68,73 @@ public class ViewMapScaffoldingTests
         Assert.Null(field.Element("DataSource"));
     }
 
+    /// <summary>
+    /// A computed field's &lt;ViewMethod&gt; must resolve to a method on the view's
+    /// own class. Emitting the field with an empty &lt;Methods /&gt; produced XML that
+    /// looked complete and could never compile — every computed field now brings
+    /// its stub.
+    /// </summary>
+    [Fact]
+    public void View_computed_field_scaffolds_the_view_method_it_names()
+    {
+        var doc = ViewScaffolder.View("V", "Q", new[]
+        {
+            new ViewFieldSpec("Total", ViewMethod: "getTotalSQL", ComputedType: "Real"),
+        });
+
+        var method = doc.Root!.Element("SourceCode")!.Element("Methods")!.Elements("Method").Single();
+        Assert.Equal("getTotalSQL", method.Element("Name")!.Value);
+
+        var src = method.Element("Source")!.Value;
+        // Computed columns always return a SQL fragment (str), whatever the
+        // column's own type — only the placeholder literal follows the type.
+        Assert.Contains("private static server str getTotalSQL()", src);
+        Assert.Contains("SysComputedColumn::returnLiteral(0.0)", src);
+    }
+
+    [Theory]
+    [InlineData("String", "''")]
+    [InlineData("Int", "0")]
+    [InlineData("Int64", "0")]
+    [InlineData("Real", "0.0")]
+    [InlineData("Date", "dateNull()")]
+    [InlineData("UtcDateTime", "DateTimeUtil::minValue()")]
+    [InlineData("Enum", "0")]
+    public void View_computed_stub_literal_matches_the_column_type(string computedType, string literal)
+    {
+        var doc = ViewScaffolder.View("V", "Q", new[]
+        {
+            new ViewFieldSpec("C", ViewMethod: "computeC", ComputedType: computedType),
+        });
+        var src = doc.Root!.Element("SourceCode")!.Element("Methods")!
+            .Elements("Method").Single().Element("Source")!.Value;
+
+        Assert.Contains($"SysComputedColumn::returnLiteral({literal})", src);
+    }
+
+    [Fact]
+    public void View_with_only_bound_fields_scaffolds_no_methods()
+    {
+        var doc = ViewScaffolder.View("V", "Q", new[]
+        {
+            new ViewFieldSpec("AccountNum", DataSource: "CustTable", DataField: "AccountNum"),
+        });
+        Assert.Empty(doc.Root!.Element("SourceCode")!.Element("Methods")!.Elements());
+    }
+
+    [Fact]
+    public void View_computed_fields_sharing_a_view_method_scaffold_it_once()
+    {
+        var doc = ViewScaffolder.View("V", "Q", new[]
+        {
+            new ViewFieldSpec("A", ViewMethod: "shared", ComputedType: "Int"),
+            new ViewFieldSpec("B", ViewMethod: "shared", ComputedType: "Int"),
+        });
+        // Two <Method> elements with the same <Name> is a duplicate-member
+        // compile error, not a harmless repeat.
+        Assert.Single(doc.Root!.Element("SourceCode")!.Element("Methods")!.Elements("Method"));
+    }
+
     [Fact]
     public void View_computed_field_without_a_type_is_rejected()
     {

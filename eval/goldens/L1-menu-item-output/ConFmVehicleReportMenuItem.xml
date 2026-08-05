@@ -1,0 +1,10 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<AxMenuItemOutput>
+  <Name>ConFmVehicleReportMenuItem</Name>
+  <Label>Fleet vehicle report</Label>
+  <Image>
+    <ImageType>Symbol</ImageType>
+  </Image>
+  <Object>ConFmVehicleParamReport</Object>
+  <ObjectType>SSRSReport</ObjectType>
+</AxMenuItemOutput>

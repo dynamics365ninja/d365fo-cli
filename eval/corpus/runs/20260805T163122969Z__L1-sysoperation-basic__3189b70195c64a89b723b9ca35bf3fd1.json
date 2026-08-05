@@ -1,0 +1,20 @@
+{
+  "runId": "20260805T163122969Z__L1-sysoperation-basic__3189b70195c64a89b723b9ca35bf3fd1",
+  "caseId": "L1-sysoperation-basic",
+  "tier": 1,
+  "timestampUtc": "2026-08-05T16:31:22.9706335+00:00",
+  "source": "replay",
+  "score": {
+    "xppClean": true,
+    "xppErrors": 0,
+    "referencesClean": false,
+    "referenceErrors": 3,
+    "goldenMatch": true,
+    "goldenDiff": {
+      "missing": [],
+      "extra": [],
+      "changed": [],
+      "isMatch": true
+    }
+  }
+}

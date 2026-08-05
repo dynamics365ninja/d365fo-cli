@@ -1,0 +1,18 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<AxQuery>
+  <Name>ConFmVehicleLineQuery</Name>
+  <DataSources>
+    <AxQuerySimpleRootDataSource>
+      <Name>FmVehicle</Name>
+      <Table>FmVehicle</Table>
+      <DataSources>
+        <AxQuerySimpleEmbeddedDataSource>
+          <Name>FmVehicleLine</Name>
+          <Table>FmVehicleLine</Table>
+          <JoinMode>InnerJoin</JoinMode>
+          <UseRelations>Yes</UseRelations>
+        </AxQuerySimpleEmbeddedDataSource>
+      </DataSources>
+    </AxQuerySimpleRootDataSource>
+  </DataSources>
+</AxQuery>

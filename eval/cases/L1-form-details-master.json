@@ -1,0 +1,33 @@
+{
+  "id": "L1-form-details-master",
+  "title": "DetailsMaster form over an existing table",
+  "tier": 1,
+  "instruction": "Create a DetailsMaster form named ConFmVehicleDetails bound to the FmVehicle table, with VIN and Make on the Overview tab, captioned 'Fleet vehicle details'. Use `d365fo get table FmVehicle` first to confirm the field names before generating. Use only the d365fo CLI (search/get/generate/validate) — do not hand-write XML.",
+  "canonical_args": [
+    "generate",
+    "form",
+    "ConFmVehicleDetails",
+    "--pattern",
+    "DetailsMaster",
+    "--table",
+    "FmVehicle",
+    "--field",
+    "VIN",
+    "--field",
+    "Make",
+    "--caption",
+    "Fleet vehicle details"
+  ],
+  "target_artifact_types": [
+    "AxForm"
+  ],
+  "golden_path": "L1-form-details-master",
+  "tags": [
+    "form",
+    "detailsmaster",
+    "metadata"
+  ],
+  "ignore": [],
+  "requires_fixture_index": true,
+  "golden_pending": false
+}

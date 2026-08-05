@@ -1,0 +1,27 @@
+{
+  "id": "L1-query-join",
+  "title": "Query joining a child table onto its root data source",
+  "tier": 1,
+  "instruction": "Create an AOT query named ConFmVehicleLineQuery rooted on FmVehicle with FmVehicleLine inner-joined to it. Use `d365fo get table FmVehicleLine` first to confirm the relation exists. Use only the d365fo CLI (search/get/generate/validate) — do not hand-write XML.",
+  "canonical_args": [
+    "generate",
+    "query",
+    "ConFmVehicleLineQuery",
+    "--ds",
+    "FmVehicle",
+    "--join",
+    "FmVehicleLine:InnerJoin:FmVehicle"
+  ],
+  "target_artifact_types": [
+    "AxQuery"
+  ],
+  "golden_path": "L1-query-join",
+  "tags": [
+    "query",
+    "join",
+    "metadata"
+  ],
+  "ignore": [],
+  "requires_fixture_index": true,
+  "golden_pending": false
+}

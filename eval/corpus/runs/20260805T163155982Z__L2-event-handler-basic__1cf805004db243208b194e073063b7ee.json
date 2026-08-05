@@ -1,0 +1,20 @@
+{
+  "runId": "20260805T163155982Z__L2-event-handler-basic__1cf805004db243208b194e073063b7ee",
+  "caseId": "L2-event-handler-basic",
+  "tier": 2,
+  "timestampUtc": "2026-08-05T16:31:55.9842794+00:00",
+  "source": "replay",
+  "score": {
+    "xppClean": true,
+    "xppErrors": 0,
+    "referencesClean": true,
+    "referenceErrors": 0,
+    "goldenMatch": true,
+    "goldenDiff": {
+      "missing": [],
+      "extra": [],
+      "changed": [],
+      "isMatch": true
+    }
+  }
+}

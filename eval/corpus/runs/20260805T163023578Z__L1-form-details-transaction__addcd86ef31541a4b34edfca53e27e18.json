@@ -1,0 +1,20 @@
+{
+  "runId": "20260805T163023578Z__L1-form-details-transaction__addcd86ef31541a4b34edfca53e27e18",
+  "caseId": "L1-form-details-transaction",
+  "tier": 1,
+  "timestampUtc": "2026-08-05T16:30:23.5798997+00:00",
+  "source": "replay",
+  "score": {
+    "xppClean": true,
+    "xppErrors": 0,
+    "referencesClean": true,
+    "referenceErrors": 0,
+    "goldenMatch": true,
+    "goldenDiff": {
+      "missing": [],
+      "extra": [],
+      "changed": [],
+      "isMatch": true
+    }
+  }
+}

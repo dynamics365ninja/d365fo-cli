@@ -1,0 +1,33 @@
+{
+  "id": "L1-form-list-page",
+  "title": "ListPage form (read-only datasource) over an existing table",
+  "tier": 1,
+  "instruction": "Create a ListPage form named ConFmVehicleListPage bound to the FmVehicle table, showing VIN and Make, captioned 'Fleet vehicles'. Use `d365fo get table FmVehicle` first to confirm the field names before generating. Use only the d365fo CLI (search/get/generate/validate) — do not hand-write XML.",
+  "canonical_args": [
+    "generate",
+    "form",
+    "ConFmVehicleListPage",
+    "--pattern",
+    "ListPage",
+    "--table",
+    "FmVehicle",
+    "--field",
+    "VIN",
+    "--field",
+    "Make",
+    "--caption",
+    "Fleet vehicles"
+  ],
+  "target_artifact_types": [
+    "AxForm"
+  ],
+  "golden_path": "L1-form-list-page",
+  "tags": [
+    "form",
+    "listpage",
+    "metadata"
+  ],
+  "ignore": [],
+  "requires_fixture_index": true,
+  "golden_pending": false
+}

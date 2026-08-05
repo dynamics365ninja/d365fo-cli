@@ -1,0 +1,20 @@
+{
+  "runId": "20260805T163103785Z__L1-privilege-data-entity__1b3a7bc5d5164d80ab80f6a1563e9713",
+  "caseId": "L1-privilege-data-entity",
+  "tier": 1,
+  "timestampUtc": "2026-08-05T16:31:03.7873712+00:00",
+  "source": "replay",
+  "score": {
+    "xppClean": true,
+    "xppErrors": 0,
+    "referencesClean": true,
+    "referenceErrors": 0,
+    "goldenMatch": true,
+    "goldenDiff": {
+      "missing": [],
+      "extra": [],
+      "changed": [],
+      "isMatch": true
+    }
+  }
+}

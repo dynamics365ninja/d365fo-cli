@@ -1,0 +1,20 @@
+{
+  "runId": "20260805T163201389Z__L2-numberseq-basic__b8ee8d9345a4438786a47bb96aaf44ba",
+  "caseId": "L2-numberseq-basic",
+  "tier": 2,
+  "timestampUtc": "2026-08-05T16:32:01.3911816+00:00",
+  "source": "replay",
+  "score": {
+    "xppClean": true,
+    "xppErrors": 0,
+    "referencesClean": false,
+    "referenceErrors": 4,
+    "goldenMatch": true,
+    "goldenDiff": {
+      "missing": [],
+      "extra": [],
+      "changed": [],
+      "isMatch": true
+    }
+  }
+}

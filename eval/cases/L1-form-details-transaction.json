@@ -1,0 +1,34 @@
+{
+  "id": "L1-form-details-transaction",
+  "title": "DetailsTransaction form with a header and a lines datasource",
+  "tier": 1,
+  "instruction": "Create a DetailsTransaction (header/lines) form named ConFmVehicleServiceOrder with FmVehicle as the header table and FmVehicleLine as the lines table, showing VIN in the header, captioned 'Vehicle service order'. Use `d365fo get table FmVehicle` and `d365fo get table FmVehicleLine` first to confirm both tables exist. Use only the d365fo CLI (search/get/generate/validate) — do not hand-write XML.",
+  "canonical_args": [
+    "generate",
+    "form",
+    "ConFmVehicleServiceOrder",
+    "--pattern",
+    "DetailsTransaction",
+    "--table",
+    "FmVehicle",
+    "--lines-table",
+    "FmVehicleLine",
+    "--field",
+    "VIN",
+    "--caption",
+    "Vehicle service order"
+  ],
+  "target_artifact_types": [
+    "AxForm"
+  ],
+  "golden_path": "L1-form-details-transaction",
+  "tags": [
+    "form",
+    "detailstransaction",
+    "header-lines",
+    "metadata"
+  ],
+  "ignore": [],
+  "requires_fixture_index": true,
+  "golden_pending": false
+}

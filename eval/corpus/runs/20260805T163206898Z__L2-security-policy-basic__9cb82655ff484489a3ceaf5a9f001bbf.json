@@ -1,0 +1,20 @@
+{
+  "runId": "20260805T163206898Z__L2-security-policy-basic__9cb82655ff484489a3ceaf5a9f001bbf",
+  "caseId": "L2-security-policy-basic",
+  "tier": 2,
+  "timestampUtc": "2026-08-05T16:32:06.9003989+00:00",
+  "source": "replay",
+  "score": {
+    "xppClean": true,
+    "xppErrors": 0,
+    "referencesClean": true,
+    "referenceErrors": 0,
+    "goldenMatch": true,
+    "goldenDiff": {
+      "missing": [],
+      "extra": [],
+      "changed": [],
+      "isMatch": true
+    }
+  }
+}

@@ -1,0 +1,31 @@
+{
+  "id": "L1-menu-item-action",
+  "title": "Action menu item pointing at a class",
+  "tier": 1,
+  "instruction": "Create an Action menu item named ConFmVehicleServiceMenuItem that runs the FmVehicleService class, labelled 'Run vehicle service'. Use `d365fo get class FmVehicleService` first to confirm the class exists. Use only the d365fo CLI (search/get/generate/validate) — do not hand-write XML.",
+  "canonical_args": [
+    "generate",
+    "menu-item",
+    "ConFmVehicleServiceMenuItem",
+    "--object",
+    "FmVehicleService",
+    "--object-type",
+    "Class",
+    "--kind",
+    "Action",
+    "--label",
+    "Run vehicle service"
+  ],
+  "target_artifact_types": [
+    "AxMenuItemAction"
+  ],
+  "golden_path": "L1-menu-item-action",
+  "tags": [
+    "menu-item",
+    "action",
+    "metadata"
+  ],
+  "ignore": [],
+  "requires_fixture_index": true,
+  "golden_pending": false
+}

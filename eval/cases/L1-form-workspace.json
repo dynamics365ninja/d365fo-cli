@@ -1,0 +1,34 @@
+{
+  "id": "L1-form-workspace",
+  "title": "Workspace (panorama) form binding its fields into a list section",
+  "tier": 1,
+  "instruction": "Create a Workspace form named ConFmVehicleWorkspace over the FmVehicle table, listing VIN and Make, captioned 'Fleet management'. Use `d365fo get table FmVehicle` first to confirm the field names before generating. Use only the d365fo CLI (search/get/generate/validate) — do not hand-write XML.",
+  "canonical_args": [
+    "generate",
+    "form",
+    "ConFmVehicleWorkspace",
+    "--pattern",
+    "Workspace",
+    "--table",
+    "FmVehicle",
+    "--field",
+    "VIN",
+    "--field",
+    "Make",
+    "--caption",
+    "Fleet management"
+  ],
+  "target_artifact_types": [
+    "AxForm"
+  ],
+  "golden_path": "L1-form-workspace",
+  "tags": [
+    "form",
+    "workspace",
+    "metadata",
+    "regression"
+  ],
+  "ignore": [],
+  "requires_fixture_index": true,
+  "golden_pending": false
+}
