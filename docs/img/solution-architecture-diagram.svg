@@ -65,7 +65,7 @@
 
   <rect x="630" y="162" width="270" height="84" rx="8" fill="#ffffff" stroke="#7c3aed"/>
   <text x="642" y="184" font-size="12.5" font-weight="600" fill="#6d28d9">D365FO.Mcp</text>
-  <text x="642" y="204" font-size="11" fill="#475569">20 unified tools · MCP C# SDK · stdio</text>
+  <text x="642" y="204" font-size="11" fill="#475569">24 tools · MCP C# SDK · stdio · HTTP</text>
   <text x="642" y="222" font-size="11" fill="#475569">same core primitives as the CLI</text>
   <text x="642" y="238" font-size="11" fill="#475569">d365fo-mcp executable</text>
 
@@ -85,7 +85,7 @@
   <text x="804" y="309" text-anchor="middle" font-size="10.5" fill="#3730a3">batch · models · deps</text>
 
   <rect x="352" y="324" width="120" height="22" rx="11" fill="#eef2ff" stroke="#c7d2fe"/>
-  <text x="412" y="339" text-anchor="middle" font-size="10.5" fill="#3730a3">generate (24 types)</text>
+  <text x="412" y="339" text-anchor="middle" font-size="10.5" fill="#3730a3">generate (29 types)</text>
   <rect x="480" y="324" width="100" height="22" rx="11" fill="#eef2ff" stroke="#c7d2fe"/>
   <text x="530" y="339" text-anchor="middle" font-size="10.5" fill="#3730a3">label CRUD</text>
   <rect x="588" y="324" width="120" height="22" rx="11" fill="#eef2ff" stroke="#c7d2fe"/>
@@ -128,7 +128,7 @@
   <text x="828" y="450" text-anchor="middle" font-size="11" font-weight="600" fill="#9a3412">Form patterns</text>
   <text x="828" y="466" text-anchor="middle" font-size="9.5" fill="#7c2d12">validate form-pattern</text>
   <text x="828" y="480" text-anchor="middle" font-size="9.5" fill="#7c2d12">FP001–FP010 catalog</text>
-  <text x="828" y="494" text-anchor="middle" font-size="9.5" fill="#7c2d12">18 patterns · 19 sub-patterns</text>
+  <text x="828" y="494" text-anchor="middle" font-size="9.5" fill="#7c2d12">20 patterns · 16 sub-patterns</text>
 
   <!-- Skills layer -->
   <rect x="340" y="544" width="560" height="68" rx="8" fill="#ffffff" stroke="#6366f1"/>
@@ -188,7 +188,7 @@
   <text x="480" y="794" text-anchor="middle" font-size="13" font-weight="700" fill="#ffffff">C# Metadata Bridge</text>
   <text x="480" y="811" text-anchor="middle" font-size="10.5" fill="#ddd6fe">D365FO.Bridge.exe · .NET Framework 4.8</text>
   <text x="480" y="827" text-anchor="middle" font-size="10.5" fill="#ddd6fe">JSON-RPC over stdio · IMetadataProvider</text>
-  <text x="480" y="843" text-anchor="middle" font-size="10.5" fill="#ddd6fe">live reads · all generate writes · DYNAMICSXREFDB</text>
+  <text x="480" y="843" text-anchor="middle" font-size="10.5" fill="#ddd6fe">live reads · install-to writes · DYNAMICSXREFDB</text>
   <text x="480" y="860" text-anchor="middle" font-size="9.5" fill="#b9a8f5">Windows D365FO VM only — graceful index fallback elsewhere</text>
 
   <!-- D365FO VM -->
@@ -204,7 +204,7 @@
   <text x="260" y="700" text-anchor="middle" font-size="10.5" fill="#64748b">FTS5 search &lt; 10 ms</text>
 
   <path d="M620 692 L620 704 L480 704 L480 772" fill="none" stroke="#64748b" stroke-width="1.6" marker-end="url(#arrow)"/>
-  <text x="552" y="700" text-anchor="middle" font-size="10.5" fill="#64748b">live reads · all writes</text>
+  <text x="552" y="700" text-anchor="middle" font-size="10.5" fill="#64748b">live reads · install-to writes</text>
 
   <!-- Bridge -> D365FO VM -->
   <line x1="640" y1="819" x2="680" y2="819" stroke="#64748b" stroke-width="1.6" marker-end="url(#arrow)"/>

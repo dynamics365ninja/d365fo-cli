@@ -32,7 +32,7 @@ This CLI pre-indexes your entire D365FO installation (hundreds of thousands of s
 | Labels | Hardcoded strings | Right `@SYS`/`@MODULE` key found instantly |
 | Security chains | Hours of manual tracing | Role → Duty → Privilege → Entry Point in one call |
 | Generated code | Hallucinated fields and types | Every reference proven against the index, gated before write |
-| Agent context cost | 20–26 MCP tool schemas every turn | 1 shell tool + lazy-loaded Skills (~85 % fewer tokens) |
+| Agent context cost | 24–26 MCP tool schemas every turn | 1 shell tool + lazy-loaded Skills (~85 % fewer tokens) |
 
 ---
 
@@ -220,7 +220,7 @@ Reference the `SKILL.md` files from `skills/anthropic/` in your session prompt o
 
 ### MCP (Claude Desktop, Continue, VS Code MCP)
 
-The bundled `d365fo-mcp` adapter speaks JSON-RPC 2.0 over the same index. Its tool surface is **consolidated** into 22 discriminator-based tools (e.g. `search`, `get_object_info`, `get_method`, `labels`, `security_info`, `extension_info`, `object_patterns`, `generate_object`, `modify_method`, `analyze`, `models`) — see [docs/MIGRATION_FROM_MCP.md](docs/MIGRATION_FROM_MCP.md):
+The bundled `d365fo-mcp` adapter speaks JSON-RPC 2.0 over the same index. Its tool surface is **consolidated** into 24 discriminator-based tools (e.g. `search`, `get_object_info`, `get_method`, `labels`, `security_info`, `extension_info`, `object_patterns`, `generate_object`, `modify_method`, `analyze`, `models`) — see [docs/MIGRATION_FROM_MCP.md](docs/MIGRATION_FROM_MCP.md):
 
 ```json
 {
@@ -250,11 +250,11 @@ A `d365fo search` shell call returning results from your codebase = you're conne
 
 ## Why CLI instead of MCP?
 
-MCP servers inject every tool definition into the model's context on every single turn. Tool consolidation trimmed that surface — the upstream MCP server went from ~61 per-type tools (≈3,500 tok/turn) to 26 discriminator-based tools, and this repo's adapter to 20 — but it is still ~1,800 tokens per turn versus one shell tool.
+MCP servers inject every tool definition into the model's context on every single turn. Tool consolidation trimmed that surface — the upstream MCP server went from ~61 per-type tools (≈3,500 tok/turn) to 26 discriminator-based tools, and this repo's adapter to 24 — but it is still ~1,800 tokens per turn versus one shell tool.
 
 | | MCP server | CLI + Skills |
 |---|---|---|
-| Tool definitions per turn | 20–26 tools (~1,800 tokens) | 1 shell tool (~100 tokens) |
+| Tool definitions per turn | 24–26 tools (~1,800 tokens) | 1 shell tool (~100 tokens) |
 | Discovery round-trips | 2–3 per task | often 1 (`d365fo prepare change`) |
 | Scriptable (shell, CI/CD) | No | Yes |
 | Works in any AI harness | No — MCP hosts only | Yes — Copilot, Claude, Codex, Gemini, … |
@@ -277,7 +277,7 @@ See [docs/TOKEN_ECONOMICS.md](docs/TOKEN_ECONOMICS.md) for the full analysis and
 | **Form patterns** | `form-pattern analyze` (advisor), `form-pattern spec` (catalog), `form-pattern validate` (FP001–FP010) — mirrors the MCP `object_patterns` tool (`domain=form`) |
 | **Find** | `find related`, `find coc`, `find relations`, `find usages`, `find extensions`, `find event-handlers`, `find references`, `find form-patterns`, `find batch-jobs` (the extensibility ones mirror the MCP `extension_info` tool) |
 | **Read** | `read class`, `read table`, `read form` (= MCP `get_method`) |
-| **Generate** | `generate table\|class\|coc\|form\|entity\|extension\|event-handler\|privilege\|duty\|role\|report\|sysoperation\|number-sequence\|workflow\|menu-item\|edt\|enum\|query\|business-event\|custom-service\|migration-script\|runbase\|security-policy\|systest` |
+| **Generate** | `generate table\|class\|coc\|form\|datasource-method\|control-method\|simple-list\|entity\|extension\|event-handler\|privilege\|duty\|role\|report\|sysoperation\|number-sequence\|workflow\|menu-item\|edt\|enum\|query\|view\|map\|business-event\|custom-service\|migration-script\|runbase\|security-policy\|systest` |
 | **Labels** | `labels search\|resolve\|info\|create\|rename\|delete` — search/resolve plus in-place `*.label.txt` edits, multi-language via `--lang` (mirrors the MCP `labels` tool) |
 | **Journal / undo** | `undo [--steps N] [--dry-run]`, `journal list`, `delete` (kind/name, bridge or on-disk) — deterministic single-command rollback for every write path (mirrors the MCP `undo_last_modification` tool) |
 | **Analyze** | `analyze completeness`, `analyze integration`, `analyze impact`, `lint`, `suggest edt`, `suggest extension`, `report-integrations` |
