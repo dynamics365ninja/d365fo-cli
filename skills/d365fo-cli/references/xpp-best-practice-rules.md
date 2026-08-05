@@ -52,7 +52,7 @@ For *filter-only* joins use `exists join` / `notExists join`. For complex correl
 
 ### `BPCheckAlternateKeyAbsent` — every table needs an alternate key
 
-A unique index on the natural key, marked `AlternateKey = Yes`. The CLI's `d365fo generate table` template emits a `<Pkey>` index with `AlternateKey = Yes` — don't strip it.
+A unique index on the natural key, marked `AlternateKey = Yes`. The CLI's `d365fo generate table` template emits a `PrimaryIdx` index with `<AlternateKey>Yes</AlternateKey>` — don't strip it.
 
 ### `BPErrorUnknownLabel` — labels referenced must exist
 
@@ -96,7 +96,7 @@ d365fo generate table FmVehicle \
 
 ```sh
 # In-process heuristics — fast, runs anywhere, useful for CI:
-d365fo lint --output sarif > lint.sarif
+d365fo lint --format sarif > lint.sarif
 
 # Run specific method-flag categories (detected at index-extract time):
 d365fo lint --category today-usage          # BPUpgradeCodeToday: today() calls
@@ -107,7 +107,7 @@ d365fo lint --category doc-comment-missing  # BPXmlDocNoDocumentationComments
 d365fo bp check --output json
 ```
 
-Six categories are now available: `table-no-index`, `ext-named-not-attributed`, `string-without-edt`, `today-usage`, `do-insert-update`, `doc-comment-missing`. The method-flag categories are populated at extract time by scanning `<Source>` text — no full body is stored. Re-run `d365fo index refresh` after editing source before linting.
+Sixteen categories are now available: `table-no-index`, `ext-named-not-attributed`, `string-without-edt`, `today-usage`, `do-insert-update`, `doc-comment-missing`, `nested-select`, `insert-in-loop`, `tts-try-catch`, `empty-table-method`, `batch-no-cango`, `force-literals`, `public-instance-field`, `cache-lookup-mismatch`, `missing-delete-action`, `no-alternate-key`. The method-flag categories are populated at extract time by scanning `<Source>` text — no full body is stored. Re-run `d365fo index refresh` after editing source before linting.
 
 **Never** auto-run `bp check`. It blocks the user (slow, Windows-only). Say *"Changes scaffolded. Run `d365fo bp check` when you're ready."*
 

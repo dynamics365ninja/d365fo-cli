@@ -1,17 +1,21 @@
 #!/usr/bin/env pwsh
 <#
 .SYNOPSIS
-  Emit Copilot and Anthropic Agent-Skills variants from skills/_source/*.md.
+  Emit Copilot, Anthropic, and d365fo-cli skill variants from skills/_source/*.md.
 
 .DESCRIPTION
   Reads every Markdown file under skills/_source/ containing a YAML frontmatter
-  block and emits two parallel artifacts:
+  block and emits three parallel artifacts:
 
     skills/copilot/<id>.instructions.md   (GitHub Copilot format: applyTo glob)
     skills/anthropic/<id>/SKILL.md        (Anthropic format: YAML description)
+    skills/d365fo-cli/references/<id>.md  (Agent-skill resource: body only)
 
-  Both outputs share the exact same body. Only the frontmatter is adapted to
+  All outputs share the exact same body. Only the frontmatter is adapted to
   the target's semantics. The source file is the single source of truth.
+
+  Runs on Windows PowerShell 5.1 and PowerShell 7+. All files are written as
+  UTF-8 without BOM so the output is byte-identical to scripts/emit-skills.py.
 
 .PARAMETER Source
   Path to the source directory. Defaults to ./skills/_source.
@@ -21,9 +25,15 @@
 #>
 [CmdletBinding()]
 param(
-    [string]$Source  = (Join-Path (Join-Path $PSScriptRoot '..') (Join-Path 'skills' '_source')),
-    [string]$OutRoot = (Join-Path $PSScriptRoot (Join-Path '..' 'skills'))
+    [string]$Source,
+    [string]$OutRoot
 )
+
+# Windows PowerShell 5.1 evaluates param() defaults in the caller's scope, where
+# $PSScriptRoot is empty. Resolve the defaults in the script body instead.
+$repoRoot = Join-Path $PSScriptRoot '..'
+if (-not $Source)  { $Source  = Join-Path (Join-Path $repoRoot 'skills') '_source' }
+if (-not $OutRoot) { $OutRoot = Join-Path $repoRoot 'skills' }
 
 $ErrorActionPreference = 'Stop'
 $Utf8NoBom = [System.Text.UTF8Encoding]::new($false)
@@ -118,14 +128,14 @@ function Emit-CopilotSkill {
     $id = $Meta.id
     $path = Join-Path $OutDir "$id.md"
     New-Item -ItemType Directory -Force -Path (Split-Path $path) | Out-Null
-    Set-Content -Path $path -Value $Body -Encoding utf8 -NoNewline
+    [System.IO.File]::WriteAllText($path, $Body, $Utf8NoBom)
     Write-Host "  [d365fo-cli] $path"
 }
 
 Write-Host "Source: $Source"
 $copilotOut      = Join-Path $OutRoot 'copilot'
 $anthropicOut    = Join-Path $OutRoot 'anthropic'
-$copilotSkillOut = Join-Path $OutRoot 'd365fo-cli' 'references'
+$copilotSkillOut = Join-Path (Join-Path $OutRoot 'd365fo-cli') 'references'
 
 if (Test-Path $copilotOut)  { Remove-Item -Recurse -Force $copilotOut }
 if (Test-Path $anthropicOut) { Remove-Item -Recurse -Force $anthropicOut }
@@ -136,7 +146,10 @@ $files = Get-ChildItem -Path $Source -Filter '*.md' -File
 if ($files.Count -eq 0) { Write-Warning "No source skills found."; exit 0 }
 
 foreach ($f in $files) {
-    Write-Host "» $($f.Name)"
+    # ASCII only: these .ps1 files have no BOM, so Windows PowerShell 5.1 reads
+    # them as ANSI and would mangle non-ASCII output. (A BOM is not an option --
+    # it would break the #!/usr/bin/env pwsh shebang on Linux/macOS.)
+    Write-Host "-> $($f.Name)"
     $raw = [System.IO.File]::ReadAllText($f.FullName, [System.Text.Encoding]::UTF8)
     $split = Split-Frontmatter -Content $raw
     $meta = Parse-Yaml -Text $split.Frontmatter

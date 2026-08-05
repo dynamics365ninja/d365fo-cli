@@ -69,15 +69,40 @@ if (-not (Test-Path $XppRepo)) {
 }
 
 # ── Regenerate references if the folder is empty (first run / clean clone) ─────
-$referenceFiles = Get-ChildItem -Path $referenceSrc -Filter '*.md' -ErrorAction SilentlyContinue
+# Note: @(...) keeps .Count valid under Set-StrictMode when the folder is absent.
+$referenceFiles = @(Get-ChildItem -Path $referenceSrc -Filter '*.md' -ErrorAction SilentlyContinue)
 if ($referenceFiles.Count -eq 0) {
-    Write-Warning "No reference files found in $referenceSrc — running emit-skills.ps1 first..."
-    $emitScript = Join-Path $CliRepo 'scripts\emit-skills.ps1'
-    if (Test-Path $emitScript) {
-        & pwsh -NoProfile -File $emitScript
-        $referenceFiles = Get-ChildItem -Path $referenceSrc -Filter '*.md' -ErrorAction SilentlyContinue
+    Write-Warning "No reference files found in $referenceSrc - regenerating..."
+    $emitPs1 = Join-Path $CliRepo 'scripts\emit-skills.ps1'
+    $emitPy  = Join-Path $CliRepo 'scripts\emit-skills.py'
+
+    # Prefer whichever host is actually installed: pwsh 7, Windows PowerShell 5.1,
+    # then python. A stock Windows / D365FO dev VM has no pwsh, so never assume it.
+    $ran = $false
+    if (Test-Path $emitPs1) {
+        foreach ($hostExe in 'pwsh', 'powershell') {
+            $cmd = Get-Command $hostExe -ErrorAction SilentlyContinue
+            if ($cmd) {
+                & $cmd.Source -NoProfile -File $emitPs1
+                $ran = $true
+                break
+            }
+        }
+    }
+    if (-not $ran -and (Test-Path $emitPy)) {
+        foreach ($pyExe in 'python', 'python3') {
+            $cmd = Get-Command $pyExe -ErrorAction SilentlyContinue
+            if ($cmd) {
+                & $cmd.Source $emitPy
+                $ran = $true
+                break
+            }
+        }
+    }
+    if ($ran) {
+        $referenceFiles = @(Get-ChildItem -Path $referenceSrc -Filter '*.md' -ErrorAction SilentlyContinue)
     } else {
-        Write-Warning "emit-skills.ps1 not found at: $emitScript — run it manually, then re-run this script."
+        Write-Warning "Could not run an emitter (no PowerShell host or python found, or scripts missing under $CliRepo\scripts). Run 'scripts/emit-skills.ps1' manually, then re-run this script."
     }
 }
 
@@ -107,7 +132,7 @@ $legacyCanon   = Join-Path $XppRepo '.github\copilot-instructions.md'
 $legacyInstrDir = Join-Path $XppRepo '.github\instructions'
 if ((Test-Path $legacyCanon) -or (Test-Path $legacyInstrDir)) {
     Write-Host ""
-    Write-Host "⚠  Legacy files detected in your X++ repo:"
+    Write-Host "!  Legacy files detected in your X++ repo:"
     if (Test-Path $legacyCanon)   { Write-Host "     .github\copilot-instructions.md" }
     if (Test-Path $legacyInstrDir) { Write-Host "     .github\instructions\" }
     Write-Host "   These are superseded by the d365fo-cli skill and can be safely deleted:"

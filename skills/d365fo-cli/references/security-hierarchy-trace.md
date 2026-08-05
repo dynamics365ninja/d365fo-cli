@@ -4,15 +4,24 @@
 
 ## Workflow
 
-1. **Top-down** — which entry points does a role reach?
+1. **Top-down** — which entry points does a role reach? `security coverage
+   <Name> --type Role` always returns an empty `routes[]` (`Role` is not a
+   valid `--type`, and the coverage lookup is a reverse/bottom-up query, not
+   a forward one) — walk the hierarchy explicitly instead:
    ```sh
-   d365fo security coverage <RoleName> --type Role --output json
+   d365fo security role <RoleName> --output json       # -> duties[] + privileges[]
+   d365fo security duty <DutyName> --output json        # -> privileges[]
+   d365fo security privilege <PrivilegeName> --output json  # -> entryPoints[] (objectName + objectType)
    ```
 
 2. **Bottom-up** — which roles reach this object?
    ```sh
-   d365fo security coverage <ObjectName> --type Menuitem --output json
-   # type may be Table, Form, Report, Class, Menuitem
+   d365fo security coverage <ObjectName> --type MenuItemDisplay --output json
+   # --type is matched literally against the indexed AOT ObjectType, so use the
+   # exact value: MenuItemDisplay | MenuItemAction | MenuItemOutput | Table |
+   # Form | Report | Class. The CLI's own default/listed value "Menuitem" does
+   # NOT occur in real data and always returns an empty routes[] — always pass
+   # the specific MenuItem* kind.
    ```
 
 3. The response contains `routes[*]` of shape
@@ -58,4 +67,9 @@ d365fo generate duty FmNewDuty --privilege FmSomePrivilege \
 ```
 
 **Scaffold order:** menu item → privilege (references the menu item) → duty (bundles privileges) → role (bundles duties).
-Always run `d365fo security coverage <Name> --type Role --output json` after to verify the new objects appear in the hierarchy.
+Always verify the new objects appear in the hierarchy afterwards — `d365fo
+security coverage <Name> --type Role --output json` always returns an empty
+`routes[]` (see Workflow above); instead run `d365fo security role
+<RoleName> --output json` to confirm the duties/privileges are attached, and
+`d365fo security coverage <EntryPointName> --type MenuItemDisplay --output
+json` to confirm the new role reaches the target entry point.

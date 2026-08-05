@@ -24,7 +24,7 @@ CORRECT — always:
 ## Pre-flight
 
 ```sh
-d365fo search form <Name> --output json          # collision check
+d365fo search any <Name> --kind form --output json   # collision check (no dedicated `search form`)
 d365fo get table <PrimaryTable> --output json    # field list for the grid
 
 # Pattern spec — required structure, versions, when-to-use, reference forms
@@ -126,11 +126,12 @@ section template is `--section Name:Caption` (split on the first `:`).
   `<DataSourceReferences>`, `<DataSources>`, methods, extension properties,
   and pattern metadata exactly.
 - After changing form XML, validate XML well-formedness, run
-  `d365fo validate xpp --file <file> --code-type xml-any --output json`, run
+  `d365fo validate xpp <file> --code-type xml-any --output json` (file is a
+  positional argument, not `--file`), run
   `d365fo index refresh --model <Model>`, and re-read with
   `d365fo get form <Form> --output json`.
 - Never use `Dialog` or `TableOfContents` patterns for transactional grids.
-- Pre-flight `search form <Name>` before scaffolding to avoid collisions.
+- Pre-flight `search any <Name> --kind form` before scaffolding to avoid collisions (there is no dedicated `search form` subcommand).
 - Caption strings must be labels (BP `BPErrorLabelIsText`) — never raw text.
 - After scaffolding, run `d365fo build` only on user request.
 

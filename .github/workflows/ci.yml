@@ -48,11 +48,11 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.x"
-      - name: Emit skills (Copilot + Anthropic)
+      - name: Emit skills (Copilot + Anthropic + d365fo-cli)
         run: python3 scripts/emit-skills.py
       - name: Fail on untracked drift
         run: |
-          if [ -n "$(git status --porcelain skills/copilot skills/anthropic)" ]; then
+          if [ -n "$(git status --porcelain skills/copilot skills/anthropic skills/d365fo-cli/references)" ]; then
             echo "::error::skills/ artifacts drift from skills/_source. Run scripts/emit-skills.py locally and commit."
             git status --porcelain skills/
             exit 1

@@ -38,7 +38,7 @@ the user explicitly requests a separate class.
 ```sh
 d365fo generate event-handler MyClass_CustTableHandler \
     --source-kind Table \
-    --source CustTable \
+    --source-object CustTable \
     --event Inserted \
     --install-to MyModel
 ```
@@ -48,23 +48,28 @@ Generated attribute: `[DataEventHandler(tableStr(CustTable), DataEventType::Inse
 D365FO `DataEventType` values: `ValidatingFieldValue`, `ValidatedField`,
 `ValidatingDelete`, `ValidatedDelete`, `ValidatingWrite`, `ValidatedWrite`,
 `Inserting`, `Inserted`, `Updating`, `Updated`, `Deleting`, `Deleted`,
-`InitializingRecord`, `InitializedRecord`, `Modifying`, `Modified`.
+`InitializingRecord`, `InitializedRecord`, `ModifyingField`, `ModifiedField`.
 
 ## Form / FormDataSource / FormControl events → form-specific attributes
 
 ```sh
 d365fo generate event-handler MyClass_FormHandler \
     --source-kind Form \
-    --source CustTable \
+    --source-object CustTable \
     --event Initialized \
     --install-to MyModel
 
 d365fo generate event-handler MyClass_FormDsHandler \
     --source-kind FormDataSource \
-    --source CustTable.CustTable \
-    --event ExecuteQuery \
+    --source-object "CustTable, CustTable" \
+    --event QueryExecuting \
     --install-to MyModel
 ```
+
+`--source-object` for `FormDataSource` is passed through verbatim into
+`formDataSourceStr(...)`, so it must already be the two comma-separated
+`<Form>, <DataSource>` arguments (e.g. `"CustTable, CustTable"`) — a dotted
+`Form.DataSource` value produces invalid X++.
 
 Attribute shapes: `[FormEventHandler(formStr(...), FormEventType::...)]`,
 `[FormDataSourceEventHandler(formDataSourceStr(form, ds), FormDataSourceEventType::...)]`.
@@ -78,7 +83,7 @@ events — those are `DataEventHandler`.
 ```sh
 d365fo generate event-handler MyClass_DelegateHandler \
     --source-kind Class \
-    --source SalesFormLetter \
+    --source-object SalesFormLetter \
     --event onPosted \
     --install-to MyModel
 ```
