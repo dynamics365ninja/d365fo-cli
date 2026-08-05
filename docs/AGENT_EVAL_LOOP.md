@@ -1,6 +1,6 @@
 # Self-improving agent eval loop — design spec
 
-**Status:** implemented — a 22-case catalog (L0–L2) runs end-to-end. See
+**Status:** implemented — a 31-case catalog (L0–L2) runs end-to-end. See
 [eval/README.md](../eval/README.md) for day-to-day mechanics and the open
 work queue.
 
@@ -260,12 +260,14 @@ Tiers (unchanged from the source repo's convention):
 | L3 — composite | relation + generated form + datasource rebind |
 | L4 — feature slice | data entity + security chain, batch job, SSRS report |
 
-Current catalog: 22 cases, L0–L2 (`generate edt`, `enum`, `table`, `class`,
+Current catalog: 31 cases, L0–L2 (`generate edt`, `enum`, `table`, `class`,
 `coc`, `form`, `query`, `map`, `report`, `sysoperation`, `runbase`,
 `business-event`, `custom-service`, `workflow`, `systest`,
-`extension table/edt/enum`, `event-handler`, `number-sequence`, `entity`,
-`security-policy`). See [eval/README.md](../eval/README.md) for the standing
-"grow the catalog" queue.
+`extension table/edt/enum/form`, `event-handler`, `number-sequence`, `entity`,
+`security-policy`, `privilege`, `duty`, `role`, `menu-item`, `view`,
+`migration-script`, `datasource-method`, `control-method`) — every `generate`
+subcommand except the bridge-only `modify`/`test`/`bp` branches. See
+[eval/README.md](../eval/README.md) for the standing "grow the catalog" queue.
 
 ---
 

@@ -1,0 +1,13 @@
+{
+  "id": "L1-duty-basic",
+  "title": "Security duty aggregating a single privilege",
+  "tier": 1,
+  "instruction": "Create a security duty named ConFmVehicleMaintainDuty that aggregates the privilege ConFmVehicleMaintainPriv. Use only the d365fo CLI (search/get/generate/validate) — do not hand-write XML.",
+  "canonical_args": ["generate", "duty", "ConFmVehicleMaintainDuty", "--privilege", "ConFmVehicleMaintainPriv"],
+  "target_artifact_types": ["AxSecurityDuty"],
+  "golden_path": "L1-duty-basic",
+  "tags": ["duty", "security", "metadata"],
+  "ignore": [],
+  "requires_fixture_index": false,
+  "golden_pending": false
+}

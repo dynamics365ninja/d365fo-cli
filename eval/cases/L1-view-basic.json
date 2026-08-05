@@ -1,0 +1,13 @@
+{
+  "id": "L1-view-basic",
+  "title": "Read-only AxView projecting an AxQuery",
+  "tier": 1,
+  "instruction": "Create an AxView named ConFmVehicleView projecting the query ConFmVehicleQuery, exposing bound fields VIN and Make from the FmVehicle datasource. Use only the d365fo CLI (search/get/generate/validate) — do not hand-write XML.",
+  "canonical_args": ["generate", "view", "ConFmVehicleView", "--query", "ConFmVehicleQuery", "--field", "VIN:FmVehicle", "--field", "Make:FmVehicle"],
+  "target_artifact_types": ["AxView"],
+  "golden_path": "L1-view-basic",
+  "tags": ["view", "metadata"],
+  "ignore": [],
+  "requires_fixture_index": false,
+  "golden_pending": false
+}

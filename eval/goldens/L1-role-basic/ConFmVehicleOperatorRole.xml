@@ -1,0 +1,10 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<AxSecurityRole>
+  <Name>ConFmVehicleOperatorRole</Name>
+  <Label>Fleet vehicle operator</Label>
+  <Duties>
+    <AxSecurityDutyReference>
+      <Name>ConFmVehicleMaintainDuty</Name>
+    </AxSecurityDutyReference>
+  </Duties>
+</AxSecurityRole>

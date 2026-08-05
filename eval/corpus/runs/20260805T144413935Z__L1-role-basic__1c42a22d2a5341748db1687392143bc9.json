@@ -1,0 +1,20 @@
+{
+  "runId": "20260805T144413935Z__L1-role-basic__1c42a22d2a5341748db1687392143bc9",
+  "caseId": "L1-role-basic",
+  "tier": 1,
+  "timestampUtc": "2026-08-05T14:44:13.936771+00:00",
+  "source": "replay",
+  "score": {
+    "xppClean": true,
+    "xppErrors": 0,
+    "referencesClean": true,
+    "referenceErrors": 0,
+    "goldenMatch": true,
+    "goldenDiff": {
+      "missing": [],
+      "extra": [],
+      "changed": [],
+      "isMatch": true
+    }
+  }
+}

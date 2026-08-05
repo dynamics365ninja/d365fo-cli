@@ -1,0 +1,13 @@
+{
+  "id": "L2-form-extension-basic",
+  "title": "Form extension shell over the ConFmVehicleList list page",
+  "tier": 2,
+  "instruction": "Create a form extension over ConFmVehicleList (the fleet-vehicle list page generated earlier). Use only the d365fo CLI (search/get/generate/validate) — do not hand-write XML.",
+  "canonical_args": ["generate", "extension", "Form", "ConFmVehicleList", "--suffix", "ConDemo"],
+  "target_artifact_types": ["AxFormExtension"],
+  "golden_path": "L2-form-extension-basic",
+  "tags": ["extension", "form", "metadata"],
+  "ignore": [],
+  "requires_fixture_index": false,
+  "golden_pending": false
+}

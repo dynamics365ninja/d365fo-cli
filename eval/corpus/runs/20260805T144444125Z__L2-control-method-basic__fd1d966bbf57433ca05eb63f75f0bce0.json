@@ -1,0 +1,20 @@
+{
+  "runId": "20260805T144444125Z__L2-control-method-basic__fd1d966bbf57433ca05eb63f75f0bce0",
+  "caseId": "L2-control-method-basic",
+  "tier": 2,
+  "timestampUtc": "2026-08-05T14:44:44.1272349+00:00",
+  "source": "replay",
+  "score": {
+    "xppClean": true,
+    "xppErrors": 0,
+    "referencesClean": true,
+    "referenceErrors": 0,
+    "goldenMatch": true,
+    "goldenDiff": {
+      "missing": [],
+      "extra": [],
+      "changed": [],
+      "isMatch": true
+    }
+  }
+}
