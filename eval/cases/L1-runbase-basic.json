@@ -1,0 +1,13 @@
+{
+  "id": "L1-runbase-basic",
+  "title": "RunBase batch-ready class skeleton",
+  "tier": 1,
+  "instruction": "Create a RunBase-derived class named ConFmVehicleRun with the standard dialog/pack/unpack/run skeleton. Use only the d365fo CLI (search/get/generate/validate) — do not hand-write XML.",
+  "canonical_args": ["generate", "runbase", "ConFmVehicleRun"],
+  "target_artifact_types": ["AxClass"],
+  "golden_path": "L1-runbase-basic",
+  "tags": ["runbase", "class", "metadata"],
+  "ignore": [],
+  "requires_fixture_index": false,
+  "golden_pending": false
+}

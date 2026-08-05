@@ -1,0 +1,13 @@
+{
+  "id": "L1-sysoperation-basic",
+  "title": "SysOperation DataContract + Service + Controller triplet",
+  "tier": 1,
+  "instruction": "Create a synchronous SysOperation framework triplet named ConFmVehicleImport with a single contract parameter VehicleNote (EDT Name). Use only the d365fo CLI (search/get/generate/validate) — do not hand-write XML.",
+  "canonical_args": ["generate", "sysoperation", "ConFmVehicleImport", "--param", "VehicleNote:Name"],
+  "target_artifact_types": ["AxClass"],
+  "golden_path": "L1-sysoperation-basic",
+  "tags": ["sysoperation", "class", "metadata", "known-reference-gap"],
+  "ignore": [],
+  "requires_fixture_index": false,
+  "golden_pending": false
+}

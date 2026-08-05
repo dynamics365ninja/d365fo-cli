@@ -1,0 +1,33 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<AxClass>
+  <Name>ConFmVehicleNoteAdded</Name>
+  <Extends>BusinessEventsBase</Extends>
+  <SourceCode>
+    <Declaration>[BusinessEvents(classStr(ConFmVehicleNoteAdded), classStr(ConFmVehicleNoteAddedContract), "Custom", "Custom")]
+public final class ConFmVehicleNoteAdded extends BusinessEventsBase
+{
+}
+</Declaration>
+    <Methods>
+      <Method>
+        <Name>newFromTable</Name>
+        <Source>public static ConFmVehicleNoteAdded newFromTable(Common _table)
+{
+    ConFmVehicleNoteAdded event = new ConFmVehicleNoteAdded();
+    event.parmId(classStr(ConFmVehicleNoteAdded));
+    return event;
+}
+</Source>
+      </Method>
+      <Method>
+        <Name>buildContract</Name>
+        <Source>[Wrappable(false), Replaceable(false)]
+public BusinessEventsContract buildContract()
+{
+    return new ConFmVehicleNoteAddedContract();
+}
+</Source>
+      </Method>
+    </Methods>
+  </SourceCode>
+</AxClass>

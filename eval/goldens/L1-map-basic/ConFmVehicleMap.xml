@@ -1,0 +1,30 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<AxMap xmlns:i="http://www.w3.org/2001/XMLSchema-instance">
+  <Name>ConFmVehicleMap</Name>
+  <SourceCode>
+    <Declaration><![CDATA[
+public class ConFmVehicleMap extends common
+{
+}
+]]></Declaration>
+    <Methods />
+  </SourceCode>
+  <FieldGroups />
+  <Fields>
+    <AxMapBaseField i:type="AxMapFieldString">
+      <Name>Make</Name>
+      <ExtendedDataType>Name</ExtendedDataType>
+    </AxMapBaseField>
+  </Fields>
+  <Mappings>
+    <AxTableMapping>
+      <MappingTable>FmVehicle</MappingTable>
+      <Connections>
+        <AxTableMappingConnection>
+          <MapField>Make</MapField>
+          <MapFieldTo>Make</MapFieldTo>
+        </AxTableMappingConnection>
+      </Connections>
+    </AxTableMapping>
+  </Mappings>
+</AxMap>

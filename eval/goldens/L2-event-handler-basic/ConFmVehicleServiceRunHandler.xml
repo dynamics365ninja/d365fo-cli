@@ -1,0 +1,15 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<AxClass>
+  <Name>ConFmVehicleServiceRunHandler</Name>
+  <SourceCode>
+    <Declaration>public static class ConFmVehicleServiceRunHandler
+{
+    [SubscribesTo(classStr(FmVehicleService), delegateStr(FmVehicleService, OnInitialized))]
+    public static void run(XppPrePostArgs args)
+    {
+        // handler logic here
+    }
+}
+</Declaration>
+  </SourceCode>
+</AxClass>

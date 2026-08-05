@@ -1,0 +1,27 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<AxDataEntityView>
+  <Name>ConFmVehicleEntity</Name>
+  <PublicEntityName>ConFmVehicleEntity</PublicEntityName>
+  <PublicCollectionName>ConFmVehicleEntities</PublicCollectionName>
+  <DataManagementEnabled>No</DataManagementEnabled>
+  <DataManagementStagingTable />
+  <IsPublic>Yes</IsPublic>
+  <DataSources>
+    <AxQuerySimpleRootDataSource>
+      <Name>FmVehicle</Name>
+      <Table>FmVehicle</Table>
+    </AxQuerySimpleRootDataSource>
+  </DataSources>
+  <Fields>
+    <AxDataEntityViewField>
+      <Name>VIN</Name>
+      <DataField>VIN</DataField>
+      <DataSource>FmVehicle</DataSource>
+    </AxDataEntityViewField>
+    <AxDataEntityViewField>
+      <Name>Make</Name>
+      <DataField>Make</DataField>
+      <DataSource>FmVehicle</DataSource>
+    </AxDataEntityViewField>
+  </Fields>
+</AxDataEntityView>

@@ -1,0 +1,30 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<AxClass>
+  <Name>ConFmVehicleImportController</Name>
+  <Extends>SysOperationServiceController</Extends>
+  <SourceCode>
+    <Declaration>class ConFmVehicleImportController extends SysOperationServiceController
+{
+}
+</Declaration>
+    <Methods>
+      <Method>
+        <Name>new</Name>
+        <Source>public void new()
+{
+    super(classStr(ConFmVehicleImportService), methodStr(ConFmVehicleImportService, process), SysOperationExecutionMode::Synchronous);
+}
+</Source>
+      </Method>
+      <Method>
+        <Name>main</Name>
+        <Source>public static void main(Args _args)
+{
+    ConFmVehicleImportController controller = new ConFmVehicleImportController();
+    controller.startOperation();
+}
+</Source>
+      </Method>
+    </Methods>
+  </SourceCode>
+</AxClass>

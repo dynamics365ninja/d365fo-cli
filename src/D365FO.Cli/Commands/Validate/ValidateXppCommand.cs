@@ -1,3 +1,4 @@
+using System.Text.RegularExpressions;
 using D365FO.Core;
 using D365FO.Core.Validation;
 using Spectre.Console;
@@ -95,7 +96,9 @@ public sealed class ValidateXppCommand : Command<ValidateXppCommand.Settings>
 
     private static string DetectCodeType(string? file, string code)
     {
-        if (code.Contains("<AxTable", StringComparison.OrdinalIgnoreCase)) return XppValidator.CodeTypeXmlTable;
+        // Match the exact <AxTable> root tag, not other elements that merely start with
+        // that prefix (e.g. <AxTableMapping> inside an AxMap, <AxTableExtension>).
+        if (Regex.IsMatch(code, @"<AxTable[\s>]", RegexOptions.IgnoreCase)) return XppValidator.CodeTypeXmlTable;
         var trimmed = code.TrimStart();
         if (trimmed.StartsWith("<?xml") || trimmed.StartsWith('<')) return XppValidator.CodeTypeXmlAny;
         if (file is not null && file.EndsWith(".xml", StringComparison.OrdinalIgnoreCase)) return XppValidator.CodeTypeXmlAny;

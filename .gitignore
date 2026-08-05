@@ -20,6 +20,3 @@ memory/
 
 # Agent workflow scratch worktrees
 .claude/worktrees/
-
-# Agent eval loop corpus — VM-free but still local run evidence, not committed (docs/AGENT_EVAL_LOOP.md)
-eval/corpus/runs/*.json

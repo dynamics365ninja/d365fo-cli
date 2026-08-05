@@ -1,0 +1,46 @@
+{
+  "runId": "20260805T130220902Z__L1-form-basic__227fae0222ba4d06b42eab99f85b79c1",
+  "caseId": "L1-form-basic",
+  "tier": 1,
+  "timestampUtc": "2026-08-05T13:02:20.9048094+00:00",
+  "source": "agent",
+  "score": {
+    "xppClean": true,
+    "xppErrors": 0,
+    "referencesClean": true,
+    "referenceErrors": 0,
+    "goldenMatch": false,
+    "goldenDiff": {
+      "missing": [
+        "AxForm/DataSources/AxFormDataSource/Fields/AxFormDataSourceField[Make]/DataField",
+        "AxForm/DataSources/AxFormDataSource/Fields/AxFormDataSourceField[VIN]/DataField",
+        "AxForm/Design/Controls/AxFormControl[Grid]/Controls/AxFormControl[Grid_Make]/@type",
+        "AxForm/Design/Controls/AxFormControl[Grid]/Controls/AxFormControl[Grid_Make]/DataField",
+        "AxForm/Design/Controls/AxFormControl[Grid]/Controls/AxFormControl[Grid_Make]/DataSource",
+        "AxForm/Design/Controls/AxFormControl[Grid]/Controls/AxFormControl[Grid_Make]/FormControlExtension/@nil",
+        "AxForm/Design/Controls/AxFormControl[Grid]/Controls/AxFormControl[Grid_Make]/Name",
+        "AxForm/Design/Controls/AxFormControl[Grid]/Controls/AxFormControl[Grid_Make]/Type",
+        "AxForm/Design/Controls/AxFormControl[Grid]/Controls/AxFormControl[Grid_VIN]/@type",
+        "AxForm/Design/Controls/AxFormControl[Grid]/Controls/AxFormControl[Grid_VIN]/DataField",
+        "AxForm/Design/Controls/AxFormControl[Grid]/Controls/AxFormControl[Grid_VIN]/DataSource",
+        "AxForm/Design/Controls/AxFormControl[Grid]/Controls/AxFormControl[Grid_VIN]/FormControlExtension/@nil",
+        "AxForm/Design/Controls/AxFormControl[Grid]/Controls/AxFormControl[Grid_VIN]/Name",
+        "AxForm/Design/Controls/AxFormControl[Grid]/Controls/AxFormControl[Grid_VIN]/Type"
+      ],
+      "extra": [],
+      "changed": [
+        {
+          "path": "AxForm/Design/Caption",
+          "expected": "Fleet vehicles",
+          "actual": "@Fleet:Vehicle"
+        },
+        {
+          "path": "AxForm/Design/Controls/AxFormControl[CustomFilterGroup]/Controls/AxFormControl/FormControlExtension/ExtensionProperties/AxFormControlExtensionProperty[defaultColumnName]/Value",
+          "expected": "Grid_VIN",
+          "actual": "Grid_FmVehicle"
+        }
+      ],
+      "isMatch": false
+    }
+  }
+}

@@ -1,0 +1,20 @@
+{
+  "runId": "20260805T125741627Z__L2-coc-extension__66d5e3c8dd1140a79b82a25b6a5c6505",
+  "caseId": "L2-coc-extension",
+  "tier": 2,
+  "timestampUtc": "2026-08-05T12:57:41.6292722+00:00",
+  "source": "replay",
+  "score": {
+    "xppClean": true,
+    "xppErrors": 0,
+    "referencesClean": true,
+    "referenceErrors": 0,
+    "goldenMatch": true,
+    "goldenDiff": {
+      "missing": [],
+      "extra": [],
+      "changed": [],
+      "isMatch": true
+    }
+  }
+}

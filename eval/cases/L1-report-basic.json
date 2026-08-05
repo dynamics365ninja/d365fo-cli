@@ -1,0 +1,13 @@
+{
+  "id": "L1-report-basic",
+  "title": "SRS report with a two-column tablix",
+  "tier": 1,
+  "instruction": "Create an SSRS report named ConFmVehicleReport with a tablix showing columns VIN and Make, captioned 'Fleet vehicle report'. Use only the d365fo CLI (search/get/generate/validate) — do not hand-write XML.",
+  "canonical_args": ["generate", "report", "ConFmVehicleReport", "--field", "VIN", "--field", "Make", "--caption", "Fleet vehicle report"],
+  "target_artifact_types": ["AxReport"],
+  "golden_path": "L1-report-basic",
+  "tags": ["report", "srs", "metadata"],
+  "ignore": [],
+  "requires_fixture_index": false,
+  "golden_pending": false
+}

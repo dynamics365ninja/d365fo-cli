@@ -1,0 +1,11 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<AxService>
+  <Name>ConFmVehicleQueryService</Name>
+  <Class>ConFmVehicleQueryServiceService</Class>
+  <ServiceOperations>
+    <AxServiceOperation>
+      <Name>lookup</Name>
+      <Method>lookup</Method>
+    </AxServiceOperation>
+  </ServiceOperations>
+</AxService>

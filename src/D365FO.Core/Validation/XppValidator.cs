@@ -339,7 +339,7 @@ public static class XppValidator
 
     private static void CheckMissingAlternateKey(string code, List<XppViolation> v)
     {
-        if (!code.Contains("<AxTable") && !code.Contains("<AxTableExtension")) return;
+        if (!Regex.IsMatch(code, @"<AxTable(Extension)?[\s>]", RegexOptions.IgnoreCase)) return;
         if (!Regex.IsMatch(code, @"<AlternateKey>\s*Yes\s*</AlternateKey>", RegexOptions.IgnoreCase))
         {
             v.Add(new XppViolation("XML001", "error", null,

@@ -1,0 +1,20 @@
+{
+  "runId": "20260805T125730958Z__L1-workflow-basic__efbf3ae8cdc94867adb19a594137dfbc",
+  "caseId": "L1-workflow-basic",
+  "tier": 1,
+  "timestampUtc": "2026-08-05T12:57:30.9610558+00:00",
+  "source": "replay",
+  "score": {
+    "xppClean": true,
+    "xppErrors": 0,
+    "referencesClean": true,
+    "referenceErrors": 0,
+    "goldenMatch": true,
+    "goldenDiff": {
+      "missing": [],
+      "extra": [],
+      "changed": [],
+      "isMatch": true
+    }
+  }
+}

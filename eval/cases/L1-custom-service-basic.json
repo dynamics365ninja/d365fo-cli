@@ -1,0 +1,13 @@
+{
+  "id": "L1-custom-service-basic",
+  "title": "AxService descriptor with a single operation",
+  "tier": 1,
+  "instruction": "Create a custom AOT service named ConFmVehicleQueryService with a single operation 'lookup' returning str. Use only the d365fo CLI (search/get/generate/validate) — do not hand-write XML.",
+  "canonical_args": ["generate", "custom-service", "ConFmVehicleQueryService", "--operation", "lookup:str"],
+  "target_artifact_types": ["AxService"],
+  "golden_path": "L1-custom-service-basic",
+  "tags": ["custom-service", "metadata"],
+  "ignore": [],
+  "requires_fixture_index": false,
+  "golden_pending": false
+}

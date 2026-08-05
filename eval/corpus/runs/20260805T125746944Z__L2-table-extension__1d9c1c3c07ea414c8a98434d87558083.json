@@ -1,0 +1,20 @@
+{
+  "runId": "20260805T125746944Z__L2-table-extension__1d9c1c3c07ea414c8a98434d87558083",
+  "caseId": "L2-table-extension",
+  "tier": 2,
+  "timestampUtc": "2026-08-05T12:57:46.9465053+00:00",
+  "source": "replay",
+  "score": {
+    "xppClean": false,
+    "xppErrors": 1,
+    "referencesClean": true,
+    "referenceErrors": 0,
+    "goldenMatch": true,
+    "goldenDiff": {
+      "missing": [],
+      "extra": [],
+      "changed": [],
+      "isMatch": true
+    }
+  }
+}

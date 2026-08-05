@@ -1,3 +1,4 @@
+using System.Text.RegularExpressions;
 using System.Xml.Linq;
 using D365FO.Core.Index;
 using D365FO.Core.Validation;
@@ -53,7 +54,9 @@ public static class EvalScorer
     /// <summary>Same heuristic as <c>ValidateXppCommand.DetectCodeType</c> (Cli project) — duplicated rather than shared across the Core/Cli boundary for a 3-line check.</summary>
     internal static string DetectCodeType(string xml)
     {
-        if (xml.Contains("<AxTable", StringComparison.OrdinalIgnoreCase)) return XppValidator.CodeTypeXmlTable;
+        // Match the exact <AxTable> root tag, not other elements that merely start with
+        // that prefix (e.g. <AxTableMapping> inside an AxMap, <AxTableExtension>).
+        if (Regex.IsMatch(xml, @"<AxTable[\s>]", RegexOptions.IgnoreCase)) return XppValidator.CodeTypeXmlTable;
         var trimmed = xml.TrimStart();
         if (trimmed.StartsWith("<?xml") || trimmed.StartsWith('<')) return XppValidator.CodeTypeXmlAny;
         return XppValidator.CodeTypeXpp;

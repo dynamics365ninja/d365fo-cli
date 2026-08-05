@@ -1,0 +1,13 @@
+{
+  "id": "L2-event-handler-basic",
+  "title": "Class-delegate event subscriber over an existing class",
+  "tier": 2,
+  "instruction": "Create an event subscriber class named ConFmVehicleServiceRunHandler subscribing to the FmVehicleService class's run event. Use `d365fo get class FmVehicleService` first to confirm the method exists before generating. Use only the d365fo CLI (search/get/generate/validate) — do not hand-write XML.",
+  "canonical_args": ["generate", "event-handler", "ConFmVehicleServiceRunHandler", "--source-kind", "Class", "--source-object", "FmVehicleService", "--method", "run"],
+  "target_artifact_types": ["AxClass"],
+  "golden_path": "L2-event-handler-basic",
+  "tags": ["event-handler", "class", "metadata"],
+  "ignore": [],
+  "requires_fixture_index": true,
+  "golden_pending": false
+}

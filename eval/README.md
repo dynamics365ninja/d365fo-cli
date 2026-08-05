@@ -23,7 +23,7 @@ eval/
 │   └── <case-id>/*.xml     ← committed, human-reviewed golden output (exactly one file per v1 case)
 └── corpus/
     ├── schema.json          ← documented run-record shape
-    └── runs/                ← one *.json run record per run (gitignored — local/CI evidence)
+    └── runs/                ← one *.json run record per run (committed, matching d365fo-mcp-server's eval/corpus/runs/)
 ```
 
 ## Running a case
@@ -98,15 +98,28 @@ lie in place while a deeper fix waits.
 
 ## Explicitly out of scope (for now)
 
-- **CI wiring.** `eval run` for all 5 cases is not yet a gate in
-  `.github/workflows/ci.yml`. Natural follow-up once the catalog has grown
-  past the initial 5.
+- **CI wiring.** `eval run` for all cases is not yet a gate in
+  `.github/workflows/ci.yml`.
 - **No runtime/SysTest oracle.** No `SysTestRunner` integration exists in
   this offline loop — only the golden-diff and static-validator dimensions.
+  A handful of cases (tagged `known-reference-gap`) generate a class or
+  extension whose body legitimately references a *sibling* artifact or a
+  standard system object that a minimal offline index can't contain (e.g.
+  the SysOperation controller's own Service class, or a CoC extension over a
+  standard `NumberSeqApplicationModule_*` class) — `referencesClean: false`
+  there is the expected, honest result of scoring one artifact in isolation,
+  not a defect.
 - **`MODEL_ERROR` → knowledge-base feedback tooling.** The sibling repo has
   an automated "cluster MODEL_ERROR runs into `skills/_source` proposals"
   step (`knowledgeFeedback.ts`); not built here yet. The rubric and agent
   roles already support adding it.
-- **Catalog breadth.** 5 cases across L0–L2 today (`generate edt`, `enum`,
-  `table`, `class`, `coc`). Wider `generate` coverage (forms, extensions,
-  security, entities, …) is the natural next slice — use `eval-author`.
+- **Catalog breadth.** 22 cases across L0–L2 (`edt`, `enum`, `table`,
+  `class`, `coc`, `form`, `query`, `map`, `report`, `sysoperation`,
+  `runbase`, `business-event`, `custom-service`, `workflow`, `systest`,
+  `extension table/edt/enum`, `event-handler`, `number-sequence`, `entity`,
+  `security-policy`). L3/L4 (batch, workflow *runtime* submission, posting,
+  DMF, ER, SSRS rendering, …) need a live build/BP-check/SysTest oracle this
+  offline loop doesn't have — the natural next slice is either growing L0–L2
+  breadth further (forms/security/menu-items not yet covered) or adding that
+  oracle. See `d365fo-mcp-server`'s `eval/cases/` for the fuller L3/L4
+  catalog shape to port once a VM-backed oracle exists here.

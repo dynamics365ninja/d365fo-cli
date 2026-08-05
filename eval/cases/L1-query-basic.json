@@ -1,0 +1,13 @@
+{
+  "id": "L1-query-basic",
+  "title": "Single-datasource AOT query over an existing table",
+  "tier": 1,
+  "instruction": "Create an AOT query named ConFmVehicleQuery with FmVehicle as its single root data source. Use `d365fo get table FmVehicle` first to confirm the table exists before generating. Use only the d365fo CLI (search/get/generate/validate) — do not hand-write XML.",
+  "canonical_args": ["generate", "query", "ConFmVehicleQuery", "--ds", "FmVehicle"],
+  "target_artifact_types": ["AxQuery"],
+  "golden_path": "L1-query-basic",
+  "tags": ["query", "metadata"],
+  "ignore": [],
+  "requires_fixture_index": true,
+  "golden_pending": false
+}

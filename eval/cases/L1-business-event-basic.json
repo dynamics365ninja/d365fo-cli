@@ -1,0 +1,13 @@
+{
+  "id": "L1-business-event-basic",
+  "title": "Business event class + contract scaffold",
+  "tier": 1,
+  "instruction": "Create a business event named ConFmVehicleNoteAdded with a single payload field NoteId (EDT Name). Use only the d365fo CLI (search/get/generate/validate) — do not hand-write XML.",
+  "canonical_args": ["generate", "business-event", "ConFmVehicleNoteAdded", "--payload", "NoteId:Name"],
+  "target_artifact_types": ["AxClass"],
+  "golden_path": "L1-business-event-basic",
+  "tags": ["business-event", "class", "metadata", "known-reference-gap"],
+  "ignore": [],
+  "requires_fixture_index": false,
+  "golden_pending": false
+}
