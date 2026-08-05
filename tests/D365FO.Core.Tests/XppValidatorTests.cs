@@ -266,6 +266,35 @@ public class XppValidatorTests
     }
 
     [Fact]
+    public void Xml001_quiet_for_empty_table_extension()
+    {
+        // `d365fo generate extension Table <target>` always emits this exact
+        // shell — a table extension that adds zero fields/indexes of its own
+        // (a common, valid pattern: placeholder shell, CoC/event-handler
+        // target, etc.). It inherits the base table's alternate key
+        // automatically; there is nothing in the extension's own delta to
+        // require one. Real BPCheckAlternateKeyAbsent's documented
+        // precondition (Customization Analysis Report docs) is "tables that
+        // have a unique index" — an index-less extension never meets it.
+        var xml = "<AxTableExtension><Name>FmVehicle.Extension</Name></AxTableExtension>";
+        var v = Run(xml, "xml-any");
+        Assert.DoesNotContain(v, x => x.Rule == "XML001");
+    }
+
+    [Fact]
+    public void Xml001_flags_table_extension_that_adds_an_index_without_alternate_key()
+    {
+        // Once the extension actually introduces its own AxTableIndex, the
+        // real rule's precondition ("has a unique index") is met for that
+        // delta — an extension-added index without an alternate key should
+        // still be flagged.
+        var xml = "<AxTableExtension><Name>FmVehicle.Extension</Name>" +
+                   "<Indexes><AxTableIndex><Name>NewIdx</Name></AxTableIndex></Indexes></AxTableExtension>";
+        var v = Run(xml, "xml-any");
+        Assert.Contains(v, x => x.Rule == "XML001" && x.Severity == "error");
+    }
+
+    [Fact]
     public void Xml002_and_003_fire_with_static_defaults()
     {
         var xml = "<AxTable><Name>MyTable</Name><Fields/></AxTable>";

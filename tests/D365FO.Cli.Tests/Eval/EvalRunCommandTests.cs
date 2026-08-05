@@ -42,6 +42,7 @@ public class EvalRunCommandTests
     [InlineData("L1-table-basic")]
     [InlineData("L1-class-basic")]
     [InlineData("L2-coc-extension")]
+    [InlineData("L2-table-extension")]
     public void Every_authored_case_replays_clean_against_its_golden(string caseId)
     {
         var exit = Run(caseId, out var stdout);

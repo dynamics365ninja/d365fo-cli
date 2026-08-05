@@ -6,7 +6,7 @@
   "canonical_args": ["generate", "extension", "Table", "FmVehicle"],
   "target_artifact_types": ["AxTableExtension"],
   "golden_path": "L2-table-extension",
-  "tags": ["extension", "table", "metadata", "known-xpp-gap"],
+  "tags": ["extension", "table", "metadata"],
   "ignore": [],
   "requires_fixture_index": true,
   "golden_pending": false

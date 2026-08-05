@@ -339,7 +339,22 @@ public static class XppValidator
 
     private static void CheckMissingAlternateKey(string code, List<XppViolation> v)
     {
-        if (!Regex.IsMatch(code, @"<AxTable(Extension)?[\s>]", RegexOptions.IgnoreCase)) return;
+        var isExtension = Regex.IsMatch(code, @"<AxTableExtension[\s>]", RegexOptions.IgnoreCase);
+        var isBaseTable = Regex.IsMatch(code, @"<AxTable[\s>]", RegexOptions.IgnoreCase);
+        if (!isExtension && !isBaseTable) return;
+
+        // A table extension merges into the base table it targets — it does not
+        // define a new physical table, and D365FO's extension model already gives
+        // it the base table's alternate key automatically. `d365fo generate
+        // extension Table <target>` legitimately emits a field-less, index-less
+        // shell (a placeholder, or purely a CoC/event-handler target) as a normal,
+        // common pattern, and there is nothing in that extension's own delta that
+        // needs an alternate key. The real BPCheckAlternateKeyAbsent's documented
+        // precondition (Microsoft Learn's Customization Analysis Report reference)
+        // is "tables that have a unique index" — only hold the extension to this
+        // rule once it actually introduces an index of its own.
+        if (isExtension && !Regex.IsMatch(code, @"<AxTableIndex[\s>]", RegexOptions.IgnoreCase)) return;
+
         if (!Regex.IsMatch(code, @"<AlternateKey>\s*Yes\s*</AlternateKey>", RegexOptions.IgnoreCase))
         {
             v.Add(new XppViolation("XML001", "error", null,
