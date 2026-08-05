@@ -14,12 +14,13 @@ public class EvalCaseCatalogTests
         var (cases, errors) = EvalCaseCatalog.LoadAll(EvalPaths.CasesDir(RepoRoot));
 
         Assert.Empty(errors);
-        Assert.Equal(5, cases.Count);
+        Assert.Equal(22, cases.Count);
         Assert.Contains(cases, c => c.Id == "L0-edt-basic");
         Assert.Contains(cases, c => c.Id == "L0-enum-basic");
         Assert.Contains(cases, c => c.Id == "L1-table-basic");
         Assert.Contains(cases, c => c.Id == "L1-class-basic");
         Assert.Contains(cases, c => c.Id == "L2-coc-extension");
+        Assert.Contains(cases, c => c.Id == "L2-security-policy-basic");
     }
 
     [Fact]
@@ -37,12 +38,19 @@ public class EvalCaseCatalogTests
     }
 
     [Fact]
-    public void Only_L2_coc_extension_requires_the_fixture_index()
+    public void Only_cases_grounded_against_the_FmVehicle_fixture_require_the_fixture_index()
     {
         var (cases, _) = EvalCaseCatalog.LoadAll(EvalPaths.CasesDir(RepoRoot));
 
-        var fixtureCases = cases.Where(c => c.RequiresFixtureIndex).Select(c => c.Id).ToList();
-        Assert.Equal(new[] { "L2-coc-extension" }, fixtureCases);
+        var fixtureCases = cases.Where(c => c.RequiresFixtureIndex).Select(c => c.Id).OrderBy(id => id).ToList();
+        Assert.Equal(
+            new[]
+            {
+                "L1-form-basic", "L1-map-basic", "L1-query-basic", "L1-systest-basic", "L1-workflow-basic",
+                "L2-coc-extension", "L2-event-handler-basic", "L2-security-policy-basic", "L2-table-extension",
+                "L2-virtual-entity-basic",
+            },
+            fixtureCases);
     }
 
     [Fact]

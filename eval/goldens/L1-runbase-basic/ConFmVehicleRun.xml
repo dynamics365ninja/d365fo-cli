@@ -1,0 +1,72 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<AxClass>
+  <Name>ConFmVehicleRun</Name>
+  <Extends>RunBase</Extends>
+  <SourceCode>
+    <Declaration>public class ConFmVehicleRun extends RunBase
+{
+        // Packing version constant
+    private static int currentVersion = 1;
+}
+</Declaration>
+    <Methods>
+      <Method>
+        <Name>dialog</Name>
+        <Source>public Object dialog()
+{
+    DialogRunbase dialog = super();
+    return dialog;
+}
+</Source>
+      </Method>
+      <Method>
+        <Name>getFromDialog</Name>
+        <Source>public boolean getFromDialog()
+{
+    return super();
+}
+</Source>
+      </Method>
+      <Method>
+        <Name>pack</Name>
+        <Source>public container pack()
+{
+    return [currentVersion];
+}
+</Source>
+      </Method>
+      <Method>
+        <Name>unpack</Name>
+        <Source>public boolean unpack(container _packedClass)
+{
+    int version = RunBase::getVersion(_packedClass);
+    if (version == currentVersion)
+    {
+        [version] = _packedClass;
+        return true;
+    }
+    return false;
+}
+</Source>
+      </Method>
+      <Method>
+        <Name>run</Name>
+        <Source>public void run()
+{
+    // TODO: implement
+}
+</Source>
+      </Method>
+      <Method>
+        <Name>main</Name>
+        <Source>public static void main(Args _args)
+{
+    ConFmVehicleRun runObject = new ConFmVehicleRun();
+    if (runObject.prompt())
+        runObject.runOperationNow();
+}
+</Source>
+      </Method>
+    </Methods>
+  </SourceCode>
+</AxClass>

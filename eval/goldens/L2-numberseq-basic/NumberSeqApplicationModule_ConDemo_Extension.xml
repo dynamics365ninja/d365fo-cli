@@ -1,0 +1,32 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<AxClass>
+  <Name>NumberSeqApplicationModule_ConDemo_Extension</Name>
+  <SourceCode>
+    <Declaration>[ExtensionOf(classStr(NumberSeqApplicationModule_ConDemo))]
+final class NumberSeqApplicationModule_ConDemo_Extension
+{
+}
+</Declaration>
+    <Methods>
+      <Method>
+        <Name>loadModule</Name>
+        <Source>public void loadModule()
+{
+    next loadModule();
+
+    NumberSeqDatatype datatype = NumberSeqDatatype::construct();
+    datatype.parmDatatypeId(extendedTypeNum(ConDemoNum));
+    datatype.parmReferenceHelp(literalStr("ConDemoNum"));
+    datatype.parmWizardIsContinuous(false);
+    datatype.parmWizardIsManual(false);
+    datatype.parmWizardIsChangeDownAllowed(false);
+    datatype.parmWizardIsChangeUpAllowed(false);
+    datatype.parmWizardHighest(999999);
+    datatype.addParameterType(NumberSeqParameterType::DataArea, true, false);
+    this.create(datatype);
+}
+</Source>
+      </Method>
+    </Methods>
+  </SourceCode>
+</AxClass>

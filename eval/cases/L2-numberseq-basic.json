@@ -1,0 +1,13 @@
+{
+  "id": "L2-numberseq-basic",
+  "title": "Number sequence module registration (EDT + CoC module extension)",
+  "tier": 2,
+  "instruction": "Register a new number-sequence module named ConDemo: a CoC extension of NumberSeqApplicationModule_ConDemo that registers a NumberSeqDatatype for a new EDT ConDemoNum in loadModule(). Use only the d365fo CLI (search/get/generate/validate) — do not hand-write XML.",
+  "canonical_args": ["generate", "number-sequence", "ConDemo"],
+  "target_artifact_types": ["AxClass"],
+  "golden_path": "L2-numberseq-basic",
+  "tags": ["numbersequence", "class", "coc", "metadata", "known-reference-gap"],
+  "ignore": [],
+  "requires_fixture_index": false,
+  "golden_pending": false
+}

@@ -1,0 +1,13 @@
+{
+  "id": "L1-form-basic",
+  "title": "SimpleList form bound to an existing table",
+  "tier": 1,
+  "instruction": "Create a SimpleList form named ConFmVehicleList bound to the FmVehicle table, with grid columns for VIN and Make, captioned 'Fleet vehicles'. Use `d365fo get table FmVehicle` first to confirm the field names before generating. Use only the d365fo CLI (search/get/generate/validate) — do not hand-write XML.",
+  "canonical_args": ["generate", "form", "ConFmVehicleList", "--pattern", "SimpleList", "--table", "FmVehicle", "--field", "VIN", "--field", "Make", "--caption", "Fleet vehicles"],
+  "target_artifact_types": ["AxForm"],
+  "golden_path": "L1-form-basic",
+  "tags": ["form", "simplelist", "metadata"],
+  "ignore": [],
+  "requires_fixture_index": true,
+  "golden_pending": false
+}

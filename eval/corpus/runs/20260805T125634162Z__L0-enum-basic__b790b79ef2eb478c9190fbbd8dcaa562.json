@@ -1,0 +1,20 @@
+{
+  "runId": "20260805T125634162Z__L0-enum-basic__b790b79ef2eb478c9190fbbd8dcaa562",
+  "caseId": "L0-enum-basic",
+  "tier": 0,
+  "timestampUtc": "2026-08-05T12:56:34.1642399+00:00",
+  "source": "replay",
+  "score": {
+    "xppClean": true,
+    "xppErrors": 0,
+    "referencesClean": true,
+    "referenceErrors": 0,
+    "goldenMatch": true,
+    "goldenDiff": {
+      "missing": [],
+      "extra": [],
+      "changed": [],
+      "isMatch": true
+    }
+  }
+}

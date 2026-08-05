@@ -1,0 +1,13 @@
+{
+  "id": "L1-map-basic",
+  "title": "Shared field map onto an existing table",
+  "tier": 1,
+  "instruction": "Create an AxMap named ConFmVehicleMap with a single field Make (EDT Name), mapped onto the FmVehicle table's own Make field by identical name. Use `d365fo get table FmVehicle` first to confirm the field exists before generating. Use only the d365fo CLI (search/get/generate/validate) — do not hand-write XML.",
+  "canonical_args": ["generate", "map", "ConFmVehicleMap", "--field", "Make:Name", "--map-to", "FmVehicle:Make=Make"],
+  "target_artifact_types": ["AxMap"],
+  "golden_path": "L1-map-basic",
+  "tags": ["map", "metadata"],
+  "ignore": [],
+  "requires_fixture_index": true,
+  "golden_pending": false
+}

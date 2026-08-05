@@ -1,0 +1,109 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<AxReport>
+  <Name>ConFmVehicleReport</Name>
+  <Datasets>
+    <AxReportDataset>
+      <Name>ConFmVehicleReportDS</Name>
+      <DataProvider>ConFmVehicleReportDP</DataProvider>
+      <QueryType>DataProvider</QueryType>
+      <DynamicFilters>Yes</DynamicFilters>
+    </AxReportDataset>
+  </Datasets>
+  <Designs>
+    <AxReportDesign>
+      <Name>Report</Name>
+      <Caption>Fleet vehicle report</Caption>
+      <AutoDesignSpecs>
+        <AxReportAutoDesignNode>
+          <Name>AutoDesign</Name>
+          <DataSet>ConFmVehicleReportDS</DataSet>
+          <ReportAutoDesignItems>
+            <AxReportAutoDesignDataSet>
+              <Name>AutoDesignDataSet1</Name>
+              <DataSet>ConFmVehicleReportDS</DataSet>
+              <AutoFields>Yes</AutoFields>
+            </AxReportAutoDesignDataSet>
+          </ReportAutoDesignItems>
+        </AxReportAutoDesignNode>
+      </AutoDesignSpecs>
+      <ReportDesignItems>
+        <AxReportTablix>
+          <Name>Tablix1</Name>
+          <DataSetName>ConFmVehicleReportDS</DataSetName>
+          <TablixBody>
+            <TablixColumns>
+              <TablixColumn>
+                <Width>2in</Width>
+              </TablixColumn>
+              <TablixColumn>
+                <Width>2in</Width>
+              </TablixColumn>
+            </TablixColumns>
+            <TablixRows>
+              <TablixRow>
+                <Height>0.25in</Height>
+                <TablixCells>
+                  <TablixCell>
+                    <CellContents>
+                      <Textbox Name="Tablix1_VIN_Header">
+                        <Value>VIN</Value>
+                        <Style>
+                          <FontWeight>Bold</FontWeight>
+                          <BackgroundColor>#e0e0e0</BackgroundColor>
+                        </Style>
+                      </Textbox>
+                    </CellContents>
+                  </TablixCell>
+                  <TablixCell>
+                    <CellContents>
+                      <Textbox Name="Tablix1_Make_Header">
+                        <Value>Make</Value>
+                        <Style>
+                          <FontWeight>Bold</FontWeight>
+                          <BackgroundColor>#e0e0e0</BackgroundColor>
+                        </Style>
+                      </Textbox>
+                    </CellContents>
+                  </TablixCell>
+                </TablixCells>
+              </TablixRow>
+              <TablixRow>
+                <Height>0.25in</Height>
+                <TablixCells>
+                  <TablixCell>
+                    <CellContents>
+                      <Textbox Name="Tablix1_VIN">
+                        <Value>=Fields!VIN.Value</Value>
+                      </Textbox>
+                    </CellContents>
+                  </TablixCell>
+                  <TablixCell>
+                    <CellContents>
+                      <Textbox Name="Tablix1_Make">
+                        <Value>=Fields!Make.Value</Value>
+                      </Textbox>
+                    </CellContents>
+                  </TablixCell>
+                </TablixCells>
+              </TablixRow>
+            </TablixRows>
+          </TablixBody>
+          <TablixColumnHierarchy>
+            <TablixMembers>
+              <TablixMember />
+              <TablixMember />
+            </TablixMembers>
+          </TablixColumnHierarchy>
+          <TablixRowHierarchy>
+            <TablixMembers>
+              <TablixMember />
+              <TablixMember>
+                <Group Name="Detail" />
+              </TablixMember>
+            </TablixMembers>
+          </TablixRowHierarchy>
+        </AxReportTablix>
+      </ReportDesignItems>
+    </AxReportDesign>
+  </Designs>
+</AxReport>

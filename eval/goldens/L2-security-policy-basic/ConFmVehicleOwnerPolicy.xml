@@ -1,0 +1,10 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<AxSecurityPolicy>
+  <Name>ConFmVehicleOwnerPolicy</Name>
+  <ConstrainedTable>FmVehicle</ConstrainedTable>
+  <Query>ConFmVehicleOwnerQuery</Query>
+  <Operation>Select</Operation>
+  <ContextType>RoleName</ContextType>
+  <ContextString></ContextString>
+  <Enabled>Yes</Enabled>
+</AxSecurityPolicy>

@@ -60,15 +60,24 @@ public static class NumberSequenceScaffolder
                             new XElement("Source", loadModuleSrc))))));
     }
 
-    /// <summary>Scaffolds an EDT that is backed by a number sequence.</summary>
+    /// <summary>
+    /// Scaffolds an EDT that is backed by a number sequence. Carries the same
+    /// <c>xmlns:i</c> / <c>i:type="AxEdtString"</c> root discriminator as
+    /// <see cref="XppScaffolder.Edt"/> — D365FO's metadata reader (and
+    /// <see cref="ScaffoldFileWriter"/>'s own write-time gate) reject an
+    /// <c>AxEdtString</c> root without it.
+    /// </summary>
     public static XDocument Edt(
         string edtName,
         string moduleName,
         NumberSequenceScope scope = NumberSequenceScope.Company,
         string? label = null)
     {
+        XNamespace xsi = "http://www.w3.org/2001/XMLSchema-instance";
         return new XDocument(
             new XElement("AxEdtString",
+                new XAttribute(XNamespace.Xmlns + "i", xsi.NamespaceName),
+                new XAttribute(XName.Get("type", xsi.NamespaceName), "AxEdtString"),
                 new XElement("Name", edtName),
                 new XElement("Extends", "Num"),
                 string.IsNullOrEmpty(label) ? null : new XElement("Label", label),

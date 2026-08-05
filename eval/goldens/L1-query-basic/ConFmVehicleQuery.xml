@@ -1,0 +1,10 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<AxQuery>
+  <Name>ConFmVehicleQuery</Name>
+  <DataSources>
+    <AxQuerySimpleRootDataSource>
+      <Name>FmVehicle</Name>
+      <Table>FmVehicle</Table>
+    </AxQuerySimpleRootDataSource>
+  </DataSources>
+</AxQuery>

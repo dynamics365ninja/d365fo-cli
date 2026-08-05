@@ -456,7 +456,7 @@ public static class XppScaffolder
             $"public static class {className}\n{{\n" +
             $"    [{attr}]\n" +
             $"    public static void {handlerMethod}(XppPrePostArgs args)\n" +
-            "    {\n        // handler logic here\n    }\n}}\n";
+            "    {\n        // handler logic here\n    }\n}\n";
 
         return new XDocument(
             new XElement("AxClass",

@@ -1,0 +1,13 @@
+{
+  "id": "L1-systest-basic",
+  "title": "ATL-ready SysTestCase skeleton over an existing class method",
+  "tier": 1,
+  "instruction": "Create an ATL-ready SysTest class named ConFmVehicleServiceTest exercising FmVehicleService.run(). Use `d365fo get class FmVehicleService` first to confirm the method exists before generating. Use only the d365fo CLI (search/get/generate/validate) — do not hand-write XML.",
+  "canonical_args": ["generate", "systest", "ConFmVehicleServiceTest", "--class", "FmVehicleService", "--method", "run"],
+  "target_artifact_types": ["AxClass"],
+  "golden_path": "L1-systest-basic",
+  "tags": ["systest", "class", "metadata"],
+  "ignore": [],
+  "requires_fixture_index": true,
+  "golden_pending": false
+}

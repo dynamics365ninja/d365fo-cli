@@ -1,0 +1,27 @@
+{
+  "runId": "20260805T130448016Z__L1-form-basic__5d2afe09312e40aca18315d5042bfa24",
+  "caseId": "L1-form-basic",
+  "tier": 1,
+  "timestampUtc": "2026-08-05T13:04:48.0187602+00:00",
+  "source": "agent",
+  "score": {
+    "xppClean": true,
+    "xppErrors": 0,
+    "referencesClean": true,
+    "referenceErrors": 0,
+    "goldenMatch": false,
+    "goldenDiff": {
+      "missing": [],
+      "extra": [],
+      "changed": [
+        {
+          "path": "AxForm/Design/Caption",
+          "expected": "Fleet vehicles",
+          "actual": "@Fleet:Vehicle"
+        }
+      ],
+      "isMatch": false
+    }
+  },
+  "note": "Agent-driven, instruction-only run. First draft omitted --field, matching the tool\u0027s own empty-grid warning; adding --field VIN --field Make (from prior \u0027get table FmVehicle\u0027 output) closes every diff except Design/Caption (golden literal \u0027Fleet vehicles\u0027 vs tool default \u0027@Fleet:Vehicle\u0027 inherited from the table label) \u2014 that string is not derivable from the instruction text, likely a case-authoring detail baked into canonical_args rather than a CLI defect."
+}

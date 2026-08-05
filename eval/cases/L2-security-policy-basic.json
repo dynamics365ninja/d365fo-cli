@@ -1,0 +1,13 @@
+{
+  "id": "L2-security-policy-basic",
+  "title": "XDS security policy constraining an existing table",
+  "tier": 2,
+  "instruction": "Create a security policy named ConFmVehicleOwnerPolicy constraining the FmVehicle table via a policy query ConFmVehicleOwnerQuery. Use `d365fo get table FmVehicle` first to confirm the table exists before generating. Use only the d365fo CLI (search/get/generate/validate) — do not hand-write XML.",
+  "canonical_args": ["generate", "security-policy", "ConFmVehicleOwnerPolicy", "--constrained-table", "FmVehicle", "--policy-query", "ConFmVehicleOwnerQuery"],
+  "target_artifact_types": ["AxSecurityPolicy"],
+  "golden_path": "L2-security-policy-basic",
+  "tags": ["security-policy", "xds", "metadata"],
+  "ignore": [],
+  "requires_fixture_index": true,
+  "golden_pending": false
+}

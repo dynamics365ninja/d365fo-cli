@@ -1,0 +1,13 @@
+{
+  "id": "L2-table-extension",
+  "title": "Table extension shell over an existing table",
+  "tier": 2,
+  "instruction": "Create a Table extension over FmVehicle. Use `d365fo get table FmVehicle` first to confirm the table exists before generating. Use only the d365fo CLI (search/get/generate/validate) — do not hand-write XML.",
+  "canonical_args": ["generate", "extension", "Table", "FmVehicle"],
+  "target_artifact_types": ["AxTableExtension"],
+  "golden_path": "L2-table-extension",
+  "tags": ["extension", "table", "metadata", "known-xpp-gap"],
+  "ignore": [],
+  "requires_fixture_index": true,
+  "golden_pending": false
+}

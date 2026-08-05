@@ -1,0 +1,13 @@
+{
+  "id": "L2-virtual-entity-basic",
+  "title": "Public data entity view over an existing table",
+  "tier": 2,
+  "instruction": "Create a public data entity named ConFmVehicleEntity over the FmVehicle table, exposing VIN and Make, with public collection name ConFmVehicleEntities. Use `d365fo get table FmVehicle` first to confirm the field names before generating. Use only the d365fo CLI (search/get/generate/validate) — do not hand-write XML.",
+  "canonical_args": ["generate", "entity", "ConFmVehicleEntity", "--table", "FmVehicle", "--public-entity", "ConFmVehicleEntity", "--public-collection", "ConFmVehicleEntities", "--field", "VIN", "--field", "Make"],
+  "target_artifact_types": ["AxDataEntityView"],
+  "golden_path": "L2-virtual-entity-basic",
+  "tags": ["entity", "data-entity", "metadata"],
+  "ignore": [],
+  "requires_fixture_index": true,
+  "golden_pending": false
+}

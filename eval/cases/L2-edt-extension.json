@@ -1,0 +1,13 @@
+{
+  "id": "L2-edt-extension",
+  "title": "EDT extension shell over a standard EDT",
+  "tier": 2,
+  "instruction": "Create an EDT extension over the standard EDT AccountNum. Use only the d365fo CLI (search/get/generate/validate) — do not hand-write XML.",
+  "canonical_args": ["generate", "extension", "Edt", "AccountNum"],
+  "target_artifact_types": ["AxEdtExtension"],
+  "golden_path": "L2-edt-extension",
+  "tags": ["extension", "edt", "metadata"],
+  "ignore": [],
+  "requires_fixture_index": false,
+  "golden_pending": false
+}
