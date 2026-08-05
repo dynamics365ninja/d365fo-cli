@@ -123,6 +123,73 @@ internal static class BridgeGate
     }
 
     /// <summary>
+    /// Delete an existing Ax* object in <paramref name="model"/> via the live metadata
+    /// provider (bridge <c>deleteObject</c>). Used by <c>d365fo delete</c> and, in reverse,
+    /// by <c>d365fo undo</c> to revert a bridge-mediated create (issue #113).
+    /// Returns (true, null) on success, (false, message) on any failure.
+    /// </summary>
+    internal static (bool ok, string? error) TryDeleteObject(string kind, string name, string model)
+    {
+        if (!BridgeClient.IsAvailable())
+        {
+            return (false, "bridge is not available (set D365FO_BRIDGE_ENABLED=1 and D365FO_BRIDGE_PATH).");
+        }
+
+        try
+        {
+            var options = DefaultOptions();
+            using var client = new BridgeClient(options);
+            var args = new JsonObject
+            {
+                ["kind"] = kind,
+                ["name"] = name,
+                ["model"] = model,
+            };
+
+            var result = client.SendAsync("deleteObject", args).GetAwaiter().GetResult();
+            if (result is null) return (false, "bridge returned no result");
+
+            var ok = (bool?)result["ok"] ?? false;
+            if (!ok)
+            {
+                var err = (string?)result["error"] ?? "UNKNOWN";
+                var msg = (string?)result["message"] ?? string.Empty;
+                return (false, err + ": " + msg);
+            }
+            return (true, null);
+        }
+        catch (BridgeException ex)
+        {
+            return (false, "bridge error: " + ex.Message);
+        }
+    }
+
+    /// <summary>
+    /// Read a live Ax* object back as raw XML via the bridge's <c>readObjectXml</c> — used to
+    /// capture an exact pre-image before a bridge delete so <c>d365fo undo</c> can recreate it
+    /// (issue #113). Returns null on any failure, including bridge unavailability.
+    /// </summary>
+    internal static string? TryReadObjectXml(string kind, string name)
+    {
+        if (!BridgeClient.IsAvailable()) return null;
+        try
+        {
+            var options = DefaultOptions();
+            using var client = new BridgeClient(options);
+            var result = client.SendAsync("readObjectXml", new JsonObject { ["kind"] = kind, ["name"] = name })
+                .GetAwaiter().GetResult();
+            if (result is null) return null;
+            var ok = (bool?)result["ok"] ?? false;
+            if (!ok) return null;
+            return (string?)result["xml"];
+        }
+        catch (BridgeException)
+        {
+            return null;
+        }
+    }
+
+    /// <summary>
     /// Query the DYNAMICSXREFDB for reverse references via the bridge.
     /// Returns the raw bridge JSON (tag _source already included by the
     /// bridge) or null on any failure — callers fall back to the regex
@@ -172,6 +239,50 @@ internal static class BridgeGate
         {
             return null;
         }
+    }
+
+    /// <summary>
+    /// Outcome of an opt-in post-write verification. <c>Skipped</c> means the
+    /// Metadata API runtime is not available at all — generation must keep working
+    /// offline, so this is never an error.
+    /// </summary>
+    internal enum VerifyOutcome { Skipped, Readable, Unreadable }
+
+    /// <summary>
+    /// Read a just-written artefact back through the live metadata provider — the
+    /// same path Visual Studio takes when it opens the file. Purely a check: nothing
+    /// is written and the artefact is left alone either way.
+    /// </summary>
+    /// <param name="axKind">Bridge collection kind: class | table | edt | enum | form.</param>
+    /// <returns>
+    /// <see cref="VerifyOutcome.Skipped"/> when the bridge is unavailable or the kind
+    /// has no read verb, <see cref="VerifyOutcome.Readable"/> when the provider
+    /// returned the object, <see cref="VerifyOutcome.Unreadable"/> when the provider
+    /// was reachable but could not load it.
+    /// </returns>
+    internal static (VerifyOutcome outcome, string? detail) TryVerifyObject(string axKind, string name)
+    {
+        var method = axKind?.ToLowerInvariant() switch
+        {
+            "class" => "readClass",
+            "table" => "readTable",
+            "edt"   => "readEdt",
+            "enum"  => "readEnum",
+            "form"  => "readForm",
+            _       => null,
+        };
+        if (method is null)
+            return (VerifyOutcome.Skipped, $"no metadata-provider read verb for kind '{axKind}'.");
+
+        // Same availability check the read/write helpers use — no second notion of
+        // "is the runtime here".
+        if (!BridgeClient.IsAvailable())
+            return (VerifyOutcome.Skipped, "the D365FO Metadata API runtime is not available.");
+
+        return TryRead(method, name) is not null
+            ? (VerifyOutcome.Readable, null)
+            : (VerifyOutcome.Unreadable,
+               "the metadata provider is reachable but could not load the object back.");
     }
 
     private static object? TryRead(string method, string name)

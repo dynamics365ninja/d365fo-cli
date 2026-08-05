@@ -111,9 +111,35 @@ public sealed record MethodInfo(
     string Name,
     string? Signature,
     string? ReturnType,
-    bool IsStatic);
+    bool IsStatic)
+{
+    /// <summary>
+    /// Class the method is actually declared on. Null for methods declared on the
+    /// class being inspected; set only on entries in
+    /// <see cref="ClassDetails.InheritedMethods"/>.
+    /// </summary>
+    /// <remarks>
+    /// Deliberately a property rather than a positional parameter: the queries that
+    /// materialize <see cref="MethodInfo"/> through Dapper select only the four
+    /// positional columns, and Dapper requires a constructor matching the projection
+    /// exactly. Inherited entries are constructed in code instead.
+    /// </remarks>
+    public string? DeclaringClass { get; init; }
+}
 
-public sealed record ClassDetails(ClassInfo Class, IReadOnlyList<MethodInfo> Methods);
+/// <param name="Class">Header row for the class itself.</param>
+/// <param name="Methods">Methods declared on the class itself.</param>
+/// <param name="InheritedMethods">
+/// Methods reachable through the <c>extends</c> chain but not redeclared locally,
+/// nearest base class first, each stamped with its <c>DeclaringClass</c>. Empty when
+/// the class has no base, when the base is outside the index, or when every base
+/// method is overridden. Kept separate from <see cref="Methods"/> so callers can
+/// still tell "this class defines it" from "it inherits it".
+/// </param>
+public sealed record ClassDetails(
+    ClassInfo Class,
+    IReadOnlyList<MethodInfo> Methods,
+    IReadOnlyList<MethodInfo> InheritedMethods);
 
 public sealed record EdtInfo(
     string Name,
@@ -160,10 +186,40 @@ public sealed record CocExtensionInfo(
     string ExtensionClass,
     string Model);
 
+/// <param name="ObjectName">Secured AOT object the coverage was computed for.</param>
+/// <param name="ObjectType">Kind of that object (Table, Form, Menuitem, …).</param>
+/// <param name="Routes">Role → duty → privilege → entry-point paths that grant access.</param>
+/// <param name="RowLevel">
+/// Record-level (XDS) coverage. Reported explicitly — including when it cannot be
+/// determined — rather than left out, so an absent section is never mistaken for
+/// "this table is unconstrained".
+/// </param>
 public sealed record SecurityCoverage(
     string ObjectName,
     string ObjectType,
-    IReadOnlyList<SecurityRoute> Routes);
+    IReadOnlyList<SecurityRoute> Routes,
+    RowLevelSecurityCoverage RowLevel);
+
+/// <param name="State">
+/// One of:
+/// <list type="bullet">
+/// <item><c>Constrained</c> — at least one AxSecurityPolicy constrains the table;
+/// see <paramref name="Policies"/>.</item>
+/// <item><c>NotConstrained</c> — the index holds security policies and none of them
+/// name this table.</item>
+/// <item><c>Unknown</c> — the index holds no security policies at all, so zero
+/// matches proves nothing. Re-run <c>d365fo index refresh</c> to populate them.</item>
+/// <item><c>NotApplicable</c> — XDS constrains tables; the queried object is not
+/// one.</item>
+/// </list>
+/// </param>
+/// <param name="Policies">
+/// The policies that constrain the table; empty for every state but
+/// <c>Constrained</c>.
+/// </param>
+public sealed record RowLevelSecurityCoverage(
+    string State,
+    IReadOnlyList<SecurityPolicyInfo> Policies);
 
 public sealed record SecurityRoute(string Role, string? Duty, string? Privilege, string? EntryPoint);
 

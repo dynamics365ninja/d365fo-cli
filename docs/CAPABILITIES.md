@@ -181,6 +181,8 @@ All scaffolders write atomically (`.tmp` + move, `.bak` on overwrite). Pass `--i
 | `generate edt` | `AxEdt` |
 | `generate enum` | `AxEnum` |
 | `generate query` | `AxQuery` with root datasource and optional nested joins |
+| `generate view` | `AxView` projecting a query: bound and computed fields |
+| `generate map` | `AxMap` field template plus table mappings |
 | `generate sysoperation` | Contract + Service + Controller class triple |
 | `generate number-sequence` | Module extension + EDT + form handler class |
 | `generate workflow` | `AxWorkflow` + document class + submit stub |
@@ -191,6 +193,7 @@ All scaffolders write atomically (`.tmp` + move, `.bak` on overwrite). Pass `--i
 | `generate systest` | `SysTestCase` skeleton — `[SysTestMethod]` Arrange/Act/Assert stub, optional `[SysTestCaseDataDependency]` and `--atl` `AtlDataRootNode` wiring (ATL-ready MVP, no test-logic generation) |
 | `generate migration-script` | Data-fix `Runnable` class with `ttsbegin`/`ttscommit` batching |
 | `generate simple-list` | Alias for `generate form --pattern SimpleList` |
+| `modify method` | Replace an existing method's body on a live class/table/edt/form via D365FO.Bridge (`IMetadataProvider`, structured `XDocument` replace — no CDATA string surgery, no on-disk fallback). Reference/BP validation always blocks on error-severity findings. |
 
 ### Scaffolding validation helpers
 
@@ -261,6 +264,33 @@ d365fo labels delete Key           --file path/Foo.en-us.label.txt
 
 ---
 
+## Modification journal & undo
+
+Every metadata write — `generate *`, `labels create\|rename\|delete`, and `delete` — appends
+an entry to a size-capped, FIFO-pruned journal at `<index-dir>/journal/`, whether the write
+went to disk or through the metadata bridge. `d365fo undo` replays entries in reverse through
+the SAME write path that produced them, restoring the exact pre-image.
+
+```sh
+d365fo journal list --output json                  # inspect the stack, most-recent-first
+d365fo undo --dry-run --output json                # preview what would be reverted
+d365fo undo --output json                           # revert the last write
+d365fo undo --steps 3 --output json                 # revert the last 3 writes
+
+# Delete an AOT object (journaled, so it can be undone)
+d365fo delete --kind table --name OldTable --path C:\pkg\MyModel\MyModel\AxTable\OldTable.xml
+d365fo delete --kind class --name OldClass --install-to MyModel   # via the metadata bridge
+```
+
+- **create → undo** removes the file (and its `.rnrproj` entry, when the model has one with an explicit item list).
+- **update → undo** restores the exact pre-image bytes.
+- **delete → undo** recreates the file from its pre-image.
+- Works identically with `D365FO_BRIDGE_ENABLED=1` or unset — bridge-mediated writes undo through `deleteObject`/`updateObject`/`createObject`.
+
+MCP parity: `undo_last_modification` (`steps`, `dryRun`) and `journal_list` (`limit`).
+
+---
+
 ## Review
 
 ```sh
@@ -313,7 +343,7 @@ Returns `UNSUPPORTED_PLATFORM` on non-Windows.
 
 ## MCP server
 
-Exposes the same index and scaffolding surface as the CLI over the `ModelContextProtocol` C# SDK via stdio. The tool surface is **consolidated** into **20 discriminator-based tools** (`search`, `get_object_info`, `get_method`, `labels`, `security_info`, `extension_info`, `object_patterns`, `generate_object`, `analyze`, `models`, …) instead of one tool per object type — mirroring the upstream `d365fo-mcp-server` (which sits at 26). A single tool dispatches on a `type` / `objectType` / `mode` / `action` / `domain` / `include` field. See [MIGRATION_FROM_MCP.md](MIGRATION_FROM_MCP.md) for the full old→new mapping.
+Exposes the same index and scaffolding surface as the CLI over the `ModelContextProtocol` C# SDK via stdio (default) or HTTP (`--http`, for a shared team deployment). The tool surface is **consolidated** into **22 discriminator-based tools** (`search`, `get_object_info`, `get_method`, `labels`, `security_info`, `extension_info`, `object_patterns`, `generate_object`, `modify_method`, `analyze`, `models`, …) instead of one tool per object type — mirroring the upstream `d365fo-mcp-server` (which sits at 26). A single tool dispatches on a `type` / `objectType` / `mode` / `action` / `domain` / `include` field. See [MIGRATION_FROM_MCP.md](MIGRATION_FROM_MCP.md) for the full old→new mapping.
 
 ```jsonc
 {
@@ -326,6 +356,20 @@ Exposes the same index and scaffolding surface as the CLI over the `ModelContext
   }
 }
 ```
+
+### HTTP transport (shared team deployment)
+
+```sh
+d365fo-mcp --http --port 8080
+```
+
+| Env var | Purpose |
+|---|---|
+| `API_KEY` | Shared secret required in the `X-Api-Key` header on `POST /mcp`. Unset = unauthenticated (logs a startup warning); `GET /health` never requires it. |
+| `MCP_SERVER_MODE` | `full` (default) \| `read-only` \| `write-only` — gates the tool surface. `read-only` drops `generate_object`/`labels`/`get_workspace_info`/`get_method` (need the local package tree); `write-only` exposes only those four. A disallowed `tools/call` fails with `MODE_NOT_ALLOWED`. |
+| `MCP_HTTP_PORT` | Listen port when `--port` is omitted (default `3000`). |
+
+`POST /mcp` is one JSON-RPC request per call (no SSE/session state) — reuses the same dispatch, routing, and mode gate as stdio. `GET /health` reports `{status, mode, indexReachable}` and needs no auth. A simple in-memory rate limiter (429 + `RATE_LIMITED`) protects `/mcp` per API key / IP. See [MIGRATION_FROM_MCP.md](MIGRATION_FROM_MCP.md#http-transport--shared-deployment-azure-app-service) for the read-only-shared / write-only-local deployment pattern this mirrors from upstream.
 
 ---
 

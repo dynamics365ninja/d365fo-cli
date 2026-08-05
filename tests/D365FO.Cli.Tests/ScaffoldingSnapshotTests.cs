@@ -10,6 +10,9 @@ namespace D365FO.Cli.Tests;
 /// Parses the output XML and asserts structural elements are present to
 /// catch silent regressions if the scaffolder templates are changed.
 /// </summary>
+// Shares a collection with LabelBatchCreateTests: both override the process-wide
+// D365FO_INDEX_DB env var, so running them in parallel would race on that global state.
+[Collection("EnvIndexDb")]
 public class ScaffoldingSnapshotTests
 {
     // ---- SysOperation (Phase 2) ----
@@ -275,6 +278,126 @@ public class ScaffoldingSnapshotTests
         var ex = Assert.Throws<System.InvalidOperationException>(() => ScaffoldFileWriter.Write(raw, tmp, overwrite: true));
         Assert.Contains("AxEdtExtension", ex.Message);
         Assert.False(System.IO.File.Exists(tmp));
+    }
+
+    [Fact]
+    public void ScaffoldFileWriter_rejects_AxEnum_without_xsi_namespace()
+    {
+        // issue #70: VS's metadata reader cannot open an AxEnum whose root is
+        // missing the XMLSchema-instance declaration.
+        var doc = new XDocument(new XElement("AxEnum",
+            new XElement("Name", "Bad"),
+            new XElement("IsExtensible", "true")));
+        var tmp = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "d365fo-cli-test-enum-no-xsi.xml");
+        if (System.IO.File.Exists(tmp)) System.IO.File.Delete(tmp);
+        var ex = Assert.Throws<System.InvalidOperationException>(() => ScaffoldFileWriter.Write(doc, tmp, overwrite: true));
+        Assert.Contains("XMLSchema-instance", ex.Message);
+        Assert.False(System.IO.File.Exists(tmp));
+    }
+
+    [Fact]
+    public void ScaffoldFileWriter_rejects_AxTable_without_xsi_namespace_string_overload()
+    {
+        // AxTableField is polymorphic: without the declaration its i:type
+        // discriminators cannot resolve (issue #91).
+        var raw = "<?xml version=\"1.0\" encoding=\"utf-8\"?><AxTable><Name>Bad</Name></AxTable>";
+        var tmp = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "d365fo-cli-test-table-no-xsi.xml");
+        if (System.IO.File.Exists(tmp)) System.IO.File.Delete(tmp);
+        var ex = Assert.Throws<System.InvalidOperationException>(() => ScaffoldFileWriter.Write(raw, tmp, overwrite: true));
+        Assert.Contains("AxTable", ex.Message);
+        Assert.False(System.IO.File.Exists(tmp));
+    }
+
+    [Fact]
+    public void ScaffoldFileWriter_rejects_NoYes_spelling_in_IsExtensible()
+    {
+        // issue #70: IsExtensible is a CLR bool, so "Yes" is not a valid encoding
+        // even though most AOT properties use the NoYes spelling.
+        var doc = new XDocument(new XElement("AxEnum",
+            new XAttribute(XNamespace.Xmlns + "i", "http://www.w3.org/2001/XMLSchema-instance"),
+            new XElement("Name", "Bad"),
+            new XElement("IsExtensible", "Yes")));
+        var tmp = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "d365fo-cli-test-enum-yesno.xml");
+        if (System.IO.File.Exists(tmp)) System.IO.File.Delete(tmp);
+        var ex = Assert.Throws<System.InvalidOperationException>(() => ScaffoldFileWriter.Write(doc, tmp, overwrite: true));
+        Assert.Contains("IsExtensible", ex.Message);
+        Assert.Contains("true", ex.Message);
+        Assert.False(System.IO.File.Exists(tmp));
+    }
+
+    [Fact]
+    public void ScaffoldFileWriter_rejects_NoYes_spelling_in_IsExtensible_string_overload()
+    {
+        var raw = "<?xml version=\"1.0\" encoding=\"utf-8\"?>" +
+                  "<AxEnum xmlns:i=\"http://www.w3.org/2001/XMLSchema-instance\">" +
+                  "<Name>Bad</Name><IsExtensible>No</IsExtensible></AxEnum>";
+        var tmp = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "d365fo-cli-test-enum-yesno-raw.xml");
+        if (System.IO.File.Exists(tmp)) System.IO.File.Delete(tmp);
+        var ex = Assert.Throws<System.InvalidOperationException>(() => ScaffoldFileWriter.Write(raw, tmp, overwrite: true));
+        Assert.Contains("IsExtensible", ex.Message);
+        Assert.False(System.IO.File.Exists(tmp));
+    }
+
+    [Fact]
+    public void ScaffoldFileWriter_accepts_scaffolder_enum_output()
+    {
+        // The guards must not fire on what the generators actually emit —
+        // otherwise the whole enum/table/EDT generate path is dead.
+        var tmp = System.IO.Path.Combine(System.IO.Path.GetTempPath(), $"d365fo-cli-test-enum-ok-{System.Guid.NewGuid():N}.xml");
+        try
+        {
+            var res = ScaffoldFileWriter.Write(
+                XppScaffolder.Enum("MyEnum", new[] { new EnumValueSpec("None", 0) }, isExtensible: true),
+                tmp, overwrite: true);
+            Assert.True(res.Bytes > 0);
+
+            var tablePath = System.IO.Path.ChangeExtension(tmp, ".table.xml");
+            try
+            {
+                ScaffoldFileWriter.Write(
+                    XppScaffolder.Table("MyTable", fields: new[] { new TableFieldSpec("AccountNum", "Name", null, true) }),
+                    tablePath, overwrite: true);
+            }
+            finally
+            {
+                if (System.IO.File.Exists(tablePath)) System.IO.File.Delete(tablePath);
+            }
+        }
+        finally
+        {
+            if (System.IO.File.Exists(tmp)) System.IO.File.Delete(tmp);
+        }
+    }
+
+    [Fact]
+    public void GenerateEnumCommand_with_verify_still_writes_when_the_metadata_runtime_is_absent()
+    {
+        // --verify is strictly belt-and-suspenders: generation has to keep working
+        // offline (CI, agent sessions, machines without the VS metadata assemblies),
+        // so an unavailable runtime must never turn a good write into a failure.
+        var outPath = System.IO.Path.Combine(System.IO.Path.GetTempPath(), $"d365fo-cli-test-verify-{System.Guid.NewGuid():N}.xml");
+        var oldFlag = System.Environment.GetEnvironmentVariable("D365FO_BRIDGE_ENABLED");
+        try
+        {
+            System.Environment.SetEnvironmentVariable("D365FO_BRIDGE_ENABLED", "0");
+            var exit = new GenerateEnumCommand().Execute(null!, new GenerateEnumCommand.Settings
+            {
+                Name = "MyVerifiedEnum",
+                Values = new[] { "None:0" },
+                Out = outPath,
+                Overwrite = true,
+                Verify = true,
+            });
+
+            Assert.Equal(0, exit);
+            Assert.True(System.IO.File.Exists(outPath));
+            Assert.Equal("AxEnum", XDocument.Load(outPath).Root!.Name.LocalName);
+        }
+        finally
+        {
+            System.Environment.SetEnvironmentVariable("D365FO_BRIDGE_ENABLED", oldFlag);
+            if (System.IO.File.Exists(outPath)) System.IO.File.Delete(outPath);
+        }
     }
 
     [Fact]

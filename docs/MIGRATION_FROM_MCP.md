@@ -7,7 +7,7 @@ Both tools share an **identical purpose** — give GitHub Copilot access to real
 | Protocol | MCP tools (JSON-RPC over stdio / HTTP) | Shell commands |
 | Implementation | TypeScript + Node.js | C# / .NET 10 |
 | Data layer | SQLite index + C# Bridge | **Shared** — same index, schema v5 is a superset |
-| Deployment | Local or Azure App Service (shared team instance) | Local |
+| Deployment | Local or Azure App Service (shared team instance) | Local, or `d365fo-mcp --http` on Azure App Service (shared team instance) |
 | Copilot integration | MCP tool calls | Shell tool |
 | Token economy | Larger JSON envelopes | Smaller output — see [TOKEN_ECONOMICS.md](TOKEN_ECONOMICS.md) |
 | CLI-only commands | — | `review diff`, `build/sync/test/bp`, `schema`, batch operations, `read`, `models` |
@@ -67,6 +67,88 @@ d365fo index status
 
 ---
 
+## HTTP transport & shared deployment (Azure App Service)
+
+`d365fo-mcp` defaults to stdio (one process per developer, spawned by the MCP
+client). For a team that wants to share one hosted instance instead — the
+scenario upstream `d365fo-mcp-server` addresses with its Azure App Service
+deployment — pass `--http` to serve the same tool surface over HTTP instead:
+
+```sh
+d365fo-mcp --http --port 8080
+# or: MCP_HTTP_PORT=8080 d365fo-mcp --http
+```
+
+This mirrors upstream's actual shipped auth/deployment model for shared
+instances — a single `X-Api-Key` header checked against an `API_KEY`
+environment variable, plus a server-mode split — **not** Entra ID / OAuth.
+(GitHub issue #114 originally proposed Entra ID; API-key auth was chosen
+instead for parity with the proven upstream design and to avoid the added
+operational cost of an app registration for what is, in practice, a
+single-team shared secret.)
+
+| Endpoint | Auth | Purpose |
+|---|---|---|
+| `POST /mcp` | `X-Api-Key` header (if `API_KEY` is set) | One JSON-RPC request per call — same semantics as stdio, same tool routing, same `MCP_SERVER_MODE` gate. Not a session/SSE transport: no `Mcp-Session-Id`, no reconnect stream. |
+| `GET /health` | None | Liveness probe: `{"status":"ok","mode":"<resolved mode>","indexReachable":true\|false}`. |
+
+Environment variables:
+
+| Variable | Values | Effect |
+|---|---|---|
+| `API_KEY` | any string | Required value of the `X-Api-Key` header on `/mcp`. **Unset = no auth** — a startup warning is logged; don't run unset outside localhost. |
+| `MCP_SERVER_MODE` | `full` (default) \| `read-only` \| `write-only` | Gates which tools are advertised in `tools/list` and callable via `tools/call`. A disallowed call fails with error code `MODE_NOT_ALLOWED`, both on `tools/list` (the tool is omitted) and `tools/call` (the gate re-checks at call time, so a stale client-side tool list can never bypass it). |
+| `MCP_HTTP_PORT` | port number | Listen port when `--port` isn't passed (default `3000`). |
+
+### The read-only / write-only split (upstream's `LOCAL_TOOLS` pattern)
+
+`read-only` excludes, and `write-only` exposes *only*, the tools that need the
+local D365FO package tree on disk: `generate_object`, `labels`,
+`get_workspace_info`, `get_method`. Every other tool (search, `get_object_info`,
+`analyze`, `models`, …) is read-only-safe because it only touches the SQLite
+index.
+
+This lets a team run the deployment upstream documents:
+
+- **Shared read-only instance** (`MCP_SERVER_MODE=read-only`) — hosted on Azure
+  App Service, no D365FO packages on the box, just the SQLite index (e.g. from
+  Blob Storage). Safe for the whole team to point their MCP client at for
+  search/read/analysis.
+- **Local write-only companion** (`MCP_SERVER_MODE=write-only`) — each
+  developer runs this locally (stdio or `--http` on localhost) where the real
+  package tree lives, for scaffolding writes and label edits.
+
+`full` (the default) is a single process exposing every tool — the right
+choice for local single-machine use, same as before this existed.
+
+### Pointing an editor at a deployed server
+
+Once a server is reachable, `d365fo connect` writes the MCP client entry for
+you instead of leaving you to hand-edit JSON:
+
+```sh
+d365fo connect https://d365fo-mcp.example.com                  # → .mcp.json (Claude Code)
+d365fo connect https://d365fo-mcp.example.com --editor vscode  # → .vscode/mcp.json
+d365fo connect http://localhost:3000 --name d365fo-local --api-key "$API_KEY"
+```
+
+It probes `GET /health` first, so a typo in the URL is reported as
+`SERVER_UNREACHABLE` rather than silently producing a config that yields no
+tools; `--force` writes anyway (useful against a cold-starting instance) and
+`--no-probe` skips the check. The server's resolved `MCP_SERVER_MODE` comes
+back in the result, with a warning when it is not `full` — so connecting to a
+read-only instance and then wondering where `generate_object` went is a
+one-line answer instead of a debugging session.
+
+The named entry is **merged** into the file: every other MCP server and
+top-level key is preserved, JSONC comments and trailing commas are tolerated,
+and a config that cannot be parsed is refused rather than overwritten. An
+entry of the same name is only replaced with `--force`; use `--name` to keep a
+prod and a local entry side by side. `--api-key` is written in plain text, so
+the command warns when the file may be committed.
+
+---
+
 ## The CLI's own MCP tool surface (unified)
 
 This repository also ships `d365fo-mcp`, a JSON-RPC 2.0 adapter over the same
@@ -95,10 +177,14 @@ renaming `form_pattern` → `object_patterns`.
 | `find_references` | — | reverse references via regex scan of indexed X++ source (was CLI-only) |
 | `validate_object_naming`, `get_workspace_info`, `suggest_edt`, `batch_get_info`, `lint`, `stats`, `index_status`, `index_history` | — | kept (parity names) |
 
-This adapter exposes **20 unified MCP tools** (the upstream `d365fo-mcp-server`
-sits at 26 — it additionally ships `get_knowledge`, `analyze_code`,
-`d365fo_file`, `undo_last_modification`, `validate_code`, `verify_d365fo_project`
-and the SDLC/build tools, which here are CLI-only or covered by Skills).
+This adapter exposes **23 unified MCP tools**, including `modify_method` (structured
+method-body replace via D365FO.Bridge — the `d365fo_file(action=modify)` counterpart) and
+`undo_last_modification` / `journal_list` (issue #113 — full parity with upstream's undo,
+backed by the modification journal described below). The upstream `d365fo-mcp-server`
+sits at 26 — it additionally ships `get_knowledge`, `analyze_code`, `d365fo_file`
+(`action=create`, covered here by `generate_object`), `validate_code`,
+`verify_d365fo_project` and the SDLC/build tools, which here are CLI-only or covered by
+Skills.
 
 Run `d365fo schema --full` for the machine-readable command/tool manifest; every
 CLI command's `mcpTool` field names the unified MCP tool it maps to.
@@ -155,11 +241,35 @@ commands. Both surfaces use the same discriminator-based naming.
 | `generate_object` (`objectType=table`) | `d365fo generate table <Name> --pattern <P> --field …` |
 | `generate_object` (`objectType=form`) | `d365fo generate form <Name> --pattern <P>` (pattern-gated write) |
 | `generate_object` (XML-only `objectType=…`) | `d365fo generate edt\|enum\|query\|sysoperation\|business-event\|runbase\|security-policy` (XML only) |
-| `d365fo_file` (`action=modify`) | targeted editor edit of CDATA method bodies + `d365fo index refresh`; structural changes via `generate … --overwrite` |
-| `undo_last_modification` | `.bak` backups written by every overwrite + `git checkout` |
+| `d365fo_file` (`action=modify`) / `modify_method` | `d365fo modify method <kind> <Object> <Method> --body "…"` (structured `XDocument` replace via D365FO.Bridge/`IMetadataProvider` — never CDATA string surgery; reference/BP validation always blocks on error-severity findings) |
+| `undo_last_modification` | `d365fo undo [--steps N] [--dry-run]` — reverts the last N modification-journal entries (see below) |
 | `labels` (`action=create\|rename\|delete`) | `d365fo labels create\|rename\|delete` (multi-language via `--lang`) |
 | `review_workspace_changes` | `d365fo review diff` |
 | `update_symbol_index` | `d365fo index refresh [--model <M>]` |
+
+#### Modification journal (issue #113)
+
+Every write path — `generate <kind> [--out\|--install-to]`, `labels create\|rename\|delete`,
+and `delete` — appends an entry to a journal stored at `<index-dir>/journal/` (next to the
+SQLite index; `d365fo journal list --output json` inspects it, size-capped with FIFO
+pruning). Each entry records the timestamp, command, object identity, operation
+(create/update/delete), and either the exact pre-image (update/delete) or a tombstone
+(create) — plus a `.rnrproj` project-file delta when the model has one with an explicit item
+list (most headless/VM installs don't; D365FO's build/sync tooling discovers objects by
+directory convention regardless).
+
+`d365fo undo [--steps N] [--dry-run]` replays the last N entries **in reverse, through the
+same write path that produced them** — on-disk file I/O, or the bridge's live
+`IMetadataProvider` when `D365FO_BRIDGE_ENABLED=1` was used for the original write — so undo
+behaves identically whether or not the bridge is enabled:
+- **create → undo** removes the file (and its `.rnrproj` entry, if one was added).
+- **update → undo** restores the exact pre-image bytes.
+- **delete → undo** (via `d365fo delete`) recreates the file from its pre-image.
+
+`--dry-run` previews what would be reverted without changing anything — use this before an
+agent commits to an undo. `undo` stops at the first failure so older entries are never
+skipped silently. The MCP adapter exposes the same engine as `undo_last_modification`
+(`steps`, `dryRun`) and `journal_list` (`limit`).
 
 ### Ops (Windows VM)
 

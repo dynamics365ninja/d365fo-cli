@@ -83,7 +83,7 @@ namespace D365FO.Bridge
             if (limit <= 0 || limit > 1000) limit = 200;
 
             // Resolve the input into one or more candidate XREFDB target paths.
-            var (exactPaths, likePaths, memberQualified) = ResolveTargetPaths(symbol);
+            var (exactPaths, likePaths, scopedTarget) = ResolveTargetPaths(symbol);
 
             var result = new JsonObject();
             var items = new JsonArray();
@@ -98,10 +98,11 @@ namespace D365FO.Bridge
                         cmd.CommandTimeout = 30;
 
                         // Build a parameterised WHERE: exact target paths via IN (...),
-                        // plus LIKE conditions for child/contains matches. A member-
-                        // qualified target points at an exact leaf, so it carries no
-                        // LIKE terms — adding "/%" children or a "%/name%" contains
-                        // would pool callers of every same-named member across types.
+                        // plus LIKE conditions for child/contains matches. A scoped
+                        // target (member-qualified, or a label) points at an exact
+                        // leaf, so it carries no LIKE terms — adding "/%" children or
+                        // a "%/name%" contains would pool callers of every same-named
+                        // member across types.
                         var inParams = new List<string>();
                         for (int i = 0; i < exactPaths.Count; i++)
                         {
@@ -185,10 +186,10 @@ ORDER BY srcName.Path";
             result["kindFilter"] = kindFilter ?? string.Empty;
             result["count"] = items.Count;
             result["source"] = "xrefdb";
-            // When the target is member-qualified the result is scoped to the
-            // declaring type, so an empty list is an authoritative "no callers"
+            // When the target is scoped (member-qualified, or a label) the query
+            // hit one exact leaf, so an empty list is an authoritative "no callers"
             // — not a hint to fall back to a looser name-only scan.
-            result["scoped"] = memberQualified;
+            result["scoped"] = scopedTarget;
             result["items"] = items;
             return result;
         }
@@ -204,31 +205,46 @@ ORDER BY srcName.Path";
         /// so method+field variants are expanded across every container type; only
         /// the path that actually exists matches. This is the precise where-used
         /// Visual Studio shows, instead of pooling every same-named member.</item>
+        /// <item>Label ("@WAX2194" old format, "@LabelFile:LabelId" new format, or
+        /// the explicit "/Labels/@..." xref path) — normalised to the single exact
+        /// path the X++ compiler records for a label, "/Labels/@&lt;ref&gt;". Without
+        /// this case a bare "@WAX2194" fell into the bare-name branch and produced
+        /// "/@WAX2194", which matches nothing, so label where-used silently returned
+        /// zero results.</item>
         /// <item>Bare name ("CustTable") — matched loosely as a standalone AOT root,
         /// its children, and as a node anywhere inside a path.</item>
         /// </list>
         /// Returns exact paths (matched via IN), LIKE patterns, and whether the
-        /// target is member-qualified (an exact leaf carrying no LIKE terms).
+        /// target is scoped to an exact leaf (carrying no LIKE terms).
         /// </summary>
-        internal static (List<string> exactPaths, List<string> likePaths, bool memberQualified) ResolveTargetPaths(string symbol)
+        internal static (List<string> exactPaths, List<string> likePaths, bool scopedTarget) ResolveTargetPaths(string symbol)
         {
             // Container segments that can own methods/fields.
             string[] memberContainers = { "Tables", "Classes", "Forms", "Views", "DataEntityViews", "Queries", "Maps" };
 
             var exact = new List<string>();
             var like = new List<string>();
-            bool memberQualified = false;
+            bool scoped = false;
             var trimmed = TrimSlash(symbol);
+
+            var labelRef = TryGetLabelRef(trimmed);
+            if (labelRef != null)
+            {
+                // A label is a leaf with a globally unique id — no children to widen
+                // to, and a "%/@Id%" contains scan would only pool unrelated paths.
+                exact.Add("/Labels/@" + labelRef);
+                return (exact, like, true);
+            }
 
             if (symbol.StartsWith("/"))
             {
                 exact.Add("/" + trimmed);
-                memberQualified = symbol.Contains("/Methods/") || symbol.Contains("/Fields/");
-                if (!memberQualified) like.Add("/" + trimmed + "/%");
+                scoped = symbol.Contains("/Methods/") || symbol.Contains("/Fields/");
+                if (!scoped) like.Add("/" + trimmed + "/%");
             }
             else if (symbol.Contains("."))
             {
-                memberQualified = true;
+                scoped = true;
                 var dot = symbol.IndexOf('.');
                 var owner = symbol.Substring(0, dot);
                 var member = symbol.Substring(dot + 1);
@@ -246,8 +262,32 @@ ORDER BY srcName.Path";
                 like.Add("%/" + trimmed + "%");
             }
 
-            return (exact, like, memberQualified);
+            return (exact, like, scoped);
         }
+
+        /// <summary>
+        /// Extracts the label id from a caller-supplied symbol, or returns null when
+        /// the symbol is not a label. Accepts the bare label reference in either
+        /// format ("@WAX2194", "@SysCommon:Delete") and the explicit xref path
+        /// ("/Labels/@WAX2194"). The id itself is passed through verbatim — the
+        /// compiler records it exactly as written in the source.
+        /// </summary>
+        private static string TryGetLabelRef(string trimmed)
+        {
+            if (string.IsNullOrEmpty(trimmed)) return null;
+
+            const string labelsPrefix = "Labels/@";
+            if (trimmed.StartsWith(labelsPrefix, StringComparison.OrdinalIgnoreCase))
+                return NullIfEmpty(trimmed.Substring(labelsPrefix.Length));
+
+            if (trimmed[0] == '@')
+                return NullIfEmpty(trimmed.Substring(1));
+
+            return null;
+        }
+
+        private static string NullIfEmpty(string s) =>
+            string.IsNullOrWhiteSpace(s) ? null : s;
 
         private static string TrimSlash(string s)
         {

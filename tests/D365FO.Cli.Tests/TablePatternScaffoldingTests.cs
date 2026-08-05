@@ -330,4 +330,29 @@ public class TablePatternScaffoldingTests
         var field = doc.Root!.Element("Fields")!.Element("AxTableField")!;
         Assert.Equal("AxTableFieldDate", field.Attribute(Xsi + "type")!.Value);
     }
+
+    [Fact]
+    public void ConfigurationKey_and_FormRef_are_emitted_when_supplied()
+    {
+        var doc = XppScaffolder.Table("FmThing", pattern: TablePattern.Main,
+            configurationKey: "FmModule", formRef: "FmThingForm");
+        var root = doc.Root!;
+        Assert.Equal("FmModule", root.Element("ConfigurationKey")!.Value);
+        Assert.Equal("FmThingForm", root.Element("FormRef")!.Value);
+
+        // Both belong to the scalar-property block, ahead of the collections.
+        var names = root.Elements().Select(e => e.Name.LocalName).ToList();
+        Assert.True(names.IndexOf("ConfigurationKey") < names.IndexOf("Fields"));
+        Assert.True(names.IndexOf("FormRef") < names.IndexOf("Fields"));
+    }
+
+    [Fact]
+    public void ConfigurationKey_and_FormRef_are_omitted_when_not_supplied()
+    {
+        // An absent element means the AOT default (ungated, no drill-down form);
+        // emitting an empty one would flip a default by accident.
+        var doc = XppScaffolder.Table("FmThing", pattern: TablePattern.Main);
+        Assert.Null(doc.Root!.Element("ConfigurationKey"));
+        Assert.Null(doc.Root!.Element("FormRef"));
+    }
 }

@@ -15,7 +15,19 @@
 
   <ItemGroup>
     <PackageReference Include="ModelContextProtocol" Version="1.2.0" />
-    <PackageReference Include="Microsoft.Extensions.Logging" Version="9.0.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!--
+      Console SDK project (not Sdk.Web) that also hosts a minimal ASP.NET Core
+      app for the HTTP transport (see HttpServerHost.cs, "d365fo mcp http"
+      flag). FrameworkReference pulls in WebApplication, Kestrel, routing,
+      Microsoft.AspNetCore.RateLimiting, and Microsoft.Extensions.Logging
+      (superseding the standalone Logging package this project used before)
+      without switching to Sdk.Web, which changes default static asset and
+      publish behavior we don't want for a CLI style executable.
+    -->
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
   </ItemGroup>
 
 </Project>

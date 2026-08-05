@@ -201,6 +201,8 @@ Auto-detects the Windows `PackagesLocalDirectory`, prepares the SQLite schema, a
 
 `generate` writes atomically (`.tmp` + move) and keeps a `.bak` when `--overwrite` is used. Pass `--install-to <Model>` to drop the artefact straight into a model folder via the bridge (requires `D365FO_BRIDGE_ENABLED=1`, `D365FO_PACKAGES_PATH`, `D365FO_BIN_PATH`).
 
+Add `--verify` to read the artefact back through the D365FO Metadata API after writing it, the way Visual Studio would. It applies to `--install-to` (the provider resolves objects by name inside the packages paths, so an arbitrary `--out` path is not something it can look up) and is skipped with a note when the runtime is unavailable — generation keeps working offline either way. A write that the provider then refuses to load fails with `VERIFY_FAILED`; the file is left on disk so you can open it in Visual Studio.
+
 ### Table
 
 ```sh
@@ -226,9 +228,18 @@ d365fo generate table FmVehicle \
   --field Make:Name \
   --primary-key VIN \
   --out src/MyModel/AxTable/FmVehicle.xml
+
+# Gate the table behind a configuration key and give it a drill-down form
+d365fo generate table FmVehicle \
+  --pattern master \
+  --configuration-key FmModule \
+  --form-ref FmVehicleForm \
+  --install-to FleetManagement
 ```
 
 Patterns: `main`/`master`, `transaction`, `parameter`/`setup`/`config`, `group`, `worksheetheader`/`header`, `worksheetline`/`line`, `reference`/`lookup`, `framework`, `miscellaneous`. Temp tables: `--table-type TempDB --pattern main`.
+
+`--configuration-key` and `--form-ref` are omitted from the XML when not passed, so the AOT defaults (ungated, no drill-down form) still apply.
 
 ### Class
 
@@ -425,6 +436,45 @@ d365fo generate query SalesTableWithLines \
 
 `--ds` sets the root datasource. `--join target:joinKind:parentDs` (repeatable) adds embedded datasources. `joinKind` accepts `InnerJoin`, `OuterJoin`, `ExistsJoin`, `NotExistsJoin`.
 
+### View — a read-only projection over a query
+
+```sh
+d365fo generate view FmOpenRentals \
+  --query FmOpenRentalsQuery \
+  --field VehicleId:FmVehicle \
+  --field RentalId:FmRental:RecId \
+  --computed DaysOut:getDaysOutSQL:Int \
+  --install-to FleetManagement
+```
+
+`--field <name>:<dataSource>[:<dataField>]` projects a query column (`dataField`
+defaults to `name`). `--computed <name>:<viewMethod>:<type>` adds a field backed by
+an X++ method returning SQL; the type (`String|Int|Int64|Real|Date|UtcDateTime|Enum`)
+is required because the AOT encodes it in the field's discriminator and cannot infer
+it from the method. `--query` is mandatory — a view without one has nothing to
+project. No `<Ranges>` and no `<Title*>` are emitted: ranges belong on the backing
+query.
+
+### Map — a shared field template across tables
+
+```sh
+d365fo generate map FmAddressMap \
+  --field Street:Name --field City:Name \
+  --map-to "FmVehicle:Street=AddrStreet,City" \
+  --map-to FmRental \
+  --install-to FleetManagement
+```
+
+`--field <name>:<edt>[:<label>]` declares a map field; the EDT drives its concrete
+type, resolved through the same index-backed lookup `generate table` uses, so a map
+field and a table field on one EDT can never disagree. `--map-to <table>[:pairs]`
+wires the map to a table; omit the pairs to connect every field by identical name.
+Connecting a field the map does not declare is rejected rather than written.
+
+Both write straight to disk — the metadata bridge's `createObject` only accepts
+class/table/EDT/enum/form, so `--install-to` resolves the model folder and the
+scaffold is written there (same as `generate query`).
+
 ### Security role (new or merge)
 
 ```sh
@@ -596,6 +646,33 @@ d365fo label delete RenamedKey         --file path/Foo.en-us.label.txt
 ```
 
 `search label --fts` requires FTS5 (falls back to `LIKE` if unavailable). Write commands keep a `.bak` of the previous file.
+
+---
+
+## Journal / undo
+
+```sh
+# Inspect the stack (most-recent-first)
+d365fo journal list --output json
+d365fo journal list --limit 5 --output json
+
+# Preview before committing to an undo
+d365fo undo --dry-run --output json
+
+# Revert the last write, or the last N
+d365fo undo --output json
+d365fo undo --steps 3 --output json
+
+# Delete an AOT object (journaled — undo-able like any other write)
+d365fo delete --kind table --name OldTable --path C:\pkg\MyModel\MyModel\AxTable\OldTable.xml
+d365fo delete --kind class --name OldClass --install-to MyModel   # via the metadata bridge
+```
+
+Every `generate *`, `labels create\|rename\|delete`, and `delete` write appends an entry to a
+size-capped journal at `<index-dir>/journal/`. `undo` replays entries in reverse through the
+same write path that produced them (disk or bridge), restoring the exact pre-image — a create
+is removed, an update/delete is restored byte-for-byte. Stops at the first failure so older
+entries are never skipped.
 
 ---
 

@@ -7,6 +7,7 @@ using D365FO.Cli.Commands.Generate;
 using D365FO.Cli.Commands.Get;
 using D365FO.Cli.Commands.Index;
 using D365FO.Cli.Commands.Models;
+using D365FO.Cli.Commands.Modify;
 using D365FO.Cli.Commands.Ops;
 using D365FO.Cli.Commands.Read;
 using D365FO.Cli.Commands.Resolve;
@@ -218,12 +219,20 @@ app.Configure(cfg =>
         b.AddCommand<GenerateEdtCommand>("edt").WithDescription("Create an AxEdt Extended Data Type.");
         b.AddCommand<GenerateEnumCommand>("enum").WithDescription("Create an AxEnum base enumeration.");
         b.AddCommand<GenerateQueryCommand>("query").WithDescription("Create an AxQuery with data sources and joins.");
+        b.AddCommand<GenerateViewCommand>("view").WithDescription("Create an AxView projecting an AxQuery (bound and computed fields).");
+        b.AddCommand<GenerateMapCommand>("map").WithDescription("Create an AxMap: a shared field template mapped onto tables.");
         b.AddCommand<GenerateBusinessEventCommand>("business-event").WithDescription("Scaffold a business event class + contract.");
         b.AddCommand<GenerateCustomServiceCommand>("custom-service").WithDescription("Scaffold an AxService class, XML, and service group.");
         b.AddCommand<GenerateMigrationScriptCommand>("migration-script").WithDescription("Scaffold a SysRunnable data-migration class.");
         b.AddCommand<GenerateRunBaseCommand>("runbase").WithDescription("Scaffold a RunBase/RunBaseBatch class with dialog and pack/unpack.");
         b.AddCommand<GenerateSecurityPolicyCommand>("security-policy").WithDescription("Scaffold an AxSecurityPolicy (XDS) XML.");
         b.AddCommand<GenerateSysTestCommand>("systest").WithDescription("Scaffold an ATL-ready SysTestCase class (Arrange/Act/Assert skeleton).");
+    });
+
+    cfg.AddBranch("modify", b =>
+    {
+        b.SetDescription("Structured, live edits to existing AOT objects via D365FO.Bridge (Windows VM). No on-disk fallback.");
+        b.AddCommand<ModifyMethodCommand>("method").WithDescription("Replace the body of an existing method on a class/table/edt/form.");
     });
 
     cfg.AddBranch("analyze", b =>
@@ -263,8 +272,18 @@ app.Configure(cfg =>
         b.AddCommand<DaemonWarmupCommand>("warmup").WithDescription("Pre-warm the SQLite page cache for faster first queries.");
     });
 
+    cfg.AddCommand<D365FO.Cli.Commands.Journal.UndoCommand>("undo").WithDescription("Revert the last N modification-journal entries (create removed, update/delete restored to their exact pre-image).");
+    cfg.AddCommand<D365FO.Cli.Commands.Journal.DeleteObjectCommand>("delete").WithDescription("Delete an AOT object (bridge or on-disk), journaled for `d365fo undo`.");
+
+    cfg.AddBranch("journal", b =>
+    {
+        b.SetDescription("Inspect the modification journal (issue #113).");
+        b.AddCommand<D365FO.Cli.Commands.Journal.JournalListCommand>("list").WithDescription("List journal entries, most-recent-first.");
+    });
+
     cfg.AddCommand<BuildCommand>("build").WithDescription("Invoke MSBuild (Windows VM).");
     cfg.AddCommand<SyncCommand>("sync").WithDescription("Run DB sync (Windows VM).");
+    cfg.AddCommand<D365FO.Cli.Commands.Connect.ConnectCommand>("connect").WithDescription("Point an editor's MCP config at a deployed `d365fo-mcp --http` server (probes /health, merges rather than clobbers).");
     cfg.AddCommand<DoctorCommand>("doctor").WithDescription("Diagnose environment.");
     cfg.AddCommand<InitCommand>("init").WithDescription("Interactive quickstart: detects PackagesLocalDirectory and prepares the index.");
     cfg.AddCommand<StatsCommand>("stats").WithDescription("Aggregate counters over the index (top tables / classes / CoC targets).");

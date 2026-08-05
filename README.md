@@ -47,7 +47,7 @@ This CLI pre-indexes your entire D365FO installation (hundreds of thousands of s
 | 🏗️ **SDLC integration** | MSBuild compilation with structured `xppcDiagnostics`, DB sync, xppbp best practices, SysTestRunner — on Windows D365FO VMs |
 | 📐 **X++ knowledge base** | 19 lazy-loaded Skills: select grammar, CoC authoring, FormRun lifecycle, BP rule canon — loaded only when relevant, for Copilot and Claude alike |
 | ⚡ **Agent-first ergonomics** | Stable `{ ok, data, warnings }` JSON envelope, `search batch` / `get batch` / `prepare` single-round aggregators, `agent-prompt` + `schema` manifests |
-| 🔌 **Daemon & MCP adapter** | Warm-cache named-pipe daemon with file-system watcher; `d365fo-mcp` speaks JSON-RPC 2.0 over the same index for MCP-only hosts |
+| 🔌 **Daemon & MCP adapter** | Warm-cache named-pipe daemon with file-system watcher; `d365fo-mcp` speaks JSON-RPC 2.0 over the same index for MCP-only hosts, over stdio or `--http` for a shared team deployment (`API_KEY`, `MCP_SERVER_MODE`) |
 
 ### Pattern-grounded form development
 
@@ -143,6 +143,9 @@ d365fo generate form FmVehicles \
 d365fo generate datasource-method FmVehicles --datasource FmVehicle --list      # show overridable methods
 d365fo generate datasource-method FmVehicles --datasource FmVehicle --method active
 d365fo generate control-method    FmVehicles --control VIN --method modified
+
+# Replace an existing method's body on a live class/table/edt/form (Windows VM, D365FO_BRIDGE_ENABLED=1)
+d365fo modify method class CustBalance calc --body "return 2;"
 ```
 
 Full walkthrough: **[docs/SETUP.md](docs/SETUP.md)**
@@ -216,7 +219,7 @@ Reference the `SKILL.md` files from `skills/anthropic/` in your session prompt o
 
 ### MCP (Claude Desktop, Continue, VS Code MCP)
 
-The bundled `d365fo-mcp` adapter speaks JSON-RPC 2.0 over the same index. Its tool surface is **consolidated** into 20 discriminator-based tools (e.g. `search`, `get_object_info`, `get_method`, `labels`, `security_info`, `extension_info`, `object_patterns`, `generate_object`, `analyze`, `models`) — see [docs/MIGRATION_FROM_MCP.md](docs/MIGRATION_FROM_MCP.md):
+The bundled `d365fo-mcp` adapter speaks JSON-RPC 2.0 over the same index. Its tool surface is **consolidated** into 22 discriminator-based tools (e.g. `search`, `get_object_info`, `get_method`, `labels`, `security_info`, `extension_info`, `object_patterns`, `generate_object`, `modify_method`, `analyze`, `models`) — see [docs/MIGRATION_FROM_MCP.md](docs/MIGRATION_FROM_MCP.md):
 
 ```json
 {
@@ -229,6 +232,8 @@ The bundled `d365fo-mcp` adapter speaks JSON-RPC 2.0 over the same index. Its to
   }
 }
 ```
+
+Sharing one instance across a team instead of a local stdio process per developer? Run `d365fo-mcp --http` — see [docs/MIGRATION_FROM_MCP.md](docs/MIGRATION_FROM_MCP.md#http-transport--shared-deployment-azure-app-service) for the `API_KEY` / `MCP_SERVER_MODE` (`read-only` shared instance + `write-only` local companion) deployment pattern.
 
 ### Verify
 
@@ -273,6 +278,7 @@ See [docs/TOKEN_ECONOMICS.md](docs/TOKEN_ECONOMICS.md) for the full analysis and
 | **Read** | `read class`, `read table`, `read form` (= MCP `get_method`) |
 | **Generate** | `generate table\|class\|coc\|form\|entity\|extension\|event-handler\|privilege\|duty\|role\|report\|sysoperation\|number-sequence\|workflow\|menu-item\|edt\|enum\|query\|business-event\|custom-service\|migration-script\|runbase\|security-policy\|systest` |
 | **Labels** | `labels search\|resolve\|info\|create\|rename\|delete` — search/resolve plus in-place `*.label.txt` edits, multi-language via `--lang` (mirrors the MCP `labels` tool) |
+| **Journal / undo** | `undo [--steps N] [--dry-run]`, `journal list`, `delete` (kind/name, bridge or on-disk) — deterministic single-command rollback for every write path (mirrors the MCP `undo_last_modification` tool) |
 | **Analyze** | `analyze completeness`, `analyze integration`, `analyze impact`, `lint`, `suggest edt`, `suggest extension`, `report-integrations` |
 | **Review** | `review diff` |
 | **Models** | `models list`, `models deps`, `models coupling` |

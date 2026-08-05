@@ -52,7 +52,8 @@ public sealed class GenerateEnumCommand : Command<GenerateEnumCommand.Settings>
                 bytes        = r.Bytes,
                 backup       = r.Backup,
                 model        = settings.InstallTo,
-            });
+            },
+            verify: settings.Verify);
     }
 
     private static EnumValueSpec ParseValue(string raw)

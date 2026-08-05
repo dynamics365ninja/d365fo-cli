@@ -68,7 +68,8 @@ public sealed class GenerateEdtCommand : Command<GenerateEdtCommand.Settings>
                 bytes      = r.Bytes,
                 backup     = r.Backup,
                 model      = settings.InstallTo,
-            });
+            },
+            verify: settings.Verify);
     }
 
     private static string? ResolveEnumTypeFromExtendsChain(string extendsName)

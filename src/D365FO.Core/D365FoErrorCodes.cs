@@ -55,4 +55,20 @@ public static class D365FoErrorCodes
 
     // MCP dispatcher
     public const string UnknownTool = "UNKNOWN_TOOL";
+
+    // Bridge / structured method modify (#112)
+    public const string BridgeRequired = "BRIDGE_REQUIRED";
+    public const string ValidationFailed = "VALIDATION_FAILED";
+    public const string GroundingRequired = "GROUNDING_REQUIRED";
+
+    // MCP HTTP transport
+    public const string Unauthorized = "UNAUTHORIZED";
+    public const string ModeNotAllowed = "MODE_NOT_ALLOWED";
+    public const string RateLimited = "RATE_LIMITED";
+
+    // Modification journal / undo (issue #113)
+    public const string JournalEmpty = "JOURNAL_EMPTY";
+    public const string UndoFailed = "UNDO_FAILED";
+    public const string InstallFailed = "INSTALL_FAILED";
+    public const string DeleteFailed = "DELETE_FAILED";
 }

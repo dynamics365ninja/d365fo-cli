@@ -35,7 +35,10 @@ public static class ToolCatalog
         // XML-only, but the whole tool is flagged write so clients confirm before
         // any write objectType runs). `labels` mixes read actions (search/info)
         // with write actions (create/rename/delete) — flagged here too.
-        "generate_object", "labels",
+        // `undo_last_modification` mutates the file system (or the live metadata
+        // provider) just like the write it reverts — flagged write even though its
+        // `dryRun` mode is read-only, since clients gate on the tool, not the call.
+        "generate_object", "labels", "modify_method", "undo_last_modification",
     };
 
     /// <summary>
@@ -344,6 +347,19 @@ public static class ToolCatalog
                         "Write: table, class, coc, form. XML-only: edt, enum, query, sysoperation, business-event, runbase, security-policy."),
             }),
 
+        new Descriptor("modify_method",
+            "Replace the body of an EXISTING method on a live class/table/edt/form via D365FO.Bridge " +
+            "(Windows VM, requires D365FO_BRIDGE_ENABLED=1). Reads the object through IMetadataProvider, " +
+            "structurally replaces one <Method>'s source (never raw XML/CDATA string surgery), runs the same " +
+            "reference/BP validation gate as generate_object and blocks the write on any error-severity finding " +
+            "(unconditionally — not gated by D365FO_GROUNDING_ENFORCE), then writes back through the provider. " +
+            "No on-disk fallback: fails BRIDGE_REQUIRED when the bridge is unavailable. Use generate_object to " +
+            "create new objects/methods; use this only to change an existing method's body.",
+            Schema(("kind", "string", true), ("name", "string", true), ("method", "string", true),
+                   ("body", "string", true), ("model", "string", false), ("groundingToken", "string", false)),
+            (h, p) => h.ModifyMethod(Str(p, "kind"), Str(p, "name"), Str(p, "method"), Str(p, "body"),
+                        StrOrNull(p, "model"), StrOrNull(p, "groundingToken"))),
+
         new Descriptor("suggest_edt",
             "Suggest indexed EDTs for a field name using similarity heuristics. Returns confidence-ranked candidates.",
             Schema(("fieldName", "string", true), ("limit", "integer", false)),
@@ -413,6 +429,24 @@ public static class ToolCatalog
             "Recent ExtractionRuns telemetry (per-model timings). Returns newest first.",
             Schema(("limit", "integer", false), ("model", "string", false)),
             (h, p) => h.IndexHistory(Int(p, "limit", 50), Str(p, "model"))),
+
+        // ---- Modification journal / undo (issue #113) ----
+
+        new Descriptor("undo_last_modification",
+            "Revert the last `steps` writes (default 1) made by `generate_object` / `labels` (create/rename/delete) / " +
+            "`delete` — CLI parity for upstream `undo_last_modification`. Replays each entry in reverse through the " +
+            "SAME write path that produced it (on-disk file, or the live metadata provider when the bridge was used), " +
+            "restoring the exact pre-image: a create is removed, an update/delete is restored byte-for-byte. Stops at " +
+            "the first failure so older entries are never skipped. Pass `dryRun=true` to preview without changing " +
+            "anything — always do this first when unsure what will be reverted.",
+            Schema(("steps", "integer", false), ("dryRun", "boolean", false)),
+            (h, p) => h.UndoLastModification(Int(p, "steps", 1), Bool(p, "dryRun"))),
+
+        new Descriptor("journal_list",
+            "Inspect the modification-journal stack (most-recent-first) without reverting anything — " +
+            "see what `undo_last_modification` would act on.",
+            Schema(("limit", "integer", false)),
+            (h, p) => h.JournalList(Int(p, "limit", 50))),
     };
 
     // ---- JSON helpers ----

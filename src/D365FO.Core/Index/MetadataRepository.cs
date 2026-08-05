@@ -275,6 +275,20 @@ public sealed partial class MetadataRepository
         return true;
     }
 
+    /// <summary>
+    /// Search classes by name (LIKE wildcard).
+    /// </summary>
+    /// <remarks>
+    /// Every object-level <c>Search*</c> method orders by <c>m.IsCustom DESC</c>
+    /// before the name. On a production AOT a prefix query like "Cust" matches
+    /// hundreds of Microsoft objects; ordering by name alone buries the handful
+    /// the customer/ISV actually authored — and because the ordering happens
+    /// before <c>LIMIT</c>, those are the rows that get truncated away entirely.
+    /// <c>Models.IsCustom</c> is <c>NOT NULL DEFAULT 0</c>, so <c>DESC</c> means
+    /// exactly "custom first, then Microsoft, each alphabetical". Label and
+    /// method-source search are excluded: they rank by FTS5 relevance and have no
+    /// model join to order on.
+    /// </remarks>
     public IReadOnlyList<ClassInfo> SearchClasses(string query, string? model = null, int limit = 50)
     {
         using var conn = OpenReadOnly();
@@ -286,29 +300,87 @@ public sealed partial class MetadataRepository
             JOIN Models m ON m.ModelId = c.ModelId
             WHERE c.Name LIKE @like ESCAPE '!'
               AND (@model IS NULL OR m.Name = @model)
-            ORDER BY c.Name
+            ORDER BY m.IsCustom DESC, c.Name
             LIMIT @limit";
         return conn.Query<ClassInfo>(sql, new { like, model, limit }).ToList();
     }
 
+    /// <summary>Maximum <c>extends</c> hops walked when collecting inherited methods.</summary>
+    /// <remarks>
+    /// Real D365FO hierarchies are a handful of levels deep; the bound exists so a
+    /// cyclic <c>ExtendsName</c> chain in a malformed index cannot spin the recursive
+    /// CTE forever.
+    /// </remarks>
+    private const int MaxExtendsDepth = 32;
+
+    /// <remarks>
+    /// The chain depth is deliberately not projected: it comes out of the recursive
+    /// CTE with no declared type, and on an empty result set Microsoft.Data.Sqlite
+    /// reports such a column as <c>byte[]</c>, which Dapper then cannot bind (the same
+    /// typeless-column problem the FTS5 queries work around). Depth ordering is applied
+    /// in SQL instead, and the caller relies on that order.
+    /// </remarks>
+    private sealed record InheritedMethodRow(
+        string Name, string? Signature, string? ReturnType, bool IsStatic,
+        string DeclaringClass);
+
     public ClassDetails? GetClassDetails(string name)
     {
         using var conn = OpenReadOnly();
-        // Execute both queries in one round-trip via QueryMultiple to avoid two
+        // Execute all queries in one round-trip via QueryMultiple to avoid
         // sequential open/close cycles on the connection pool.
+        //
+        // The third query walks the extends chain: a class lookup that reads only
+        // locally-declared members reports a subclass as having almost no methods,
+        // when in practice most of its surface is inherited. Locally-declared names
+        // are excluded so an override is attributed to the class that overrides it.
         using var multi = conn.QueryMultiple(@"
             SELECT c.ClassId, c.Name, m.Name AS Model, c.ExtendsName AS Extends,
                    c.IsAbstract, c.IsFinal, c.SourcePath
             FROM Classes c JOIN Models m ON m.ModelId = c.ModelId
             WHERE c.Name = @name LIMIT 1;
+
             SELECT mt.Name, mt.Signature, mt.ReturnType, mt.IsStatic
             FROM Methods mt
             JOIN Classes c ON c.ClassId = mt.ClassId
-            WHERE c.Name = @name ORDER BY mt.Name", new { name });
+            WHERE c.Name = @name ORDER BY mt.Name;
+
+            WITH RECURSIVE Ancestors(Name, Depth) AS (
+                SELECT c.ExtendsName, 1
+                FROM Classes c
+                WHERE c.Name = @name AND COALESCE(c.ExtendsName, '') <> ''
+                UNION ALL
+                SELECT c.ExtendsName, a.Depth + 1
+                FROM Ancestors a
+                JOIN Classes c ON c.Name = a.Name
+                WHERE COALESCE(c.ExtendsName, '') <> '' AND a.Depth < @maxDepth
+            )
+            SELECT mt.Name, mt.Signature, mt.ReturnType, mt.IsStatic,
+                   c.Name AS DeclaringClass
+            FROM Ancestors a
+            JOIN Classes c ON c.Name = a.Name
+            JOIN Methods mt ON mt.ClassId = c.ClassId
+            WHERE mt.Name NOT IN (
+                SELECT own.Name FROM Methods own
+                JOIN Classes oc ON oc.ClassId = own.ClassId
+                WHERE oc.Name = @name)
+            ORDER BY a.Depth, mt.Name", new { name, maxDepth = MaxExtendsDepth });
+
         var cls = multi.ReadFirstOrDefault<ClassInfo>();
         if (cls is null) return null;
         var methods = multi.Read<MethodInfo>().ToList();
-        return new ClassDetails(cls, methods);
+
+        // Rows arrive ordered by chain depth, so a method redeclared at several levels
+        // resolves to the nearest declaration simply by keeping the first one seen.
+        var inherited = multi.Read<InheritedMethodRow>()
+            .DistinctBy(r => r.Name, StringComparer.OrdinalIgnoreCase)
+            .Select(r => new MethodInfo(r.Name, r.Signature, r.ReturnType, r.IsStatic)
+            {
+                DeclaringClass = r.DeclaringClass,
+            })
+            .ToList();
+
+        return new ClassDetails(cls, methods, inherited);
     }
 
     public TableDetails? GetTableDetails(string name)
@@ -584,7 +656,40 @@ public sealed partial class MetadataRepository
             WHERE ObjectName = @n AND ObjectType = @t
             ORDER BY Role, Duty, Privilege",
             new { n = objectName, t = objectType }).ToList();
-        return new SecurityCoverage(objectName, objectType, routes);
+        return new SecurityCoverage(objectName, objectType, routes,
+            ReadRowLevelSecurity(conn, objectName, objectType));
+    }
+
+    /// <summary>
+    /// Record-level (XDS) coverage for a table. Distinguishes "no policy constrains
+    /// this table" from "this index knows nothing about policies" — reporting the
+    /// latter as a silent empty result would read as an assurance the data cannot
+    /// support.
+    /// </summary>
+    private static RowLevelSecurityCoverage ReadRowLevelSecurity(
+        System.Data.IDbConnection conn, string objectName, string objectType)
+    {
+        var empty = Array.Empty<SecurityPolicyInfo>();
+
+        // XDS constrains tables; for a menu item / form / class there is no
+        // record-level answer to give.
+        if (!string.Equals(objectType, "Table", StringComparison.OrdinalIgnoreCase))
+            return new RowLevelSecurityCoverage("NotApplicable", empty);
+
+        var policies = conn.Query<SecurityPolicyInfo>(@"
+            SELECT sp.Id, sp.Name, sp.ConstrainedTable, sp.PolicyQuery, sp.OperationType,
+                   sp.ContextType, sp.IsEnabled, sp.IsMandatory, m.Name AS Model, sp.SourcePath
+            FROM SecurityPolicies sp JOIN Models m ON m.ModelId = sp.ModelId
+            WHERE sp.ConstrainedTable = @n
+            ORDER BY sp.Name", new { n = objectName }).ToList();
+
+        if (policies.Count > 0)
+            return new RowLevelSecurityCoverage("Constrained", policies);
+
+        // Zero matches only means "unconstrained" when policies were indexed at all;
+        // an index built before AxSecurityPolicy extraction has none of either.
+        var indexed = conn.ExecuteScalar<long>("SELECT COUNT(*) FROM SecurityPolicies");
+        return new RowLevelSecurityCoverage(indexed > 0 ? "NotConstrained" : "Unknown", empty);
     }
 
     public IReadOnlyList<ObjectExtensionInfo> FindExtensions(string targetName, string? kind = null)
@@ -1128,7 +1233,7 @@ public sealed partial class MetadataRepository
         return conn.Query<QueryInfo>(@"
             SELECT q.QueryId, q.Name, m.Name AS Model, q.SourcePath
             FROM Queries q JOIN Models m ON m.ModelId = q.ModelId
-            WHERE q.Name LIKE @like ESCAPE '!' ORDER BY q.Name LIMIT @limit",
+            WHERE q.Name LIKE @like ESCAPE '!' ORDER BY m.IsCustom DESC, q.Name LIMIT @limit",
             new { like, limit }).ToList();
     }
 
@@ -1153,7 +1258,7 @@ public sealed partial class MetadataRepository
         return conn.Query<ViewInfo>(@"
             SELECT v.ViewId, v.Name, m.Name AS Model, v.Label, v.QueryName, v.SourcePath
             FROM Views v JOIN Models m ON m.ModelId = v.ModelId
-            WHERE v.Name LIKE @like ESCAPE '!' ORDER BY v.Name LIMIT @limit",
+            WHERE v.Name LIKE @like ESCAPE '!' ORDER BY m.IsCustom DESC, v.Name LIMIT @limit",
             new { like, limit }).ToList();
     }
 
@@ -1180,7 +1285,7 @@ public sealed partial class MetadataRepository
                    e.StagingTable, e.QueryName, e.Label, e.SourcePath
             FROM DataEntities e JOIN Models m ON m.ModelId = e.ModelId
             WHERE e.Name LIKE @like ESCAPE '!' OR e.PublicEntityName LIKE @like ESCAPE '!' OR e.PublicCollectionName LIKE @like ESCAPE '!'
-            ORDER BY e.Name LIMIT @limit",
+            ORDER BY m.IsCustom DESC, e.Name LIMIT @limit",
             new { like, limit }).ToList();
     }
 
@@ -1206,7 +1311,7 @@ public sealed partial class MetadataRepository
         return conn.Query<ReportInfo>(@"
             SELECT r.ReportId, r.Name, r.Kind, m.Name AS Model, r.SourcePath
             FROM Reports r JOIN Models m ON m.ModelId = r.ModelId
-            WHERE r.Name LIKE @like ESCAPE '!' ORDER BY r.Name LIMIT @limit",
+            WHERE r.Name LIKE @like ESCAPE '!' ORDER BY m.IsCustom DESC, r.Name LIMIT @limit",
             new { like, limit }).ToList();
     }
 
@@ -1231,7 +1336,7 @@ public sealed partial class MetadataRepository
         return conn.Query<ServiceInfo>(@"
             SELECT s.ServiceId, s.Name, s.Class, m.Name AS Model, s.SourcePath
             FROM Services s JOIN Models m ON m.ModelId = s.ModelId
-            WHERE s.Name LIKE @like ESCAPE '!' ORDER BY s.Name LIMIT @limit",
+            WHERE s.Name LIKE @like ESCAPE '!' ORDER BY m.IsCustom DESC, s.Name LIMIT @limit",
             new { like, limit }).ToList();
     }
 
@@ -1271,7 +1376,7 @@ public sealed partial class MetadataRepository
             SELECT w.Name, w.Category, w.DocumentClass, m.Name AS Model, w.SourcePath
             FROM WorkflowTypes w JOIN Models m ON m.ModelId = w.ModelId
             WHERE w.Name LIKE @like ESCAPE '!' OR w.DocumentClass LIKE @like ESCAPE '!'
-            ORDER BY w.Name LIMIT @limit",
+            ORDER BY m.IsCustom DESC, w.Name LIMIT @limit",
             new { like, limit }).ToList();
     }
 
@@ -1286,7 +1391,7 @@ public sealed partial class MetadataRepository
             SELECT mp.MapId, mp.Name, m.Name AS Model, mp.Label, mp.SourcePath
             FROM Maps mp JOIN Models m ON m.ModelId = mp.ModelId
             WHERE mp.Name LIKE @like ESCAPE '!'
-            ORDER BY mp.Name LIMIT @limit",
+            ORDER BY m.IsCustom DESC, mp.Name LIMIT @limit",
             new { like, limit }).ToList();
     }
 
@@ -1322,7 +1427,7 @@ public sealed partial class MetadataRepository
             FROM BusinessEvents be JOIN Models m ON m.ModelId = be.ModelId
             WHERE (be.Name LIKE @like ESCAPE '!' OR be.ContractClass LIKE @like ESCAPE '!')
               AND (@category IS NULL OR be.Category LIKE @catLike ESCAPE '!')
-            ORDER BY be.Name LIMIT @limit",
+            ORDER BY m.IsCustom DESC, be.Name LIMIT @limit",
             new { like, category, catLike = category is not null ? $"%{EscapeLike(category)}%" : null, limit }).ToList();
     }
 
@@ -1344,7 +1449,7 @@ public sealed partial class MetadataRepository
                    sp.IsEnabled, sp.IsMandatory, m.Name AS Model, sp.SourcePath
             FROM SecurityPolicies sp JOIN Models m ON m.ModelId = sp.ModelId
             WHERE sp.Name LIKE @like ESCAPE '!' OR sp.ConstrainedTable LIKE @like ESCAPE '!'
-            ORDER BY sp.Name LIMIT @limit",
+            ORDER BY m.IsCustom DESC, sp.Name LIMIT @limit",
             new { like, limit }).ToList();
     }
 
@@ -1366,7 +1471,7 @@ public sealed partial class MetadataRepository
             SELECT ck.Id, ck.Name, ck.Label, ck.IsEnabled, ck.ParentKey, ck.LicenseCode, m.Name AS Model
             FROM ConfigurationKeys ck JOIN Models m ON m.ModelId = ck.ModelId
             WHERE ck.Name LIKE @like ESCAPE '!'
-            ORDER BY ck.Name LIMIT @limit",
+            ORDER BY m.IsCustom DESC, ck.Name LIMIT @limit",
             new { like, limit }).ToList();
     }
 
@@ -1378,7 +1483,7 @@ public sealed partial class MetadataRepository
             SELECT t.Id, t.Name, t.MenuItemName, t.MenuItemType, t.Label, t.TileType, m.Name AS Model, t.SourcePath
             FROM Tiles t JOIN Models m ON m.ModelId = t.ModelId
             WHERE t.Name LIKE @like ESCAPE '!' OR t.MenuItemName LIKE @like ESCAPE '!'
-            ORDER BY t.Name LIMIT @limit",
+            ORDER BY m.IsCustom DESC, t.Name LIMIT @limit",
             new { like, limit }).ToList();
     }
 
@@ -1390,7 +1495,7 @@ public sealed partial class MetadataRepository
             SELECT ws.Id, ws.Name, ws.Label, m.Name AS Model, ws.SourcePath
             FROM Workspaces ws JOIN Models m ON m.ModelId = ws.ModelId
             WHERE ws.Name LIKE @like ESCAPE '!'
-            ORDER BY ws.Name LIMIT @limit",
+            ORDER BY m.IsCustom DESC, ws.Name LIMIT @limit",
             new { like, limit }).ToList();
     }
 
@@ -1790,7 +1895,7 @@ public sealed partial class MetadataRepository
             FROM Tables t JOIN Models m ON m.ModelId = t.ModelId
             WHERE t.Name LIKE @like ESCAPE '!'
               AND (@model IS NULL OR m.Name = @model)
-            ORDER BY t.Name
+            ORDER BY m.IsCustom DESC, t.Name
             LIMIT @limit", new { like, model, limit }).ToList();
     }
 
@@ -1804,7 +1909,7 @@ public sealed partial class MetadataRepository
                    e.ReferenceTable, e.FormHelp, e.AnalysisUsage, e.EnumType
             FROM Edts e JOIN Models m ON m.ModelId = e.ModelId
             WHERE e.Name LIKE @like ESCAPE '!'
-            ORDER BY e.Name
+            ORDER BY m.IsCustom DESC, e.Name
             LIMIT @limit", new { like, limit }).ToList();
     }
 
@@ -1816,7 +1921,7 @@ public sealed partial class MetadataRepository
             SELECT e.Name, m.Name AS Model, e.Label
             FROM Enums e JOIN Models m ON m.ModelId = e.ModelId
             WHERE e.Name LIKE @like ESCAPE '!'
-            ORDER BY e.Name
+            ORDER BY m.IsCustom DESC, e.Name
             LIMIT @limit", new { like, limit }).ToList();
     }
 

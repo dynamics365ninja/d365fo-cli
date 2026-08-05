@@ -6,6 +6,10 @@ using Xunit;
 
 namespace D365FO.Core.Tests;
 
+// Shares a collection with ScaffoldFileWriterJournalTests: both call ScaffoldFileWriter.Write,
+// which (issue #113) journals via the process-wide D365FO_INDEX_DB env var that the journal
+// test overrides — running them in parallel would race on that global state.
+[Collection("ScaffoldFileWriter")]
 public class ExtractPipelineTests : IDisposable
 {
     private readonly string _dbPath = Path.Combine(Path.GetTempPath(), $"d365fo-extract-{Guid.NewGuid():N}.sqlite");
@@ -272,6 +276,38 @@ public class ExtractPipelineTests : IDisposable
         Assert.False(batches["MsExtensions"]);
     }
 
+    [Theory]
+    [InlineData("classStr")]
+    [InlineData("classstr")]
+    [InlineData("CLASSSTR")]
+    public void MetadataExtractor_detects_ExtensionOf_regardless_of_intrinsic_casing(string intrinsic)
+    {
+        // X++ is case-insensitive and real AOTs mix the casing freely
+        // (classStr / classstr / dataentityviewstr). A case-sensitive match
+        // silently dropped those class extensions from CoC indexing.
+        var model = Path.Combine(_workRoot, "CocCase", "CocCase");
+        Directory.CreateDirectory(Path.Combine(model, "AxClass"));
+        File.WriteAllText(Path.Combine(model, "AxClass", "CustTableHelper.xml"), $$"""
+            <AxClass>
+              <Name>CustTableHelper</Name>
+              <SourceCode>
+                <Declaration>[ExtensionOf({{intrinsic}}(CustTable))]
+            final class CustTableHelper
+            {
+            }</Declaration>
+                <Methods>
+                  <Method><Name>insert</Name><Source>public void insert() { next insert(); }</Source></Method>
+                </Methods>
+              </SourceCode>
+            </AxClass>
+            """);
+
+        var batch = Assert.Single(new MetadataExtractor().ExtractAll(_workRoot).ToList());
+        var coc = Assert.Single(batch.CocExtensions);
+        Assert.Equal("CustTable", coc.TargetClass);
+        Assert.Equal("insert", coc.TargetMethod);
+    }
+
     [Fact]
     public void Scaffolder_writes_table_atomically_with_backup()
     {
@@ -381,6 +417,50 @@ public class ExtractPipelineTests : IDisposable
     }
 
     [Fact]
+    public void MetadataExtractor_reads_view_fields_when_FieldGroups_precede_Fields()
+    {
+        // Regression: AxView puts <FieldGroups> (each with its own empty <Fields>)
+        // BEFORE the view's real <Fields> — the layout every shipped view uses. A
+        // Descendants() scan matched the field group's empty one first, so views
+        // indexed with zero fields.
+        var model = Path.Combine(_workRoot, "PkgViewFG", "PkgViewFG");
+        Directory.CreateDirectory(Path.Combine(model, "AxView"));
+        File.WriteAllText(Path.Combine(model, "AxView", "VWithFG.xml"), """
+            <AxView xmlns:i="http://www.w3.org/2001/XMLSchema-instance">
+              <Name>VWithFG</Name>
+              <Query>VQuery</Query>
+              <FieldGroups>
+                <AxTableFieldGroup>
+                  <Name>AutoReport</Name>
+                  <Fields />
+                </AxTableFieldGroup>
+              </FieldGroups>
+              <Fields>
+                <AxViewField i:type="AxViewFieldBound">
+                  <Name>AccountNum</Name>
+                  <DataField>AccountNum</DataField>
+                  <DataSource>CustTable</DataSource>
+                </AxViewField>
+                <AxViewField i:type="AxViewFieldComputedReal">
+                  <Name>Total</Name>
+                  <ViewMethod>getTotalSQL</ViewMethod>
+                </AxViewField>
+              </Fields>
+            </AxView>
+            """);
+
+        var batch = new MetadataExtractor().ExtractAll(_workRoot).ToList().Single(b => b.Model == "PkgViewFG");
+        var view = Assert.Single(batch.Views);
+        Assert.Equal("VQuery", view.QueryName);
+        Assert.Equal(2, view.Fields.Count);
+        Assert.Equal("AccountNum", view.Fields[0].Name);
+        Assert.Equal("CustTable", view.Fields[0].DataSource);
+        // A computed field projects no column — the absence is the correct answer.
+        Assert.Equal("Total", view.Fields[1].Name);
+        Assert.Null(view.Fields[1].DataSource);
+    }
+
+    [Fact]
     public void MetadataExtractor_reads_data_entity_fields_when_FieldGroups_precede_Fields()
     {
         // Regression: AxDataEntityView can contain FieldGroups with nested <Fields>.
@@ -486,6 +566,39 @@ class BaseClass extends SysOperationServiceBase
         var batch = batches.Single(b => b.Model == "PkgFix4");
         var cls = Assert.Single(batch.Classes);
         Assert.True(cls.IsAbstract, "abstract with trailing newline should be detected by word-boundary regex");
+    }
+
+    [Fact]
+    public void MetadataExtractor_detects_ExtensionOf_intrinsics_case_insensitively()
+    {
+        var model = Path.Combine(_workRoot, "PkgCocCase", "PkgCocCase");
+        Directory.CreateDirectory(Path.Combine(model, "AxClass"));
+        File.WriteAllText(Path.Combine(model, "AxClass", "Unrelated_Extension.xml"), """
+            <AxClass>
+              <Name>Unrelated_Extension</Name>
+              <SourceCode>
+                <Declaration><![CDATA[
+            [extensionof(tablestr(CustTable))]
+            final class Unrelated_Extension
+            {
+            }
+                ]]></Declaration>
+                <Methods>
+                  <Method>
+                    <Name>update</Name>
+                    <Source><![CDATA[public void update() { next update(); }]]></Source>
+                  </Method>
+                </Methods>
+              </SourceCode>
+            </AxClass>
+            """);
+
+        var batches = new MetadataExtractor().ExtractAll(_workRoot).ToList();
+        var batch = batches.Single(b => b.Model == "PkgCocCase");
+        var coc = Assert.Single(batch.CocExtensions);
+        Assert.Equal("CustTable", coc.TargetClass);
+        Assert.Equal("update", coc.TargetMethod);
+        Assert.Equal("Unrelated_Extension", coc.ExtensionClass);
     }
 
     [Fact]
