@@ -32,7 +32,7 @@ This CLI pre-indexes your entire D365FO installation (hundreds of thousands of s
 | Labels | Hardcoded strings | Right `@SYS`/`@MODULE` key found instantly |
 | Security chains | Hours of manual tracing | Role → Duty → Privilege → Entry Point in one call |
 | Generated code | Hallucinated fields and types | Every reference proven against the index, gated before write |
-| Agent context cost | 24–26 MCP tool schemas every turn | 1 shell tool + lazy-loaded Skills (~85 % fewer tokens) |
+| Agent context cost | 26–27 MCP tool schemas every turn | 1 shell tool + lazy-loaded Skills (~85 % fewer tokens) |
 
 ---
 
@@ -43,7 +43,7 @@ This CLI pre-indexes your entire D365FO installation (hundreds of thousands of s
 | 🔍 **Full-codebase intelligence** | Tables, classes, EDTs, enums, forms, queries, views, entities, reports, services, workflows, security artifacts, labels (FTS5) — results in milliseconds, no VM round-trip |
 | 🛡️ **Grounded generation** | Fail-closed gates: `prepare change`/`prepare create` issue grounding tokens, `validate references` proves every identifier, `validate xpp` enforces BP rules — hallucinated code never reaches disk |
 | 🧩 **Form pattern engine** | Catalog of Microsoft form patterns and container sub-patterns: `get form-pattern` serves the required structure, `generate form` self-tests against it (FP001–FP010), `validate form-pattern` re-checks any hand edit |
-| ✍️ **Pattern-correct scaffolding** | 26 `generate` commands — tables, classes, CoC, forms (9 patterns), form datasource/control override methods, entities, security, SysOperation, workflows, business events, number sequences, XDS policies |
+| ✍️ **Pattern-correct scaffolding** | 29 `generate` commands — tables, classes, CoC, forms (9 patterns), form datasource/control override methods, entities, security, SysOperation, workflows, business events, number sequences, XDS policies |
 | 🏗️ **SDLC integration** | MSBuild compilation with structured `xppcDiagnostics`, DB sync, xppbp best practices, SysTestRunner — on Windows D365FO VMs |
 | 📐 **X++ knowledge base** | 19 lazy-loaded Skills: select grammar, CoC authoring, FormRun lifecycle, BP rule canon — loaded only when relevant, for Copilot and Claude alike |
 | ⚡ **Agent-first ergonomics** | Stable `{ ok, data, warnings }` JSON envelope, `search batch` / `get batch` / `prepare` single-round aggregators, `agent-prompt` + `schema` manifests |
@@ -209,7 +209,7 @@ Reference the `SKILL.md` files from `skills/anthropic/` in your session prompt o
 
 ### MCP (Claude Desktop, Continue, VS Code MCP)
 
-The bundled `d365fo-mcp` adapter speaks JSON-RPC 2.0 over the same index. Its tool surface is **consolidated** into 24 discriminator-based tools (e.g. `search`, `get_object_info`, `get_method`, `labels`, `security_info`, `extension_info`, `object_patterns`, `generate_object`, `modify_method`, `analyze`, `models`) — see [docs/MIGRATION_FROM_MCP.md](docs/MIGRATION_FROM_MCP.md):
+The bundled `d365fo-mcp` adapter speaks JSON-RPC 2.0 over the same index. Its tool surface is **consolidated** into 27 discriminator-based tools (e.g. `search`, `get_object_info`, `get_method`, `labels`, `security_info`, `extension_info`, `object_patterns`, `generate_object`, `modify_method`, `analyze`, `models`) — see [docs/MIGRATION_FROM_MCP.md](docs/MIGRATION_FROM_MCP.md):
 
 ```json
 {
@@ -239,11 +239,11 @@ A `d365fo search` shell call returning results from your codebase = you're conne
 
 ## Why CLI instead of MCP?
 
-MCP servers inject every tool definition into the model's context on every single turn. Tool consolidation trimmed that surface — the upstream MCP server went from ~61 per-type tools (≈3,500 tok/turn) to 26 discriminator-based tools, and this repo's adapter to 24 — but it is still ~1,800 tokens per turn versus one shell tool.
+MCP servers inject every tool definition into the model's context on every single turn. Tool consolidation trimmed that surface — the upstream MCP server went from ~61 per-type tools (≈3,500 tok/turn) to 26 discriminator-based tools, and this repo's adapter to 27 — but it is still ~1,800 tokens per turn versus one shell tool.
 
 | | MCP server | CLI + Skills |
 |---|---|---|
-| Tool definitions per turn | 24–26 tools (~1,800 tokens) | 1 shell tool (~100 tokens) |
+| Tool definitions per turn | 26–27 tools (~1,800 tokens) | 1 shell tool (~100 tokens) |
 | Discovery round-trips | 2–3 per task | often 1 (`d365fo prepare change`) |
 | Scriptable (shell, CI/CD) | No | Yes |
 | Works in any AI harness | No — MCP hosts only | Yes — Copilot, Claude, Codex, Gemini, … |
