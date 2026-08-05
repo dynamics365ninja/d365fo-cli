@@ -950,7 +950,8 @@ public sealed class MetadataExtractor
     // form/table — that's what downstream queries key on.
     private static readonly System.Text.RegularExpressions.Regex ExtensionOfRx = new(
         @"\[\s*ExtensionOf\s*\(\s*(?<kind>\w+)Str\s*\(\s*(?<name>[A-Za-z_][A-Za-z0-9_]*)",
-        System.Text.RegularExpressions.RegexOptions.Compiled);
+        System.Text.RegularExpressions.RegexOptions.Compiled |
+        System.Text.RegularExpressions.RegexOptions.IgnoreCase);
 
     private static IEnumerable<ExtractedCoc> DetectCoc(ExtractedClass c)
     {

@@ -493,6 +493,39 @@ class BaseClass extends SysOperationServiceBase
     }
 
     [Fact]
+    public void MetadataExtractor_detects_ExtensionOf_intrinsics_case_insensitively()
+    {
+        var model = Path.Combine(_workRoot, "PkgCocCase", "PkgCocCase");
+        Directory.CreateDirectory(Path.Combine(model, "AxClass"));
+        File.WriteAllText(Path.Combine(model, "AxClass", "Unrelated_Extension.xml"), """
+            <AxClass>
+              <Name>Unrelated_Extension</Name>
+              <SourceCode>
+                <Declaration><![CDATA[
+            [extensionof(tablestr(CustTable))]
+            final class Unrelated_Extension
+            {
+            }
+                ]]></Declaration>
+                <Methods>
+                  <Method>
+                    <Name>update</Name>
+                    <Source><![CDATA[public void update() { next update(); }]]></Source>
+                  </Method>
+                </Methods>
+              </SourceCode>
+            </AxClass>
+            """);
+
+        var batches = new MetadataExtractor().ExtractAll(_workRoot).ToList();
+        var batch = batches.Single(b => b.Model == "PkgCocCase");
+        var coc = Assert.Single(batch.CocExtensions);
+        Assert.Equal("CustTable", coc.TargetClass);
+        Assert.Equal("update", coc.TargetMethod);
+        Assert.Equal("Unrelated_Extension", coc.ExtensionClass);
+    }
+
+    [Fact]
     public void MetadataExtractor_today_in_comment_does_not_flag_HasTodayCall()
     {
         var model = Path.Combine(_workRoot, "PkgFix5", "PkgFix5");
