@@ -575,18 +575,39 @@ public class ScaffoldingSnapshotTests
     // ---- CustomService (Phase 6) ----
 
     [Fact]
-    public void CustomService_class_has_ServiceAttribute()
+    public void CustomService_class_is_plain_with_no_service_attribute()
     {
+        // There is no class-level [ServiceAttribute] in X++ — confirmed absent from every
+        // shipped attribute-class AOT file and every real AxService-registered class on a
+        // live D365FO platform. Exposure comes entirely from the AxService/AxServiceGroup XML.
         var doc = CustomServiceScaffolder.ServiceClass("VendorService",
             new[] { new OperationSpec("lookupVendor", "void") });
         var root = doc.Root!;
         Assert.Equal("AxClass", root.Name.LocalName);
         var decl = root.Element("SourceCode")!.Element("Declaration")!.Value;
-        Assert.Contains("[ServiceAttribute]", decl);
+        Assert.DoesNotContain("[ServiceAttribute]", decl);
         var methods = root.Element("SourceCode")!.Element("Methods")!.Elements("Method").ToList();
         Assert.Contains(methods, m => m.Element("Name")!.Value == "lookupVendor");
         var lookupSrc = methods.First(m => m.Element("Name")!.Value == "lookupVendor").Element("Source")!.Value;
         Assert.DoesNotContain("[SysEntryPointAttribute", lookupSrc);
+    }
+
+    [Fact]
+    public void CustomService_xml_uses_real_platform_element_names()
+    {
+        // Confirmed against shipped AxService/AxServiceGroup XML on a live D365FO platform
+        // (e.g. DMFEntityWriterService.xml / DMFServiceGroup.xml): AxService wraps operations
+        // in <ServiceOperations>, and AxServiceGroupService needs both <Name> (local id) and
+        // <Service> (the actual reference to the AxService object) to link correctly.
+        var serviceDoc = CustomServiceScaffolder.ServiceXml("VendorLookup", "VendorLookupService",
+            new[] { new OperationSpec("lookupVendor", "void") });
+        var serviceRoot = serviceDoc.Root!;
+        Assert.NotNull(serviceRoot.Element("ServiceOperations"));
+        Assert.Null(serviceRoot.Element("Operations"));
+
+        var groupDoc = CustomServiceScaffolder.ServiceGroupXml("VendorLookupServiceGroup", "VendorLookup");
+        var groupService = groupDoc.Root!.Element("Services")!.Element("AxServiceGroupService")!;
+        Assert.Equal("VendorLookup", groupService.Element("Service")?.Value);
     }
 
     // ---- SysTest (issue #107) ----

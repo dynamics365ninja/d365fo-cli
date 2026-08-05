@@ -187,13 +187,16 @@ public sealed class GetSecurityCommand : Command<GetSecurityCommand.Settings>
         public string Object { get; init; } = "";
 
         [CommandOption("--type <TYPE>")]
-        [System.ComponentModel.Description("Table|Form|Report|Class|Menuitem (default: Menuitem)")]
-        public string Type { get; init; } = "Menuitem";
+        [System.ComponentModel.Description("Required. Matched literally against the indexed AOT ObjectType — e.g. MenuItemDisplay|MenuItemAction|MenuItemOutput|Table|Form|Report|Class. There is no usable default: entry points are always indexed as one of the specific MenuItem* kinds, never bare \"Menuitem\".")]
+        public string? Type { get; init; }
     }
 
     public override int Execute(CommandContext ctx, Settings settings)
     {
         var kind = OutputMode.Resolve(settings.Output);
+        if (string.IsNullOrWhiteSpace(settings.Type))
+            return RenderHelpers.Render(kind, ToolResult<object>.Fail(D365FoErrorCodes.BadInput,
+                "--type is required. Use the specific indexed ObjectType, e.g. MenuItemDisplay|MenuItemAction|MenuItemOutput|Table|Form|Report|Class."));
         var repo = RepoFactory.Create();
         var coverage = repo.GetSecurityCoverage(settings.Object, settings.Type);
         return RenderHelpers.Render(kind, ToolResult<object>.Success(coverage));

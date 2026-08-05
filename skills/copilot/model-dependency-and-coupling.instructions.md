@@ -46,7 +46,7 @@ Output highlights:
 
 - Before introducing a new dependency: check `models list`/`models deps` for
   the target's layer — a model can only *depend on* strictly lower-or-equal
-  layers (e.g. a `cus`-layer model must not depend on an `isv`- or
+  layers (e.g. an `isv`-layer model must not depend on a `var`-, `cus`- or
   `usr`-layer one).
 - During architectural review: `cycles[]` must be empty; fan-out outliers
   flag candidates for splitting.
@@ -55,14 +55,16 @@ Output highlights:
 
 ## Hard rules
 
-- Layer ordering (lowest → highest): `sys → syp → gls → glp → dis → dip →
-  cus → cup → var → vap → isv → isp → usr → usp` (each `Descriptor/*.xml`
-  stores the numeric layer id, e.g. `<Layer>8</Layer>` = `var`). Each layer
-  can only consume (depend on) *lower* layers — a `cus`-layer model cannot
-  depend on an `isv`- or `usr`-layer model; the reverse is allowed. In
-  practice most customer extension work happens in `usr` (the highest
-  layer) precisely so it can reference everything below it, including
-  installed ISV solutions.
+- Layer ordering (lowest → highest): `sys → syp → gls → glp → fpk → fpp →
+  sln → slp → isv → isp → var → vap → cus → cup → usr → usp` (each
+  `Descriptor/*.xml` stores the numeric layer id 0-15 in that same order,
+  e.g. `<Layer>8</Layer>` = `isv`, `<Layer>12</Layer>` = `cus`). Each layer
+  can only consume (depend on) *lower or equal* layers — an `isv`-layer
+  model cannot depend on a `var`-, `cus`- or `usr`-layer model, but a
+  `cus`-layer model *can* depend on an `isv`-layer one (that's the normal
+  "customize on top of an installed ISV solution" pattern). In practice
+  most customer extension work happens in `usr` (the highest layer)
+  precisely so it can reference everything below it.
 - Never introduce a cycle — even a 2-node cycle blocks compilation.
 - After modifying any `Descriptor/*.xml`, run `d365fo index refresh` so
   subsequent `models deps` / `models coupling` reflects reality.

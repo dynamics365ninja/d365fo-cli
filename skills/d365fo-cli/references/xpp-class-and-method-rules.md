@@ -30,7 +30,7 @@
 
 - **Optional parameters** must come after all required parameters. Callers cannot skip — every preceding parameter must be supplied.
 - Use `prmIsDefault(_x)` inside a `parmX(_x = x)` accessor to detect "was this caller-supplied?".
-- **All parameters are pass-by-value.** Mutating a parameter inside the method does NOT affect the caller's variable. Return modified state explicitly or wrap in an object.
+- **All parameters are pass-by-value.** *Reassigning* a parameter to a different value/object inside the method does NOT affect the caller's variable. But for reference types (table buffers, class instances), the value being copied is the reference itself — so *mutating fields on the object the parameter refers to* (e.g. `_custTable.CreditMax = 5000;` on a passed `CustTable` buffer) **does** persist back to the caller, because both point at the same underlying object. Don't rely on in-place field mutation through a parameter to look "safe" just because parameters are pass-by-value — only reassignment is isolated.
 
 ## `this` rules
 

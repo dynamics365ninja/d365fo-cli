@@ -77,9 +77,9 @@ public AmountMST balanceMST(boolean _includeOpen = true) { … }
 
 Auto-generated stubs ("This method does foo.") do **not** count. Restate the contract.
 
-### `BPDuplicateMethod` — no dupes on the inheritance chain
+### No dupes on the inheritance chain
 
-Adding a method that already exists on a base class in the same model fails BP. Run `d365fo get class <Base>` to confirm before adding.
+Adding a method that already exists on a base class in the same model is rejected by the compiler as an invalid re-declaration (not a specific named BP rule — there is no `BPDuplicateMethod` rule in the shipped Best Practice rule assemblies). Run `d365fo get class <Base>` to confirm before adding.
 
 ## Label-on-field exception
 

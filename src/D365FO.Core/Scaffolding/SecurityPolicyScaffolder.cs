@@ -24,7 +24,7 @@ public static class SecurityPolicyScaffolder
         PolicyContextType contextType = PolicyContextType.RoleName,
         string? contextValue = null)
     {
-        var operationStr    = operation    == PolicyOperation.All    ? "All"          : "Select";
+        var operationStr    = operation    == PolicyOperation.All    ? "AllOperations" : "Select";
         var contextTypeStr  = contextType  == PolicyContextType.ContextString ? "ContextString" : "RoleName";
         var contextValueStr = contextValue ?? "";
 
@@ -36,7 +36,6 @@ public static class SecurityPolicyScaffolder
                 new XElement("Operation", operationStr),
                 new XElement("ContextType", contextTypeStr),
                 new XElement("ContextString", contextValueStr),
-                new XElement("IsEnabled", "Yes"),
-                new XElement("IsMandatory", "No")));
+                new XElement("Enabled", "Yes")));
     }
 }

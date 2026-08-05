@@ -94,7 +94,7 @@ usedPatternDefaults, fieldCount}` — never request the full XML back.
 | Property | Meaning | Allowed values |
 |---|---|---|
 | `TableGroup` | **Business role** | `Main`, `Transaction`, `Parameter`, `Group`, `WorksheetHeader`, `WorksheetLine`, `Reference`, `Framework`, `Miscellaneous` |
-| `TableType` | **Storage** kind | `RegularTable`, `TempDB`, `InMemory` |
+| `TableType` | **Storage** kind | `--table-type` accepts `RegularTable`, `TempDB`, `InMemory` (the AOT `<TableType>` element itself is emitted as `Regular`, `TempDB`, or `InMemory` — `RegularTable` is the CLI's flag name, not the literal XML value, and is omitted from the XML entirely when it's the default) |
 
 ❌ Passing `--pattern TempDB` is **rejected** — the CLI returns
 `BAD_INPUT` with a hint to use `--table-type TempDB --pattern main` instead.
@@ -136,7 +136,7 @@ d365fo generate query SalesTableWithLines \
 d365fo search query <NamePart> --output json
 ```
 
-`--join target:joinKind:parentDs` (repeatable). JoinKind: `InnerJoin`, `OuterJoin`, `ExistsJoin`, `NotExistsJoin`.
+`--join target:joinKind:parentDs` (repeatable). JoinKind: `InnerJoin`, `OuterJoin`, `ExistsJoin`, `NoExistsJoin` (no "t" — this is the real `AxQuerySimpleEmbeddedDataSource.JoinMode` spelling, confirmed against shipped platform `AxQuery` XML; `NotExistsJoin` is rejected). The join is emitted as `<UseRelations>Yes</UseRelations>`, which tells the platform to auto-derive the join key from the target table's existing AOT relation — this only works when such a relation actually exists between the two tables.
 
 ### Number sequence integration
 
@@ -152,7 +152,7 @@ d365fo generate number-sequence <ModuleName> \
 ```
 
 This emits:
-- A CoC extension of `NumberSeqApplicationModule` that registers the new sequence.
+- A CoC extension of the per-module `NumberSeqApplicationModule_<ModuleName>` class (e.g. `NumberSeqApplicationModule_FleetManagement`) that registers the new sequence.
 - An EDT with `NumberSequence=Yes` and `NumberSequenceModule` set.
 - A `NumberSeqFormHandler` extension class for the target form's `init()`.
 
@@ -160,7 +160,9 @@ Manual consumption in X++ — the `numRef<EdtName>()` accessor lives as a `stati
 NumberSequenceReference` method on the module's **own parameter table** (e.g.
 `FmParameters`, mirroring how `CustParameters::numRefCustAccount()` returns
 `NumberSeqReference::findReference(extendedTypeNum(CustAccount))` in the real
-platform) — **not** on `CompanyInfo` (no such class exists in modern D365FO):
+platform) — **not** on `CompanyInfo` (that class does exist and is the
+standard way to read the current legal entity via `CompanyInfo::find()`,
+but it isn't where a module's own number-sequence accessor belongs):
 ```xpp
 NumberSeq numSeq = NumberSeq::newGetNum(FmParameters::numRefMySequence());
 str nextNum = numSeq.num();

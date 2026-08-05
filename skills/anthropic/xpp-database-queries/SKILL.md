@@ -94,7 +94,7 @@ while (search.nextRecord(so))
 }
 ```
 
-**Joins:** `qe.joinClause(SysDaJoinKind::InnerJoin, joinQe)` — supports `InnerJoin`, `OuterJoin`, `ExistsJoin`, `NotExistsJoin`.
+**Joins:** `qe.joinClause(SysDaJoinKind::InnerJoin, joinQe)` — supports `InnerJoin`, `OuterJoin`, `ExistsJoin`, `NotExistsJoin`. ⚠️ This `SysDaJoinKind` spelling (**with** "t") is specific to the `SysDa` builder framework — the native AOT `AxQuerySimpleEmbeddedDataSource.JoinMode` property (and the `d365fo generate query --join` flag) uses the differently-spelled `NoExistsJoin` (**no** "t"). Confirmed against both enums as shipped on the platform; mixing them up produces an invalid enum literal.
 
 **SysDa vs `select` — decision:**
 

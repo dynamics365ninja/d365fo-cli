@@ -97,7 +97,7 @@ public final class CustPaymentBusinessEvent extends BusinessEventsBase
     }
 
     // Required: populate the contract from the current record context
-    [Wrappable(true), Replaceable(true)]
+    [Wrappable(false), Replaceable(false)]
     public BusinessEventsContract buildContract()
     {
         var contract = new CustPaymentBusinessEventContract();
@@ -173,7 +173,7 @@ final class CustTrans_MyExt
 
 After scaffolding and compiling:
 
-1. **System Administration > Business events catalog** — the event appears after a browser refresh or `iisreset`.
+1. **System administration > Setup > Business events > Business events catalog** — a new/changed event does **not** appear automatically after compiling; from the catalog form's **Manage** menu run **Rebuild business event catalog** first, then refresh the grid.
 2. **Activate** — select the event, click Activate, choose the legal entity scope.
 3. **Configure endpoint** — click Endpoints, create or reuse a Service Bus / Event Grid / HTTP / Power Automate connection.
 4. **Test** — trigger the business process; the event payload arrives at the endpoint within seconds.
@@ -186,5 +186,5 @@ After scaffolding and compiling:
 - **`buildContract()` is called by the framework** — return the populated contract instance; never return `null`.
 - **Contract `parmXxx()` accessors must be decorated with `[DataMemberAttribute]`** — the serialization layer uses these to build the JSON payload.
 - **Use EDTs for payload fields** (e.g. `CustAccount`, `AmountCur`) — not primitive types. Run `d365fo get edt <Name>` to confirm the EDT exists.
-- **Never call `.send()` inside a `ttsbegin`/`ttscommit` block** unless you intend to publish on rollback too. Call it after the outermost `ttscommit` or in the `postInsert`/`postUpdate` framework hook. `send()` is a `public final` instance method on `BusinessEventsBase` (there is also `sendOnUserConnection(UserConnection)`) — there is no static `publish()` method.
+- **Never call `.send()` inside a `ttsbegin`/`ttscommit` block** unless you intend to publish on rollback too. Call it after the outermost `ttscommit` or in the `postInsert`/`postUpdate` framework hook. `send()` is a `public final` instance method on `BusinessEventsBase` — there is no static `publish()` method.
 - **The catalog category comes from the `ModuleAxapta` enum value passed to `[BusinessEvents(...)]`**, not free text — pick the enum member matching the module the event belongs to (e.g. `ModuleAxapta::Customer`, `ModuleAxapta::Inventory`; run `d365fo get enum ModuleAxapta` for the full list).

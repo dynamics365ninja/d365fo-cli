@@ -23,7 +23,6 @@ public static class CustomServiceScaffolder
             ops.Add(new OperationSpec("process", "void"));
 
         var declaration =
-            "[ServiceAttribute]\n" +
             $"public class {className}\n" +
             "{\n" +
             "}\n";
@@ -86,7 +85,7 @@ public static class CustomServiceScaffolder
             new XElement("AxService",
                 new XElement("Name", serviceName),
                 new XElement("Class", serviceClass),
-                new XElement("Operations", operationEls)));
+                new XElement("ServiceOperations", operationEls)));
     }
 
     /// <summary>
@@ -99,6 +98,7 @@ public static class CustomServiceScaffolder
                 new XElement("Name", groupName),
                 new XElement("Services",
                     new XElement("AxServiceGroupService",
-                        new XElement("Name", serviceName)))));
+                        new XElement("Name", serviceName),
+                        new XElement("Service", serviceName)))));
     }
 }
