@@ -156,9 +156,13 @@ This emits:
 - An EDT with `NumberSequence=Yes` and `NumberSequenceModule` set.
 - A `NumberSeqFormHandler` extension class for the target form's `init()`.
 
-Manual consumption in X++:
+Manual consumption in X++ — the `numRef<EdtName>()` accessor lives as a `static
+NumberSequenceReference` method on the module's **own parameter table** (e.g.
+`FmParameters`, mirroring how `CustParameters::numRefCustAccount()` returns
+`NumberSeqReference::findReference(extendedTypeNum(CustAccount))` in the real
+platform) — **not** on `CompanyInfo` (no such class exists in modern D365FO):
 ```xpp
-NumberSeq numSeq = NumberSeq::newGetNum(CompanyInfo::numRefMySequence());
+NumberSeq numSeq = NumberSeq::newGetNum(FmParameters::numRefMySequence());
 str nextNum = numSeq.num();
 numSeq.used();   // or numSeq.abort() to roll back
 ```
