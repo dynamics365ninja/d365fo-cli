@@ -52,7 +52,7 @@ public static class RnrProjRegistry
         var rnrproj = FindRnrProj(modelFolder);
         if (rnrproj is null) return null;
 
-        var include = Path.Combine(axSubfolder, objectName + ".xml");
+        var include = axSubfolder + "\\" + objectName + ".xml";
         try
         {
             var doc = XDocument.Load(rnrproj, LoadOptions.PreserveWhitespace);
@@ -82,7 +82,7 @@ public static class RnrProjRegistry
         var rnrproj = FindRnrProj(modelFolder);
         if (rnrproj is null) return null;
 
-        var include = Path.Combine(axSubfolder, objectName + ".xml");
+        var include = axSubfolder + "\\" + objectName + ".xml";
         try
         {
             var doc = XDocument.Load(rnrproj, LoadOptions.PreserveWhitespace);
@@ -144,8 +144,13 @@ public static class RnrProjRegistry
     private static bool HasInclude(IEnumerable<XElement> itemGroups, string include)
         => FindInclude(itemGroups, include) is not null;
 
+    // .rnrproj files are always Windows/Visual-Studio-authored (backslash-separated Include
+    // paths) regardless of which OS this CLI runs on — normalize both sides so a lookup for
+    // "AxTable\Foo.xml" matches an on-disk entry that (rarely) uses "AxTable/Foo.xml" or vice versa.
     private static XElement? FindInclude(IEnumerable<XElement> itemGroups, string include)
         => itemGroups.SelectMany(g => g.Elements())
             .FirstOrDefault(e => string.Equals(
-                (string?)e.Attribute("Include"), include, StringComparison.OrdinalIgnoreCase));
+                Normalize((string?)e.Attribute("Include")), Normalize(include), StringComparison.OrdinalIgnoreCase));
+
+    private static string? Normalize(string? path) => path?.Replace('/', '\\');
 }

@@ -30,7 +30,9 @@ public sealed class RnrProjRegistryTests : IDisposable
 
         Assert.NotNull(delta);
         Assert.True(delta!.WasAdded);
-        Assert.Equal(Path.Combine("AxTable", "NewTable.xml"), delta.Include);
+        // .rnrproj Include paths are always Windows/Visual-Studio-style (backslash), regardless
+        // of the host OS this test runs on — not Path.Combine, which would use '/' on Linux/macOS.
+        Assert.Equal(@"AxTable\NewTable.xml", delta.Include);
         var xml = File.ReadAllText(rnrproj);
         Assert.Contains("NewTable.xml", xml);
         Assert.Contains("Existing.xml", xml); // pre-existing entry untouched
