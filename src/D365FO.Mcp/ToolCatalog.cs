@@ -35,7 +35,10 @@ public static class ToolCatalog
         // XML-only, but the whole tool is flagged write so clients confirm before
         // any write objectType runs). `labels` mixes read actions (search/info)
         // with write actions (create/rename/delete) — flagged here too.
-        "generate_object", "labels", "modify_method",
+        // `undo_last_modification` mutates the file system (or the live metadata
+        // provider) just like the write it reverts — flagged write even though its
+        // `dryRun` mode is read-only, since clients gate on the tool, not the call.
+        "generate_object", "labels", "modify_method", "undo_last_modification",
     };
 
     /// <summary>
@@ -426,6 +429,24 @@ public static class ToolCatalog
             "Recent ExtractionRuns telemetry (per-model timings). Returns newest first.",
             Schema(("limit", "integer", false), ("model", "string", false)),
             (h, p) => h.IndexHistory(Int(p, "limit", 50), Str(p, "model"))),
+
+        // ---- Modification journal / undo (issue #113) ----
+
+        new Descriptor("undo_last_modification",
+            "Revert the last `steps` writes (default 1) made by `generate_object` / `labels` (create/rename/delete) / " +
+            "`delete` — CLI parity for upstream `undo_last_modification`. Replays each entry in reverse through the " +
+            "SAME write path that produced it (on-disk file, or the live metadata provider when the bridge was used), " +
+            "restoring the exact pre-image: a create is removed, an update/delete is restored byte-for-byte. Stops at " +
+            "the first failure so older entries are never skipped. Pass `dryRun=true` to preview without changing " +
+            "anything — always do this first when unsure what will be reverted.",
+            Schema(("steps", "integer", false), ("dryRun", "boolean", false)),
+            (h, p) => h.UndoLastModification(Int(p, "steps", 1), Bool(p, "dryRun"))),
+
+        new Descriptor("journal_list",
+            "Inspect the modification-journal stack (most-recent-first) without reverting anything — " +
+            "see what `undo_last_modification` would act on.",
+            Schema(("limit", "integer", false)),
+            (h, p) => h.JournalList(Int(p, "limit", 50))),
     };
 
     // ---- JSON helpers ----

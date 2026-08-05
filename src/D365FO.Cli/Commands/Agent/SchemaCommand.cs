@@ -137,6 +137,8 @@ public sealed class SchemaCommand : Command<SchemaCommand.Settings>
         C("labels create", "Create or update a label entry.", ["<KEY>", "<VALUE>"], ["--file", "--overwrite", "--output"], ["labels (action=create)"], true),
         C("labels rename", "Rename a label key.", ["<OLD>", "<NEW>"], ["--file", "--overwrite", "--output"], ["labels (action=rename)"], true),
         C("labels delete", "Delete a label key.", ["<KEY>"], ["--file", "--output"], ["labels (action=delete)"], true),
+        C("undo", "Revert the last N modification-journal entries (create removed, update/delete restored to their exact pre-image).", [], ["--steps", "--dry-run", "--db", "--output"], ["undo_last_modification"], true),
+        C("journal list", "Inspect the modification-journal stack, most-recent-first.", [], ["--limit", "--db", "--output"], ["journal_list"], true),
 
         // Typed search/get commands (kind-specific) — all fold into the unified
         // `search` / `get_object_info` MCP tools via a `type`/`objectType` field.
@@ -211,6 +213,8 @@ public sealed class SchemaCommand : Command<SchemaCommand.Settings>
         C("generate duty", "Scaffold a security duty.", ["<NAME>"], ["--privilege", "--label", "--into-role", "--out", "--overwrite", "--install-to", "--output"], []),
         C("generate role", "Scaffold or merge a security role.", ["<NAME>"], ["--duty", "--privilege", "--label", "--description", "--add-to", "--out", "--overwrite", "--install-to", "--output"], []),
         C("generate report", "Scaffold AxReport and RDP skeleton.", ["<NAME>"], ["--dp", "--tmp", "--dataset", "--caption", "--field", "--parameter", "--extra-dataset", "--out-dp", "--out-contract", "--out", "--overwrite", "--install-to", "--output"], []),
+
+        C("delete", "Delete an AOT object (bridge or on-disk), journaled for `undo`.", [], ["--kind", "--name", "--install-to", "--path", "--model", "--output"], []),
 
         C("analyze completeness", "Cross-check workspace AOT XML against the index.", [], ["--workspace", "--output"], []),
         C("analyze integration", "Cross-check data entities for OData/DMF readiness.", [], ["--model", "--output"], ["analyze (mode=integration)"]),

@@ -599,6 +599,33 @@ d365fo label delete RenamedKey         --file path/Foo.en-us.label.txt
 
 ---
 
+## Journal / undo
+
+```sh
+# Inspect the stack (most-recent-first)
+d365fo journal list --output json
+d365fo journal list --limit 5 --output json
+
+# Preview before committing to an undo
+d365fo undo --dry-run --output json
+
+# Revert the last write, or the last N
+d365fo undo --output json
+d365fo undo --steps 3 --output json
+
+# Delete an AOT object (journaled — undo-able like any other write)
+d365fo delete --kind table --name OldTable --path C:\pkg\MyModel\MyModel\AxTable\OldTable.xml
+d365fo delete --kind class --name OldClass --install-to MyModel   # via the metadata bridge
+```
+
+Every `generate *`, `labels create\|rename\|delete`, and `delete` write appends an entry to a
+size-capped journal at `<index-dir>/journal/`. `undo` replays entries in reverse through the
+same write path that produced them (disk or bridge), restoring the exact pre-image — a create
+is removed, an update/delete is restored byte-for-byte. Stops at the first failure so older
+entries are never skipped.
+
+---
+
 ## Review
 
 ```sh

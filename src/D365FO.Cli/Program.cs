@@ -270,6 +270,15 @@ app.Configure(cfg =>
         b.AddCommand<DaemonWarmupCommand>("warmup").WithDescription("Pre-warm the SQLite page cache for faster first queries.");
     });
 
+    cfg.AddCommand<D365FO.Cli.Commands.Journal.UndoCommand>("undo").WithDescription("Revert the last N modification-journal entries (create removed, update/delete restored to their exact pre-image).");
+    cfg.AddCommand<D365FO.Cli.Commands.Journal.DeleteObjectCommand>("delete").WithDescription("Delete an AOT object (bridge or on-disk), journaled for `d365fo undo`.");
+
+    cfg.AddBranch("journal", b =>
+    {
+        b.SetDescription("Inspect the modification journal (issue #113).");
+        b.AddCommand<D365FO.Cli.Commands.Journal.JournalListCommand>("list").WithDescription("List journal entries, most-recent-first.");
+    });
+
     cfg.AddCommand<BuildCommand>("build").WithDescription("Invoke MSBuild (Windows VM).");
     cfg.AddCommand<SyncCommand>("sync").WithDescription("Run DB sync (Windows VM).");
     cfg.AddCommand<DoctorCommand>("doctor").WithDescription("Diagnose environment.");

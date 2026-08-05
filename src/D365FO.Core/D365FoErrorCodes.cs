@@ -65,4 +65,10 @@ public static class D365FoErrorCodes
     public const string Unauthorized = "UNAUTHORIZED";
     public const string ModeNotAllowed = "MODE_NOT_ALLOWED";
     public const string RateLimited = "RATE_LIMITED";
+
+    // Modification journal / undo (issue #113)
+    public const string JournalEmpty = "JOURNAL_EMPTY";
+    public const string UndoFailed = "UNDO_FAILED";
+    public const string InstallFailed = "INSTALL_FAILED";
+    public const string DeleteFailed = "DELETE_FAILED";
 }

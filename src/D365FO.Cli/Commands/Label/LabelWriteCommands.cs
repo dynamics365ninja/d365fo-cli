@@ -1,4 +1,5 @@
 using D365FO.Core;
+using D365FO.Core.Journal;
 using D365FO.Core.Labels;
 using Spectre.Console.Cli;
 
@@ -108,6 +109,7 @@ public sealed class LabelCreateCommand : Command<LabelCreateCommand.Settings>
                         "KEY_EXISTS",
                         $"Label '{settings.Key}' already exists in {file}. Pass --overwrite to replace.",
                         hint: $"Existing value: {res.OldValue}"));
+                LabelJournalRecorder.RecordCreateOrUpdate(res, "labels create");
                 results.Add(new
                 {
                     outcome = res.Outcome.ToString(),
@@ -187,6 +189,7 @@ public sealed class LabelRenameCommand : Command<LabelRenameCommand.Settings>
         try
         {
             var res = LabelFileWriter.Rename(settings.File!, settings.OldKey, settings.NewKey, settings.Overwrite);
+            LabelJournalRecorder.RecordRename(res, settings.OldKey, "labels rename");
             return res.Outcome switch
             {
                 WriteOutcome.FileMissing => RenderHelpers.Render(kind, ToolResult<object>.Fail("FILE_NOT_FOUND", $"Label file not found: {settings.File}")),
@@ -231,6 +234,7 @@ public sealed class LabelDeleteCommand : Command<LabelDeleteCommand.Settings>
         try
         {
             var res = LabelFileWriter.Delete(settings.File!, settings.Key);
+            LabelJournalRecorder.RecordDelete(res, "labels delete");
             return res.Outcome switch
             {
                 WriteOutcome.FileMissing => RenderHelpers.Render(kind, ToolResult<object>.Fail("FILE_NOT_FOUND", $"Label file not found: {settings.File}")),

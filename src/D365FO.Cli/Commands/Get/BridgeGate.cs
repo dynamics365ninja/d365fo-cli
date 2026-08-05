@@ -123,6 +123,73 @@ internal static class BridgeGate
     }
 
     /// <summary>
+    /// Delete an existing Ax* object in <paramref name="model"/> via the live metadata
+    /// provider (bridge <c>deleteObject</c>). Used by <c>d365fo delete</c> and, in reverse,
+    /// by <c>d365fo undo</c> to revert a bridge-mediated create (issue #113).
+    /// Returns (true, null) on success, (false, message) on any failure.
+    /// </summary>
+    internal static (bool ok, string? error) TryDeleteObject(string kind, string name, string model)
+    {
+        if (!BridgeClient.IsAvailable())
+        {
+            return (false, "bridge is not available (set D365FO_BRIDGE_ENABLED=1 and D365FO_BRIDGE_PATH).");
+        }
+
+        try
+        {
+            var options = DefaultOptions();
+            using var client = new BridgeClient(options);
+            var args = new JsonObject
+            {
+                ["kind"] = kind,
+                ["name"] = name,
+                ["model"] = model,
+            };
+
+            var result = client.SendAsync("deleteObject", args).GetAwaiter().GetResult();
+            if (result is null) return (false, "bridge returned no result");
+
+            var ok = (bool?)result["ok"] ?? false;
+            if (!ok)
+            {
+                var err = (string?)result["error"] ?? "UNKNOWN";
+                var msg = (string?)result["message"] ?? string.Empty;
+                return (false, err + ": " + msg);
+            }
+            return (true, null);
+        }
+        catch (BridgeException ex)
+        {
+            return (false, "bridge error: " + ex.Message);
+        }
+    }
+
+    /// <summary>
+    /// Read a live Ax* object back as raw XML via the bridge's <c>readObjectXml</c> — used to
+    /// capture an exact pre-image before a bridge delete so <c>d365fo undo</c> can recreate it
+    /// (issue #113). Returns null on any failure, including bridge unavailability.
+    /// </summary>
+    internal static string? TryReadObjectXml(string kind, string name)
+    {
+        if (!BridgeClient.IsAvailable()) return null;
+        try
+        {
+            var options = DefaultOptions();
+            using var client = new BridgeClient(options);
+            var result = client.SendAsync("readObjectXml", new JsonObject { ["kind"] = kind, ["name"] = name })
+                .GetAwaiter().GetResult();
+            if (result is null) return null;
+            var ok = (bool?)result["ok"] ?? false;
+            if (!ok) return null;
+            return (string?)result["xml"];
+        }
+        catch (BridgeException)
+        {
+            return null;
+        }
+    }
+
+    /// <summary>
     /// Query the DYNAMICSXREFDB for reverse references via the bridge.
     /// Returns the raw bridge JSON (tag _source already included by the
     /// bridge) or null on any failure — callers fall back to the regex
