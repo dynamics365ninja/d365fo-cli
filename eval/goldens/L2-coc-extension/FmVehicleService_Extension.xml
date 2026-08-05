@@ -1,0 +1,21 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<AxClass>
+  <Name>FmVehicleService_Extension</Name>
+  <SourceCode>
+    <Declaration>[ExtensionOf(classStr(FmVehicleService))]
+final class FmVehicleService_Extension
+{
+}</Declaration>
+    <Methods>
+      <Method>
+        <Name>run</Name>
+        <Source>public void run()
+{
+    next run();
+    // extension logic here
+}
+</Source>
+      </Method>
+    </Methods>
+  </SourceCode>
+</AxClass>

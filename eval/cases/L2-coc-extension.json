@@ -1,0 +1,13 @@
+{
+  "id": "L2-coc-extension",
+  "title": "Chain-of-Command wrapper on FmVehicleService.run",
+  "tier": 2,
+  "instruction": "Add a Chain-of-Command extension class wrapping the run() method on the class FmVehicleService, calling next() around your logic. Use `d365fo get class FmVehicleService` first to confirm the method exists and its signature before generating. Use only the d365fo CLI (search/get/generate/validate) — do not hand-write XML.",
+  "canonical_args": ["generate", "coc", "FmVehicleService", "--method", "run"],
+  "target_artifact_types": ["AxClass"],
+  "golden_path": "L2-coc-extension",
+  "tags": ["coc", "extension", "class", "anti-hallucination"],
+  "ignore": [],
+  "requires_fixture_index": true,
+  "golden_pending": false
+}

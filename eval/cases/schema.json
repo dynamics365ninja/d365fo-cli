@@ -1,0 +1,57 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/dynamics365ninja/d365fo-cli/eval/cases/schema.json",
+  "title": "Eval case",
+  "description": "Documented shape of an eval/cases/<id>.json file. Informational only — enforced in code by D365FO.Core.Eval.EvalCaseCatalog, not by a JSON-Schema validator (no such library is referenced anywhere else in this repo).",
+  "type": "object",
+  "required": ["id", "title", "tier", "instruction", "target_artifact_types", "golden_path"],
+  "properties": {
+    "id": {
+      "type": "string",
+      "pattern": "^L[0-4]-[a-z0-9-]+$",
+      "description": "Tier prefix (L0-L4) must match the 'tier' field."
+    },
+    "title": { "type": "string" },
+    "tier": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 4,
+      "description": "0=trivial (single EDT/enum), 1=single object (table/class), 2=extension (CoC/event-handler/table-extension), 3=composite, 4=feature slice."
+    },
+    "instruction": {
+      "type": "string",
+      "description": "Natural-language instruction for the eval-runner agent to drive through the d365fo CLI/MCP tool surface unassisted."
+    },
+    "canonical_args": {
+      "type": ["array", "null"],
+      "items": { "type": "string" },
+      "description": "Optional. Full `d365fo` args (e.g. [\"generate\", \"edt\", \"Name\", \"--base-type\", \"String\"]) for the deterministic `eval run` replay path. Must NOT include --out/--overwrite/--install-to/--output — `eval run` supplies those (the last forced to json, so the replay never touches Spectre's AnsiConsole). Omit for instruction-only cases (agent-driven via `eval score` only)."
+    },
+    "target_artifact_types": {
+      "type": "array",
+      "items": { "type": "string" },
+      "minItems": 1,
+      "description": "AOT kinds this case produces, e.g. [\"AxEdt\"]."
+    },
+    "golden_path": {
+      "type": "string",
+      "description": "Directory name under eval/goldens/ holding exactly one captured *.xml golden."
+    },
+    "tags": { "type": "array", "items": { "type": "string" } },
+    "ignore": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Golden-diff path globs to ignore (e.g. legitimately variable nodes). * = any run of characters, ** = same, spanning '/'."
+    },
+    "requires_fixture_index": {
+      "type": "boolean",
+      "default": false,
+      "description": "True when the case extends/references an object from tests/Samples/MiniAot (e.g. a CoC wrapper). `eval run` builds a disposable temp index from that fixture before replaying."
+    },
+    "golden_pending": {
+      "type": "boolean",
+      "default": false,
+      "description": "True once authored but before the golden has been captured (`d365fo eval capture`) and reviewed."
+    }
+  }
+}

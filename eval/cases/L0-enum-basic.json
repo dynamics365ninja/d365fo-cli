@@ -1,0 +1,13 @@
+{
+  "id": "L0-enum-basic",
+  "title": "New base enum with three elements",
+  "tier": 0,
+  "instruction": "Create a new base enum named ConVehicleStatus with three elements: Available (value 0), InUse (value 1), and Maintenance (value 2). Label the enum 'Vehicle status'. Use only the d365fo CLI (search/get/generate/validate) — do not hand-write XML.",
+  "canonical_args": ["generate", "enum", "ConVehicleStatus", "--value", "Available:0", "--value", "InUse:1", "--value", "Maintenance:2", "--label", "Vehicle status"],
+  "target_artifact_types": ["AxEnum"],
+  "golden_path": "L0-enum-basic",
+  "tags": ["enum", "metadata"],
+  "ignore": [],
+  "requires_fixture_index": false,
+  "golden_pending": false
+}

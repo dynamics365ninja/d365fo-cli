@@ -1,0 +1,13 @@
+{
+  "id": "L1-class-basic",
+  "title": "New standalone final class",
+  "tier": 1,
+  "instruction": "Create a new final class named ConVehicleLogHelper with no base class. Use only the d365fo CLI (search/get/generate/validate) — do not hand-write XML.",
+  "canonical_args": ["generate", "class", "ConVehicleLogHelper"],
+  "target_artifact_types": ["AxClass"],
+  "golden_path": "L1-class-basic",
+  "tags": ["class"],
+  "ignore": [],
+  "requires_fixture_index": false,
+  "golden_pending": false
+}

@@ -1,0 +1,6 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<AxEdt xmlns:i="http://www.w3.org/2001/XMLSchema-instance" i:type="AxEdtString">
+  <Name>ConVehiclePlateNumber</Name>
+  <Label>Vehicle plate number</Label>
+  <StringSize>20</StringSize>
+</AxEdt>

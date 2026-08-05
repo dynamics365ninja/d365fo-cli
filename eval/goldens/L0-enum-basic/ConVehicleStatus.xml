@@ -1,0 +1,21 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<AxEnum xmlns:i="http://www.w3.org/2001/XMLSchema-instance">
+  <Name>ConVehicleStatus</Name>
+  <Label>Vehicle status</Label>
+  <IsExtensible>true</IsExtensible>
+  <UseEnumValue>No</UseEnumValue>
+  <EnumValues>
+    <AxEnumValue>
+      <Name>Available</Name>
+      <Value>0</Value>
+    </AxEnumValue>
+    <AxEnumValue>
+      <Name>InUse</Name>
+      <Value>1</Value>
+    </AxEnumValue>
+    <AxEnumValue>
+      <Name>Maintenance</Name>
+      <Value>2</Value>
+    </AxEnumValue>
+  </EnumValues>
+</AxEnum>
