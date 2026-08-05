@@ -37,6 +37,14 @@ public sealed class InitCommand : Command<InitCommand.Settings>
         [CommandOption("--persist-profile")]
         [System.ComponentModel.Description("Append D365FO_PACKAGES_PATH / D365FO_INDEX_DB to the user's shell profile (PowerShell $PROFILE on Windows, ~/.profile otherwise).")]
         public bool PersistProfile { get; init; }
+
+        [CommandOption("--label-languages <LANGS>")]
+        [System.ComponentModel.Description("Comma-separated label languages to persist as D365FO_LABEL_LANGUAGES, e.g. en-us,cs. Only written with --persist-profile.")]
+        public string? LabelLanguages { get; init; }
+
+        [CommandOption("--no-wizard")]
+        [System.ComponentModel.Description("Skip the interactive setup wizard even in a terminal; use flags/auto-detect only. Non-interactive runs (piped, CI, --output json) never show the wizard regardless of this flag.")]
+        public bool NoWizard { get; init; }
     }
 
     private static readonly string[] CandidateRoots =
@@ -52,10 +60,45 @@ public sealed class InitCommand : Command<InitCommand.Settings>
         var kind = OutputMode.Resolve(settings.Output);
         var cfg = D365FoSettings.FromEnvironment(settings.DatabasePath);
 
-        var packages = settings.PackagesPath ?? cfg.PackagesPath ?? AutoDetectPackages();
-        var extraPackages = D365FO.Cli.Commands.Index.IndexExtractCommand.MergeExtraPaths(
+        var extraFromFlags = D365FO.Cli.Commands.Index.IndexExtractCommand.MergeExtraPaths(
             settings.ExtraPackagesPaths,
-            cfg.CustomPackagesPaths);
+            cfg.CustomPackagesPaths) ?? Array.Empty<string>();
+
+        // Bare 'd365fo init' in a real terminal walks the user through it
+        // instead of just reporting what auto-detect found — same job as
+        // `npm run setup` upstream. Any explicit --packages, --output, or
+        // --dry-run means the caller already knows what they want, so those
+        // (and non-TTY / --no-wizard) skip straight to the flag-driven path.
+        var runWizard = !settings.NoWizard
+            && OutputMode.IsTty
+            && string.IsNullOrEmpty(settings.Output)
+            && !settings.DryRun
+            && settings.PackagesPath is null;
+
+        string? packages;
+        List<string> extraPackages;
+        bool persistProfile;
+        bool runExtractNow;
+        string? labelLanguages;
+
+        if (runWizard)
+        {
+            var answers = RunWizard(settings, cfg, extraFromFlags);
+            packages = answers.Packages;
+            extraPackages = answers.ExtraPackages;
+            persistProfile = answers.PersistProfile;
+            runExtractNow = answers.RunExtract;
+            labelLanguages = answers.LabelLanguages;
+        }
+        else
+        {
+            packages = settings.PackagesPath ?? cfg.PackagesPath ?? AutoDetectPackages();
+            extraPackages = extraFromFlags.ToList();
+            persistProfile = settings.PersistProfile;
+            runExtractNow = settings.RunExtract;
+            labelLanguages = settings.LabelLanguages;
+        }
+
         var workspace = cfg.WorkspacePath ?? (packages is null ? null : Path.GetFullPath(Path.Combine(packages, "..")));
         var steps = new List<object>();
 
@@ -85,7 +128,7 @@ public sealed class InitCommand : Command<InitCommand.Settings>
         }
 
         int extractExit = 0;
-        if (settings.RunExtract && packages is not null && !settings.DryRun)
+        if (runExtractNow && packages is not null && !settings.DryRun)
         {
             try
             {
@@ -100,7 +143,7 @@ public sealed class InitCommand : Command<InitCommand.Settings>
             }
         }
 
-        if (settings.PersistProfile && packages is not null)
+        if (persistProfile && packages is not null)
         {
             var vars = new Dictionary<string, string>
             {
@@ -111,6 +154,8 @@ public sealed class InitCommand : Command<InitCommand.Settings>
                 vars["D365FO_WORKSPACE_PATH"] = workspace;
             if (extraPackages is { Count: > 0 })
                 vars["D365FO_CUSTOM_PACKAGES_PATH"] = string.Join(";", extraPackages);
+            if (!string.IsNullOrWhiteSpace(labelLanguages))
+                vars["D365FO_LABEL_LANGUAGES"] = labelLanguages;
 
             // --- JSON config file (shell-agnostic, solves Developer PowerShell issue) ---
             try
@@ -166,7 +211,7 @@ public sealed class InitCommand : Command<InitCommand.Settings>
                 workspace,
                 database = cfg.DatabasePath,
                 dryRun = settings.DryRun,
-                extracted = settings.RunExtract && !settings.DryRun && extractExit == 0,
+                extracted = runExtractNow && !settings.DryRun && extractExit == 0,
                 nextSteps = new[]
                 {
                     "Set D365FO_PACKAGES_PATH to persist the discovered path.",
@@ -189,6 +234,61 @@ public sealed class InitCommand : Command<InitCommand.Settings>
             if (ok)
                 AnsiConsole.MarkupLine("[green]Init complete.[/] Run 'd365fo doctor' to verify.");
         });
+    }
+
+    private readonly record struct WizardAnswers(
+        string? Packages,
+        List<string> ExtraPackages,
+        bool PersistProfile,
+        bool RunExtract,
+        string? LabelLanguages);
+
+    /// <summary>
+    /// Interactive first-run walkthrough for a bare <c>d365fo init</c> in a
+    /// terminal — confirms/asks for the packages path, an optional UDE extra
+    /// root, label languages, whether to persist, and whether to build the
+    /// index now. Mirrors <c>npm run setup</c> upstream, scoped to what this
+    /// CLI actually needs (no scenario picker, no secrets — it has neither).
+    /// </summary>
+    private static WizardAnswers RunWizard(Settings settings, D365FoSettings cfg, IReadOnlyList<string> extraFromFlags)
+    {
+        AnsiConsole.Write(new Rule("[bold]d365fo init — setup wizard[/]").LeftJustified());
+        AnsiConsole.MarkupLine("[grey]Enter accepts the default shown. Nothing is written until the end. Pass --no-wizard to skip this.[/]");
+        AnsiConsole.WriteLine();
+
+        var detected = AutoDetectPackages() ?? cfg.PackagesPath;
+        string? packages;
+        if (detected is not null && AnsiConsole.Confirm($"Found PackagesLocalDirectory at [green]{RenderHelpers.Escape(detected)}[/] — use it?"))
+        {
+            packages = detected;
+        }
+        else
+        {
+            packages = AnsiConsole.Prompt(
+                new TextPrompt<string>("Path to [bold]PackagesLocalDirectory[/]:")
+                    .Validate(p => Directory.Exists(p)
+                        ? ValidationResult.Success()
+                        : ValidationResult.Error("[red]Directory not found[/]")));
+        }
+
+        var extraPackages = new List<string>(extraFromFlags);
+        if (AnsiConsole.Confirm("Second (UDE) packages root for local custom-model XML?", false))
+        {
+            var raw = AnsiConsole.Ask<string>("Extra path(s), semicolon-separated:");
+            extraPackages.AddRange(raw.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries));
+        }
+
+        var defaultLanguages = settings.LabelLanguages ?? D365FoSettings.Resolve("D365FO_LABEL_LANGUAGES") ?? "en-us";
+        var labelLanguages = AnsiConsole.Ask("Label languages (comma-separated):", defaultLanguages);
+
+        var persistProfile = settings.PersistProfile
+            || AnsiConsole.Confirm("Persist these settings to your shell profile so new shells pick them up?");
+
+        var runExtract = settings.RunExtract
+            || AnsiConsole.Confirm("Build the metadata index now? (minutes for one model, longer for ApplicationSuite)", false);
+
+        AnsiConsole.WriteLine();
+        return new WizardAnswers(packages, extraPackages, persistProfile, runExtract, labelLanguages);
     }
 
     private static string? AutoDetectPackages()

@@ -1,5 +1,7 @@
 # Configuration
 
+Run `d365fo init` — in a terminal it's a wizard that asks for what you need and writes `settings.json` (`--persist-profile`); nothing below has to be edited by hand. The tables in this page document what it can write and what every setting does.
+
 `d365fo` resolves settings in the following priority order — first match wins:
 
 1. **Explicit CLI flags** (`--packages`, `--db`, …) — highest priority
@@ -19,8 +21,6 @@
 | `D365FO_INDEX_DB` | Path to the SQLite index file | `%LOCALAPPDATA%\d365fo-cli\d365fo-index.sqlite` |
 | `D365FO_WORKSPACE_PATH` | Root of your X++ solution (enables scaffold output) | — |
 | `D365FO_CUSTOM_MODELS` | Comma-separated list of custom model names | — |
-
-> ⚠️ **`D365FO_WORKSPACE_PATH` is not the same thing as your editor's "workspace".** This variable only tells the `d365fo` CLI where scaffolded X++ output should be written. It has **no effect** on where Visual Studio or VS Code loads GitHub Copilot instruction files from — that is determined purely by the folder/`.sln` you have open in the editor (see [SETUP.md — Connect your AI agent](SETUP.md#step-5--connect-your-ai-agent)). Setting `D365FO_WORKSPACE_PATH` does **not** make Copilot pick up `.github/copilot-instructions.md` from that path.
 | `D365FO_BRIDGE_ENABLED` | `1`/`true` enables the metadata bridge (required for `generate --install-to` and `find refs --xref`) | `false` |
 | `D365FO_BRIDGE_PATH` | Path to `D365FO.Bridge.exe` (auto-detected next to `d365fo.exe` when unset) | *(auto)* |
 | `D365FO_BIN_PATH` | Folder containing `Microsoft.Dynamics.AX.Metadata.*.dll` (usually `<PackagesLocalDirectory>\bin`) | — |
@@ -29,6 +29,8 @@
 | `D365FO_HOME` | Root for the provenance/grounding token store | `%USERPROFILE%\.d365fo` |
 | `D365FO_GROUNDING_ENFORCE` | `true` = `generate` rejects writes without a valid grounding token or with unresolved references / BP errors | `false` (warn only) |
 | `D365FO_FORM_PATTERN_ENFORCE` | `false` = disable the form-pattern write gate; by default `generate form` rejects structural pattern violations (FP001–FP005, FP007) | `true` |
+
+> ⚠️ **`D365FO_WORKSPACE_PATH` is not the same thing as your editor's "workspace".** This variable only tells the `d365fo` CLI where scaffolded X++ output should be written. It has **no effect** on where Visual Studio or VS Code loads GitHub Copilot instruction files from — that is determined purely by the folder/`.sln` you have open in the editor (see [SETUP.md — Connect your AI agent](SETUP.md#step-5--connect-your-ai-agent)). Setting `D365FO_WORKSPACE_PATH` does **not** make Copilot pick up `.github/copilot-instructions.md` from that path.
 
 ### `d365fo-mcp`-only variables
 
@@ -98,3 +100,11 @@ Alternatively, set variables at **machine scope** so they are inherited by every
     "K:\AosService\PackagesLocalDirectory",
     [System.EnvironmentVariableTarget]::Machine)
 ```
+
+---
+
+## See also
+
+- [SETUP.md](SETUP.md) — install and the `d365fo init` wizard.
+- [TROUBLESHOOTING.md](TROUBLESHOOTING.md) — env var / profile disagreements and other failure modes.
+- [ARCHITECTURE.md](ARCHITECTURE.md) — where the bridge and MCP variables plug in.

@@ -188,12 +188,15 @@ Static naming-rule check (publisher prefix, PascalCase, suffix conventions). Ret
 ### `init` — quickstart
 
 ```sh
+d365fo init                            # in a terminal: interactive wizard
 d365fo init --run-extract
 d365fo init --dry-run                  # show what would be done
 d365fo init --persist-profile          # append env vars to $PROFILE / ~/.profile
 ```
 
-Auto-detects the Windows `PackagesLocalDirectory`, prepares the SQLite schema, and (with `--run-extract`) drives the full extract pipeline. `--persist-profile` writes `D365FO_PACKAGES_PATH` / `D365FO_INDEX_DB` to the user's shell profile.
+Auto-detects the Windows `PackagesLocalDirectory`, prepares the SQLite schema, and (with `--run-extract`) drives the full extract pipeline. `--persist-profile` writes `D365FO_PACKAGES_PATH` / `D365FO_INDEX_DB` (and, if set, `D365FO_LABEL_LANGUAGES`) to the user's shell profile.
+
+In a real terminal, `init` is a wizard unless `--packages`, `--output`, `--dry-run`, or `--no-wizard` is given (or output is piped/non-TTY, as it always is for an agent's shell tool calls) — it asks for the packages path, an optional UDE extra root, label languages, and whether to persist / build the index now. `--persist-profile` and `--run-extract` still work as pre-answers to those last two questions when the wizard does run, so `d365fo init --persist-profile` above launches the wizard interactively but skips asking whether to persist.
 
 ---
 
@@ -772,8 +775,6 @@ After `dotnet publish src/D365FO.Mcp -c Release -r osx-arm64` you get a standalo
 
 ---
 
----
-
 ## Daemon (warm cache)
 
 For latency-sensitive integrations, run the CLI as a daemon so the SQLite handle and read caches stay hot:
@@ -810,3 +811,12 @@ Every command is scriptable: exit codes are reliable, output is JSON by default 
     d365fo review diff --base origin/main --head HEAD --output json \
       | jq -e '.data.violationCount == 0'
 ```
+
+---
+
+## See also
+
+- [SETUP.md](SETUP.md) — install, configure, connect an AI agent.
+- [CAPABILITIES.md](CAPABILITIES.md) — full command reference and the built-in-editor-vs-`d365fo` decision table.
+- [ARCHITECTURE.md](ARCHITECTURE.md) — index schema, lint rules, form pattern engine, the daemon.
+- [TROUBLESHOOTING.md](TROUBLESHOOTING.md) — common failure modes and fixes.

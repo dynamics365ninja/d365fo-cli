@@ -76,29 +76,49 @@ Structural violations (wrong order, missing container, disallowed control, misap
 
 ### Install
 
+One line in PowerShell checks for the .NET SDK, clones the repo, publishes a self-contained `d365fo` binary onto `PATH`, and hands off to `d365fo init` — an interactive wizard that detects your `PackagesLocalDirectory` and asks the rest. Safe to re-run — an existing checkout is updated in place.
+
+```powershell
+irm https://raw.githubusercontent.com/dynamics365ninja/d365fo-cli/main/install.ps1 | iex
+```
+
+macOS / Linux (read · search · scaffold only — `build`/`sync`/`test`/`bp` need a Windows D365FO VM):
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/dynamics365ninja/d365fo-cli/main/install.sh | bash
+```
+
+<details>
+<summary>Prefer to run the steps yourself</summary>
+
 ```sh
 git clone https://github.com/dynamics365ninja/d365fo-cli.git
 cd d365fo-cli
 dotnet build d365fo-cli.slnx -c Release
+d365fo init --persist-profile
 ```
 
-**PowerShell alias (fastest for dev):**
+**PowerShell alias (fastest for dev, no publish step):**
 
 ```powershell
 function d365fo { dotnet run --project C:\path\to\d365fo-cli\src\D365FO.Cli -- @args }
 ```
 
-**Self-contained binary (for distribution):**
+**Self-contained binary (what the installer does):**
 
 ```sh
 dotnet publish src/D365FO.Cli -c Release -r win-x64 --self-contained
-# also: linux-x64, osx-arm64
+# also: linux-x64, osx-x64, osx-arm64
 ```
+
+</details>
 
 ### First run
 
+The installer above already ran `d365fo init` for you. What's left is populating the index:
+
 ```sh
-# Point at your packages folder
+# Point at your packages folder (skip if 'd365fo init' found it already)
 $env:D365FO_PACKAGES_PATH = "K:\AosService\PackagesLocalDirectory"
 
 # Build + populate the index
@@ -117,38 +137,7 @@ d365fo find coc SalesTable::insert --output json
 d365fo labels resolve @SYS12345 --lang en-us,cs
 ```
 
-### Scaffold your first object
-
-```sh
-# New table
-d365fo generate table FmVehicle \
-  --label "@Fleet:Vehicle" \
-  --field VIN:VinEdt:mandatory \
-  --field Make:Name \
-  --field Year:YearEdt \
-  --out src/MyModel/AxTable/FmVehicle.xml
-
-# Chain-of-Command extension
-d365fo generate coc SalesTable --method insert --out src/MyModel/AxClass/SalesTable_MyExt.xml
-
-# Form — consult the pattern spec, scaffold, and the write is pattern-gated
-d365fo form-pattern spec SimpleList --output json
-d365fo generate form FmVehicles \
-  --pattern SimpleList \
-  --table FmVehicle \
-  --field VIN --field Make --field Year \
-  --out src/MyModel/AxForm/FmVehicles.xml
-
-# Form datasource / control override methods (mutates the existing AxForm)
-d365fo generate datasource-method FmVehicles --datasource FmVehicle --list      # show overridable methods
-d365fo generate datasource-method FmVehicles --datasource FmVehicle --method active
-d365fo generate control-method    FmVehicles --control VIN --method modified
-
-# Replace an existing method's body on a live class/table/edt/form (Windows VM, D365FO_BRIDGE_ENABLED=1)
-d365fo modify method class CustBalance calc --body "return 2;"
-```
-
-Full walkthrough: **[docs/SETUP.md](docs/SETUP.md)**
+Ready to scaffold your first table, form, and CoC extension? Full walkthrough with every command: **[docs/SETUP.md — Step 6](docs/SETUP.md#step-6--scaffold-your-first-object)**.
 
 ---
 
