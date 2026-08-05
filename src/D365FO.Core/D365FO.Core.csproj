@@ -17,6 +17,13 @@
   <ItemGroup>
     <EmbeddedResource Include="Index\Schema.sql" />
     <EmbeddedResource Include="Scaffolding\FormTemplates\*.template.xml" />
+    <!-- Knowledge topics served by `d365fo knowledge` / the MCP `get_knowledge`
+         tool. Embedded straight from the single-source skill corpus so a fact is
+         corrected in exactly one place (see D365FO.Core/Knowledge/KnowledgeBase.cs). -->
+    <EmbeddedResource Include="..\..\skills\_source\*.md">
+      <LogicalName>D365FO.Core.Knowledge.%(Filename).md</LogicalName>
+      <Visible>false</Visible>
+    </EmbeddedResource>
   </ItemGroup>
 
   <ItemGroup>

@@ -360,4 +360,44 @@ public class FormPatternValidatorTests
         Assert.NotNull(report.Pattern);
         Assert.NotNull(FormPatternCatalog.ResolveExact(report.Pattern));
     }
+
+    /// <summary>
+    /// The same gate with <c>--section</c> supplied. This used to fail for two patterns
+    /// — Dialog wrapped its sections in a Tab (FP004 under the FieldsFieldGroups
+    /// sub-pattern) and Workspace declared CustomAndQuickFilters over an empty
+    /// &lt;Controls /&gt; (FP003, missing QuickFilterControl) — so
+    /// `generate form --pattern Dialog|Workspace --section X` could never be written
+    /// while the write gate was enforced.
+    /// </summary>
+    [Theory]
+    [InlineData(FormPattern.SimpleList)]
+    [InlineData(FormPattern.SimpleListDetails)]
+    [InlineData(FormPattern.DetailsMaster)]
+    [InlineData(FormPattern.DetailsTransaction)]
+    [InlineData(FormPattern.Dialog)]
+    [InlineData(FormPattern.TableOfContents)]
+    [InlineData(FormPattern.Lookup)]
+    [InlineData(FormPattern.ListPage)]
+    [InlineData(FormPattern.Workspace)]
+    public void Scaffolded_forms_with_sections_pass_their_declared_pattern(FormPattern pattern)
+    {
+        var xml = XppScaffolder.Form(
+            formName: "FpGateSectionForm",
+            dataSourceTable: pattern is FormPattern.Dialog ? null : "CustTable",
+            pattern: pattern,
+            caption: "@SYS1234",
+            gridFields: new[] { "AccountNum", "CustGroup" },
+            sections: new[]
+            {
+                new FormSectionSpec("SectionGeneral", "General"),
+                new FormSectionSpec("SectionSetup", "Setup"),
+            },
+            linesTable: pattern == FormPattern.DetailsTransaction ? "CustTrans" : null);
+
+        var report = FormPatternValidator.ValidateXml(xml);
+        Assert.False(report.HasErrors,
+            $"{pattern}: " + string.Join("; ", report.Violations
+                .Where(v => v.Severity == "error")
+                .Select(v => $"{v.Rule} {v.Path}: {v.Excerpt}")));
+    }
 }

@@ -362,6 +362,16 @@ namespace D365FO.Bridge
         /// the matching MetaModel type name ("AxClass"), and the assembly that
         /// ships it (Microsoft.Dynamics.AX.Metadata.dll).
         /// </summary>
+        /// <remarks>
+        /// The extension kinds below are what lets a write target
+        /// <c>&lt;Target&gt;.&lt;Suffix&gt;</c> instead of the base object — the
+        /// extension-fallback path <c>D365FO.Core.Bridge.ObjectModifyEngine</c> takes when
+        /// the base object lives in a model this installation may not modify (a
+        /// Microsoft or ISV model). Every entry is resolved reflectively against the
+        /// live <c>IMetadataProvider</c>, so a collection this build of the platform does
+        /// not expose degrades to a <c>"&lt;collection&gt; provider not exposed"</c> error
+        /// rather than a crash (see <see cref="SaveArtifact"/>).
+        /// </remarks>
         internal static readonly System.Collections.Generic.Dictionary<string, string> KindToCollection =
             new System.Collections.Generic.Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
             {
@@ -370,16 +380,43 @@ namespace D365FO.Bridge
                 { "edt",   "Edts"    },
                 { "enum",  "Enums"   },
                 { "form",  "Forms"   },
+                { "view",  "Views"   },
+                { "map",   "Maps"    },
+                { "query", "Queries" },
+                { "dataentityview", "DataEntityViews" },
+                { "tableextension", "TableExtensions" },
+                { "formextension", "FormExtensions" },
+                { "edtextension",  "EdtExtensions"  },
+                { "enumextension", "EnumExtensions" },
+                { "viewextension", "ViewExtensions" },
+                { "queryextension", "QueryExtensions" },
+                { "dataentityviewextension", "DataEntityViewExtensions" },
             };
+
+        private const string MetaModelNs = "Microsoft.Dynamics.AX.Metadata.MetaModel.";
 
         private static readonly System.Collections.Generic.Dictionary<string, string> KindToTypeName =
             new System.Collections.Generic.Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
             {
-                { "class", "Microsoft.Dynamics.AX.Metadata.MetaModel.AxClass" },
-                { "table", "Microsoft.Dynamics.AX.Metadata.MetaModel.AxTable" },
-                { "edt",   "Microsoft.Dynamics.AX.Metadata.MetaModel.AxEdt"   },
-                { "enum",  "Microsoft.Dynamics.AX.Metadata.MetaModel.AxEnum"  },
-                { "form",  "Microsoft.Dynamics.AX.Metadata.MetaModel.AxForm"  },
+                { "class", MetaModelNs + "AxClass" },
+                { "table", MetaModelNs + "AxTable" },
+                { "edt",   MetaModelNs + "AxEdt"   },
+                { "enum",  MetaModelNs + "AxEnum"  },
+                { "form",  MetaModelNs + "AxForm"  },
+                { "view",  MetaModelNs + "AxView"  },
+                { "map",   MetaModelNs + "AxMap"   },
+                { "query", MetaModelNs + "AxQuery" },
+                { "dataentityview", MetaModelNs + "AxDataEntityView" },
+                { "tableextension", MetaModelNs + "AxTableExtension" },
+                { "formextension", MetaModelNs + "AxFormExtension" },
+                // AxEdtExtension is abstract — the concrete subtype (AxEdtStringExtension,
+                // …) must come from the input XML's root element or xsi:type, exactly as
+                // for AxEdt itself. WriteArtifact already handles that.
+                { "edtextension",  MetaModelNs + "AxEdtExtension"  },
+                { "enumextension", MetaModelNs + "AxEnumExtension" },
+                { "viewextension", MetaModelNs + "AxViewExtension" },
+                { "queryextension", MetaModelNs + "AxQueryExtension" },
+                { "dataentityviewextension", MetaModelNs + "AxDataEntityViewExtension" },
             };
 
         /// <summary>

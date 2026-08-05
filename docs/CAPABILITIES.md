@@ -74,7 +74,18 @@ Form-pattern advisor, spec catalog, and structural validator (mirrors the MCP `o
 form-pattern analyze [--pattern P|--table T|--similar-to Form]  — pattern histogram / advisor
 form-pattern spec [Name]        — required structure tree, versions, reference forms
 form-pattern validate [File]    — FP001–FP010 structural validation of AxForm XML
+form-pattern repair [File]      — auto-fix the deterministic violations; dry-run unless --apply/--out
 ```
+
+`repair` applies the fixes the validator already describes, and only those with a
+single correct outcome: insert a missing required control (FP003), reorder the
+Design root into spec order (FP005), pin `PatternVersion` (FP002), reset a drifted
+pattern-default property (FP009), apply an unambiguous container sub-pattern (FP006),
+and adopt an unpatterned form into `--pattern X` (FP010). It never deletes a control:
+a disallowed child (FP004), a sub-pattern on the wrong control type (FP007), a
+datasource gap (FP008), or a container with several candidate sub-patterns are
+reported under `skipped` with the reason, for a human to resolve. Exit code 2 when
+violations remain.
 
 ### `find`
 
@@ -194,6 +205,25 @@ All scaffolders write atomically (`.tmp` + move, `.bak` on overwrite). Pass `--i
 | `generate migration-script` | Data-fix `Runnable` class with `ttsbegin`/`ttscommit` batching |
 | `generate simple-list` | Alias for `generate form --pattern SimpleList` |
 | `modify method` | Replace an existing method's body on a live class/table/edt/form via D365FO.Bridge (`IMetadataProvider`, structured `XDocument` replace — no CDATA string surgery, no on-disk fallback). Reference/BP validation always blocks on error-severity findings. |
+| `modify property` | Set a property (`Label`, `ConfigurationKey`, `TableGroup`, …) on a live object. |
+| `modify add-field` | Add a field to a live table; the concrete `AxTableField*` subtype is resolved from the EDT's indexed base type. |
+| `modify add-enum-value` | Add a value to a live base enum — positional, never a hard-coded ordinal. |
+| `modify add-control` | Add a control to a live form's Design, optionally inside `--parent` and bound to `--datasource`/`--datafield`. |
+
+#### Extension fallback
+
+Every `modify` sub-command decides where the write lands. If the object's model is
+**not** in `D365FO_CUSTOM_MODELS`, the change is redirected to the
+`<Target>.<Suffix>` extension object in a custom model — created if it does not
+exist — rather than editing a Microsoft or ISV object in place, and the redirect is
+reported in `warnings`. `--extension [SUFFIX]` forces that path for any object;
+`--extension-model` picks the owning model; `--require-extension` refuses the
+in-place path entirely. The suffix defaults to whatever an existing extension of the
+same object already uses, so a model does not accumulate `CustTable.Fleet` next to
+`CustTable.Extension`.
+
+Every `modify` write (including `modify method`) records its exact pre-image in the
+modification journal — revert with `d365fo undo`.
 
 ### Scaffolding validation helpers
 
@@ -285,9 +315,50 @@ d365fo delete --kind class --name OldClass --install-to MyModel   # via the meta
 - **create → undo** removes the file (and its `.rnrproj` entry, when the model has one with an explicit item list).
 - **update → undo** restores the exact pre-image bytes.
 - **delete → undo** recreates the file from its pre-image.
+- The whole `modify` family journals too — including `modify method`, which previously
+  read its pre-image and discarded it, leaving method edits un-undoable.
 - Works identically with `D365FO_BRIDGE_ENABLED=1` or unset — bridge-mediated writes undo through `deleteObject`/`updateObject`/`createObject`.
 
 MCP parity: `undo_last_modification` (`steps`, `dryRun`) and `journal_list` (`limit`).
+
+---
+
+## Knowledge & build-error triage
+
+The verified X++/D365FO corpus in `skills/_source/*.md` is embedded in the binary and
+served per topic or per section, so an agent with no skill-file support can still
+ground itself. This is the CLI's equivalent of the upstream MCP `get_knowledge` tool,
+and it reads the *same* documents the Copilot / Anthropic / `d365fo-cli` skill variants
+are generated from — a fact is corrected in exactly one place.
+
+```sh
+d365fo knowledge list --output json                       # catalog + per-topic token cost
+d365fo knowledge search "add a field to a standard table" # rank sections across the corpus
+d365fo knowledge get table-scaffolding --outline          # cheap table of contents
+d365fo knowledge get table-scaffolding --section "Pre-flight"
+```
+
+Prefer `search` → `get --section` over fetching a whole topic; a full topic runs to
+~2.5k tokens.
+
+`explain-error` scores compiler output against a rule table and returns the ranked
+cause plus the knowledge topic behind it. It needs no VM and no index, so it works on
+a log the user pasted:
+
+```sh
+d365fo build --output json | d365fo explain-error --output json
+d365fo explain-error --file build.log --all --output json
+d365fo explain-error "The label @SYS12345 does not exist."
+```
+
+Matching is scored, not first-match-wins: each rule declares the tokens it requires
+and the tokens that disqualify it, every rule is evaluated, and the best-scoring one
+wins. A message that matches nothing gets **no** hint rather than the nearest-looking
+one. (The previous ordered `Contains` chain answered *"the label @SYS12345 does not
+exist"* with generic identifier advice, and answered any message containing the word
+"label" with label-creation advice.)
+
+MCP parity: `get_knowledge` (`action=list|get|search`) and `explain_build_error`.
 
 ---
 
@@ -343,7 +414,7 @@ Returns `UNSUPPORTED_PLATFORM` on non-Windows.
 
 ## MCP server
 
-Exposes the same index and scaffolding surface as the CLI over the `ModelContextProtocol` C# SDK via stdio (default) or HTTP (`--http`, for a shared team deployment). The tool surface is **consolidated** into **24 discriminator-based tools** (`search`, `get_object_info`, `get_method`, `labels`, `security_info`, `extension_info`, `object_patterns`, `generate_object`, `modify_method`, `analyze`, `models`, …) instead of one tool per object type — mirroring the upstream `d365fo-mcp-server` (which sits at 26). A single tool dispatches on a `type` / `objectType` / `mode` / `action` / `domain` / `include` field. See [MIGRATION_FROM_MCP.md](MIGRATION_FROM_MCP.md) for the full old→new mapping.
+Exposes the same index and scaffolding surface as the CLI over the `ModelContextProtocol` C# SDK via stdio (default) or HTTP (`--http`, for a shared team deployment). The tool surface is **consolidated** into **27 discriminator-based tools** (`search`, `get_object_info`, `get_method`, `labels`, `security_info`, `extension_info`, `object_patterns`, `generate_object`, `modify_method`, `modify_object`, `get_knowledge`, `explain_build_error`, `analyze`, `models`, …) instead of one tool per object type — mirroring the upstream `d365fo-mcp-server` (which sits at 26). A single tool dispatches on a `type` / `objectType` / `mode` / `action` / `domain` / `include` field. See [MIGRATION_FROM_MCP.md](MIGRATION_FROM_MCP.md) for the full old→new mapping.
 
 ```jsonc
 {

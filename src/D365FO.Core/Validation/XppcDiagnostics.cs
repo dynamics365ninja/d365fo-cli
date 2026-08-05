@@ -13,8 +13,14 @@ public sealed record XppcDiagnostic(
     int? Column,
     string Message)
 {
-    /// <summary>Known-fix hint for the message, when the pattern is recognised.</summary>
+    /// <summary>Known-fix hint for the message, when a <see cref="XppcFixHints"/> rule matches.</summary>
     public string? Hint => XppcDiagnostics.FixHint(Message);
+
+    /// <summary>Id of the matched hint rule, so a corpus/eval run can cluster by cause rather than by message text.</summary>
+    public string? HintRule => XppcFixHints.Best(Message)?.RuleId;
+
+    /// <summary>Knowledge topic backing the hint — feed to <c>d365fo knowledge get &lt;id&gt;</c>.</summary>
+    public string? Knowledge => XppcFixHints.Best(Message)?.Knowledge;
 }
 
 /// <summary>
@@ -73,28 +79,10 @@ public static class XppcDiagnostics
     }
 
     /// <summary>
-    /// Compact known-fix table for the most common xppc messages, so the agent
-    /// can correct everything in one round instead of re-asking.
+    /// Best known-fix hint for a compiler message, so the agent can correct
+    /// everything in one round instead of re-asking. Delegates to the scored
+    /// <see cref="XppcFixHints"/> matcher — see that type for why an ordered
+    /// substring chain was the wrong shape here.
     /// </summary>
-    public static string? FixHint(string message)
-    {
-        var m = message.ToLowerInvariant();
-        if (m.Contains("';' expected"))
-            return "Missing semicolon — check the statement at the reported line/column.";
-        if (m.Contains("unknown type") || m.Contains("could not be found") || m.Contains("does not exist"))
-            return "The identifier does not exist in metadata. Verify it with `d365fo search any <name>` / `d365fo validate references` — never guess names.";
-        if (m.Contains("is not a valid method") || m.Contains("method not found"))
-            return "Method missing on the type. Check the real method list with `d365fo get class <name>` or `d365fo get table <name>`.";
-        if (m.Contains("does not denote a class"))
-            return "[ExtensionOf] intrinsic mismatch — use tableStr() for tables, classStr() for classes, formStr() for forms.";
-        if (m.Contains("label") && (m.Contains("not exist") || m.Contains("unknown")))
-            return "Label id missing. Find it with `d365fo search label \"<text>\"` or create it via `d365fo label create`.";
-        if (m.Contains("final") && m.Contains("extend"))
-            return "The base class is final — CoC needs [Wrappable(true)] on the method or use an event handler instead.";
-        if (m.Contains("expected") && m.Contains("but found"))
-            return "Syntax error — re-check X++ syntax at the reported position (common after editing CDATA method bodies).";
-        if (m.Contains("number of arguments"))
-            return "Argument count mismatch — `d365fo validate references` reports the indexed signature arity before the compiler does.";
-        return null;
-    }
+    public static string? FixHint(string message) => XppcFixHints.Best(message)?.Hint;
 }

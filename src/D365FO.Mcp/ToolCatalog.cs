@@ -38,7 +38,7 @@ public static class ToolCatalog
         // `undo_last_modification` mutates the file system (or the live metadata
         // provider) just like the write it reverts — flagged write even though its
         // `dryRun` mode is read-only, since clients gate on the tool, not the call.
-        "generate_object", "labels", "modify_method", "undo_last_modification",
+        "generate_object", "labels", "modify_method", "modify_object", "undo_last_modification",
     };
 
     /// <summary>
@@ -276,13 +276,37 @@ public static class ToolCatalog
             Schema(),
             (h, _) => h.GetWorkspaceInfo()),
 
+        // ---- Knowledge ----
+
+        new Descriptor("get_knowledge",
+            "Verified X++/D365FO knowledge topics (the same corpus the d365fo skill files ship, checked against a " +
+            "live D365FO dev VM). `action=list` returns the catalog with each topic's section count and token cost; " +
+            "`action=get` returns one topic by `topic` id (`section` narrows to one '##' section, `outline=true` " +
+            "returns only headings); `action=search` ranks sections across the corpus against a free-text `query`. " +
+            "Prefer search → get(section) over fetching whole topics — a full topic can run to 2.5k tokens.",
+            Schema(("action", "string", false), ("topic", "string", false), ("section", "string", false),
+                   ("query", "string", false), ("limit", "integer", false), ("outline", "boolean", false)),
+            (h, p) => h.GetKnowledge(StrOr(p, "action", "list"), StrOrNull(p, "topic"), StrOrNull(p, "section"),
+                                     StrOrNull(p, "query"), Int(p, "limit", 10), Bool(p, "outline"))),
+
+        new Descriptor("explain_build_error",
+            "Score xppc / MSBuild output against the fix-hint rules and return ranked, machine-identified causes " +
+            "(rule id + fix + the `get_knowledge` topic behind it). Offline — needs no VM or index, so it works on " +
+            "a log pasted by the user. Pass the whole log; structured `dynamics://` lines are parsed per-diagnostic, " +
+            "a bare message is scored as-is. Messages matching no rule are returned verbatim rather than guessed at.",
+            Schema(("log", "string", true), ("all", "boolean", false)),
+            (h, p) => h.ExplainBuildError(Str(p, "log"), Bool(p, "all"))),
+
         // ---- Object patterns ----
 
         new Descriptor("object_patterns",
             "Pattern catalog + structural validator, selected by `domain` (default form). " +
             "`domain=form`: spec (catalog spec for a pattern/sub-pattern — versions, when-to-use, reference forms, " +
             "lifecycle; omit `name` to list all) · validate (structural validator FP001-FP010 over complete AxForm " +
-            "`xml` — the same gate `generate_object(objectType=form)` enforces before writing). " +
+            "`xml` — the same gate `generate_object(objectType=form)` enforces before writing) · " +
+            "repair (apply the deterministic fixes for those violations — missing required controls, control order, " +
+            "PatternVersion, pattern-default properties, unambiguous sub-patterns — and return the repaired `xml` " +
+            "plus what it refused to change; pass `name` to adopt an unpatterned form into a pattern). " +
             "`domain=table` is not backed by the C# index here — use `analyze(mode=integration)` or the CLI " +
             "`d365fo find form-patterns` for table/form mining.",
             Schema(("domain", "string", false), ("action", "string", true), ("name", "string", false), ("xml", "string", false)),
@@ -291,6 +315,7 @@ public static class ToolCatalog
                 "form" => StrOr(p, "action", "spec").ToLowerInvariant() switch
                 {
                     "validate" => h.ValidateFormPattern(Str(p, "xml")),
+                    "repair"   => h.RepairFormPattern(Str(p, "xml"), StrOrNull(p, "name")),
                     _          => h.GetFormPatternSpec(StrOrNull(p, "name")),
                 },
                 _ => D365FO.Core.ToolResult<object>.Fail("BAD_INPUT",
@@ -359,6 +384,33 @@ public static class ToolCatalog
                    ("body", "string", true), ("model", "string", false), ("groundingToken", "string", false)),
             (h, p) => h.ModifyMethod(Str(p, "kind"), Str(p, "name"), Str(p, "method"), Str(p, "body"),
                         StrOrNull(p, "model"), StrOrNull(p, "groundingToken"))),
+
+        new Descriptor("modify_object",
+            "Structured edits to an EXISTING object beyond its method bodies, via D365FO.Bridge (Windows VM, " +
+            "requires D365FO_BRIDGE_ENABLED=1). `action` selects the edit:\n" +
+            "• property — set `member` (Label, ConfigurationKey, TableGroup, …) to `value` on any kind\n" +
+            "• add-field — add field `member` to table `name`; `type` is the EDT and decides the concrete " +
+            "AxTableField subtype (`label`, `mandatory` optional)\n" +
+            "• add-enum-value — add value `member` to base enum `name` (positional; never writes an ordinal, " +
+            "which is what breaks when another model inserts a value ahead of it)\n" +
+            "• add-control — add control `member` of `type` (Grid, Group, TabPage, String, …) to form `name`, " +
+            "optionally inside `parent` and bound to `dataSource`/`dataField`\n" +
+            "EXTENSION FALLBACK: when the object's model is not in D365FO_CUSTOM_MODELS the edit is written to " +
+            "the <Target>.<Suffix> extension in a custom model instead of the object itself, creating that " +
+            "extension if needed, and says so in `warnings`. Force it with `extensionSuffix`, or refuse the " +
+            "in-place path entirely with `requireExtension`. Every write is journaled — revert with " +
+            "undo_last_modification. No on-disk fallback: fails BRIDGE_REQUIRED when the bridge is unavailable.",
+            Schema(("action", "string", true), ("kind", "string", true), ("name", "string", true),
+                   ("member", "string", true), ("value", "string", false), ("type", "string", false),
+                   ("label", "string", false), ("mandatory", "boolean", false), ("parent", "string", false),
+                   ("dataSource", "string", false), ("dataField", "string", false), ("model", "string", false),
+                   ("extensionSuffix", "string", false), ("extensionModel", "string", false),
+                   ("requireExtension", "boolean", false)),
+            (h, p) => h.ModifyObject(Str(p, "action"), Str(p, "kind"), Str(p, "name"), Str(p, "member"),
+                        StrOrNull(p, "value"), StrOrNull(p, "type"), StrOrNull(p, "label"), Bool(p, "mandatory"),
+                        StrOrNull(p, "parent"), StrOrNull(p, "dataSource"), StrOrNull(p, "dataField"),
+                        StrOrNull(p, "model"), StrOrNull(p, "extensionSuffix"), StrOrNull(p, "extensionModel"),
+                        Bool(p, "requireExtension"))),
 
         new Descriptor("suggest_edt",
             "Suggest indexed EDTs for a field name using similarity heuristics. Returns confidence-ranked candidates.",

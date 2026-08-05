@@ -7,6 +7,7 @@ using D365FO.Cli.Commands.Find;
 using D365FO.Cli.Commands.Generate;
 using D365FO.Cli.Commands.Get;
 using D365FO.Cli.Commands.Index;
+using D365FO.Cli.Commands.Knowledge;
 using D365FO.Cli.Commands.Models;
 using D365FO.Cli.Commands.Modify;
 using D365FO.Cli.Commands.Ops;
@@ -128,6 +129,7 @@ public static class CliApp
                 b.AddCommand<FindFormPatternsCommand>("analyze").WithDescription("Analyse indexed forms by Microsoft pattern / primary table / similarity to a reference form.");
                 b.AddCommand<GetFormPatternCommand>("spec").WithDescription("Form pattern spec catalog: structure tree, versions, when-to-use, reference forms. Omit NAME to list all.");
                 b.AddCommand<ValidateFormPatternCommand>("validate").WithDescription("Structural form-pattern validator (FP001-FP010) over AxForm XML.");
+                b.AddCommand<RepairFormPatternCommand>("repair").WithDescription("Auto-repair the structural violations that have exactly one correct fix (missing controls, order, version, pattern defaults). Dry-run unless --apply/--out.");
             });
 
             // Unified `labels` branch — mirrors the MCP `labels` tool
@@ -170,6 +172,7 @@ public static class CliApp
                 b.AddCommand<ValidateXppCommand>("xpp").WithDescription("Offline X++/XML best-practice validator over a file or stdin (no VM needed).");
                 b.AddCommand<ValidateReferencesCommand>("references").WithDescription("Semantic anti-hallucination gate: verify every identifier in X++ code against the index.");
                 b.AddCommand<ValidateFormPatternCommand>("form-pattern").WithDescription("Structural form-pattern validator (FP001-FP010) over AxForm XML — same gate `generate form` enforces.");
+                b.AddCommand<RepairFormPatternCommand>("form-pattern-repair").WithDescription("Alias of `form-pattern repair` — auto-repair deterministic structural violations.");
             });
 
             cfg.AddBranch("label", b =>
@@ -245,8 +248,12 @@ public static class CliApp
 
             cfg.AddBranch("modify", b =>
             {
-                b.SetDescription("Structured, live edits to existing AOT objects via D365FO.Bridge (Windows VM). No on-disk fallback.");
+                b.SetDescription("Structured, live edits to existing AOT objects via D365FO.Bridge (Windows VM). No on-disk fallback. Writes outside D365FO_CUSTOM_MODELS are redirected to an extension. Every edit is journaled for `d365fo undo`.");
                 b.AddCommand<ModifyMethodCommand>("method").WithDescription("Replace the body of an existing method on a class/table/edt/form.");
+                b.AddCommand<ModifyPropertyCommand>("property").WithDescription("Set a property (Label, ConfigurationKey, TableGroup, …) on a live object.");
+                b.AddCommand<ModifyAddFieldCommand>("add-field").WithDescription("Add a field to a live table — concrete AxTableField subtype resolved from the EDT.");
+                b.AddCommand<ModifyAddEnumValueCommand>("add-enum-value").WithDescription("Add a value to a live base enum (positional, never a hard-coded ordinal).");
+                b.AddCommand<ModifyAddControlCommand>("add-control").WithDescription("Add a control to a live form's design, optionally bound to a datasource field.");
             });
 
             cfg.AddBranch("analyze", b =>
@@ -305,6 +312,19 @@ public static class CliApp
                 b.AddCommand<EvalReportCommand>("report").WithDescription("Aggregate scoreboard over the corpus of run records.");
                 b.AddCommand<EvalClustersCommand>("clusters").WithDescription("Rank failure clusters over the corpus of run records.");
             });
+
+            // The CLI's `get_knowledge` equivalent: the verified skills/_source corpus,
+            // embedded in the binary and served per-topic / per-section so an agent
+            // without skill-file support can still ground itself.
+            cfg.AddBranch("knowledge", b =>
+            {
+                b.SetDescription("Verified X++/D365FO knowledge topics (the skills/_source corpus), served per topic or per section.");
+                b.AddCommand<KnowledgeListCommand>("list").WithDescription("List knowledge topics with descriptions and token cost.");
+                b.AddCommand<KnowledgeGetCommand>("get").WithDescription("Fetch a topic, one of its '##' sections, or just its outline.");
+                b.AddCommand<KnowledgeSearchCommand>("search").WithDescription("Rank topic sections against a free-text question.");
+            });
+
+            cfg.AddCommand<ExplainErrorCommand>("explain-error").WithDescription("Score xppc/build errors (argument, --file, or stdin) against the fix-hint rules and point at the knowledge topic behind each.");
 
             cfg.AddCommand<BuildCommand>("build").WithDescription("Invoke MSBuild (Windows VM).");
             cfg.AddCommand<SyncCommand>("sync").WithDescription("Run DB sync (Windows VM).");
