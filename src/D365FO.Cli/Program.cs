@@ -281,6 +281,7 @@ app.Configure(cfg =>
 
     cfg.AddCommand<BuildCommand>("build").WithDescription("Invoke MSBuild (Windows VM).");
     cfg.AddCommand<SyncCommand>("sync").WithDescription("Run DB sync (Windows VM).");
+    cfg.AddCommand<D365FO.Cli.Commands.Connect.ConnectCommand>("connect").WithDescription("Point an editor's MCP config at a deployed `d365fo-mcp --http` server (probes /health, merges rather than clobbers).");
     cfg.AddCommand<DoctorCommand>("doctor").WithDescription("Diagnose environment.");
     cfg.AddCommand<InitCommand>("init").WithDescription("Interactive quickstart: detects PackagesLocalDirectory and prepares the index.");
     cfg.AddCommand<StatsCommand>("stats").WithDescription("Aggregate counters over the index (top tables / classes / CoC targets).");
