@@ -22,7 +22,7 @@ flowchart LR
     MCP -.->|same backing index| CLI
 ```
 
-Every MCP request loads all tool schemas into the model context — there is no "load on demand". The CLI exposes one shell tool; the agent discovers commands via `d365fo schema` only when it needs them. Skills add ~30–60 tokens of frontmatter per `.instructions.md` file; the full skill body is only paged in when the agent decides it is relevant.
+Every MCP request loads all tool schemas into the model context — there is no "load on demand". The CLI exposes one shell tool; the agent discovers commands via `d365fo schema` only when it needs them. The `d365fo-cli` agent skill costs only its `name` + `description` frontmatter until the agent decides it is relevant; the `SKILL.md` body is paged in on activation, and the 19 `references/*.md` topic files only when that topic actually comes up. (In the legacy `.instructions.md` layout the equivalent standing cost was ~30–60 tokens of frontmatter per file.)
 
 > **Tool consolidation cut the MCP baseline too.** The upstream `d365fo-mcp-server`
 > collapsed its old per-type surface (~61 tools, ~2,900 tok of schemas) into 26

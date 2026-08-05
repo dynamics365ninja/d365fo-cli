@@ -1,3 +1,9 @@
+---
+name: d365fo-cli
+description: D365 Finance & Operations X++ AI development skill powered by the d365fo CLI. Use whenever the user is working in a D365 F&O X++ project: writing classes, tables, forms, CoC extensions, event handlers, entities, security, batch jobs, business events, labels, or any AOT artifact. Loads topic-specific guidance lazily from references/.
+compatibility: Requires GitHub Copilot agent mode (VS 2022/2026 or VS Code) and d365fo CLI in PATH.
+---
+
 # D365 Finance & Operations X++ Development — `d365fo` CLI
 
 <!--
@@ -8,9 +14,9 @@
   (see "Authoritative X++ syntax source" at the bottom).
 -->
 
-This file gives **GitHub Copilot** the rules for assisting with D365 Finance & Operations X++ development. It is deployed to your X++ project's `.github/` folder by `Install-D365FoCopilotSkills.ps1` and is read automatically by Copilot in Visual Studio.
+This skill gives **GitHub Copilot** the rules for assisting with D365 Finance & Operations X++ development. It is deployed to your X++ project's `.github/skills/d365fo-cli/` folder by `Install-D365FoCopilotSkills.ps1` and is loaded automatically by Copilot when you are working on D365 F&O tasks.
 
-> **Primary environment — VS 2022 / VS 2026 agent mode:** GitHub Copilot runs `d365fo` commands via the built-in terminal tool (`run_command_in_terminal`). Skills in `.github/instructions/` load on demand and tell Copilot exactly which commands to run. No copy-paste, no MCP overhead.
+> **Primary environment — VS 2022 / VS 2026 agent mode:** GitHub Copilot runs `d365fo` commands via the built-in terminal tool (`run_command_in_terminal`). Topic-specific rules in `references/` load on demand. No copy-paste, no MCP overhead.
 >
 > **Secondary environment — VS Code agent mode:** Same approach, different terminal tool name (`run_in_terminal`). Identical experience.
 >
@@ -82,7 +88,7 @@ Examples:
 | **VS Code agent mode** | `run_in_terminal` → `d365fo` CLI | ~100 tokens |
 | **VS Chat mode** (no agent tools) | User runs manually, pastes JSON | collaborative |
 
-In agent mode Copilot calls `d365fo` commands autonomously — it reads skills from `.github/instructions/`, decides which commands to run, executes them in the terminal, and interprets the JSON output. No copy-paste required.
+In agent mode Copilot calls `d365fo` commands autonomously — it reads topic rules from `references/` in this skill, decides which commands to run, executes them in the terminal, and interprets the JSON output. No copy-paste required.
 
 ### ⛔ Chat mode only (no agent tools) — fallback workflow
 
@@ -166,11 +172,11 @@ Copilot: "Since I cannot access the codebase, I'll provide generic guidance…"
 
 ---
 
-## Full X++ rules — loaded on demand from skills
+## Full X++ rules — loaded on demand from references
 
-Detailed rules are in `.github/instructions/` (lazy-loaded by Copilot when relevant):
+Detailed rules are in `references/` (lazily loaded by Copilot when relevant):
 
-| Skill file | Covers |
+| Resource file | Covers |
 |---|---|
 | `coc-extension-authoring` | CoC wrapper rules, `next` placement, signature matching, `[Hookable]`/`[Wrappable]` |
 | `xpp-database-queries` | `select` grammar, `crossCompany`, `in` operator, joins, aggregates, SysDa, QueryRun |

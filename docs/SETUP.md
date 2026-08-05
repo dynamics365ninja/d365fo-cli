@@ -143,7 +143,7 @@ Or run the daemon and forget about it — `d365fo daemon start` keeps the SQLite
 
 ```mermaid
 flowchart LR
-    Cop["GitHub Copilot<br/>VS 2022/2026 · VS Code"] -->|.github/instructions/| Bin
+    Cop["GitHub Copilot<br/>VS 2022/2026 · VS Code"] -->|.github/skills/d365fo-cli/| Bin
     Cla["Claude Code<br/>CLI · VS Code ext."]     -->|skills/anthropic/| Bin
     Other["Codex · Gemini · Cursor"]              -->|AGENTS.md| Bin
     Mcp["Claude Desktop · Continue<br/>(MCP host)"] -->|JSON-RPC stdio| Mbin["d365fo-mcp"]
@@ -154,7 +154,7 @@ flowchart LR
 ### GitHub Copilot — Visual Studio 2022 / 2026 / VS Code (agent mode)
 
 1. Place `d365fo` on `PATH` (either Option 1 alias or Option 2 binary above).
-2. Deploy the Skills into a parent folder of your X++ solutions:
+2. Deploy the `d365fo-cli` Copilot skill into a parent folder of your X++ solutions:
 
    ```powershell
    .\scripts\Install-D365FoCopilotSkills.ps1 `
@@ -162,9 +162,9 @@ flowchart LR
      -XppRepo K:\D365FO\MyProject
    ```
 
-   The script copies `.github/copilot-instructions.md` and all `skills/copilot/*.instructions.md` files. One copy in a common parent covers every solution beneath it — VS searches upward from the `.sln`.
+   The script deploys `skills/d365fo-cli/SKILL.md` and all `references/*.md` to `.github/skills/d365fo-cli/`. One copy in a common parent covers every solution beneath it — VS searches upward from the `.sln`. Copilot auto-discovers skills in `.github/skills/` with no extra configuration.
 3. **Agent mode (recommended).** Open Copilot Chat → mode dropdown (top-right) → **Agent**. Copilot now calls `d365fo` directly via its terminal tool — no copy-paste.
-4. **Chat mode (fallback).** Without agent tools, Copilot asks you to run `d365fo` commands in Developer PowerShell and paste the JSON back. The Skills teach Copilot to ask first — if it skips that step the `.github/copilot-instructions.md` file is missing from the parent folder.
+4. **Chat mode (fallback).** Without agent tools, Copilot asks you to run `d365fo` commands in Developer PowerShell and paste the JSON back. The skill teaches Copilot to ask first — if it skips that step the `.github/skills/d365fo-cli/SKILL.md` file is missing from the parent folder.
 
 > ⚠️ **Never** use `@workspace` or built-in code search on AOT XML. It always fails. Copilot must use `d365fo` exclusively for codebase queries; the Skills enforce this.
 
@@ -173,9 +173,9 @@ flowchart LR
 > | Term | What it controls | Set via |
 > |---|---|---|
 > | `D365FO_WORKSPACE_PATH` (CLI env var) | Where `d365fo generate` writes scaffolded X++ files | `d365fo init` / `settings.json` / env var |
-> | Editor "workspace" (VS solution root / VS Code opened folder) | Where Copilot looks for `.github/copilot-instructions.md` and `.github/instructions/*.instructions.md` | Which folder/`.sln` you open in the IDE |
+> | Editor "workspace" (VS solution root / VS Code opened folder) | Where Copilot looks for `.github/skills/d365fo-cli/SKILL.md` | Which folder/`.sln` you open in the IDE |
 >
-> Setting `D365FO_WORKSPACE_PATH` (or any `D365FO_*` env var) has **zero effect** on Copilot's instruction discovery. If Copilot isn't finding your instructions, the fix is always about **which folder is open in the editor**, never about CLI configuration — re-run `Install-D365FoCopilotSkills.ps1` against the actual parent folder you open, not against `D365FO_WORKSPACE_PATH`.
+> Setting `D365FO_WORKSPACE_PATH` (or any `D365FO_*` env var) has **zero effect** on Copilot's skill discovery. If Copilot isn't finding your skill, the fix is always about **which folder is open in the editor**, never about CLI configuration — re-run `Install-D365FoCopilotSkills.ps1` against the actual parent folder you open, not against `D365FO_WORKSPACE_PATH`.
 
 ### Claude Code (CLI or VS Code extension)
 
@@ -280,7 +280,7 @@ d365fo doctor
 | `UNSUPPORTED_PLATFORM` | `build` / `sync` / `test` / `bp` require Windows + a D365FO dev VM. Everything else still works |
 | `NO_INDEX` | `d365fo index build && d365fo index extract` |
 | `stale-index` warning from `doctor` | `d365fo index refresh --model <Model>` (or just start the daemon) |
-| Copilot Chat says "There was an error executing code search" then writes generic X++ | VS Copilot Chat cannot search AOT XML — `.github/copilot-instructions.md` must be deployed in a parent folder. Re-run `Install-D365FoCopilotSkills.ps1` and restart VS. For full automation switch Copilot Chat to **Agent** mode |
+| Copilot Chat says "There was an error executing code search" then writes generic X++ | VS Copilot Chat cannot search AOT XML — the `d365fo-cli` skill must be deployed in a parent folder. Re-run `Install-D365FoCopilotSkills.ps1` and restart VS. For full automation switch Copilot Chat to **Agent** mode |
 | Index file appears locked | Stop any running `d365fo daemon` or `d365fo-mcp` process; `-wal` / `-shm` sidecar files are normal |
 | Settings differ between Developer PowerShell and PowerShell 7 | Re-run `d365fo init --persist-profile` — it writes both profiles and the JSON config |
 | Self-contained binary won't start on Linux | `chmod +x d365fo` after copying out of the publish folder |

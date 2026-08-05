@@ -34,7 +34,8 @@ internal static class PromptGenerator
 > This prompt mirrors the rule canon from `d365fo-mcp-server`'s
 > `systemInstructions.ts`. The CLI surface differs (shell commands instead of
 > tool calls), but the X++ rules are identical and authoritative.
-> See `.github/copilot-instructions.md` for the full version with worked examples.
+> See `skills/d365fo-cli/SKILL.md` (deployed to `.github/skills/d365fo-cli/` by
+> `Install-D365FoCopilotSkills.ps1`) for the full version with worked examples.
 
 You have access to a shell that can execute the `d365fo` CLI. All subcommands
 return JSON on stdout when stdout is not a TTY. **Always pass `--output json`
