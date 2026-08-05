@@ -22,7 +22,7 @@ public sealed class GenerateSysTestCommand : Command<GenerateSysTestCommand.Sett
         public string Name { get; init; } = "";
 
         [CommandOption("--data-area-id <COMPANY>")]
-        [System.ComponentModel.Description("Company emitted as [SysTestCaseDataDependency('<Company>')]. Omitted entirely when not set.")]
+        [System.ComponentModel.Description("Company emitted as [[SysTestCaseDataDependency('<Company>')]]. Omitted entirely when not set.")]
         public string? DataAreaId { get; init; }
 
         [CommandOption("--atl")]

@@ -19,7 +19,7 @@ public sealed class GenerateViewCommand : Command<GenerateViewCommand.Settings>
         public string? Query { get; init; }
 
         [CommandOption("--field <SPEC>")]
-        [System.ComponentModel.Description("Repeatable bound field: <name>:<dataSource>[:<dataField>]. dataField defaults to <name>. Example: --field AccountNum:CustTable")]
+        [System.ComponentModel.Description("Repeatable bound field: <name>:<dataSource>[[:<dataField>]]. dataField defaults to <name>. Example: --field AccountNum:CustTable")]
         public string[] Fields { get; init; } = Array.Empty<string>();
 
         [CommandOption("--computed <SPEC>")]
@@ -154,11 +154,11 @@ public sealed class GenerateMapCommand : Command<GenerateMapCommand.Settings>
         public string Name { get; init; } = "";
 
         [CommandOption("--field <SPEC>")]
-        [System.ComponentModel.Description("Repeatable: <name>:<edt>[:<label>]. The EDT determines the field's concrete type. Example: --field AccountNum:CustAccount")]
+        [System.ComponentModel.Description("Repeatable: <name>:<edt>[[:<label>]]. The EDT determines the field's concrete type. Example: --field AccountNum:CustAccount")]
         public string[] Fields { get; init; } = Array.Empty<string>();
 
         [CommandOption("--map-to <SPEC>")]
-        [System.ComponentModel.Description("Repeatable: <table>[:<mapField>=<tableField>,…]. Omit the pairs to map every field by identical name. Example: --map-to CustTable:AccountNum=AccountNum")]
+        [System.ComponentModel.Description("Repeatable: <table>[[:<mapField>=<tableField>,…]]. Omit the pairs to map every field by identical name. Example: --map-to CustTable:AccountNum=AccountNum")]
         public string[] MapTo { get; init; } = Array.Empty<string>();
 
         [CommandOption("--label <KEY>")]
