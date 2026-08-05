@@ -93,7 +93,7 @@ For strategy dispatching where new implementations must be addable without chang
 
 1. Define an interface or abstract base class for the strategy, identified by its namespace + class name (`_baseClassNamespace` / `_baseClassName`).
 2. Tag concrete implementations so the managed extensibility layer can discover them (see existing platform plugin implementations for current attribute usage).
-3. Build a `SysPluginMetadataCollection` and populate it with `.SetValue(key, val)` name/value pairs identifying the specific derived type you want.
+3. Build a `SysPluginMetadataCollection` and populate it with `.SetValue(key, val)` name/value pairs identifying the specific derived type you want (`SetValue(str key, Object val)` takes native X++ types; there's also a `.SetManagedValue(System.String, System.Object)` overload for callers already holding managed CLR values — both wrap the same underlying `ExportMetadataCollection.SetValue`).
 4. Resolve at runtime with the real signature: `SysPluginFactory::Instance(str _baseClassNamespace, str _baseClassName, SysPluginMetadataCollection _metadataCollection)` — **not** an enum-keyed call; there is no `enumStr(...)`/`ExportMetadataAttribute` overload.
 
 New strategies require only a new class + metadata registration — no changes to callers.

@@ -54,10 +54,18 @@ d365fo generate event-handler MyClass_CustTableHandler \
 
 Generated attribute: `[DataEventHandler(tableStr(CustTable), DataEventType::Inserted)]`.
 
-D365FO `DataEventType` values: `ValidatingFieldValue`, `ValidatedField`,
+Most commonly used `DataEventType` values: `ValidatingFieldValue`, `ValidatedField`,
 `ValidatingDelete`, `ValidatedDelete`, `ValidatingWrite`, `ValidatedWrite`,
 `Inserting`, `Inserted`, `Updating`, `Updated`, `Deleting`, `Deleted`,
 `InitializingRecord`, `InitializedRecord`, `ModifyingField`, `ModifiedField`.
+This is **not the full list** — the real `DataEventType` enum ships with 51
+members (confirmed against `AxEnum/DataEventType.xml`), including near-miss
+siblings that are easy to reach for by mistake (`ValidatingField` vs.
+`ValidatingFieldValue`, `ModifyingFieldValue` vs. `ModifyingField`,
+`FinalInsertValidation`/`FinalUpdateValidation`/`FinalDeleteValidation`, the
+`*EntityDataSource` family, `DefaultingField`/`DefaultingRow`, …). Run
+`d365fo get enum DataEventType` to see the exact set before picking one you
+don't see above.
 
 ## Form / FormDataSource / FormControl events → form-specific attributes
 

@@ -8,10 +8,9 @@ applyTo: '**/AxSecurityRole/**,**/AxSecurityDuty/**,**/AxSecurityPrivilege/**'
 
 ## Workflow
 
-1. **Top-down** — which entry points does a role reach? `security coverage
-   <Name> --type Role` always returns an empty `routes[]` (`Role` is not a
-   valid `--type`, and the coverage lookup is a reverse/bottom-up query, not
-   a forward one) — walk the hierarchy explicitly instead:
+1. **Top-down** — which entry points does a role reach? `security coverage`
+   is a reverse/bottom-up lookup, not a forward one — `Role` is not a valid
+   `--type` for it. Walk the hierarchy explicitly instead:
    ```sh
    d365fo security role <RoleName> --output json       # -> duties[] + privileges[]
    d365fo security duty <DutyName> --output json        # -> privileges[]
@@ -21,11 +20,13 @@ applyTo: '**/AxSecurityRole/**,**/AxSecurityDuty/**,**/AxSecurityPrivilege/**'
 2. **Bottom-up** — which roles reach this object?
    ```sh
    d365fo security coverage <ObjectName> --type MenuItemDisplay --output json
-   # --type is matched literally against the indexed AOT ObjectType, so use the
-   # exact value: MenuItemDisplay | MenuItemAction | MenuItemOutput | Table |
-   # Form | Report | Class. The CLI's own default/listed value "Menuitem" does
-   # NOT occur in real data and always returns an empty routes[] — always pass
-   # the specific MenuItem* kind.
+   # --type is required (no default) and matched literally against the indexed
+   # AOT ObjectType — confirmed real values, straight from shipped
+   # AxSecurityPrivilege XML: MenuItemDisplay | MenuItemAction | MenuItemOutput |
+   # ServiceOperation | Table | Form | Report | Class. Entry points are always indexed as one of the
+   # specific MenuItem* kinds, never bare "Menuitem" — omitting --type or passing
+   # "Menuitem" now fails fast with BAD_INPUT instead of silently returning an
+   # empty routes[].
    ```
 
 3. The response contains `routes[*]` of shape

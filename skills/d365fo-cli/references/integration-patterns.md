@@ -22,7 +22,7 @@
 
 **Purpose:** real-time synchronous CRUD from external systems — Power Platform, Logic Apps, third-party ERPs.
 
-**Endpoint:** `https://{env}.cloudax.dynamics.com/data/{PublicCollectionName}`
+**Endpoint:** `https://{env}.operations.dynamics.com/data/{PublicCollectionName}`
 
 **Requirements for a working OData entity:**
 
@@ -70,9 +70,9 @@ AxServiceGroup
         └── Service class (X++)
 ```
 
-**REST endpoint:** `https://{env}.cloudax.dynamics.com/api/services/{ServiceGroupName}/{ServiceName}/{OperationName}`
+**REST endpoint:** `https://{env}.operations.dynamics.com/api/services/{ServiceGroupName}/{ServiceName}/{OperationName}`
 
-**SOAP endpoint (legacy):** `https://{env}.cloudax.dynamics.com/soap/services/{ServiceGroupName}`
+**SOAP endpoint (legacy):** `https://{env}.operations.dynamics.com/soap/services/{ServiceGroupName}`
 
 **Authentication:** Azure AD OAuth2 (client credentials or user delegation).
 

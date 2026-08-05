@@ -154,7 +154,7 @@ d365fo generate security-policy CustCustomSecurityPolicy \
   --out c:/AOT/MyModel/AxSecurityPolicy/CustCustomSecurityPolicy.xml
 ```
 
-`--operation` accepts only `Select` (default) or `All` — `Insert`/`Update`/`Delete` are rejected with "Unknown --operation '<value>'. Expected Select | All." The policy query (`--policy-query`) is a separate `AxQuery` AOT object that must already exist or be scaffolded with `d365fo generate query`.
+`--operation` accepts only `Select` (default) or `All` — `Insert`/`Update`/`Delete` are rejected with "Unknown --operation '<value>'. Expected Select | All." `--operation All` emits `<Operation>AllOperations</Operation>` in the generated XML (the real `AxSecurityPolicy.Operation` property is the `SecurityPolicyApplicability` enum: `Select | Insert | Update | Delete | InsertUpdateDelete | AllOperations` — confirmed against `Microsoft.Dynamics.AX.Metadata.dll`; this CLI only exposes the two most common values). The policy query (`--policy-query`) is a separate `AxQuery` AOT object that must already exist or be scaffolded with `d365fo generate query`.
 
 After scaffolding, verify with:
 ```sh

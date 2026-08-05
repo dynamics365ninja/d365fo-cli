@@ -50,7 +50,9 @@ d365fo generate sysoperation FmInvoiceBatch \
   --install-to FleetManagement
 ```
 
-**Execution modes:** `Synchronous` (default, blocks until done) | `Asynchronous` (fire-and-forget, returns immediately) | `ScheduledBatch` (adds to batch framework queue).
+**`--execution-mode` values this CLI accepts:** `Synchronous` (default, blocks until done) | `Asynchronous` (requires the controller to be exposed as a service; not a general-purpose fire-and-forget mode) | `ScheduledBatch` (adds to batch framework queue).
+
+The `SysOperationExecutionMode` enum in the platform also has a fourth member, `ReliableAsynchronous` (runs on a batch-server thread with a tracked client poll — commonly used for "fire off and keep a Batch Job History record"), but this CLI's `--execution-mode` flag does not currently emit it; passing it is rejected. If you need `ReliableAsynchronous`, scaffold with `Synchronous` and hand-edit the generated `mainOperation`/`new` code afterward.
 
 **Hard rules:**
 
