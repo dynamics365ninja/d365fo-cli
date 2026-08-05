@@ -12,25 +12,30 @@ releases v1.1.0 through v1.8.0. Upstream repo cloned fresh from
 `https://github.com/dynamics365ninja/d365fo-mcp-server` (default branch) on
 2026-08-04; all SHAs below are from that clone.
 
-Two items from the 2026-07 doc are being worked on in parallel by other
-agents right now and are **not** re-investigated here — see the "in
-progress" notes under Deferred item 1 below:
-- GitHub issue #112 (structured method-level modify via bridge)
-- GitHub issue #113 (modification journal/undo)
+**Everything this doc still lists is open work.** Items resolved since the
+2026-08 pass have been removed; the git history holds the analysis behind each.
+Resolved so far:
 
-This pass also catalogued a set of targeted bug fixes — label where-used in
-`find references --xref`, case-insensitive `[ExtensionOf]` parsing, custom/ISV
-model search ranking, `generate table` configuration key / form ref, inherited
-class members, and row-level security coverage. **All of them have since been
-ported**, so they are no longer listed here; see the git history for the
-analysis behind each.
+- The targeted bug fixes catalogued by this pass — label where-used in
+  `find references --xref`, case-insensitive `[ExtensionOf]` parsing,
+  custom/ISV model search ranking, `generate table` configuration key / form
+  ref, inherited class members, and row-level security coverage.
+- GitHub issues #112 (structured method-level modify via bridge) and #113
+  (modification journal / undo), which closed part of Deferred item 1 below.
+- Issue #114's HTTP transport, plus the `d365fo connect <url>` follow-on that
+  wires an editor's MCP config at a deployed server.
+- The View and Map writers (`generate view` / `generate map`), which were the
+  precondition for the upstream view/map fixes.
+- Bulk multi-key label creation on the CLI (`label create --entry`).
 
 ## Deferred — candidate future features
 
-1. **Modify operations on existing objects — extends the 2026-07 item, IN
-   PROGRESS elsewhere (issues #112, #113).** Not investigated in depth per
-   task instructions. Upstream has continued heavy investment in exactly
-   this area since `fd78ece`: PR #800 `feat/form-extension-and-data-entity-
+1. **Modify operations on existing objects — extends the 2026-07 item;
+   partially landed.** Issues #112 (structured method-level modify via
+   `D365FO.Bridge`, giving `d365fo modify method`) and #113 (modification
+   journal + `d365fo undo`) are **done and on main**. What remains is the
+   rest of upstream's write surface, where it has continued heavy
+   investment since `fd78ece`: PR #800 `feat/form-extension-and-data-entity-
    extension-support` (laeliand), PR #799 `fix/table-extension-fallback-
    for-relation-and-index-ops` (laeliand), PR #804 `fix/extension-fallback-
    for-remaining-write-ops`, PR #776 `fix/extension-writer-properties`, PR
@@ -41,29 +46,14 @@ analysis behind each.
    `a04a583` (addField RPC param forwarding), `015d697` (modify-property
    for data-entity), `95a474f` (add-control on form design root), `982d8b7`
    (stop discarding params in silence), `8be57d7` (honour dropped write
-   params). Whoever resumes work on #112/#113 should treat this list as
+   params). Concretely, the CLI's `modify` branch still exposes only
+   `method` — there is no add-field, add-control, modify-property or
+   extension-writer surface, and the bridge accepts only
+   `class|table|edt|enum|form` for create/update/delete. Treat this list as
    the up-to-date upstream state of that subsystem, not the 2026-07 doc's
    snapshot.
 
-2. **`connect` command — configure an editor for a deployed HTTP-mode
-   server** (upstream `e1f56bb`/PR #712-adjacent `feat(cli): add connect —
-   configure an editor for a deployed server`, 2026-07-21). Once a server
-   is reachable over HTTP, `npx d365fo-mcp connect <url>` merges the right
-   MCP config entry into VS Code / Claude Code / other editor config files
-   (probing `/health` first to distinguish a typo from a cold-starting
-   server; `--force` to override; merges rather than clobbers existing MCP
-   entries). **This has no CLI equivalent today and is a direct follow-on
-   to the in-progress #114 HTTP-transport work** — right now #114 is adding
-   `X-Api-Key` + `MCP_SERVER_MODE` to `D365FO.Mcp`'s HTTP transport, but
-   once a deployed server exists there is still no CLI-side helper to wire
-   an editor's MCP config at it; a user would have to hand-edit
-   `mcp.json`/`.vscode/mcp.json`/`~/.claude.json` per the upstream doc's own
-   admission that this was previously "documented as write this JSON by
-   hand." Worth a follow-up ticket once #114 lands, scoped as a new
-   `d365fo connect <url>` command (or `D365FO.Mcp` equivalent) under
-   `src/D365FO.Cli/Commands/`.
-
-3. **Knowledge base + build-error hint scoring — extends the 2026-07
+2. **Knowledge base + build-error hint scoring — extends the 2026-07
    item.** Upstream keeps growing this subsystem: `2941ed6` adds a
    class-inheritance topic, `d3f268b` fixes the custom-services topic to
    stop mandating the deprecated `SysEntryPointAttribute`, `1e9ddb0`
@@ -74,24 +64,15 @@ analysis behind each.
    ported slice); the gap is unchanged in kind, just larger in upstream
    content volume.
 
-4. **View / Map / Query creation writers — extends the 2026-07 item.**
-   Further writer-honesty fixes landed: `6b66454` "write the ranges, and
-   stop inventing a literal Title" and `01d902d` "emit DynamicFields where
-   the contract puts it, before Table" (both in `queryViewXml.ts`), plus
-   `79caaee` "stop the create/generate path emitting metadata that cannot
-   build." Still not applicable until the CLI has a `ViewScaffolder`/
-   `MapScaffolder` writer to receive these fixes.
-
-5. **TRUDUtils-style generators + form auto-repair** — no material new
+3. **TRUDUtils-style generators + form auto-repair** — no material new
    upstream work in this specific area since `fd78ece` beyond eval-goldens
    closing out `form-lifecycle` coverage (`1d45e81`, verified now depends
    on PR #728's `add-control` landing for real rather than the
    `create overwrite=true` escape hatch — itself part of item 1 above).
-   No change to this item's status from the 2026-07 doc.
-
-6. **Bulk multi-key label creation** — no upstream changes to
-   `src/tools/labels.ts` since `fd78ece`. No change to this item's status
-   from the 2026-07 doc.
+   No change to this item's status from the 2026-07 doc. Partial overlap
+   still exists (`FormMethodScaffolder`, `FormPatternValidator`); the
+   deterministic control expander and the repair pipeline are the missing
+   pieces.
 
 ## Not applicable to this codebase (permanently)
 
