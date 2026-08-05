@@ -1,6 +1,7 @@
 using System.Xml.Linq;
 using D365FO.Cli.Commands.Get;
 using D365FO.Core;
+using D365FO.Core.Journal;
 using D365FO.Core.Scaffolding;
 using Spectre.Console.Cli;
 
@@ -101,6 +102,15 @@ internal static class FormMethodImpl
         var (formPath, resolveFail) = ResolveFormPath(kind, s.Form);
         if (resolveFail.HasValue) return resolveFail.Value;
 
+        // Captured BEFORE injection mutates the in-memory document — the exact pre-image
+        // the journal needs to restore on `d365fo undo` (issue #113).
+        string preImageXml;
+        try { preImageXml = System.IO.File.ReadAllText(formPath!); }
+        catch (Exception ex)
+        {
+            return RenderHelpers.Render(kind, ToolResult<object>.Fail(D365FoErrorCodes.SourceUnreadable, $"Failed to read form XML: {ex.Message}"));
+        }
+
         XDocument doc;
         try { doc = XDocument.Load(formPath!, LoadOptions.PreserveWhitespace); }
         catch (Exception ex)
@@ -190,6 +200,8 @@ internal static class FormMethodImpl
             if (!ok)
                 return RenderHelpers.Render(kind, ToolResult<object>.Fail("INSTALL_FAILED",
                     $"Could not update form '{formName}' in model '{s.InstallTo}' via the metadata bridge: {err}"));
+            RecordJournalUpdate("form", formName, s.InstallTo, JournalWritePath.Bridge, null, preImageXml,
+                $"generate {(target == FormMethodCatalog.Target.DataSource ? "datasource-method" : "control-method")} --install-to");
             return RenderHelpers.Render(kind, ToolResult<object>.Success(PayloadFor("bridge", null), warnings));
         }
 
@@ -201,6 +213,15 @@ internal static class FormMethodImpl
         catch (Exception ex)
         {
             return RenderHelpers.Render(kind, ToolResult<object>.Fail(D365FoErrorCodes.WriteFailed, ex.Message));
+        }
+
+        // Only journal a pre-image when the write landed on the SAME path we read from —
+        // `--out <other path>` is a copy-out, not a mutation of the source form, so there
+        // is nothing on the target path to restore an undo to.
+        if (string.Equals(System.IO.Path.GetFullPath(outPath), System.IO.Path.GetFullPath(formPath!), StringComparison.OrdinalIgnoreCase))
+        {
+            RecordJournalUpdate("form", formName, null, JournalWritePath.Disk, outPath, preImageXml,
+                $"generate {(target == FormMethodCatalog.Target.DataSource ? "datasource-method" : "control-method")}");
         }
 
         return RenderHelpers.Render(kind, ToolResult<object>.Success(PayloadFor("scaffold", outPath), warnings));
@@ -241,6 +262,36 @@ internal static class FormMethodImpl
             return (null, RenderHelpers.Render(kind, ToolResult<object>.Fail(D365FoErrorCodes.FormNotFound,
                 $"Could not resolve form '{form}' via the index: {ex.Message}. Pass a file path instead.")));
         }
+    }
+
+    /// <summary>
+    /// Best-effort modification-journal append (issue #113) for a datasource/control method
+    /// injection — always an Update (the form already existed), never lets a journal failure
+    /// fail the write it is recording.
+    /// </summary>
+    private static void RecordJournalUpdate(
+        string aotKind, string objectName, string? model, JournalWritePath writePath,
+        string? targetPath, string preImage, string command)
+    {
+        try
+        {
+            ModificationJournal.ForIndex().Append(new JournalEntry(
+                Id: Guid.NewGuid().ToString("N"),
+                TimestampUtc: DateTimeOffset.UtcNow,
+                Command: command,
+                TargetType: JournalTargetType.AotObject,
+                Kind: aotKind,
+                ObjectName: objectName,
+                SecondaryKey: null,
+                Model: model,
+                Operation: JournalOperation.Update,
+                WritePath: writePath,
+                TargetPath: targetPath,
+                PreImage: preImage,
+                IsTombstone: false,
+                RnrProjDelta: null));
+        }
+        catch { /* best-effort */ }
     }
 
     /// <summary>Write the document atomically (.tmp → move), keeping a .bak of any prior file.</summary>

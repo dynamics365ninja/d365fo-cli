@@ -235,6 +235,7 @@ See [docs/TOKEN_ECONOMICS.md](docs/TOKEN_ECONOMICS.md) for the full analysis and
 | **Read** | `read class`, `read table`, `read form` (= MCP `get_method`) |
 | **Generate** | `generate table\|class\|coc\|form\|entity\|extension\|event-handler\|privilege\|duty\|role\|report\|sysoperation\|number-sequence\|workflow\|menu-item\|edt\|enum\|query\|business-event\|custom-service\|migration-script\|runbase\|security-policy\|systest` |
 | **Labels** | `labels search\|resolve\|info\|create\|rename\|delete` — search/resolve plus in-place `*.label.txt` edits, multi-language via `--lang` (mirrors the MCP `labels` tool) |
+| **Journal / undo** | `undo [--steps N] [--dry-run]`, `journal list`, `delete` (kind/name, bridge or on-disk) — deterministic single-command rollback for every write path (mirrors the MCP `undo_last_modification` tool) |
 | **Analyze** | `analyze completeness`, `analyze integration`, `analyze impact`, `lint`, `suggest edt`, `suggest extension`, `report-integrations` |
 | **Review** | `review diff` |
 | **Models** | `models list`, `models deps`, `models coupling` |

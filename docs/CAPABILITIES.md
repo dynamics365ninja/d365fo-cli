@@ -262,6 +262,33 @@ d365fo labels delete Key           --file path/Foo.en-us.label.txt
 
 ---
 
+## Modification journal & undo
+
+Every metadata write — `generate *`, `labels create\|rename\|delete`, and `delete` — appends
+an entry to a size-capped, FIFO-pruned journal at `<index-dir>/journal/`, whether the write
+went to disk or through the metadata bridge. `d365fo undo` replays entries in reverse through
+the SAME write path that produced them, restoring the exact pre-image.
+
+```sh
+d365fo journal list --output json                  # inspect the stack, most-recent-first
+d365fo undo --dry-run --output json                # preview what would be reverted
+d365fo undo --output json                           # revert the last write
+d365fo undo --steps 3 --output json                 # revert the last 3 writes
+
+# Delete an AOT object (journaled, so it can be undone)
+d365fo delete --kind table --name OldTable --path C:\pkg\MyModel\MyModel\AxTable\OldTable.xml
+d365fo delete --kind class --name OldClass --install-to MyModel   # via the metadata bridge
+```
+
+- **create → undo** removes the file (and its `.rnrproj` entry, when the model has one with an explicit item list).
+- **update → undo** restores the exact pre-image bytes.
+- **delete → undo** recreates the file from its pre-image.
+- Works identically with `D365FO_BRIDGE_ENABLED=1` or unset — bridge-mediated writes undo through `deleteObject`/`updateObject`/`createObject`.
+
+MCP parity: `undo_last_modification` (`steps`, `dryRun`) and `journal_list` (`limit`).
+
+---
+
 ## Review
 
 ```sh

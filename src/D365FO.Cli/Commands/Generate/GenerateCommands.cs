@@ -1,4 +1,5 @@
 using D365FO.Core;
+using D365FO.Core.Journal;
 using D365FO.Core.Scaffolding;
 using Spectre.Console.Cli;
 using D365FO.Cli.Commands.Get;
@@ -71,6 +72,35 @@ internal static class GenerateInstaller
         catch { return null; }
     }
 
+    /// <summary>
+    /// Best-effort modification-journal append (issue #113) for a bridge-mediated create.
+    /// Tombstone entry (no pre-image, since nothing existed before) — undo replays it by
+    /// calling the bridge's <c>deleteObject</c>. Never lets a journal failure fail the
+    /// create it is recording.
+    /// </summary>
+    private static void RecordBridgeCreate(string axKind, string name, string model)
+    {
+        try
+        {
+            ModificationJournal.ForIndex().Append(new JournalEntry(
+                Id: Guid.NewGuid().ToString("N"),
+                TimestampUtc: DateTimeOffset.UtcNow,
+                Command: $"generate {axKind} --install-to",
+                TargetType: JournalTargetType.AotObject,
+                Kind: axKind,
+                ObjectName: name,
+                SecondaryKey: null,
+                Model: model,
+                Operation: JournalOperation.Create,
+                WritePath: JournalWritePath.Bridge,
+                TargetPath: null,
+                PreImage: null,
+                IsTombstone: true,
+                RnrProjDelta: null));
+        }
+        catch { /* best-effort */ }
+    }
+
     internal enum InstallOutcome { CreatedViaApi, WriteScaffold, Failed }
 
     /// <summary>
@@ -88,7 +118,11 @@ internal static class GenerateInstaller
 
         // 1) Metadata-API path — canonical, consistent output.
         var (ok, err) = BridgeGate.TrySaveObject(axKind, name, model, xml);
-        if (ok) return (InstallOutcome.CreatedViaApi, null, null, warnings);
+        if (ok)
+        {
+            RecordBridgeCreate(axKind, name, model);
+            return (InstallOutcome.CreatedViaApi, null, null, warnings);
+        }
 
         // 2) Fallback — write the scaffold into the model folder if resolvable.
         var folder = BridgeGate.TryGetModelFolder(model);

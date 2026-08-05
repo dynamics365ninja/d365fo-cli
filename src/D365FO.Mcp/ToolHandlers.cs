@@ -501,6 +501,7 @@ public sealed class ToolHandlers
                 return ToolResult<object>.Fail("KEY_EXISTS",
                     $"Label '{key}' already exists; pass overwrite=true to replace.",
                     hint: $"Existing value: {res.OldValue}");
+            D365FO.Core.Journal.LabelJournalRecorder.RecordCreateOrUpdate(res, "labels(create)");
             return ToolResult<object>.Success(new
             {
                 outcome = res.Outcome.ToString(),
@@ -557,6 +558,7 @@ public sealed class ToolHandlers
         try
         {
             var res = D365FO.Core.Labels.LabelFileWriter.Rename(file, oldKey, newKey, overwrite);
+            D365FO.Core.Journal.LabelJournalRecorder.RecordRename(res, oldKey, "labels(rename)");
             return res.Outcome switch
             {
                 D365FO.Core.Labels.WriteOutcome.FileMissing => ToolResult<object>.Fail("FILE_NOT_FOUND", $"Label file not found: {file}"),
@@ -585,6 +587,7 @@ public sealed class ToolHandlers
         try
         {
             var res = D365FO.Core.Labels.LabelFileWriter.Delete(file, key);
+            D365FO.Core.Journal.LabelJournalRecorder.RecordDelete(res, "labels(delete)");
             return res.Outcome switch
             {
                 D365FO.Core.Labels.WriteOutcome.FileMissing => ToolResult<object>.Fail("FILE_NOT_FOUND", $"Label file not found: {file}"),
@@ -602,6 +605,99 @@ public sealed class ToolHandlers
         {
             return ToolResult<object>.Fail(D365FoErrorCodes.WriteFailed, ex.Message);
         }
+    }
+
+    // ---- modification journal / undo (issue #113) ----------------------
+
+    /// <summary>
+    /// MCP parity for upstream <c>undo_last_modification</c>: revert the last
+    /// <paramref name="steps"/> journal entries, replaying each in reverse through the same
+    /// write path (disk or bridge) that produced it. See <c>d365fo undo</c> /
+    /// <see cref="D365FO.Core.Journal.UndoEngine"/>.
+    /// </summary>
+    public ToolResult<object> UndoLastModification(int steps, bool dryRun)
+    {
+        var journal = D365FO.Core.Journal.ModificationJournal.ForIndex();
+        if (journal.Count() == 0)
+            return ToolResult<object>.Fail(D365FoErrorCodes.JournalEmpty,
+                "The modification journal is empty — nothing to undo.",
+                "Every write from `generate_object` and `labels` (create/rename/delete) appends an entry here.");
+
+        var effectiveSteps = steps <= 0 ? 1 : steps;
+        var result = D365FO.Core.Journal.UndoEngine.Undo(journal, effectiveSteps, dryRun);
+
+        var touchedModels = result.Steps
+            .Where(s => s.Ok && !string.IsNullOrWhiteSpace(s.Entry.Model))
+            .Select(s => s.Entry.Model!)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+        var warnings = new List<string>();
+        if (!dryRun && touchedModels.Count > 0)
+            warnings.Add($"Index not auto-refreshed for {string.Join(", ", touchedModels)} — run `update_symbol_index` so reverted objects are searchable again.");
+        foreach (var rnr in result.Steps.Where(s => s.RnrProjWarning is not null).Select(s => s.RnrProjWarning!))
+            warnings.Add(rnr);
+
+        var payload = new
+        {
+            dryRun = result.DryRun,
+            requestedSteps = effectiveSteps,
+            reverted = result.Steps.Count(s => s.Ok),
+            steps = result.Steps.Select(s => new
+            {
+                id = s.Entry.Id,
+                timestampUtc = s.Entry.TimestampUtc,
+                command = s.Entry.Command,
+                targetType = s.Entry.TargetType.ToString(),
+                kind = s.Entry.Kind,
+                name = s.Entry.ObjectName,
+                model = s.Entry.Model,
+                operation = s.Entry.Operation.ToString(),
+                writePath = s.Entry.WritePath.ToString(),
+                target = s.Entry.TargetPath,
+                ok = s.Ok,
+                error = s.Error,
+                detail = s.Detail,
+            }),
+        };
+
+        if (!result.AllOk)
+        {
+            var failedStep = result.Steps.FirstOrDefault(s => !s.Ok);
+            return ToolResult<object>.Fail(D365FoErrorCodes.UndoFailed,
+                    $"Undo stopped after {result.Steps.Count(s => s.Ok)} of {effectiveSteps} step(s): {failedStep?.Error}",
+                    "Earlier (older) journal entries were left untouched.")
+                with { Data = payload };
+        }
+
+        return ToolResult<object>.Success(payload, warnings.Count > 0 ? warnings : null);
+    }
+
+    /// <summary>Inspect the modification-journal stack without reverting anything.</summary>
+    public ToolResult<object> JournalList(int limit)
+    {
+        var journal = D365FO.Core.Journal.ModificationJournal.ForIndex();
+        var effectiveLimit = limit <= 0 ? 50 : limit;
+        var entries = journal.List(effectiveLimit);
+        return ToolResult<object>.Success(new
+        {
+            journalDirectory = journal.JournalDirectory,
+            count = entries.Count,
+            totalCount = journal.Count(),
+            entries = entries.Select(e => new
+            {
+                id = e.Id,
+                timestampUtc = e.TimestampUtc,
+                command = e.Command,
+                targetType = e.TargetType.ToString(),
+                kind = e.Kind,
+                name = e.ObjectName,
+                model = e.Model,
+                operation = e.Operation.ToString(),
+                writePath = e.WritePath.ToString(),
+                target = e.TargetPath,
+                hasPreImage = e.PreImage is not null,
+            }),
+        });
     }
 
     public ToolResult<object> IndexHistory(int limit, string? model)

@@ -50,15 +50,22 @@ namespace D365FO.Bridge
         /// Read an artefact and hand back its <b>raw XmlSerializer XML</b> (not the
         /// reflection-based JSON projection <see cref="AxSerializer"/> produces) —
         /// the byte-for-byte counterpart of the <c>xml</c> blob <see cref="UpdateObject"/>
-        /// accepts. Used by <c>d365fo modify method</c> (issue #112) to round-trip a
-        /// single method body through <c>IMetadataProvider</c> without ever touching
-        /// on-disk XML directly: read here, do a structured (XDocument-element)
-        /// replace of one &lt;Method&gt;'s &lt;Source&gt;, write back via
-        /// <see cref="UpdateObject"/>. The XML shape is whatever this process's
-        /// <see cref="XmlSerializer"/> produces for the live Ax* instance — it need
-        /// not match Visual Studio's on-disk formatting because it never reaches
-        /// disk itself; <see cref="MetadataBootstrap.SaveArtifact"/> re-serialises
-        /// through the provider on write, same as every other write path here.
+        /// accepts. Two consumers:
+        /// <list type="bullet">
+        /// <item><description><c>d365fo modify method</c> (issue #112) round-trips a single
+        /// method body through <c>IMetadataProvider</c> without ever touching on-disk XML
+        /// directly: read here, do a structured (XDocument-element) replace of one
+        /// &lt;Method&gt;'s &lt;Source&gt;, write back via <see cref="UpdateObject"/>.</description></item>
+        /// <item><description>The modification journal / <c>d365fo undo</c> (issue #113) calls
+        /// this before a bridge update/delete to capture the exact pre-image, so undo can
+        /// round-trip it straight back through <c>updateObject</c>/<c>createObject</c> — the
+        /// JSON shape from <c>readClass</c>/<c>readTable</c>/... is lossy for that purpose (it
+        /// is shaped for display, not for re-serialization).</description></item>
+        /// </list>
+        /// The XML shape is whatever this process's <see cref="XmlSerializer"/> produces for
+        /// the live Ax* instance — it need not match Visual Studio's on-disk formatting because
+        /// it never reaches disk itself; <see cref="MetadataBootstrap.SaveArtifact"/>
+        /// re-serialises through the provider on write, same as every other write path here.
         /// </summary>
         internal JsonObject ReadObjectXml(JsonObject args)
         {

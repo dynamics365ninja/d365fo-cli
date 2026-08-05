@@ -1,6 +1,7 @@
 using System.Xml.Linq;
 using System.Xml;
 using D365FO.Core.Guardrails;
+using D365FO.Core.Journal;
 
 namespace D365FO.Core.Scaffolding;
 
@@ -1139,6 +1140,63 @@ public static class ScaffoldFileWriter
         return WriteCore(xml, path, overwrite, declarationOnSaveFromXDoc: false, null);
     }
 
+    public sealed record DeleteResult(string Path, string PreImage);
+
+    /// <summary>
+    /// Delete an on-disk AOT object file, capturing its exact pre-image bytes and journaling the
+    /// delete (best-effort) so <c>d365fo undo</c> can restore it. Counterpart to <c>Write</c>
+    /// for the disk write path's create/delete symmetry — see <see cref="D365FO.Core.Journal.UndoEngine"/>.
+    /// </summary>
+    public static DeleteResult Delete(string path, string? model = null)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(path);
+        var full = Path.GetFullPath(path);
+
+        var cfg = D365FoSettings.FromEnvironment();
+        PathGuard.EnsureWithinBoundary(full, new[] { cfg.PackagesPath, cfg.WorkspacePath }.Concat(cfg.CustomPackagesPaths).ToArray());
+
+        if (!File.Exists(full))
+            throw new FileNotFoundException($"Target does not exist: {full}", full);
+
+        var preImage = SafeReadAllText(full);
+        var (kind, objectName) = InferKindAndName(full);
+        var effectiveModel = model ?? InferModel(full);
+
+        RnrProjDelta? delta = null;
+        if (effectiveModel is not null)
+        {
+            var modelFolder = Path.GetDirectoryName(Path.GetDirectoryName(full));
+            var axSubfolder = Path.GetFileName(Path.GetDirectoryName(full));
+            if (!string.IsNullOrEmpty(modelFolder) && !string.IsNullOrEmpty(axSubfolder))
+                delta = RnrProjRegistry.TryRegisterDelete(modelFolder!, axSubfolder!, objectName);
+        }
+
+        File.Delete(full);
+
+        try
+        {
+            var entry = new JournalEntry(
+                Id: Guid.NewGuid().ToString("N"),
+                TimestampUtc: DateTimeOffset.UtcNow,
+                Command: "delete",
+                TargetType: JournalTargetType.AotObject,
+                Kind: kind,
+                ObjectName: objectName,
+                SecondaryKey: null,
+                Model: effectiveModel,
+                Operation: JournalOperation.Delete,
+                WritePath: JournalWritePath.Disk,
+                TargetPath: full,
+                PreImage: preImage,
+                IsTombstone: false,
+                RnrProjDelta: delta);
+            ModificationJournal.ForIndex().Append(entry);
+        }
+        catch { /* best-effort */ }
+
+        return new DeleteResult(full, preImage);
+    }
+
     private static void EnsureConcreteAxRoot(string? rootLocalName)
     {
         if (rootLocalName is not null && _abstractAxRoots.Contains(rootLocalName))
@@ -1200,6 +1258,11 @@ public static class ScaffoldFileWriter
         var dir = Path.GetDirectoryName(full);
         if (!string.IsNullOrEmpty(dir)) Directory.CreateDirectory(dir);
 
+        // Captured BEFORE any mutation so the journal entry holds the exact pre-image bytes —
+        // independent of the .bak file below, which the write path keeps for immediate manual
+        // recovery but is not itself part of the journal's reversible-write contract.
+        string? preImage = File.Exists(full) ? SafeReadAllText(full) : null;
+
         string? backup = null;
         if (File.Exists(full))
         {
@@ -1242,6 +1305,115 @@ public static class ScaffoldFileWriter
         }
 
         var bytes = new FileInfo(full).Length;
+        RecordJournalEntry(full, preImage);
         return new WriteResult(full, bytes, backup);
+    }
+
+    /// <summary>
+    /// Best-effort modification-journal append (issue #113) — never lets a journal failure
+    /// fail the write it is recording. Fires for EVERY caller of <see cref="Write(XDocument,string,bool)"/>
+    /// / <see cref="Write(string,string,bool)"/>: the CLI `generate *` commands, the MCP
+    /// `generate_object` tool, and any future disk-scaffold caller — this is the single choke
+    /// point the journal's "shared by every write path" design relies on for on-disk writes.
+    /// Kind/ObjectName/Model are inferred from the written XML and the D365FO packages layout
+    /// convention (&lt;root&gt;\&lt;Model&gt;\&lt;Model&gt;\Ax&lt;Kind&gt;\&lt;Name&gt;.xml) —
+    /// best-effort: when the path doesn't match that convention, Model is left null and the
+    /// entry is still recorded (disk replay only needs the path + pre-image, not the model).
+    /// </summary>
+    private static void RecordJournalEntry(string fullPath, string? preImage)
+    {
+        try
+        {
+            var (kind, objectName) = InferKindAndName(fullPath);
+            var model = InferModel(fullPath);
+            RnrProjDelta? delta = null;
+            if (preImage is null && model is not null)
+            {
+                var modelFolder = Path.GetDirectoryName(Path.GetDirectoryName(fullPath));
+                var axSubfolder = Path.GetFileName(Path.GetDirectoryName(fullPath));
+                if (!string.IsNullOrEmpty(modelFolder) && !string.IsNullOrEmpty(axSubfolder))
+                    delta = RnrProjRegistry.TryRegisterCreate(modelFolder!, axSubfolder!, objectName);
+            }
+
+            var entry = new JournalEntry(
+                Id: Guid.NewGuid().ToString("N"),
+                TimestampUtc: DateTimeOffset.UtcNow,
+                Command: "scaffold-write",
+                TargetType: JournalTargetType.AotObject,
+                Kind: kind,
+                ObjectName: objectName,
+                SecondaryKey: null,
+                Model: model,
+                Operation: preImage is null ? JournalOperation.Create : JournalOperation.Update,
+                WritePath: JournalWritePath.Disk,
+                TargetPath: fullPath,
+                PreImage: preImage,
+                IsTombstone: preImage is null,
+                RnrProjDelta: delta);
+
+            ModificationJournal.ForIndex().Append(entry);
+        }
+        catch
+        {
+            // Best-effort: the journal is a convenience, not a correctness requirement of the
+            // write itself. Never let it turn a successful scaffold write into a failure.
+        }
+    }
+
+    private static string SafeReadAllText(string path)
+    {
+        try { return File.ReadAllText(path); }
+        catch { return string.Empty; }
+    }
+
+    /// <summary>
+    /// Best-effort Kind/Name inference from the just-written XML: Kind from the root element's
+    /// local name (leading "Ax" stripped — purely descriptive, not the bridge kind vocabulary,
+    /// since disk-only journal entries never need to name a bridge collection), Name from the
+    /// root's child &lt;Name&gt; element (the universal AOT convention), falling back to the
+    /// file name when either is missing.
+    /// </summary>
+    private static (string kind, string objectName) InferKindAndName(string fullPath)
+    {
+        var fallbackName = Path.GetFileNameWithoutExtension(fullPath);
+        try
+        {
+            var root = XElement.Load(fullPath);
+            var localName = root.Name.LocalName;
+            var kind = localName.StartsWith("Ax", StringComparison.Ordinal) && localName.Length > 2
+                ? localName[2..]
+                : localName;
+            var name = root.Elements().FirstOrDefault(e => e.Name.LocalName == "Name")?.Value;
+            return (string.IsNullOrEmpty(kind) ? "object" : kind, string.IsNullOrWhiteSpace(name) ? fallbackName : name);
+        }
+        catch
+        {
+            return ("object", fallbackName);
+        }
+    }
+
+    /// <summary>
+    /// Best-effort Model inference from the D365FO packages layout convention
+    /// (&lt;root&gt;\&lt;Model&gt;\&lt;Model&gt;\Ax&lt;Kind&gt;\&lt;Name&gt;.xml — see
+    /// <c>GenerateInstaller.ResolveInstallPath</c>). Only trusts the inference when the two
+    /// model-name path segments actually match; otherwise returns null rather than guessing.
+    /// </summary>
+    private static string? InferModel(string fullPath)
+    {
+        try
+        {
+            var axSubfolderDir = Path.GetDirectoryName(fullPath); // .../<Model>/<Model>/Ax<Kind>
+            var modelDir = Path.GetDirectoryName(axSubfolderDir); // .../<Model>/<Model>
+            var modelParentDir = Path.GetDirectoryName(modelDir); // .../<Model>
+            var inner = modelDir is null ? null : Path.GetFileName(modelDir);
+            var outer = modelParentDir is null ? null : Path.GetFileName(modelParentDir);
+            return !string.IsNullOrEmpty(inner) && string.Equals(inner, outer, StringComparison.OrdinalIgnoreCase)
+                ? inner
+                : null;
+        }
+        catch
+        {
+            return null;
+        }
     }
 }

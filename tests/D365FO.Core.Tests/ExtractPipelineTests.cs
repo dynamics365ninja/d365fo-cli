@@ -6,6 +6,10 @@ using Xunit;
 
 namespace D365FO.Core.Tests;
 
+// Shares a collection with ScaffoldFileWriterJournalTests: both call ScaffoldFileWriter.Write,
+// which (issue #113) journals via the process-wide D365FO_INDEX_DB env var that the journal
+// test overrides — running them in parallel would race on that global state.
+[Collection("ScaffoldFileWriter")]
 public class ExtractPipelineTests : IDisposable
 {
     private readonly string _dbPath = Path.Combine(Path.GetTempPath(), $"d365fo-extract-{Guid.NewGuid():N}.sqlite");

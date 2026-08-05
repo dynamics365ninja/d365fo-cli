@@ -151,13 +151,14 @@ renaming `form_pattern` → `object_patterns`.
 | `find_references` | — | reverse references via regex scan of indexed X++ source (was CLI-only) |
 | `validate_object_naming`, `get_workspace_info`, `suggest_edt`, `batch_get_info`, `lint`, `stats`, `index_status`, `index_history` | — | kept (parity names) |
 
-This adapter exposes **22 unified MCP tools**, including `modify_method`
-(structured method-body replace via D365FO.Bridge — the `d365fo_file(action=modify)`
-counterpart). The upstream `d365fo-mcp-server` sits at 26 — it additionally ships
-`get_knowledge`, `analyze_code`, `d365fo_file` (`action=create`, covered here by
-`generate_object`), `undo_last_modification`, `validate_code`,
-`verify_d365fo_project` and the SDLC/build tools, which here are CLI-only or
-covered by Skills.
+This adapter exposes **23 unified MCP tools**, including `modify_method` (structured
+method-body replace via D365FO.Bridge — the `d365fo_file(action=modify)` counterpart) and
+`undo_last_modification` / `journal_list` (issue #113 — full parity with upstream's undo,
+backed by the modification journal described below). The upstream `d365fo-mcp-server`
+sits at 26 — it additionally ships `get_knowledge`, `analyze_code`, `d365fo_file`
+(`action=create`, covered here by `generate_object`), `validate_code`,
+`verify_d365fo_project` and the SDLC/build tools, which here are CLI-only or covered by
+Skills.
 
 Run `d365fo schema --full` for the machine-readable command/tool manifest; every
 CLI command's `mcpTool` field names the unified MCP tool it maps to.
@@ -215,10 +216,34 @@ commands. Both surfaces use the same discriminator-based naming.
 | `generate_object` (`objectType=form`) | `d365fo generate form <Name> --pattern <P>` (pattern-gated write) |
 | `generate_object` (XML-only `objectType=…`) | `d365fo generate edt\|enum\|query\|sysoperation\|business-event\|runbase\|security-policy` (XML only) |
 | `d365fo_file` (`action=modify`) / `modify_method` | `d365fo modify method <kind> <Object> <Method> --body "…"` (structured `XDocument` replace via D365FO.Bridge/`IMetadataProvider` — never CDATA string surgery; reference/BP validation always blocks on error-severity findings) |
-| `undo_last_modification` | `.bak` backups written by every overwrite + `git checkout` |
+| `undo_last_modification` | `d365fo undo [--steps N] [--dry-run]` — reverts the last N modification-journal entries (see below) |
 | `labels` (`action=create\|rename\|delete`) | `d365fo labels create\|rename\|delete` (multi-language via `--lang`) |
 | `review_workspace_changes` | `d365fo review diff` |
 | `update_symbol_index` | `d365fo index refresh [--model <M>]` |
+
+#### Modification journal (issue #113)
+
+Every write path — `generate <kind> [--out\|--install-to]`, `labels create\|rename\|delete`,
+and `delete` — appends an entry to a journal stored at `<index-dir>/journal/` (next to the
+SQLite index; `d365fo journal list --output json` inspects it, size-capped with FIFO
+pruning). Each entry records the timestamp, command, object identity, operation
+(create/update/delete), and either the exact pre-image (update/delete) or a tombstone
+(create) — plus a `.rnrproj` project-file delta when the model has one with an explicit item
+list (most headless/VM installs don't; D365FO's build/sync tooling discovers objects by
+directory convention regardless).
+
+`d365fo undo [--steps N] [--dry-run]` replays the last N entries **in reverse, through the
+same write path that produced them** — on-disk file I/O, or the bridge's live
+`IMetadataProvider` when `D365FO_BRIDGE_ENABLED=1` was used for the original write — so undo
+behaves identically whether or not the bridge is enabled:
+- **create → undo** removes the file (and its `.rnrproj` entry, if one was added).
+- **update → undo** restores the exact pre-image bytes.
+- **delete → undo** (via `d365fo delete`) recreates the file from its pre-image.
+
+`--dry-run` previews what would be reverted without changing anything — use this before an
+agent commits to an undo. `undo` stops at the first failure so older entries are never
+skipped silently. The MCP adapter exposes the same engine as `undo_last_modification`
+(`steps`, `dryRun`) and `journal_list` (`limit`).
 
 ### Ops (Windows VM)
 
