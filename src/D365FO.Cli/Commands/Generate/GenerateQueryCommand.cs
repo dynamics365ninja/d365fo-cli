@@ -19,7 +19,7 @@ public sealed class GenerateQueryCommand : Command<GenerateQueryCommand.Settings
         public string[] DataSources { get; init; } = Array.Empty<string>();
 
         [CommandOption("--join <SPEC>")]
-        [System.ComponentModel.Description("Repeatable: <table>:<joinKind>:<parentDs>. JoinKind: InnerJoin (default) | OuterJoin | ExistsJoin | NotExistsJoin. Example: --join SalesLine:InnerJoin:SalesTable")]
+        [System.ComponentModel.Description("Repeatable: <table>:<joinKind>:<parentDs>. JoinKind: InnerJoin (default) | OuterJoin | ExistsJoin | NoExistsJoin (note: no \"t\" — this is the real AOT enum spelling, not NotExistsJoin). Example: --join SalesLine:InnerJoin:SalesTable")]
         public string[] Joins { get; init; } = Array.Empty<string>();
     }
 
@@ -110,7 +110,7 @@ public sealed class GenerateQueryCommand : Command<GenerateQueryCommand.Settings
         var parent   = parts.Length > 2 ? parts[2] : null;
 
         var validModes = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
-            { "InnerJoin", "OuterJoin", "ExistsJoin", "NotExistsJoin" };
+            { "InnerJoin", "OuterJoin", "ExistsJoin", "NoExistsJoin" };
         if (!validModes.Contains(joinMode)) return false;
 
         spec = new QueryDataSourceSpec(table, null, parent, joinMode);

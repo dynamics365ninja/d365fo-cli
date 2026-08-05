@@ -7,8 +7,11 @@ namespace D365FO.Core.Scaffolding;
 /// <para>
 /// Root data sources have no <see cref="ParentDs"/>. Joined data sources specify
 /// the <see cref="ParentDs"/> by name (defaults to the parent's <see cref="Table"/>
-/// when only one root exists). <see cref="JoinMode"/> follows D365FO values:
-/// <c>InnerJoin</c>, <c>OuterJoin</c>, <c>ExistsJoin</c>, <c>NotExistsJoin</c>.
+/// when only one root exists). <see cref="JoinMode"/> follows the real
+/// <c>AxQuerySimpleEmbeddedDataSource.JoinMode</c> enum values:
+/// <c>InnerJoin</c>, <c>OuterJoin</c>, <c>ExistsJoin</c>, <c>NoExistsJoin</c>
+/// (note: no "t" — confirmed against shipped platform AxQuery XML; this differs
+/// from the unrelated <c>SysDaJoinKind::NotExistsJoin</c> spelling).
 /// </para>
 /// </summary>
 public sealed record QueryDataSourceSpec(
@@ -74,7 +77,7 @@ public static class QueryScaffolder
             new XElement("Name", dsName),
             new XElement("Table", ds.Table),
             new XElement("JoinMode", ds.JoinMode),
-            new XElement("Relations", "Yes"));
+            new XElement("UseRelations", "Yes"));
 
         if (children.Count > 0)
             el.Add(new XElement("DataSources", children.Select(c => BuildJoin(c, allJoins))));
