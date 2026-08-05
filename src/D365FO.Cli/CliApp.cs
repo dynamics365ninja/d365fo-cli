@@ -187,6 +187,7 @@ public static class CliApp
                 b.AddCommand<ValidateNameCommand>("name").WithDescription("Check object name against naming conventions.");
                 b.AddCommand<ValidateXppCommand>("xpp").WithDescription("Offline X++/XML best-practice validator over a file or stdin (no VM needed).");
                 b.AddCommand<ValidateReferencesCommand>("references").WithDescription("Semantic anti-hallucination gate: verify every identifier in X++ code against the index.");
+                b.AddCommand<ValidateMetadataCommand>("metadata").WithDescription("Round-trip AOT XML through Microsoft's IMetadataProvider serializer and report anything it drops. Nothing is written. Requires D365FO_BRIDGE_ENABLED=1.");
                 b.AddCommand<ValidateFormPatternCommand>("form-pattern").WithDescription("Structural form-pattern validator (FP001-FP010) over AxForm XML — same gate `generate form` enforces.");
                 b.AddCommand<RepairFormPatternCommand>("form-pattern-repair").WithDescription("Alias of `form-pattern repair` — auto-repair deterministic structural violations.");
             });

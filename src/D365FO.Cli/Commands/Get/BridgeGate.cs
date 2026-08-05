@@ -242,6 +242,61 @@ internal static class BridgeGate
     }
 
     /// <summary>
+    /// Verdict from the bridge's <c>validateArtifact</c>: did the XML deserialize into its
+    /// MetaModel type, and did anything vanish on the way back out.
+    /// </summary>
+    /// <param name="Deserialized">The provider's serializer accepted the document.</param>
+    /// <param name="Valid">It deserialized <em>and</em> the round-trip lost nothing.</param>
+    /// <param name="Dropped">Leaf elements (path = value) present in the input and gone after the round-trip.</param>
+    internal sealed record MetadataVerdict(
+        bool Deserialized,
+        bool Valid,
+        string? RootElement,
+        string? ClrType,
+        string? ErrorCode,
+        string? ErrorMessage,
+        IReadOnlyList<string> Dropped);
+
+    /// <summary>
+    /// Ask the live metadata provider whether it can read this XML, without writing
+    /// anything. Returns null when the bridge is unavailable — the caller decides whether
+    /// that is a skip or a failure.
+    /// </summary>
+    internal static MetadataVerdict? TryValidateArtifact(string? kind, string xml)
+    {
+        if (!BridgeClient.IsAvailable()) return null;
+        try
+        {
+            var options = DefaultOptions();
+            using var client = new BridgeClient(options);
+            var args = new JsonObject { ["xml"] = xml };
+            if (!string.IsNullOrWhiteSpace(kind)) args["kind"] = kind;
+
+            var result = client.SendAsync("validateArtifact", args).GetAwaiter().GetResult();
+            if (result is null) return null;
+            if (((bool?)result["ok"] ?? false) == false) return null;
+
+            var dropped = new List<string>();
+            if (result["dropped"] is JsonArray arr)
+                foreach (var item in arr)
+                    if ((string?)item is { } s) dropped.Add(s);
+
+            return new MetadataVerdict(
+                Deserialized: (bool?)result["deserialized"] ?? false,
+                Valid: (bool?)result["valid"] ?? false,
+                RootElement: (string?)result["rootElement"],
+                ClrType: (string?)result["clrType"],
+                ErrorCode: (string?)result["errorCode"],
+                ErrorMessage: (string?)result["errorMessage"],
+                Dropped: dropped);
+        }
+        catch (BridgeException)
+        {
+            return null;
+        }
+    }
+
+    /// <summary>
     /// Outcome of an opt-in post-write verification. <c>Skipped</c> means the
     /// Metadata API runtime is not available at all — generation must keep working
     /// offline, so this is never an error.

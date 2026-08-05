@@ -24,6 +24,7 @@ namespace D365FO.Core.ObjectTypes
             string generateCommand,
             string mcpObjectType,
             string namingKind,
+            string contractNamespace,
             bool requiresXsiNamespace,
             bool abstractRoot,
             bool existsInStandardAot,
@@ -37,6 +38,7 @@ namespace D365FO.Core.ObjectTypes
             GenerateCommand = generateCommand;
             McpObjectType = mcpObjectType;
             NamingKind = namingKind;
+            ContractNamespace = contractNamespace ?? string.Empty;
             RequiresXsiNamespace = requiresXsiNamespace;
             AbstractRoot = abstractRoot;
             ExistsInStandardAot = existsInStandardAot;
@@ -73,6 +75,17 @@ namespace D365FO.Core.ObjectTypes
 
         /// <summary>Kind string understood by <see cref="ObjectNamingRules"/>.</summary>
         public string NamingKind { get; }
+
+        /// <summary>
+        /// XML namespace the type's <c>DataContract</c> declares, and therefore the namespace
+        /// its on-disk files must use — empty for most types, but
+        /// <c>Microsoft.Dynamics.AX.Metadata.V1</c> for menu items and tiles, <c>V2</c> for
+        /// reports and workflow objects, <c>V6</c> for forms. Get it wrong and the metadata
+        /// reader rejects the file outright ("Expecting element X from namespace Y"), which is
+        /// what shipped for menu items, reports and workflows until this was ground-truthed
+        /// against <c>Microsoft.Dynamics.AX.Metadata.dll</c>.
+        /// </summary>
+        public string ContractNamespace { get; }
 
         /// <summary>The metadata reader rejects the file unless the XMLSchema-instance namespace is declared on the root.</summary>
         public bool RequiresXsiNamespace { get; }
@@ -174,7 +187,7 @@ namespace D365FO.Core.ObjectTypes
                 New("class", "AxClass", "Classes", "class", "class", "Class"),
                 New("edt", "AxEdt", "Edts", "edt", "edt", "Edt", xsi: true, abstractRoot: true),
                 New("enum", "AxEnum", "Enums", "enum", "enum", "Enum", xsi: true),
-                New("form", "AxForm", "Forms", "form", "form", "Form"),
+                New("form", "AxForm", "Forms", "form", "form", "Form", ns: NsV6),
                 New("view", "AxView", "Views", "view", null, "View", xsi: true),
                 New("map", "AxMap", "Maps", "map", null, "Map", xsi: true),
                 // AxQuery is an abstract MetaModel base: every shipped file is
@@ -188,49 +201,48 @@ namespace D365FO.Core.ObjectTypes
 
                 // ── Extensions ─────────────────────────────────────────────────────
                 New("tableextension", "AxTableExtension", "TableExtensions", "extension", null, "TableExtension"),
-                New("formextension", "AxFormExtension", "FormExtensions", "extension", null, "FormExtension"),
-                New("edtextension", "AxEdtExtension", "EdtExtensions", "extension", null, "EdtExtension", xsi: true, abstractRoot: true),
+                New("formextension", "AxFormExtension", "FormExtensions", "extension", null, "FormExtension", ns: NsV6),
+                // Concrete, despite the name symmetry with the abstract AxEdt: the assembly
+                // declares no AxEdt*Extension subtypes, so an i:type here would name nothing.
+                New("edtextension", "AxEdtExtension", "EdtExtensions", "extension", null, "EdtExtension", xsi: true),
                 New("enumextension", "AxEnumExtension", "EnumExtensions", "extension", null, "EnumExtension"),
                 New("viewextension", "AxViewExtension", "ViewExtensions", null, null, "ViewExtension"),
-                // Query extensions are concrete on disk: the folder and the root element are
-                // both AxQuerySimpleExtension (no i:type needed). The bridge collection is
-                // still QueryExtensions, and the abstract AxQueryExtension is what the
-                // provider's kind→type lookup resolves — the one place where the MetaModel
-                // type the bridge constructs differs from the file's root element.
-                New("queryextension", "AxQuerySimpleExtension", "QueryExtensions", null, null, "QueryExtension",
-                    metaModelType: "AxQueryExtension", xsi: true),
+                // Query extensions are concrete on disk: folder and root element are both
+                // AxQuerySimpleExtension, and the provider property is QuerySimpleExtensions.
+                // There is no AxQueryExtension type at all — the bridge used to name one.
+                New("queryextension", "AxQuerySimpleExtension", "QuerySimpleExtensions", null, null, "QueryExtension"),
                 New("dataentityviewextension", "AxDataEntityViewExtension", "DataEntityViewExtensions", null, null, "DataEntityViewExtension"),
                 // Folder ships in every model; no standard model has a file in it yet.
-                New("mapextension", "AxMapExtension", null, null, null, "MapExtension"),
-                New("securitydutyextension", "AxSecurityDutyExtension", null, "extension", null, "SecurityDutyExtension"),
-                New("securityroleextension", "AxSecurityRoleExtension", null, "extension", null, "SecurityRoleExtension"),
+                New("mapextension", "AxMapExtension", "MapExtensions", null, null, "MapExtension"),
+                New("securitydutyextension", "AxSecurityDutyExtension", "SecurityDutyExtensions", "extension", null, "SecurityDutyExtension"),
+                New("securityroleextension", "AxSecurityRoleExtension", "SecurityRoleExtensions", "extension", null, "SecurityRoleExtension"),
 
-                // ── Written as XML only (no provider collection wired yet) ──────────
-                New("menuitemdisplay", "AxMenuItemDisplay", null, "menu-item", null, "MenuItemDisplay"),
-                New("menuitemaction", "AxMenuItemAction", null, "menu-item", null, "MenuItemAction"),
-                New("menuitemoutput", "AxMenuItemOutput", null, "menu-item", null, "MenuItemOutput"),
-                New("report", "AxReport", null, "report", null, "Report"),
-                New("service", "AxService", null, "custom-service", null, "Service"),
-                New("servicegroup", "AxServiceGroup", null, "custom-service", null, "ServiceGroup"),
-                New("securityrole", "AxSecurityRole", null, "role", null, "SecurityRole"),
-                New("securityduty", "AxSecurityDuty", null, "duty", null, "SecurityDuty"),
-                New("securityprivilege", "AxSecurityPrivilege", null, "privilege", null, "SecurityPrivilege"),
-                New("securitypolicy", "AxSecurityPolicy", null, "security-policy", "security-policy", "SecurityPolicy"),
+                // ── Families the provider exposes; generation now routes through it ──
+                New("menuitemdisplay", "AxMenuItemDisplay", "MenuItemDisplays", "menu-item", null, "MenuItemDisplay", ns: NsV1),
+                New("menuitemaction", "AxMenuItemAction", "MenuItemActions", "menu-item", null, "MenuItemAction", ns: NsV1),
+                New("menuitemoutput", "AxMenuItemOutput", "MenuItemOutputs", "menu-item", null, "MenuItemOutput", ns: NsV1),
+                New("report", "AxReport", "Reports", "report", null, "Report", ns: NsV2),
+                New("service", "AxService", "Services", "custom-service", null, "Service"),
+                New("servicegroup", "AxServiceGroup", "ServiceGroups", "custom-service", null, "ServiceGroup"),
+                New("securityrole", "AxSecurityRole", "SecurityRoles", "role", null, "SecurityRole"),
+                New("securityduty", "AxSecurityDuty", "SecurityDuties", "duty", null, "SecurityDuty"),
+                New("securityprivilege", "AxSecurityPrivilege", "SecurityPrivileges", "privilege", null, "SecurityPrivilege"),
+                New("securitypolicy", "AxSecurityPolicy", "SecurityPolicies", "security-policy", "security-policy", "SecurityPolicy"),
                 // The AOT node Visual Studio labels "workflow type".
-                New("workflowtemplate", "AxWorkflowTemplate", null, "workflow", null, "WorkflowTemplate"),
-                New("workflowapproval", "AxWorkflowApproval", null, "workflow", null, "WorkflowApproval"),
-                New("workflowtask", "AxWorkflowTask", null, "workflow", null, "WorkflowTask"),
+                New("workflowtemplate", "AxWorkflowTemplate", "WorkflowTemplates", "workflow", null, "WorkflowTemplate", ns: NsV2),
+                New("workflowapproval", "AxWorkflowApproval", "WorkflowApprovals", "workflow", null, "WorkflowApproval", ns: NsV2),
+                New("workflowtask", "AxWorkflowTask", "WorkflowTasks", "workflow", null, "WorkflowTask", ns: NsV2),
 
                 // ── Read-only types the index knows but nothing generates ───────────
-                New("workflowcategory", "AxWorkflowCategory", null, null, null, "WorkflowCategory", indexed: false),
-                New("configurationkey", "AxConfigurationKey", null, null, null, "ConfigurationKey"),
-                New("labelfile", "AxLabelFile", null, null, null, "LabelFile"),
-                New("tile", "AxTile", null, null, null, "Tile"),
-                New("menu", "AxMenu", null, null, null, "Menu", indexed: false),
-                New("compositedataentityview", "AxCompositeDataEntityView", null, null, null, "CompositeDataEntityView", indexed: false),
-                New("aggregatedataentity", "AxAggregateDataEntity", null, null, null, "AggregateDataEntity", indexed: false),
-                New("formpart", "AxFormPart", null, null, null, "FormPart", indexed: false),
-                New("resource", "AxResource", null, null, null, "Resource", indexed: false),
+                New("workflowcategory", "AxWorkflowCategory", "WorkflowCategories", null, null, "WorkflowCategory", indexed: false, ns: NsV2),
+                New("configurationkey", "AxConfigurationKey", "ConfigurationKeys", null, null, "ConfigurationKey"),
+                New("labelfile", "AxLabelFile", "LabelFiles", null, null, "LabelFile"),
+                New("tile", "AxTile", "Tiles", null, null, "Tile", ns: NsV1),
+                New("menu", "AxMenu", "Menus", null, null, "Menu", indexed: false, ns: NsV1),
+                New("compositedataentityview", "AxCompositeDataEntityView", "CompositeDataEntityViews", null, null, "CompositeDataEntityView", indexed: false),
+                New("aggregatedataentity", "AxAggregateDataEntity", "AggregateDataEntities", null, null, "AggregateDataEntity", indexed: false),
+                New("formpart", "AxFormPart", "FormParts", null, null, "FormPart", indexed: false),
+                New("resource", "AxResource", "Resources", null, null, "Resource", indexed: false),
 
                 // ── Names that exist in this codebase but not on any AOS ────────────
                 // Kept so the parity test can assert nothing reads them: an extractor
@@ -240,6 +252,15 @@ namespace D365FO.Core.ObjectTypes
                 New("reportssrs", "AxReportSsrs", null, null, null, "Report", existsInStandardAot: false, indexed: false),
             };
         }
+
+        /// <summary>Namespaces the MetaModel DataContracts declare. Only three are in use.</summary>
+        public const string NsV1 = "Microsoft.Dynamics.AX.Metadata.V1";
+
+        /// <inheritdoc cref="NsV1"/>
+        public const string NsV2 = "Microsoft.Dynamics.AX.Metadata.V2";
+
+        /// <inheritdoc cref="NsV1"/>
+        public const string NsV6 = "Microsoft.Dynamics.AX.Metadata.V6";
 
         private static ObjectTypeInfo New(
             string kind,
@@ -253,12 +274,14 @@ namespace D365FO.Core.ObjectTypes
             bool existsInStandardAot = true,
             bool indexed = true,
             string aotSubfolder = null,
-            string metaModelType = null)
+            string metaModelType = null,
+            string ns = null)
             => new ObjectTypeInfo(
                 kind, rootElement,
                 aotSubfolder ?? rootElement,
                 metaModelType ?? rootElement,
                 providerCollection, generateCommand, mcpObjectType, namingKind,
+                ns ?? string.Empty,
                 xsi, abstractRoot, existsInStandardAot, indexed);
 
         /// <summary>Every registered type.</summary>

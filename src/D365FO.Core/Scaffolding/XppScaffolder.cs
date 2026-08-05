@@ -354,14 +354,14 @@ public static class XppScaffolder
     /// Scaffolds a Table/Form/Edt/Enum extension. Name follows the D365FO
     /// convention <c>&lt;Target&gt;.&lt;Suffix&gt;</c> (dot-separated).
     ///
-    /// <para><c>AxEdtExtension</c> is an abstract base in the metadata model, exactly like
-    /// <c>AxEdt</c>: the concrete subtype (<c>AxEdtStringExtension</c>, …) has to be
-    /// pinned via <c>i:type</c> or Visual Studio's reader throws "Cannot create an
-    /// abstract class" — and <see cref="ScaffoldFileWriter"/> refuses the write outright.
-    /// Emitting the bare abstract root made <c>generate extension edt</c> fail
-    /// unconditionally at write time, so the subtype is resolved here from the target
-    /// EDT's base type via <paramref name="edtBaseTypeResolver"/> (the same index-backed
-    /// resolver <c>generate table</c> uses for field subtypes).</para>
+    /// <para>Unlike <c>AxEdt</c>, <c>AxEdtExtension</c> is <em>not</em> polymorphic: the
+    /// metadata assembly declares exactly one concrete <c>AxEdtExtension</c> type and no
+    /// per-base-type subtypes at all. This code used to pin
+    /// <c>i:type="AxEdtStringExtension"</c> (and <see cref="ScaffoldFileWriter"/> refused the
+    /// write without one) — a type that exists in no D365FO build, so every EDT extension it
+    /// produced was unreadable. Shipped extensions carry no discriminator; they express their
+    /// changes as <c>PropertyModifications</c>, which is why an EDT extension can retype
+    /// nothing and only override properties.</para>
     /// </summary>
     public static XDocument Extension(
         string kind, string targetName, string suffix, Func<string, string?>? edtBaseTypeResolver = null)
@@ -380,9 +380,11 @@ public static class XppScaffolder
         if (elementName == "AxEdtExtension")
         {
             XNamespace xsi = "http://www.w3.org/2001/XMLSchema-instance";
-            var concrete = $"AxEdt{ConcreteFieldSuffix(targetName, edtBaseTypeResolver)}Extension";
             root.SetAttributeValue(XNamespace.Xmlns + "i", xsi.NamespaceName);
-            root.SetAttributeValue(xsi + "type", concrete);
+            // Shape of every shipped AxEdtExtension: the array-elements collection, then the
+            // property overrides this extension applies.
+            root.Add(new XElement("ArrayElements"));
+            root.Add(new XElement("PropertyModifications"));
         }
 
         return new XDocument(root);
@@ -1198,6 +1200,10 @@ public static class ScaffoldFileWriter
     public static WriteResult Write(XDocument doc, string path, bool overwrite = false)
     {
         ArgumentNullException.ThrowIfNull(doc);
+        // Before any shape check: put the document in the namespace its DataContract
+        // declares. Without it the metadata reader rejects V1/V2/V6 types outright, so this
+        // is not formatting — it decides whether the file can be read at all.
+        ContractNamespaceApplier.Apply(doc);
         EnsureConcreteAxRoot(doc.Root);
         EnsureValidEdtRoot(doc.Root);
         EnsureValueShapes(doc.Root);
@@ -1301,18 +1307,24 @@ public static class ScaffoldFileWriter
             "metadata reader throws \"Cannot create an abstract class\" otherwise.");
     }
 
+    /// <summary>
+    /// <c>AxEdt</c> is an abstract base and must name its concrete subtype. <c>AxEdtExtension</c>
+    /// is not: the metadata assembly declares one concrete type and no <c>AxEdt*Extension</c>
+    /// subtypes, so a discriminator here would name a type that does not exist — which is
+    /// exactly what this guard used to demand.
+    /// </summary>
     private static void EnsureValidEdtRoot(XElement? root)
     {
         var rootLocalName = root?.Name.LocalName;
-        if (rootLocalName is not "AxEdt" and not "AxEdtExtension") return;
+        if (rootLocalName is not "AxEdt") return;
         if (HasConcreteXsiType(root!, rootLocalName!)) return;
 
         throw new InvalidOperationException(
-            $"Refusing to write <{rootLocalName}> without a concrete XMLSchema-instance type. " +
+            "Refusing to write <AxEdt> without a concrete XMLSchema-instance type. " +
             "Set i:type to a concrete subtype (e.g. AxEdtString, AxEdtInt, AxEdtReal, " +
-            "AxEdtDate, AxEdtUtcDateTime, AxEdtTime, AxEdtGuid, AxEdtContainer, AxEdtEnum — " +
-            "suffixed with 'Extension' for an EDT extension). Visual Studio's metadata reader " +
-            "throws \"Cannot create an abstract class\" when type metadata is missing.");
+            "AxEdtDate, AxEdtUtcDateTime, AxEdtTime, AxEdtGuid, AxEdtContainer, AxEdtEnum). " +
+            "Visual Studio's metadata reader throws \"Cannot create an abstract class\" when " +
+            "type metadata is missing.");
     }
 
     /// <summary>True when the root pins a concrete <c>Ax*</c> subtype that is not the abstract base itself.</summary>

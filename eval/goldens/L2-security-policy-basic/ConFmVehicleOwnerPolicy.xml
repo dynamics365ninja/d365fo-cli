@@ -1,10 +1,11 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
-<AxSecurityPolicy>
+<AxSecurityPolicy xmlns:i="http://www.w3.org/2001/XMLSchema-instance">
   <Name>ConFmVehicleOwnerPolicy</Name>
-  <ConstrainedTable>FmVehicle</ConstrainedTable>
-  <Query>ConFmVehicleOwnerQuery</Query>
-  <Operation>Select</Operation>
+  <ConstrainedTable>Yes</ConstrainedTable>
   <ContextType>RoleName</ContextType>
-  <ContextString></ContextString>
   <Enabled>Yes</Enabled>
+  <Operation>Select</Operation>
+  <PrimaryTable>FmVehicle</PrimaryTable>
+  <Query>ConFmVehicleOwnerQuery</Query>
+  <ConstrainedTables />
 </AxSecurityPolicy>

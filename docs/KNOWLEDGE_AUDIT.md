@@ -118,6 +118,12 @@ to `generate extension`), `AxLabelFile` manifest.
   `XmlSerializer(Ax*Type).Deserialize(xml)` + provider `Create/Update`, plus
   `BridgeGate.TryVerifyObject` read-back after `generate --verify`.
 - The bridge has **no `validate*` RPC** — Microsoft's own validation surface is never invoked.
+  *Closed 2026-08-05 in Phase 1.2: the bridge gained `validateArtifact` (deserialize +
+  re-serialize + diff, no model touched) behind `d365fo validate metadata`. It also corrected a
+  wrong assumption in this audit — the on-disk format is **DataContract**, not `XmlSerializer`:
+  each type declares its own namespace (`AxTable` none, `AxForm` V6, `AxMenuItem*` V1,
+  `AxWorkflow*`/`AxReport` V2) and its own member order, and the serializer silently drops
+  elements that are unknown or out of order.*
 - Off-bridge (macOS/Linux/CI), "validity" degrades to `ScaffoldFileWriter` guards
   (abstract-root, `xmlns:i`, CLR-bool) + per-family offline validators where they exist.
 
@@ -143,6 +149,15 @@ to `generate extension`), `AxLabelFile` manifest.
   metadata reader would reject every generated query.
 - **G3 — Bridge kind set ⊂ generate set.** Report, workflow, menu item, security*, service,
   label manifest never reach the provider, so their XML is never proven deserializable.
+  Fixed 2026-08-05 in Phase 1.2: every family the provider exposes now has its collection in
+  the registry (read off `IMetadataProvider`'s own property list), and `validate metadata`
+  proves deserializability for all of them. Proving it immediately found **ten unreadable
+  families**: menu items, reports and workflow types written without their contract namespace;
+  `AxFormExtension` likewise; a `TableOfContents` form carrying `TabStyle` value `TOCList`,
+  which is not in the enum; `AxSecurityPolicy` putting a table name into the `NoYes` flag
+  `ConstrainedTable` instead of `PrimaryTable`; and `AxEdtExtension` pinned to
+  `i:type="AxEdtStringExtension"` — a type that exists in no D365FO build, which the write
+  guard *required*. All fixed; all 51 goldens now read back.
 - **G4 — Grounding gate applied to only 3 of 29 generate commands** (coc, extension,
   event-handler). The anti-hallucination token from `prepare` is optional everywhere else.
 - **G5 — Form pattern silent fallback.** `FormPatternNormalizer.Normalize` mapped any unknown

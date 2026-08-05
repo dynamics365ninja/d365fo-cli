@@ -118,23 +118,29 @@ public class ScaffoldingSmokeTests
     }
 
     [Fact]
-    public void EdtExtension_pins_a_concrete_subtype_so_it_can_actually_be_written()
+    public void EdtExtension_carries_no_subtype_discriminator()
     {
-        // AxEdtExtension is an abstract base: emitting it bare made
-        // `generate extension edt` fail unconditionally at write time, because
-        // ScaffoldFileWriter refuses abstract roots (and VS cannot open them either).
+        // The metadata assembly declares exactly one, concrete AxEdtExtension and no
+        // AxEdt*Extension subtypes. This used to emit i:type="AxEdtStringExtension" — a type
+        // that exists in no D365FO build — and the write guard demanded it, so every EDT
+        // extension produced was unreadable by the metadata provider.
         var doc = XppScaffolder.Extension("Edt", "CustAccount", "Contoso", _ => "String");
         var xsi = XNamespace.Get("http://www.w3.org/2001/XMLSchema-instance");
 
         Assert.Equal("AxEdtExtension", doc.Root!.Name.LocalName);
-        Assert.Equal("AxEdtStringExtension", (string?)doc.Root.Attribute(xsi + "type"));
+        Assert.Null(doc.Root.Attribute(xsi + "type"));
+        // Shipped extensions declare the xsi namespace and express changes as property overrides.
+        Assert.Equal(xsi.NamespaceName, (string?)doc.Root.Attribute(XNamespace.Xmlns + "i"));
+        Assert.NotNull(doc.Root.Element("ArrayElements"));
+        Assert.NotNull(doc.Root.Element("PropertyModifications"));
 
-        // The write path must now accept it.
         var path = Path.Combine(Path.GetTempPath(), $"edtext-{Guid.NewGuid():N}.xml");
         try
         {
             ScaffoldFileWriter.Write(doc, path, overwrite: true);
-            Assert.Contains("AxEdtStringExtension", File.ReadAllText(path));
+            var written = File.ReadAllText(path);
+            Assert.Contains("<AxEdtExtension", written);
+            Assert.DoesNotContain("AxEdtStringExtension", written);
         }
         finally
         {
@@ -142,12 +148,21 @@ public class ScaffoldingSmokeTests
         }
     }
 
+    /// <summary>
+    /// The base-type resolver still exists for <c>generate table</c>'s field subtypes; an EDT
+    /// extension simply has no subtype to resolve, whatever the target's base type is.
+    /// </summary>
     [Fact]
-    public void EdtExtension_subtype_follows_the_targets_base_type()
+    public void EdtExtension_shape_does_not_vary_with_the_targets_base_type()
     {
         var xsi = XNamespace.Get("http://www.w3.org/2001/XMLSchema-instance");
+        var stringDoc = XppScaffolder.Extension("Edt", "CustAccount", "Contoso", _ => "String");
         var intDoc = XppScaffolder.Extension("Edt", "CustQty", "Contoso", _ => "Int64");
-        Assert.Equal("AxEdtInt64Extension", (string?)intDoc.Root!.Attribute(xsi + "type"));
+
+        Assert.Null(stringDoc.Root!.Attribute(xsi + "type"));
+        Assert.Null(intDoc.Root!.Attribute(xsi + "type"));
+        Assert.Equal(stringDoc.Root.Elements().Select(e => e.Name.LocalName),
+                     intDoc.Root.Elements().Select(e => e.Name.LocalName));
     }
 
     [Fact]

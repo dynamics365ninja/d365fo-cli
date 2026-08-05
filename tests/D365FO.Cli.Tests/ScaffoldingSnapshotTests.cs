@@ -568,7 +568,10 @@ public class ScaffoldingSnapshotTests
         var doc = SecurityPolicyScaffolder.Policy("MyPolicy", "CustTable", "MyCustPolicyQuery");
         var root = doc.Root!;
         Assert.Equal("AxSecurityPolicy", root.Name.LocalName);
-        Assert.Equal("CustTable", root.Element("ConstrainedTable")!.Value);
+        // ConstrainedTable is a NoYes flag; the table's name belongs in PrimaryTable. Putting
+        // the name in ConstrainedTable made the provider reject the file outright.
+        Assert.Equal("Yes", root.Element("ConstrainedTable")!.Value);
+        Assert.Equal("CustTable", root.Element("PrimaryTable")!.Value);
         Assert.Equal("MyCustPolicyQuery", root.Element("Query")!.Value);
     }
 

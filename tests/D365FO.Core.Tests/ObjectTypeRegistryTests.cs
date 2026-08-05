@@ -116,15 +116,33 @@ public class ObjectTypeRegistryTests
             Assert.Equal("Microsoft.Dynamics.AX.Metadata.MetaModel." + t.MetaModelType, types[t.Kind]);
         }
 
-        // The 16 kinds the bridge shipped with, so a refactor cannot quietly drop one.
-        Assert.Equal(
-            new[]
-            {
-                "class", "dataentityview", "dataentityviewextension", "edt", "edtextension",
-                "enum", "enumextension", "form", "formextension", "map", "query",
-                "queryextension", "table", "tableextension", "view", "viewextension",
-            },
-            collections.Keys.OrderBy(k => k, StringComparer.Ordinal).ToArray());
+        // The 16 kinds the bridge shipped with must all survive; the rest were added once
+        // IMetadataProvider's own property list was read off the assembly.
+        foreach (var original in new[]
+                 {
+                     "class", "dataentityview", "dataentityviewextension", "edt", "edtextension",
+                     "enum", "enumextension", "form", "formextension", "map", "query",
+                     "table", "tableextension", "view", "viewextension",
+                 })
+            Assert.True(collections.ContainsKey(original), $"bridge lost kind '{original}'");
+
+        // Every collection name must be one IMetadataProvider actually exposes. The bridge
+        // used to map query extensions to "QueryExtensions" and the type AxQueryExtension —
+        // neither exists; the provider property is QuerySimpleExtensions.
+        Assert.Equal("QuerySimpleExtensions", collections["queryextension"]);
+        Assert.Equal("AxQuerySimpleExtension", ObjectTypeRegistry.Find("queryextension")!.MetaModelType);
+
+        // Families the audit flagged as never reaching the provider (G3) now do.
+        foreach (var (kind, collection) in new[]
+                 {
+                     ("report", "Reports"),
+                     ("workflowtemplate", "WorkflowTemplates"),
+                     ("menuitemdisplay", "MenuItemDisplays"),
+                     ("securityrole", "SecurityRoles"),
+                     ("securityprivilege", "SecurityPrivileges"),
+                     ("service", "Services"),
+                 })
+            Assert.Equal(collection, collections[kind]);
     }
 
     /// <summary>
@@ -137,12 +155,32 @@ public class ObjectTypeRegistryTests
         var abstractRoots = ObjectTypeRegistry.AbstractRoots();
 
         Assert.Contains("AxEdt", abstractRoots);
-        Assert.Contains("AxEdtExtension", abstractRoots);
         Assert.Contains("AxQuery", abstractRoots);
+        // AxEdtExtension looks like AxEdt's twin but is concrete, and the assembly declares
+        // no AxEdt*Extension subtypes — pinning one names a type that does not exist.
+        Assert.DoesNotContain("AxEdtExtension", abstractRoots);
 
         var xsi = ObjectTypeRegistry.XsiRequiredRoots();
         foreach (var root in abstractRoots)
             Assert.Contains(root, xsi);
+    }
+
+    [Fact]
+    public void Contract_namespaces_match_what_the_MetaModel_types_declare()
+    {
+        // Ground-truthed against Microsoft.Dynamics.AX.Metadata.dll: a file written in the
+        // wrong namespace is rejected before a single property is read.
+        Assert.Equal(ObjectTypeRegistry.NsV6, ObjectTypeRegistry.Find("form")!.ContractNamespace);
+        Assert.Equal(ObjectTypeRegistry.NsV6, ObjectTypeRegistry.Find("formextension")!.ContractNamespace);
+        Assert.Equal(ObjectTypeRegistry.NsV2, ObjectTypeRegistry.Find("report")!.ContractNamespace);
+        Assert.Equal(ObjectTypeRegistry.NsV2, ObjectTypeRegistry.Find("workflowtemplate")!.ContractNamespace);
+        Assert.Equal(ObjectTypeRegistry.NsV1, ObjectTypeRegistry.Find("menuitemdisplay")!.ContractNamespace);
+        Assert.Equal(ObjectTypeRegistry.NsV1, ObjectTypeRegistry.Find("tile")!.ContractNamespace);
+
+        // Everything else contracts into the empty namespace.
+        Assert.Equal(string.Empty, ObjectTypeRegistry.Find("table")!.ContractNamespace);
+        Assert.Equal(string.Empty, ObjectTypeRegistry.Find("class")!.ContractNamespace);
+        Assert.Equal(string.Empty, ObjectTypeRegistry.Find("securityrole")!.ContractNamespace);
     }
 
     [Fact]

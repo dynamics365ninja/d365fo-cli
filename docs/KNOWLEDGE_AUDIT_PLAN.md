@@ -36,14 +36,30 @@ Fallout found and fixed: three phantom folders the extractor read (`AxWorkspace`
 `AxReportSsrs`, `AxQuerySimple`), and `generate query` emitting a bare abstract `<AxQuery>` root
 without `i:type="AxQuerySimple"`.
 
-1.2 **Extend the bridge to all generated families.** Add registry-driven kinds for
-`AxReport`, `AxWorkflowTemplate`, `AxMenuItem{Display,Action,Output}`, `AxSecurity{Role,Duty,
-Privilege,Policy}`, `AxService`, `AxServiceGroup`, `AxDataEntityView` extensions, so
-`generate --install-to/--verify` round-trips them through `IMetadataProvider`. Port bridge
-workarounds from R4 as they become relevant: abstract-type mapping table
-(`AxQuery→AxQuerySimple` style), `AxFormDataSourceRoot` rule, provider-side relation writes,
-never-retry-writes policy, read-back after every write (`bridgeValidateAfterWrite` equivalent —
-promote `BridgeGate.TryVerifyObject` from opt-in flag to default when the bridge is up).
+1.2 ✅ **Extend the bridge to all generated families.** Every kind `IMetadataProvider` exposes
+now carries its collection in the registry — read off the interface's own property list rather
+than guessed, which is how the bridge's `queryextension → QueryExtensions`/`AxQueryExtension`
+mapping was found to name two things that do not exist (it is `QuerySimpleExtensions` /
+`AxQuerySimpleExtension`).
+
+The bigger half is **proof**: the bridge gained a `validateArtifact` RPC (deserialize →
+re-serialize → diff, no model touched) behind `d365fo validate metadata <file|dir>`, so
+"valid" stops meaning "looks right to us". Two corrections to this plan's assumptions came out
+of it — the on-disk format is **DataContract**, not `XmlSerializer` (hence per-type namespaces
+and member order), and validation therefore needs no write access, so it works against a live
+installation without touching it.
+
+Ten unreadable families fell out immediately and are fixed: missing contract namespace on menu
+items (V1), reports (V2), workflow types (V2) and form extensions (V6); `TabStyle` value
+`TOCList`, which is not in the enum; `AxSecurityPolicy` putting the table name in the `NoYes`
+flag `ConstrainedTable` rather than `PrimaryTable`; and `AxEdtExtension` pinned to the
+nonexistent `AxEdtStringExtension` (a discriminator the write guard *required*). All 51 goldens
+now deserialize.
+
+Deferred to 1.3 and Phase 2: routing the XML-only `generate` commands through the provider on
+`--install-to` (they write to disk today, which the fixes above finally make readable), and the
+remaining R4 workarounds — `AxFormDataSourceRoot`, provider-side relation writes,
+never-retry-writes, read-back-after-write by default.
 
 1.3 **Serializer-order knowledge (R2).** Port `axTablePropertyOrder` + non-existent-property
 catalog as `XML006` (misordered property will be silently dropped) and `XML007`

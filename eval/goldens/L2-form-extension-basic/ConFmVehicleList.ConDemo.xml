@@ -1,4 +1,4 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
-<AxFormExtension>
+<AxFormExtension xmlns="Microsoft.Dynamics.AX.Metadata.V6">
   <Name>ConFmVehicleList.ConDemo</Name>
 </AxFormExtension>

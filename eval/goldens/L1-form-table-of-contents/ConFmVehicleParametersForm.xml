@@ -83,7 +83,6 @@ public class ConFmVehicleParametersForm extends FormRun
           <Controls />
         </AxFormControl>
         </Controls>
-        <Style>TOCList</Style>
       </AxFormControl>
     </Controls>
   </Design>

@@ -1,5 +1,5 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
-<AxMenuItemAction>
+<AxMenuItemAction xmlns="Microsoft.Dynamics.AX.Metadata.V1">
   <Name>ConFmVehicleServiceMenuItem</Name>
   <Label>Run vehicle service</Label>
   <Image>

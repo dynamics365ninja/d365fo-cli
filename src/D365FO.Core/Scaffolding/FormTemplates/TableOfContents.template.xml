@@ -35,7 +35,6 @@ public class {FormName} extends FormRun
         <FormControlExtension i:nil="true" />
         <Controls>
 {TabPageControls}        </Controls>
-        <Style>TOCList</Style>
       </AxFormControl>
     </Controls>
   </Design>

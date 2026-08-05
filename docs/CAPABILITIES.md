@@ -233,6 +233,28 @@ d365fo suggest extension CustTable                  # rank extension strategies
 d365fo validate name Table FmVehicle --prefix Fm    # naming-rule check
 ```
 
+### `validate metadata` — the provider's own verdict
+
+Every other validator checks the XML against *our* expectations. This one hands the file to
+Microsoft's metadata serializer and reports what it cannot keep:
+
+```sh
+d365fo validate metadata MyTable.xml                       # one file
+d365fo validate metadata src/MyModel --recursive           # a whole model
+```
+
+Two ways to be invalid, and the second is the dangerous one:
+
+- **Cannot be read at all** — wrong contract namespace, an abstract root without `i:type`, an
+  enum value the platform does not define. Visual Studio refuses to open the file.
+- **Reads, but loses data** — `DataContractSerializer` ignores elements a type does not declare
+  and stops matching once elements fall out of contract order, so a misspelled, invented, or
+  misplaced property is *silently dropped*. The file looks right, offline validators pass, and
+  the object is quietly missing the property.
+
+Nothing is written and no model is touched. Requires `D365FO_BRIDGE_ENABLED=1` and
+`D365FO_BIN_PATH`; off a D365FO machine it reports itself skipped rather than guessing.
+
 ---
 
 ## Analysis

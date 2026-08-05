@@ -187,6 +187,202 @@ namespace D365FO.Bridge
             };
         }
 
+        // --- validation (no model, nothing written) ---------------------------
+
+        /// <summary>
+        /// Answer "would <c>IMetadataProvider</c> accept this XML?" without writing
+        /// anything: deserialize the blob into its MetaModel type exactly as
+        /// <see cref="WriteArtifact"/> would, then serialize the resulting object back and
+        /// report what the round-trip lost.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// The lossy half is the point. <c>XmlSerializer</c> ignores elements the type does
+        /// not declare, so a misspelled or invented property does not fail — it vanishes.
+        /// The file still looks right on disk, offline validators still pass, and the object
+        /// is quietly missing the property until a compile or a runtime somewhere disagrees.
+        /// Comparing input against the round-trip is what turns that silent drop into a
+        /// finding (audit findings R2/R6).
+        /// </para>
+        /// <para>
+        /// Deserialization failure is reported as a verdict, not an RPC error, so a caller
+        /// can validate a whole directory in one pass and get one row per file.
+        /// </para>
+        /// </remarks>
+        internal JsonObject ValidateArtifact(JsonObject args)
+        {
+            string kind = args != null ? (string)args["kind"] : null;
+            string xml = args != null ? (string)args["xml"] : null;
+
+            if (string.IsNullOrWhiteSpace(xml)) return Fail("MISSING_ARG", "xml is required");
+
+            if (!MetadataBootstrap.TryInitialize())
+            {
+                return Fail("METADATA_UNAVAILABLE",
+                    MetadataBootstrap.LastError ??
+                    "IMetadataProvider failed to initialise; set D365FO_BIN_PATH to the D365FO bin folder.");
+            }
+
+            string rootLocalName;
+            string rootXsiType;
+            try
+            {
+                using (var sr = new StringReader(xml))
+                using (var xr = System.Xml.XmlReader.Create(sr, new System.Xml.XmlReaderSettings { DtdProcessing = System.Xml.DtdProcessing.Prohibit }))
+                {
+                    xr.MoveToContent();
+                    rootLocalName = xr.NodeType == System.Xml.XmlNodeType.Element ? xr.LocalName : null;
+                    rootXsiType = xr.GetAttribute("type", "http://www.w3.org/2001/XMLSchema-instance");
+                }
+            }
+            catch (Exception ex)
+            {
+                return Verdict(kind, null, null, false, "XML_PARSE_FAILED", ex.Message, null);
+            }
+
+            if (string.IsNullOrEmpty(rootLocalName))
+                return Verdict(kind, null, null, false, "XML_PARSE_FAILED", "Could not read the root element.", null);
+
+            var serializerType = MetadataBootstrap.GetMetaModelTypeByShortName(rootLocalName)
+                                 ?? (string.IsNullOrWhiteSpace(kind) ? null : MetadataBootstrap.GetMetaModelType(kind));
+            if (serializerType == null)
+            {
+                return Verdict(kind, rootLocalName, null, false, "TYPE_NOT_FOUND",
+                    "No MetaModel type matches root element '" + rootLocalName +
+                    "'. The AOT has no such object type, so nothing can read this file.", null);
+            }
+            if (serializerType.IsAbstract && string.IsNullOrEmpty(rootXsiType))
+            {
+                return Verdict(kind, rootLocalName, serializerType.FullName, false, "ABSTRACT_TYPE",
+                    "Root element '" + rootLocalName + "' maps to abstract type '" + serializerType.FullName +
+                    "'. Pin the concrete subtype via i:type.", null);
+            }
+
+            object ax;
+            string roundTripped;
+            try
+            {
+                // DataContractSerializer, not XmlSerializer: the MetaModel types are
+                // DataContract-annotated, and that contract is what the on-disk format
+                // encodes — each type's own namespace (AxTable "", AxForm …V6,
+                // AxMenuItem* …V1, AxWorkflow* …V2) and its member order. Validating with
+                // XmlSerializer would happily accept files the platform cannot read, and
+                // reject shipped Microsoft files it can, which is worse than no check.
+                var serializer = new System.Runtime.Serialization.DataContractSerializer(serializerType);
+                using (var sr = new StringReader(xml))
+                using (var xr = System.Xml.XmlReader.Create(sr, new System.Xml.XmlReaderSettings { DtdProcessing = System.Xml.DtdProcessing.Prohibit }))
+                {
+                    ax = serializer.ReadObject(xr, true);
+                }
+
+                using (var sw = new StringWriter())
+                using (var xw = System.Xml.XmlWriter.Create(sw, new System.Xml.XmlWriterSettings { Indent = true, OmitXmlDeclaration = true }))
+                {
+                    new System.Runtime.Serialization.DataContractSerializer(ax.GetType()).WriteObject(xw, ax);
+                    xw.Flush();
+                    roundTripped = sw.ToString();
+                }
+            }
+            catch (Exception ex)
+            {
+                var inner = ex.InnerException != null ? " / " + ex.InnerException.Message : string.Empty;
+                return Verdict(kind, rootLocalName, serializerType.FullName, false,
+                    "XML_DESERIALIZE_FAILED", ex.Message + inner, null);
+            }
+
+            var dropped = DroppedLeaves(xml, roundTripped);
+            var droppedArray = new JsonArray();
+            foreach (var d in dropped) droppedArray.Add(d);
+
+            return Verdict(kind, rootLocalName, ax.GetType().FullName, true, null, null, droppedArray);
+        }
+
+        private static JsonObject Verdict(
+            string kind, string rootElement, string clrType, bool deserialized,
+            string errorCode, string errorMessage, JsonArray dropped)
+        {
+            var result = new JsonObject
+            {
+                ["ok"] = true,
+                ["source"] = "bridge",
+                ["kind"] = kind,
+                ["rootElement"] = rootElement,
+                ["clrType"] = clrType,
+                ["deserialized"] = deserialized,
+                ["valid"] = deserialized && (dropped == null || dropped.Count == 0),
+                ["errorCode"] = errorCode,
+                ["errorMessage"] = errorMessage,
+                ["droppedCount"] = dropped == null ? 0 : dropped.Count,
+            };
+            if (dropped != null) result["dropped"] = dropped;
+            return result;
+        }
+
+        /// <summary>
+        /// Leaf elements (path + value) present in <paramref name="original"/> but not in the
+        /// round-tripped XML. Namespaces are ignored — the provider re-serializes into its own
+        /// — and only losses are reported: elements the round-trip *adds* are defaults being
+        /// materialised, which is expected and harmless.
+        /// </summary>
+        private static System.Collections.Generic.List<string> DroppedLeaves(string original, string roundTripped)
+        {
+            var before = LeafCounts(original);
+            var after = LeafCounts(roundTripped);
+            var lost = new System.Collections.Generic.List<string>();
+
+            foreach (var pair in before)
+            {
+                int seen;
+                after.TryGetValue(pair.Key, out seen);
+                for (var i = 0; i < pair.Value - seen; i++) lost.Add(pair.Key);
+            }
+
+            lost.Sort(StringComparer.Ordinal);
+            return lost;
+        }
+
+        private static System.Collections.Generic.Dictionary<string, int> LeafCounts(string xml)
+        {
+            var counts = new System.Collections.Generic.Dictionary<string, int>(StringComparer.Ordinal);
+            System.Xml.Linq.XDocument doc;
+            try
+            {
+                doc = System.Xml.Linq.XDocument.Parse(xml);
+            }
+            catch
+            {
+                return counts;
+            }
+
+            if (doc.Root == null) return counts;
+
+            // Paths are relative to the root, whose own name legitimately changes on the way
+            // back out: a document rooted at the abstract <AxEdt i:type="AxEdtString"> or
+            // <AxQuery i:type="AxQuerySimple"> re-serializes as <AxEdtString> / <AxQuerySimple>.
+            // Including the root name would then report every single leaf as dropped.
+            Walk(doc.Root, string.Empty, counts);
+            return counts;
+        }
+
+        private static void Walk(
+            System.Xml.Linq.XElement element, string path,
+            System.Collections.Generic.Dictionary<string, int> counts)
+        {
+            var children = 0;
+            foreach (var child in element.Elements())
+            {
+                children++;
+                Walk(child, path.Length == 0 ? child.Name.LocalName : path + "/" + child.Name.LocalName, counts);
+            }
+
+            if (children > 0) return;
+
+            var key = (path.Length == 0 ? element.Name.LocalName : path) + " = " + element.Value.Trim();
+            int current;
+            counts.TryGetValue(key, out current);
+            counts[key] = current + 1;
+        }
+
         /// <summary>
         /// Shared implementation for create/update/delete. Accepts args with
         /// <c>kind</c>, <c>name</c>, <c>model</c>, and for create/update an
