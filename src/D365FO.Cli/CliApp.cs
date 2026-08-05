@@ -32,7 +32,13 @@ namespace D365FO.Cli;
 /// </summary>
 public static class CliApp
 {
-    public static CommandApp Build()
+    /// <param name="console">
+    /// Optional scoped console to render through instead of the global
+    /// <see cref="Spectre.Console.AnsiConsole.Console"/> singleton — lets tests
+    /// capture output without mutating process-wide static state (which would
+    /// race against other tests capturing console output in parallel).
+    /// </param>
+    public static CommandApp Build(Spectre.Console.IAnsiConsole? console = null)
     {
         var app = new CommandApp();
         app.Configure(cfg =>
@@ -41,6 +47,7 @@ public static class CliApp
             cfg.SetApplicationVersion("0.1.0-dev");
             cfg.CaseSensitivity(CaseSensitivity.None);
             cfg.PropagateExceptions();
+            if (console is not null) cfg.ConfigureConsole(console);
 
             cfg.AddBranch("search", b =>
             {
