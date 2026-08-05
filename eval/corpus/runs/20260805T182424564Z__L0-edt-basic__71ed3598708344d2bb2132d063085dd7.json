@@ -1,0 +1,21 @@
+{
+  "runId": "20260805T182424564Z__L0-edt-basic__71ed3598708344d2bb2132d063085dd7",
+  "caseId": "L0-edt-basic",
+  "tier": 0,
+  "timestampUtc": "2026-08-05T18:24:24.5658271+00:00",
+  "source": "replay",
+  "score": {
+    "xppClean": true,
+    "xppErrors": 0,
+    "referencesClean": true,
+    "referenceErrors": 0,
+    "goldenMatch": true,
+    "goldenDiff": {
+      "missing": [],
+      "extra": [],
+      "changed": [],
+      "isMatch": true
+    }
+  },
+  "note": "Phase 1.1: ObjectTypeRegistry; AxQuery abstract-root fix"
+}

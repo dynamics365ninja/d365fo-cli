@@ -40,8 +40,15 @@ public static class QueryScaffolder
             joins  = dsList.Skip(1).Select(ds => ds with { ParentDs = dsList[0].Name ?? dsList[0].Table }).ToList();
         }
 
+        // AxQuery is an abstract MetaModel base, like AxEdt: every shipped query file is
+        // <AxQuery xmlns:i="…" i:type="AxQuerySimple">, and without that discriminator the
+        // metadata reader throws "Cannot create an abstract class". The datasource elements
+        // below already commit to the AxQuerySimple family, so the root has to say so too.
+        XNamespace xsi = "http://www.w3.org/2001/XMLSchema-instance";
         return new XDocument(
             new XElement("AxQuery",
+                new XAttribute(XNamespace.Xmlns + "i", xsi.NamespaceName),
+                new XAttribute(xsi + "type", "AxQuerySimple"),
                 new XElement("Name", name),
                 new XElement("DataSources",
                     roots.Select(r => BuildRoot(r, joins)))));

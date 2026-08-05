@@ -2,6 +2,8 @@ using D365FO.Core;
 using D365FO.Core.Scaffolding;
 using Spectre.Console.Cli;
 
+using static D365FO.Core.ObjectTypes.ObjectTypeRegistry;
+
 namespace D365FO.Cli.Commands.Generate;
 
 /// <summary>
@@ -73,15 +75,15 @@ public sealed class GenerateSysOperationCommand : Command<GenerateSysOperationCo
         string? controllerPath, contractPath, servicePath;
         if (hasInstall && !hasOut)
         {
-            controllerPath = GenerateInstaller.ResolveInstallPath(kind, "AxClass", controllerName, settings.InstallTo!, out var f1);
+            controllerPath = GenerateInstaller.ResolveInstallPath(kind, Folders.Class, controllerName, settings.InstallTo!, out var f1);
             if (f1.HasValue) return f1.Value;
             contractPath = string.IsNullOrWhiteSpace(settings.OutContract)
-                ? GenerateInstaller.ResolveInstallPath(kind, "AxClass", contractName, settings.InstallTo!, out var f2)
+                ? GenerateInstaller.ResolveInstallPath(kind, Folders.Class, contractName, settings.InstallTo!, out var f2)
                 : settings.OutContract;
             if (hasInstall && string.IsNullOrWhiteSpace(settings.OutContract) && contractPath is null)
                 return RenderHelpers.Render(kind, ToolResult<object>.Fail(D365FoErrorCodes.BadInput, "Could not resolve contract path."));
             servicePath = string.IsNullOrWhiteSpace(settings.OutService)
-                ? GenerateInstaller.ResolveInstallPath(kind, "AxClass", serviceName, settings.InstallTo!, out var f3)
+                ? GenerateInstaller.ResolveInstallPath(kind, Folders.Class, serviceName, settings.InstallTo!, out var f3)
                 : settings.OutService;
             if (hasInstall && string.IsNullOrWhiteSpace(settings.OutService) && servicePath is null)
                 return RenderHelpers.Render(kind, ToolResult<object>.Fail(D365FoErrorCodes.BadInput, "Could not resolve service path."));

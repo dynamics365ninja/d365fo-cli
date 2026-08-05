@@ -135,6 +135,12 @@ to `generate extension`), `AxLabelFile` manifest.
 - **G2 — Four divergent type registries.** Bridge `KindToCollection`/`KindToTypeName` (16),
   ~30 hard-coded subfolder literals in `Commands/Generate/*`, `ObjectLookup` (15 read kinds),
   `MetadataExtractor` (30 folders). No single source of truth; G1 is the first visible casualty.
+  Fixed 2026-08-05 in Phase 1.1: `Core/ObjectTypes/ObjectTypeRegistry.cs` is the single table,
+  shared-compiled into the net48 bridge. Consolidating it surfaced three more phantom folders
+  (`AxWorkspace`, `AxReportSsrs`, `AxQuerySimple` — read by the extractor, present on no AOS)
+  and one shipping defect: `generate query` emitted a bare `<AxQuery>`, but `AxQuery` is an
+  abstract MetaModel base and every shipped file is `<AxQuery i:type="AxQuerySimple">`, so the
+  metadata reader would reject every generated query.
 - **G3 — Bridge kind set ⊂ generate set.** Report, workflow, menu item, security*, service,
   label manifest never reach the provider, so their XML is never proven deserializable.
 - **G4 — Grounding gate applied to only 3 of 29 generate commands** (coc, extension,

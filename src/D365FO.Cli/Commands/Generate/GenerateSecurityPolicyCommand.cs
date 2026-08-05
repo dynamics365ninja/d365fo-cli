@@ -2,6 +2,8 @@ using D365FO.Core;
 using D365FO.Core.Scaffolding;
 using Spectre.Console.Cli;
 
+using static D365FO.Core.ObjectTypes.ObjectTypeRegistry;
+
 namespace D365FO.Cli.Commands.Generate;
 
 /// <summary>
@@ -64,7 +66,7 @@ public sealed class GenerateSecurityPolicyCommand : Command<GenerateSecurityPoli
         var outPath = settings.Out;
         if (hasInstall && !hasOut)
         {
-            outPath = GenerateInstaller.ResolveInstallPath(kind, "AxSecurityPolicy", settings.Name, settings.InstallTo!, out var fail);
+            outPath = GenerateInstaller.ResolveInstallPath(kind, Folders.SecurityPolicy, settings.Name, settings.InstallTo!, out var fail);
             if (fail.HasValue) return fail.Value;
         }
 

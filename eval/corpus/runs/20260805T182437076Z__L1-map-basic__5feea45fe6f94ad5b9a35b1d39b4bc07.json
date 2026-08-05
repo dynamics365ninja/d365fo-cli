@@ -1,0 +1,21 @@
+{
+  "runId": "20260805T182437076Z__L1-map-basic__5feea45fe6f94ad5b9a35b1d39b4bc07",
+  "caseId": "L1-map-basic",
+  "tier": 1,
+  "timestampUtc": "2026-08-05T18:24:37.0770084+00:00",
+  "source": "replay",
+  "score": {
+    "xppClean": true,
+    "xppErrors": 0,
+    "referencesClean": true,
+    "referenceErrors": 0,
+    "goldenMatch": true,
+    "goldenDiff": {
+      "missing": [],
+      "extra": [],
+      "changed": [],
+      "isMatch": true
+    }
+  },
+  "note": "Phase 1.1: ObjectTypeRegistry; AxQuery abstract-root fix"
+}

@@ -1,0 +1,21 @@
+{
+  "runId": "20260805T182446448Z__L1-systest-basic__46826753a64244e59713dd935f07e296",
+  "caseId": "L1-systest-basic",
+  "tier": 1,
+  "timestampUtc": "2026-08-05T18:24:46.4487777+00:00",
+  "source": "replay",
+  "score": {
+    "xppClean": true,
+    "xppErrors": 0,
+    "referencesClean": true,
+    "referenceErrors": 0,
+    "goldenMatch": true,
+    "goldenDiff": {
+      "missing": [],
+      "extra": [],
+      "changed": [],
+      "isMatch": true
+    }
+  },
+  "note": "Phase 1.1: ObjectTypeRegistry; AxQuery abstract-root fix"
+}

@@ -2,6 +2,8 @@ using D365FO.Core;
 using D365FO.Core.Scaffolding;
 using Spectre.Console.Cli;
 
+using static D365FO.Core.ObjectTypes.ObjectTypeRegistry;
+
 namespace D365FO.Cli.Commands.Generate;
 
 /// <summary>
@@ -64,13 +66,13 @@ public sealed class GenerateCustomServiceCommand : Command<GenerateCustomService
         string? servicePath, classPath, groupPath;
         if (hasInstall && !hasOut)
         {
-            servicePath = GenerateInstaller.ResolveInstallPath(kind, "AxService", settings.Name, settings.InstallTo!, out var f1);
+            servicePath = GenerateInstaller.ResolveInstallPath(kind, Folders.Service, settings.Name, settings.InstallTo!, out var f1);
             if (f1.HasValue) return f1.Value;
             classPath = string.IsNullOrWhiteSpace(settings.OutClass)
-                ? GenerateInstaller.ResolveInstallPath(kind, "AxClass", className, settings.InstallTo!, out _)
+                ? GenerateInstaller.ResolveInstallPath(kind, Folders.Class, className, settings.InstallTo!, out _)
                 : settings.OutClass;
             groupPath = string.IsNullOrWhiteSpace(settings.OutGroup)
-                ? GenerateInstaller.ResolveInstallPath(kind, "AxServiceGroup", groupName, settings.InstallTo!, out _)
+                ? GenerateInstaller.ResolveInstallPath(kind, Folders.ServiceGroup, groupName, settings.InstallTo!, out _)
                 : settings.OutGroup;
         }
         else

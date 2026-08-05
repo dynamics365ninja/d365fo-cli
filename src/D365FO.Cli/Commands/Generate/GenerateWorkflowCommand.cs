@@ -2,6 +2,8 @@ using D365FO.Core;
 using D365FO.Core.Scaffolding;
 using Spectre.Console.Cli;
 
+using static D365FO.Core.ObjectTypes.ObjectTypeRegistry;
+
 namespace D365FO.Cli.Commands.Generate;
 
 /// <summary>
@@ -106,11 +108,11 @@ public sealed class GenerateWorkflowCommand : Command<GenerateWorkflowCommand.Se
             workflowPath  = GenerateInstaller.ResolveInstallPath(kind, WorkflowScaffolder.TemplateRoot, settings.Name, settings.InstallTo!, out var f1);
             if (f1.HasValue) return f1.Value;
             documentPath  = string.IsNullOrWhiteSpace(settings.OutDocument)
-                ? GenerateInstaller.ResolveInstallPath(kind, "AxClass", docClassName, settings.InstallTo!, out _)
+                ? GenerateInstaller.ResolveInstallPath(kind, Folders.Class, docClassName, settings.InstallTo!, out _)
                 : settings.OutDocument;
             submitPath    = !generateSubmit ? null
                 : string.IsNullOrWhiteSpace(settings.OutSubmit)
-                    ? GenerateInstaller.ResolveInstallPath(kind, "AxClass", submitExtName, settings.InstallTo!, out _)
+                    ? GenerateInstaller.ResolveInstallPath(kind, Folders.Class, submitExtName, settings.InstallTo!, out _)
                     : settings.OutSubmit;
             approvalPath  = approvalName is null ? null
                 : string.IsNullOrWhiteSpace(settings.OutApproval)

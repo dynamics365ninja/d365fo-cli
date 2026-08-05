@@ -1,0 +1,21 @@
+{
+  "runId": "20260805T182444488Z__L1-role-basic__4f11707e18fe4671b9ac1b6c16f6dd47",
+  "caseId": "L1-role-basic",
+  "tier": 1,
+  "timestampUtc": "2026-08-05T18:24:44.4884248+00:00",
+  "source": "replay",
+  "score": {
+    "xppClean": true,
+    "xppErrors": 0,
+    "referencesClean": true,
+    "referenceErrors": 0,
+    "goldenMatch": true,
+    "goldenDiff": {
+      "missing": [],
+      "extra": [],
+      "changed": [],
+      "isMatch": true
+    }
+  },
+  "note": "Phase 1.1: ObjectTypeRegistry; AxQuery abstract-root fix"
+}

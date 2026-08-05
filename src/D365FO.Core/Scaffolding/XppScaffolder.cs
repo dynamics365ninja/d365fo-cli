@@ -1157,30 +1157,26 @@ public static class ScaffoldFileWriter
     // AOT root elements that are abstract bases in Microsoft.Dynamics.AX.Metadata.MetaModel.
     // Writing one of these as the document root makes VS metadata reader throw
     // "Cannot create an abstract class" when the file is opened — callers must use the
-    // concrete subtype (AxEdtString, AxEdtInt, AxEdtStringExtension, …).
-    private static readonly HashSet<string> _abstractAxRoots = new(StringComparer.Ordinal)
-    {
-        "AxEdtExtension",
-    };
+    // concrete subtype (AxEdtString, AxEdtInt, AxEdtStringExtension, AxQuerySimple, …).
+    // AxEdt itself is handled separately by EnsureValidEdtRoot, which explains the
+    // concrete subtypes on offer.
+    private static readonly HashSet<string> _abstractAxRoots =
+        D365FO.Core.ObjectTypes.ObjectTypeRegistry.AbstractRoots();
 
     private const string XsiNamespace = "http://www.w3.org/2001/XMLSchema-instance";
 
     // AOT roots whose files are unreadable without the XMLSchema-instance namespace
-    // declared on the root element. AxEdt* carries i:type on the root itself, while
-    // AxTable / AxView / AxMap carry it on every field (AxTableField, AxViewField,
+    // declared on the root element. AxEdt* and AxQuery carry i:type on the root itself,
+    // while AxTable / AxView / AxMap carry it on every field (AxTableField, AxViewField,
     // AxMapBaseField are all polymorphic, abstract-based types — see issue #91);
     // AxEnum needs it because Visual Studio's metadata reader rejects the file
-    // outright when the declaration is absent (issue #70). Every entry here is
-    // ground-truthed against shipped standard-model files on a real AOS.
-    // Deliberately NOT a blanket rule for every AxXxx root: AxClass/AxMenuItem/AxQuery/…
+    // outright when the declaration is absent (issue #70). Every entry is
+    // ground-truthed against shipped standard-model files on a real AOS and lives in
+    // ObjectTypeRegistry, not here.
+    // Deliberately NOT a blanket rule for every AxXxx root: AxClass/AxMenuItem/…
     // are written without it today and are read back fine.
-    private static readonly HashSet<string> _xsiRequiredAxRoots = new(StringComparer.Ordinal)
-    {
-        "AxEnum",
-        "AxTable",
-        "AxView",
-        "AxMap",
-    };
+    private static readonly HashSet<string> _xsiRequiredAxRoots =
+        D365FO.Core.ObjectTypes.ObjectTypeRegistry.XsiRequiredRoots();
 
     // AOT elements that deserialize into a CLR bool, not a NoYes-style enum. The
     // DataContractSerializer reads these with XmlConvert.ToBoolean, so the NoYes
@@ -1293,6 +1289,9 @@ public static class ScaffoldFileWriter
     {
         var rootLocalName = root?.Name.LocalName;
         if (rootLocalName is null || !_abstractAxRoots.Contains(rootLocalName)) return;
+        // The AxEdt family gets the more specific diagnostic from EnsureValidEdtRoot,
+        // which can name the concrete subtypes on offer.
+        if (rootLocalName is "AxEdt" or "AxEdtExtension") return;
         if (HasConcreteXsiType(root!, rootLocalName)) return;
 
         throw new InvalidOperationException(

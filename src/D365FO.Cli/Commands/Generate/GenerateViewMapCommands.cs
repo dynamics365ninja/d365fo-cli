@@ -3,6 +3,8 @@ using D365FO.Core;
 using D365FO.Core.Scaffolding;
 using Spectre.Console.Cli;
 
+using static D365FO.Core.ObjectTypes.ObjectTypeRegistry;
+
 namespace D365FO.Cli.Commands.Generate;
 
 /// <summary>Scaffolds an <c>AxView</c> — a read-only projection over an <c>AxQuery</c>.</summary>
@@ -85,7 +87,7 @@ public sealed class GenerateViewCommand : Command<GenerateViewCommand.Settings>
         // "Metadata API rejected the object" warning on every install. Same approach
         // as `generate query`, which has the same constraint. (`--verify` is likewise
         // inapplicable — there is no readView verb to check against.)
-        if (!TryResolveOutPath(kind, settings, "AxView", settings.Name, out var outPath, out var pathFailure))
+        if (!TryResolveOutPath(kind, settings, Folders.View, settings.Name, out var outPath, out var pathFailure))
             return pathFailure;
 
         try
@@ -228,7 +230,7 @@ public sealed class GenerateMapCommand : Command<GenerateMapCommand.Settings>
         }
 
         // Same reasoning as GenerateViewCommand: the bridge has no "map" kind.
-        if (!GenerateViewCommand.TryResolveOutPath(kind, settings, "AxMap", settings.Name, out var outPath, out var pathFailure))
+        if (!GenerateViewCommand.TryResolveOutPath(kind, settings, Folders.Map, settings.Name, out var outPath, out var pathFailure))
             return pathFailure;
 
         try

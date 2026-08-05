@@ -1,0 +1,21 @@
+{
+  "runId": "20260805T182426362Z__L0-enum-non-extensible__12ed5763d8dd4dec8a537c8e0f528fac",
+  "caseId": "L0-enum-non-extensible",
+  "tier": 0,
+  "timestampUtc": "2026-08-05T18:24:26.3625041+00:00",
+  "source": "replay",
+  "score": {
+    "xppClean": true,
+    "xppErrors": 0,
+    "referencesClean": true,
+    "referenceErrors": 0,
+    "goldenMatch": true,
+    "goldenDiff": {
+      "missing": [],
+      "extra": [],
+      "changed": [],
+      "isMatch": true
+    }
+  },
+  "note": "Phase 1.1: ObjectTypeRegistry; AxQuery abstract-root fix"
+}

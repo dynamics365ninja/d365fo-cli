@@ -2,6 +2,8 @@ using D365FO.Core;
 using D365FO.Core.Scaffolding;
 using Spectre.Console.Cli;
 
+using static D365FO.Core.ObjectTypes.ObjectTypeRegistry;
+
 namespace D365FO.Cli.Commands.Generate;
 
 /// <summary>Scaffolds an <c>AxEnum</c> base enumeration.</summary>
@@ -37,7 +39,7 @@ public sealed class GenerateEnumCommand : Command<GenerateEnumCommand.Settings>
         var doc = XppScaffolder.Enum(settings.Name, values, !settings.NonExtensible, settings.Label);
 
         return GenerateInstaller.Emit(
-            kind, "enum", "AxEnum", settings.Name,
+            kind, "enum", Folders.Enum, settings.Name,
             settings.InstallTo, settings.Out, settings.Overwrite, doc,
             r => new
             {

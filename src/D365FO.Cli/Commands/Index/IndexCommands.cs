@@ -491,16 +491,11 @@ public sealed class IndexExtractCommand : Command<IndexExtractCommand.Settings>
             catch (UnauthorizedAccessException) { return Array.Empty<string>(); }
         }
 
+        // Same registry-driven marker list the extractor uses, so `index refresh` and
+        // MetadataExtractor never disagree about what counts as a model directory.
         static bool HasAot(string dir)
         {
-            foreach (var s in new[] {
-                "AxTable", "AxClass", "AxEdt", "AxEnum", "AxLabelFile", "AxForm",
-                "AxTableExtension", "AxFormExtension", "AxEdtExtension", "AxEnumExtension",
-                "AxSecurityRole", "AxSecurityDuty", "AxSecurityPrivilege",
-                "AxMenuItemDisplay", "AxMenuItemAction", "AxMenuItemOutput",
-                "AxQuery", "AxQuerySimple", "AxView", "AxDataEntityView",
-                "AxReport", "AxReportSsrs", "AxService", "AxServiceGroup", "AxWorkflowTemplate",
-            })
+            foreach (var s in D365FO.Core.ObjectTypes.ObjectTypeRegistry.ModelMarkerFolders())
                 if (Directory.Exists(Path.Combine(dir, s))) return true;
             return false;
         }

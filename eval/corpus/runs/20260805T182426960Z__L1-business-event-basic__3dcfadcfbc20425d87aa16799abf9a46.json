@@ -1,0 +1,21 @@
+{
+  "runId": "20260805T182426960Z__L1-business-event-basic__3dcfadcfbc20425d87aa16799abf9a46",
+  "caseId": "L1-business-event-basic",
+  "tier": 1,
+  "timestampUtc": "2026-08-05T18:24:26.9607889+00:00",
+  "source": "replay",
+  "score": {
+    "xppClean": true,
+    "xppErrors": 0,
+    "referencesClean": false,
+    "referenceErrors": 1,
+    "goldenMatch": true,
+    "goldenDiff": {
+      "missing": [],
+      "extra": [],
+      "changed": [],
+      "isMatch": true
+    }
+  },
+  "note": "Phase 1.1: ObjectTypeRegistry; AxQuery abstract-root fix"
+}

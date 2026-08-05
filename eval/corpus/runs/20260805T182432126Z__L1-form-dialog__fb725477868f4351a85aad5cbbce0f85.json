@@ -1,0 +1,21 @@
+{
+  "runId": "20260805T182432126Z__L1-form-dialog__fb725477868f4351a85aad5cbbce0f85",
+  "caseId": "L1-form-dialog",
+  "tier": 1,
+  "timestampUtc": "2026-08-05T18:24:32.1261638+00:00",
+  "source": "replay",
+  "score": {
+    "xppClean": true,
+    "xppErrors": 0,
+    "referencesClean": true,
+    "referenceErrors": 0,
+    "goldenMatch": true,
+    "goldenDiff": {
+      "missing": [],
+      "extra": [],
+      "changed": [],
+      "isMatch": true
+    }
+  },
+  "note": "Phase 1.1: ObjectTypeRegistry; AxQuery abstract-root fix"
+}

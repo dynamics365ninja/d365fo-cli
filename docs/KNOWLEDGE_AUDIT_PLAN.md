@@ -22,14 +22,19 @@ to `index build` over a fixture containing it.
 
 ## Phase 1 — Single type registry + provable validity (the core)
 
-1.1 **Unified object-type registry.** One table in `D365FO.Core` (e.g.
-`Core/ObjectTypes/ObjectTypeRegistry.cs`): kind → Ax root element, concrete MetaModel type name,
-AOT subfolder, bridge collection name, abstract-root/i:type policy, MCP exposure flag, naming
-rule id. Consume it from `MetadataBootstrap.KindToCollection/KindToTypeName`,
-`GenerateInstaller` call sites (drop the ~30 subfolder literals), `ObjectLookup`,
-`MetadataExtractor` folder list, `ToolCatalog` objectType enum, `ObjectNamingRules`. Add a
-parity test asserting the registry covers every `generate` subcommand and every extractor
-folder (prevents the next G1). Mirrors the predecessor's dispatch-parity tests (R6).
+1.1 ✅ **Unified object-type registry** — `Core/ObjectTypes/ObjectTypeRegistry.cs`: kind → root
+element, AOT subfolder, MetaModel type, provider collection, abstract-root/`i:type` policy,
+generate subcommand, MCP objectType, naming kind, plus an `ExistsInStandardAot` flag. Consumed by
+`MetadataBootstrap.KindToCollection/KindToTypeName` (the net48 bridge shared-compiles the file
+rather than referencing net10 Core), the `GenerateInstaller` call sites (subfolder literals →
+`ObjectTypeRegistry.Folders.*` constants, so a typo is a build error), `ScaffoldFileWriter`'s
+xsi/abstract-root guards, `MetadataExtractor` + `index refresh` folder lists, and
+`ObjectLookup.NormalizeKind`. Parity tests cover kind/root uniqueness, the folder constants, the
+bridge's 16 kinds, and — when `D365FO_PACKAGES_PATH` points at an AOS — every folder name against
+a live census. `ToolCatalog`'s objectType enum stays with 2.4, which widens it.
+Fallout found and fixed: three phantom folders the extractor read (`AxWorkspace`,
+`AxReportSsrs`, `AxQuerySimple`), and `generate query` emitting a bare abstract `<AxQuery>` root
+without `i:type="AxQuerySimple"`.
 
 1.2 **Extend the bridge to all generated families.** Add registry-driven kinds for
 `AxReport`, `AxWorkflowTemplate`, `AxMenuItem{Display,Action,Output}`, `AxSecurity{Role,Duty,

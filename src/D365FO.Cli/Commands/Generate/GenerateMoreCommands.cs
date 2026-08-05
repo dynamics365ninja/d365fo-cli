@@ -2,6 +2,8 @@ using D365FO.Core;
 using D365FO.Core.Scaffolding;
 using Spectre.Console.Cli;
 
+using static D365FO.Core.ObjectTypes.ObjectTypeRegistry;
+
 namespace D365FO.Cli.Commands.Generate;
 
 /// <summary>Scaffolds an <c>AxDataEntityView</c>. ROADMAP §6.</summary>
@@ -53,7 +55,7 @@ public sealed class GenerateEntityCommand : Command<GenerateEntityCommand.Settin
         var outPath = settings.Out;
         if (hasInstall && !hasOut)
         {
-            outPath = GenerateInstaller.ResolveInstallPath(kind, "AxDataEntityView", settings.EntityName, settings.InstallTo!, out var fail);
+            outPath = GenerateInstaller.ResolveInstallPath(kind, Folders.DataEntityView, settings.EntityName, settings.InstallTo!, out var fail);
             if (fail.HasValue) return fail.Value;
         }
 
@@ -247,7 +249,7 @@ public sealed class GenerateEventHandlerCommand : Command<GenerateEventHandlerCo
         if (gate.Failure is not null) return RenderHelpers.Render(kind, gate.Failure);
 
         return GenerateInstaller.Emit(
-            kind, "class", "AxClass", settings.ClassName,
+            kind, "class", Folders.Class, settings.ClassName,
             settings.InstallTo, settings.Out, settings.Overwrite, doc,
             r => new
             {
@@ -326,7 +328,7 @@ public sealed class GeneratePrivilegeCommand : Command<GeneratePrivilegeCommand.
         var outPath = settings.Out;
         if (hasInstall && !hasOut)
         {
-            outPath = GenerateInstaller.ResolveInstallPath(kind, "AxSecurityPrivilege", settings.Name, settings.InstallTo!, out var fail);
+            outPath = GenerateInstaller.ResolveInstallPath(kind, Folders.SecurityPrivilege, settings.Name, settings.InstallTo!, out var fail);
             if (fail.HasValue) return fail.Value;
         }
 
@@ -404,7 +406,7 @@ public sealed class GenerateDutyCommand : Command<GenerateDutyCommand.Settings>
         var outPath = settings.Out;
         if (hasInstall && !hasOut)
         {
-            outPath = GenerateInstaller.ResolveInstallPath(kind, "AxSecurityDuty", settings.Name, settings.InstallTo!, out var fail);
+            outPath = GenerateInstaller.ResolveInstallPath(kind, Folders.SecurityDuty, settings.Name, settings.InstallTo!, out var fail);
             if (fail.HasValue) return fail.Value;
         }
 
@@ -495,7 +497,7 @@ public sealed class GenerateRoleCommand : Command<GenerateRoleCommand.Settings>
         var outPath = settings.Out;
         if (hasInstall && !hasOut)
         {
-            outPath = GenerateInstaller.ResolveInstallPath(kind, "AxSecurityRole", settings.Name, settings.InstallTo!, out var fail);
+            outPath = GenerateInstaller.ResolveInstallPath(kind, Folders.SecurityRole, settings.Name, settings.InstallTo!, out var fail);
             if (fail.HasValue) return fail.Value;
         }
 
@@ -679,7 +681,7 @@ public sealed class GenerateReportCommand : Command<GenerateReportCommand.Settin
         string? reportPath, dpPath, contractPath;
         if (hasInstall && !hasOut)
         {
-            reportPath = GenerateInstaller.ResolveInstallPath(kind, "AxReport", settings.Name, settings.InstallTo!, out var f1);
+            reportPath = GenerateInstaller.ResolveInstallPath(kind, Folders.Report, settings.Name, settings.InstallTo!, out var f1);
             if (f1.HasValue) return f1.Value;
 
             if (!string.IsNullOrWhiteSpace(settings.OutDp))
@@ -688,7 +690,7 @@ public sealed class GenerateReportCommand : Command<GenerateReportCommand.Settin
             }
             else
             {
-                dpPath = GenerateInstaller.ResolveInstallPath(kind, "AxClass", spec.EffectiveDpClass, settings.InstallTo!, out var f2);
+                dpPath = GenerateInstaller.ResolveInstallPath(kind, Folders.Class, spec.EffectiveDpClass, settings.InstallTo!, out var f2);
                 if (f2.HasValue) return f2.Value;
             }
 
@@ -700,7 +702,7 @@ public sealed class GenerateReportCommand : Command<GenerateReportCommand.Settin
                 }
                 else
                 {
-                    contractPath = GenerateInstaller.ResolveInstallPath(kind, "AxClass", spec.ContractClass, settings.InstallTo!, out var f3);
+                    contractPath = GenerateInstaller.ResolveInstallPath(kind, Folders.Class, spec.ContractClass, settings.InstallTo!, out var f3);
                     if (f3.HasValue) return f3.Value;
                 }
             }
