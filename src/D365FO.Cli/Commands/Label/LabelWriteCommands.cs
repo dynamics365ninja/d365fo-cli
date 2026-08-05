@@ -13,11 +13,17 @@ public sealed class LabelCreateCommand : Command<LabelCreateCommand.Settings>
 {
     public sealed class Settings : D365OutputSettings
     {
-        [CommandArgument(0, "<KEY>")]
+        [CommandArgument(0, "[KEY]")]
+        [System.ComponentModel.Description("Label key. Optional when one or more --entry pairs are given.")]
         public string Key { get; init; } = "";
 
-        [CommandArgument(1, "<VALUE>")]
+        [CommandArgument(1, "[VALUE]")]
+        [System.ComponentModel.Description("Label value. Required when <KEY> is given.")]
         public string Value { get; init; } = "";
+
+        [CommandOption("--entry <KEY=VALUE>")]
+        [System.ComponentModel.Description("Repeatable: create several keys in one pass. Split on the first '=' so values may contain '='. Each key is written independently — one failure does not stop the rest.")]
+        public string[] Entries { get; init; } = Array.Empty<string>();
 
         [CommandOption("--file <PATH>")]
         [System.ComponentModel.Description("Target <Name>.<lang>.label.txt file (absolute path). Created if missing. Required unless --install-to is used.")]
@@ -47,8 +53,39 @@ public sealed class LabelCreateCommand : Command<LabelCreateCommand.Settings>
     public override int Execute(CommandContext ctx, Settings settings)
     {
         var kind = OutputMode.Resolve(settings.Output);
-        if (string.IsNullOrWhiteSpace(settings.Key))
+
+        // A single positional key keeps the original one-shot behaviour (including a
+        // hard KEY_EXISTS failure); --entry switches to batch semantics where each
+        // key stands or falls on its own.
+        var batchMode = settings.Entries.Length > 0;
+        var entries = new List<(string Key, string Value)>();
+        if (!string.IsNullOrWhiteSpace(settings.Key))
+            entries.Add((settings.Key, settings.Value));
+        foreach (var raw in settings.Entries)
+        {
+            // Split on the FIRST '=' only: label values legitimately contain '='.
+            var eq = raw.IndexOf('=');
+            if (eq <= 0)
+                return RenderHelpers.Render(kind, ToolResult<object>.Fail(D365FoErrorCodes.BadInput,
+                    $"Malformed --entry '{raw}'.",
+                    hint: "Expected <KEY>=<VALUE>, e.g. --entry FmVehicle=Vehicle."));
+            entries.Add((raw[..eq].Trim(), raw[(eq + 1)..]));
+        }
+
+        if (entries.Count == 0)
+            return RenderHelpers.Render(kind, ToolResult<object>.Fail(D365FoErrorCodes.BadInput, "Label key required.",
+                hint: "Pass <KEY> <VALUE>, or one or more --entry <KEY>=<VALUE> pairs."));
+
+        var blank = entries.FirstOrDefault(e => string.IsNullOrWhiteSpace(e.Key));
+        if (blank.Key is not null && string.IsNullOrWhiteSpace(blank.Key))
             return RenderHelpers.Render(kind, ToolResult<object>.Fail(D365FoErrorCodes.BadInput, "Label key required."));
+
+        var duplicate = entries.GroupBy(e => e.Key, StringComparer.OrdinalIgnoreCase)
+            .FirstOrDefault(g => g.Count() > 1);
+        if (duplicate is not null)
+            return RenderHelpers.Render(kind, ToolResult<object>.Fail(D365FoErrorCodes.BadInput,
+                $"Key '{duplicate.Key}' appears more than once in this batch.",
+                hint: "Each key may only be written once per invocation — the later value would silently win."));
 
         var hasFile    = !string.IsNullOrWhiteSpace(settings.File);
         var hasInstall = !string.IsNullOrWhiteSpace(settings.InstallTo);
@@ -98,36 +135,112 @@ public sealed class LabelCreateCommand : Command<LabelCreateCommand.Settings>
                     hint: "Target the model's own label file (e.g. --label-file <MODEL>), or pass --allow-extension-label-file to override."));
         }
 
-        try
+        if (!batchMode)
         {
-            var results = new List<object>();
+            // ---- Legacy single-key path: unchanged, including the hard KEY_EXISTS. ----
+            try
+            {
+                var results = new List<object>();
+                foreach (var file in resolvedFiles)
+                {
+                    var res = LabelFileWriter.CreateOrUpdate(file, settings.Key, settings.Value, settings.Overwrite);
+                    if (res.Outcome == WriteOutcome.KeyExists)
+                        return RenderHelpers.Render(kind, ToolResult<object>.Fail(
+                            "KEY_EXISTS",
+                            $"Label '{settings.Key}' already exists in {file}. Pass --overwrite to replace.",
+                            hint: $"Existing value: {res.OldValue}"));
+                    LabelJournalRecorder.RecordCreateOrUpdate(res, "labels create");
+                    results.Add(new
+                    {
+                        outcome = res.Outcome.ToString(),
+                        file = res.Path,
+                        key = res.Key,
+                        oldValue = res.OldValue,
+                        newValue = res.NewValue,
+                    });
+                }
+
+                return RenderHelpers.Render(kind, ToolResult<object>.Success(
+                    results.Count == 1 ? results[0] : new { key = settings.Key, files = results }));
+            }
+            catch (Exception ex)
+            {
+                return RenderHelpers.Render(kind, ToolResult<object>.Fail(D365FoErrorCodes.WriteFailed, ex.Message));
+            }
+        }
+
+        // ---- Batch path: per-key error isolation. ----
+        // One bad key (already present, unwritable file) must not cost the caller the
+        // other writes, so each key is attempted independently and reported on its own.
+        // The payload mirrors the MCP `labels action=create` bulk shape.
+        var entryResults = new List<BatchEntryResult>(entries.Count);
+        int ok = 0, failed = 0;
+        foreach (var (key, value) in entries)
+        {
+            var files = new List<object>();
+            string? errorCode = null, errorMessage = null;
+
             foreach (var file in resolvedFiles)
             {
-                var res = LabelFileWriter.CreateOrUpdate(file, settings.Key, settings.Value, settings.Overwrite);
-                if (res.Outcome == WriteOutcome.KeyExists)
-                    return RenderHelpers.Render(kind, ToolResult<object>.Fail(
-                        "KEY_EXISTS",
-                        $"Label '{settings.Key}' already exists in {file}. Pass --overwrite to replace.",
-                        hint: $"Existing value: {res.OldValue}"));
-                LabelJournalRecorder.RecordCreateOrUpdate(res, "labels create");
-                results.Add(new
+                try
                 {
-                    outcome = res.Outcome.ToString(),
-                    file = res.Path,
-                    key = res.Key,
-                    oldValue = res.OldValue,
-                    newValue = res.NewValue,
-                });
+                    var res = LabelFileWriter.CreateOrUpdate(file, key, value, settings.Overwrite);
+                    if (res.Outcome == WriteOutcome.KeyExists)
+                    {
+                        errorCode ??= "KEY_EXISTS";
+                        errorMessage ??= $"Label '{key}' already exists in {file} (current value: {res.OldValue}). Pass --overwrite to replace.";
+                        continue;
+                    }
+                    LabelJournalRecorder.RecordCreateOrUpdate(res, "labels create");
+                    files.Add(new
+                    {
+                        outcome = res.Outcome.ToString(),
+                        file = res.Path,
+                        oldValue = res.OldValue,
+                        newValue = res.NewValue,
+                    });
+                }
+                catch (Exception ex)
+                {
+                    errorCode ??= D365FoErrorCodes.WriteFailed;
+                    errorMessage ??= $"{file}: {ex.Message}";
+                }
             }
 
-            return RenderHelpers.Render(kind, ToolResult<object>.Success(
-                results.Count == 1 ? results[0] : new { key = settings.Key, files = results }));
+            var entryOk = errorCode is null;
+            if (entryOk) ok++; else failed++;
+            entryResults.Add(new BatchEntryResult(key, entryOk, errorCode, errorMessage, files));
         }
-        catch (Exception ex)
-        {
-            return RenderHelpers.Render(kind, ToolResult<object>.Fail(D365FoErrorCodes.WriteFailed, ex.Message));
-        }
+
+        var summary = new { total = entries.Count, created = ok, failed, results = entryResults };
+
+        // Nothing landed at all — that is a failed operation, not a partial one, and
+        // the caller deserves a non-zero exit rather than a success envelope to parse.
+        if (ok == 0)
+            return RenderHelpers.Render(kind, ToolResult<object>.Fail(
+                "BATCH_FAILED",
+                $"All {entries.Count} label(s) failed to write; the first error was: {entryResults[0].Message}",
+                hint: "Pass --overwrite to replace existing keys, or check the target label file is writable."));
+
+        // Partial success stays ok:true — the writes that succeeded are real and
+        // already journaled. Failures are repeated as warnings so they are visible
+        // without walking `results`; scripts should gate on `data.failed == 0`.
+        var warnings = entryResults
+            .Where(r => !r.Ok)
+            .Select(r => $"label '{r.Key}': {r.Message}")
+            .ToList();
+
+        return RenderHelpers.Render(kind, ToolResult<object>.Success(
+            (object)summary, warnings.Count > 0 ? warnings : null));
     }
+
+    /// <summary>Per-key outcome of a <c>--entry</c> batch; one bad key does not sink the rest.</summary>
+    private sealed record BatchEntryResult(
+        string Key,
+        bool Ok,
+        string? Error,
+        string? Message,
+        IReadOnlyList<object> Files);
 
     /// <summary>
     /// Reuse the existing locale folder's casing ("en-US" vs "en-us") so writes

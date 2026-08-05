@@ -10,6 +10,9 @@ namespace D365FO.Cli.Tests;
 /// Parses the output XML and asserts structural elements are present to
 /// catch silent regressions if the scaffolder templates are changed.
 /// </summary>
+// Shares a collection with LabelBatchCreateTests: both override the process-wide
+// D365FO_INDEX_DB env var, so running them in parallel would race on that global state.
+[Collection("EnvIndexDb")]
 public class ScaffoldingSnapshotTests
 {
     // ---- SysOperation (Phase 2) ----
