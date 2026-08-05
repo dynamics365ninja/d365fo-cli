@@ -103,10 +103,24 @@ Environment variables:
 ### The read-only / write-only split (upstream's `LOCAL_TOOLS` pattern)
 
 `read-only` excludes, and `write-only` exposes *only*, the tools that need the
-local D365FO package tree on disk: `generate_object`, `labels`,
-`get_workspace_info`, `get_method`. Every other tool (search, `get_object_info`,
-`analyze`, `models`, …) is read-only-safe because it only touches the SQLite
-index.
+local D365FO package tree on disk:
+
+- `generate_object`, `labels` — write AOT XML / label files to local disk.
+- `get_workspace_info`, `get_method` — report this process's path configuration,
+  and read raw X++ off disk at the indexed `SourcePath`.
+- `modify_method`, `modify_object`, `undo_last_modification` — round-trip through
+  the local `D365FO.Bridge` process, which loads `IMetadataProvider` over the
+  on-disk package tree.
+- `journal_list` — reads `<index-dir>/journal/`, which is only populated on the
+  instance that did the writing.
+
+Every other tool (search, `get_object_info`, `analyze`, `models`, …) is
+read-only-safe because it only touches the SQLite index.
+
+The invariant is that **no tool that writes is reachable in `read-only` mode** —
+a test asserts it over the catalog's own write-tool set, so adding a write tool
+without classifying it fails the build rather than shipping in a shared
+deployment.
 
 This lets a team run the deployment upstream documents:
 
@@ -116,7 +130,9 @@ This lets a team run the deployment upstream documents:
   search/read/analysis.
 - **Local write-only companion** (`MCP_SERVER_MODE=write-only`) — each
   developer runs this locally (stdio or `--http` on localhost) where the real
-  package tree lives, for scaffolding writes and label edits.
+  package tree lives. It carries the whole write→inspect→undo loop: scaffolding,
+  label edits, live object modification, `journal_list`, and
+  `undo_last_modification`.
 
 `full` (the default) is a single process exposing every tool — the right
 choice for local single-machine use, same as before this existed.

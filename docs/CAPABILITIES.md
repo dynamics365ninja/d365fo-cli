@@ -437,7 +437,7 @@ d365fo-mcp --http --port 8080
 | Env var | Purpose |
 |---|---|
 | `API_KEY` | Shared secret required in the `X-Api-Key` header on `POST /mcp`. Unset = unauthenticated (logs a startup warning); `GET /health` never requires it. |
-| `MCP_SERVER_MODE` | `full` (default) \| `read-only` \| `write-only` — gates the tool surface. `read-only` drops `generate_object`/`labels`/`get_workspace_info`/`get_method` (need the local package tree); `write-only` exposes only those four. A disallowed `tools/call` fails with `MODE_NOT_ALLOWED`. |
+| `MCP_SERVER_MODE` | `full` (default) \| `read-only` \| `write-only` — gates the tool surface. `read-only` drops the tools that need the local package tree — `generate_object`, `labels`, `get_workspace_info`, `get_method`, the bridge-backed `modify_method`/`modify_object`/`undo_last_modification`, and `journal_list`; `write-only` exposes only those. No tool that writes is reachable in `read-only`. A disallowed `tools/call` fails with `MODE_NOT_ALLOWED`. |
 | `MCP_HTTP_PORT` | Listen port when `--port` is omitted (default `3000`). |
 
 `POST /mcp` is one JSON-RPC request per call (no SSE/session state) — reuses the same dispatch, routing, and mode gate as stdio. `GET /health` reports `{status, mode, indexReachable}` and needs no auth. A simple in-memory rate limiter (429 + `RATE_LIMITED`) protects `/mcp` per API key / IP. See [MIGRATION_FROM_MCP.md](MIGRATION_FROM_MCP.md#http-transport--shared-deployment-azure-app-service) for the read-only-shared / write-only-local deployment pattern this mirrors from upstream.
