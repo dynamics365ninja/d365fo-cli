@@ -181,12 +181,12 @@ All scaffolders write atomically (`.tmp` + move, `.bak` on overwrite). Pass `--i
 | `generate form` | `AxForm` XML (9 patterns: SimpleList, DetailsMaster, Workspace …) |
 | `generate datasource-method` | Add/override a method on a form datasource (form-level `SourceCode`); `--list` shows overridable methods |
 | `generate control-method` | Add/override a method on a form control (form-level `SourceCode`); `--list` shows overridable methods |
-| `generate entity` | `AxDataEntityView` (`DataManagementEnabled=No` by default; opt in via `--data-management`) |
+| `generate entity` | `AxDataEntityView` — fields, keys, `--relation` (constraint-joined), `--computed-field` (unmapped, method-backed). `--data-management` also emits the DMF staging table |
 | `generate extension` | `AxTableExtension` / `AxFormExtension` / `AxEdtExtension` / `AxEnumExtension` / `AxSecurityDutyExtension` / `AxSecurityRoleExtension` |
 | `generate event-handler` | X++ event subscriber class with correct attribute |
 | `generate privilege` | `AxSecurityPrivilege` (entry point and/or `--data-entity` OData/DMF grant) |
-| `generate duty` | `AxSecurityDuty` |
-| `generate role` | `AxSecurityRole` (new or merge into existing) |
+| `generate duty` | `AxSecurityDuty` — privileges plus `--description`, `--context-string`, `--disabled` |
+| `generate role` | `AxSecurityRole` (new or merge into existing) — duties, privileges, `--sub-role` composition, `--context-string`, `--disabled`, `--no-delete-from-ui` |
 | `generate menu-item` | `AxMenuItemDisplay` / `AxMenuItemAction` / `AxMenuItemOutput` |
 | `generate report` | `AxReport` + DP class + optional DataContract class |
 | `generate edt` | `AxEdt` |
@@ -200,7 +200,7 @@ All scaffolders write atomically (`.tmp` + move, `.bak` on overwrite). Pass `--i
 | `generate business-event` | Event class + contract class |
 | `generate custom-service` | `AxService` + service class + `AxServiceGroup` |
 | `generate runbase` | `RunBase` / `RunBaseBatch` skeleton with dialog parameters |
-| `generate security-policy` | `AxSecurityPolicy` (XDS row-level security) |
+| `generate security-policy` | `AxSecurityPolicy` (XDS row-level security), including the nested `--constrained` table tree |
 | `generate systest` | `SysTestCase` skeleton — `[SysTestMethod]` Arrange/Act/Assert stub, optional `[SysTestCaseDataDependency]` and `--atl` `AtlDataRootNode` wiring (ATL-ready MVP, no test-logic generation) |
 | `generate migration-script` | Data-fix `Runnable` class with `ttsbegin`/`ttscommit` batching |
 | `generate simple-list` | Alias for `generate form --pattern SimpleList` |
