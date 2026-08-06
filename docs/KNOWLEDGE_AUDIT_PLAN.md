@@ -250,7 +250,7 @@ Four things this could only be learned by running it, and all four were wrong fi
   Information` are now parsed, as are the two line shapes without a `dynamics://` URL or without a
   source location. TODO markers are `information` and count as neither error nor warning.
 
-**Four shipping defects the offline loop could never see, all now fixed:**
+**Six shipping defects the offline loop could never see, all now fixed:**
 - `generate query` (2 cases) — the reader threw `KeyNotFoundException` on every generated query.
   Ground-truthed against shipped queries (300/300 carry it):
   `<SourceCode><Methods><Method><Name>classDeclaration` is mandatory, and each data source needs
@@ -269,9 +269,20 @@ Four things this could only be learned by running it, and all four were wrong fi
   values. The generated factory also called `parmId()`, which exists on no business event
   (`BusinessEventsBase` declares only `parmUserId`); it now keeps the source record the way
   shipped events do, in a private member behind a generated parm method.
+- `generate report` — no `DefaultParameterGroup` unless the caller passed `--parameter`, so every
+  report was missing it *and* the five mandatory `AX_*` framework parameters the SSRS runtime
+  injects; the auto design carried no `PageSize`/`InteractiveSize`/`Margin`, so its height and
+  width were zero ("Invalid page size"); and `--extra-dataset Name:DPClass` produced a dataset
+  with no fields, an empty temp table and a data region with no data fields. Extra datasets now
+  take fields inline (`Name:DPClass:F1,F2`) or inherit `--field`.
+- `generate entity` — `IsPublic` was hard-coded `Yes` while `Keys` stayed optional, so every
+  generated entity failed "There must be a key defined for a public data entity". The command now
+  derives the EntityKey from the table's alternate-key index (or `--key`, or explicitly mandatory
+  fields) and asks rather than guessing when it cannot; the scaffolder keeps `IsPublic` and
+  `Keys` in step so the two can no longer disagree.
 
-**Baseline: 36 of 51 goldens compile clean, with zero unattributed diagnostics.** That number went
-*down* from 48 as the oracle got more honest, not as the tool got worse: the metadata validator
+**Baseline: 39 of 51 goldens compile clean, with zero unattributed diagnostics.** It dipped to 36
+first, as the oracle got more honest rather than as the tool got worse: the metadata validator
 reports in its own shape (`Metadata Error: AxForm/<object>/Design/Controls/…/DataGroup: …`), which
 the parser did not recognise, and the attribution key was the golden's file stem, which truncates
 `NoYes.Extension` at the dot. Both dropped real findings on the floor while the scoreboard looked
@@ -283,12 +294,12 @@ cannot contain. The mini-AOT fixture gained a query (once `generate query` could
 readable one) and an `OnInitialized` delegate on `FmVehicleService`, without which the
 event-handler case could not compile however correct the scaffolder was.
 
-**The 15 red cases are now the honest work queue** — reports missing every mandatory `AX_*`
-framework parameter and a page size; public data entities with no key; form patterns binding
-`DataGroup` to field groups the table does not declare, and one putting an
-`AxFormActionPaneTabControl` under a tab page, which the metadata validator forbids; a workflow
-and a security policy with an empty mandatory property. That is Phase 2-shaped generation-depth
-work, not eval-loop work, and it is what the improver picks up next.
+**The 12 remaining reds are the honest work queue** — form patterns binding `DataGroup` to field
+groups the table does not declare, and one putting an `AxFormActionPaneTabControl` under a tab
+page, which the metadata validator forbids; a workflow and a security policy with an empty
+mandatory property; a custom service naming a class that is not generated; and `L2-enum-extension`
+extending `NoYes`, which is not extensible on this platform — a case-authoring bug rather than a
+scaffolder one. Phase 2-shaped generation-depth work, for the improver's next round.
 
 4.3 ❌ **L4 runtime oracle — not built.** It needs a live AOS, a `SysTestRunner` result parser
 (none exists; `test run` returns a raw output tail) and per-run fixture provisioning inside a real

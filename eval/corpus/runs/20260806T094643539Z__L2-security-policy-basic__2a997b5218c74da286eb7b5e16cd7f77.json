@@ -1,0 +1,22 @@
+{
+  "runId": "20260806T094643539Z__L2-security-policy-basic__2a997b5218c74da286eb7b5e16cd7f77",
+  "caseId": "L2-security-policy-basic",
+  "tier": 2,
+  "timestampUtc": "2026-08-06T09:46:43.5395552+00:00",
+  "source": "build-oracle",
+  "score": {
+    "xppErrors": 0,
+    "referenceErrors": 0,
+    "goldenMatch": true,
+    "goldenDiff": {
+      "missing": [],
+      "extra": [],
+      "changed": [],
+      "isMatch": true
+    },
+    "buildClean": false,
+    "buildErrors": 1
+  },
+  "classification": "TOOL_DEFECT",
+  "note": "xppc reported 1 error(s) against this golden: Query \u0027ConFmVehicleOwnerQuery\u0027 does not exist."
+}

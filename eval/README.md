@@ -85,7 +85,7 @@ returns `EVAL_BUILD_INVOCATION` and writes **no** verdicts — an argument mista
 must never be recorded as a broken golden. `EvalScoreCard.BuildClean` is `null`
 wherever no compiler ran; it is never `false` by default.
 
-Current baseline: **36 of 51 goldens compile clean**, with **zero unattributed
+Current baseline: **39 of 51 goldens compile clean**, with **zero unattributed
 diagnostics** — every complaint the compiler makes is blamed on the case that
 produced the object it names.
 
@@ -101,14 +101,17 @@ Cases tagged `known-reference-gap` are recorded but never classified as
 include, or a standard object the fixture cannot contain, and the compiler rejects
 those for exactly the reason `validate references` does.
 
-Four defects this oracle has found and that are now fixed — none of them visible to
-a golden diff or to any offline validator, which is the whole argument for the
-tier: `generate query` produced queries the metadata reader could not read at all;
-`generate event-handler` wrote its handler where the provider could not find the
-method name; `generate migration-script` named a variable `count`, an X++ keyword;
-and `generate business-event` built a `[BusinessEvents]` attribute with the wrong
-first argument and a string where the `ModuleAxapta` enum belongs, then called a
-`parmId()` that exists on no business event.
+Defects this oracle has found and that are now fixed — none of them visible to a
+golden diff or to any offline validator, which is the whole argument for the tier:
+
+| Scaffolder | What the compiler said |
+|---|---|
+| `generate query` | the metadata reader could not read a generated query at all (`KeyNotFoundException`) |
+| `generate event-handler` | "The method name in the source code … does not match the name in the XML file, ''" |
+| `generate migration-script` | "'count' is an invalid name for a variable because it is an X++ keyword" |
+| `generate business-event` | "Cannot implicitly convert from type 'str' to type 'Extensible Enumeration(ModuleAxapta)'", plus a `parmId()` that exists on no business event |
+| `generate report` | five missing mandatory `AX_*` framework parameters, no default parameter group, "Invalid page size", and an extra dataset with no fields |
+| `generate entity` | "There must be a key defined for a public data entity" — `IsPublic` was hard-coded `Yes` while `Keys` stayed optional |
 
 ## Improver toolchain
 

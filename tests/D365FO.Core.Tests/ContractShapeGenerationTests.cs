@@ -50,17 +50,80 @@ public class ContractShapeGenerationTests
         Assert.NotNull(root.Element("DataSets"));
         Assert.Null(root.Element("Datasets"));
 
-        // Parameters belong to the report's default group, not to the report.
+        // Parameters belong to the report's default group, not to the report — and the
+        // group carries the five framework parameters the SSRS runtime injects before
+        // any of the caller's. Missing them is one validator error each.
         Assert.Null(root.Element("ReportParameters"));
-        var parameter = root.Element("DefaultParameterGroup")!
-            .Element("ReportParameterBases")!.Elements().Single();
-        Assert.Equal("System.DateTime", parameter.Element("DataType")!.Value);
+        var parameters = root.Element("DefaultParameterGroup")!
+            .Element("ReportParameterBases")!.Elements().ToList();
+
+        var names = parameters.Select(p => p.Element("Name")!.Value).ToList();
+        Assert.Equal(
+            ["AX_PartitionKey", "AX_CompanyName", "AX_UserContext", "AX_RenderingCulture", "AX_ReportContext", "FromDate"],
+            names);
+        Assert.Equal("System.DateTime", parameters[^1].Element("DataType")!.Value);
 
         // The design is a real subtype, not a bare AxReportDesign carrying invented members.
         var design = root.Element("Designs")!.Elements().Single();
         Assert.Equal("AxReportAutoDesign", design.Attribute(XName.Get("type", Xsi))!.Value);
         Assert.NotNull(design.Element("DataRegions"));
         Assert.Null(design.Element("AutoDesignSpecs"));
+
+        // Without a page size the design's height and width are zero and the report is
+        // rejected outright.
+        Assert.Equal("11in", design.Element("PageSize")!.Element("Height")!.Value);
+        Assert.Equal("8.5in", design.Element("PageSize")!.Element("Width")!.Value);
+        Assert.NotNull(design.Element("InteractiveSize"));
+        Assert.NotNull(design.Element("Margin"));
+    }
+
+    /// <summary>
+    /// A report generated without <c>--parameter</c> used to carry no
+    /// <c>DefaultParameterGroup</c> at all: "Report default parameter group is not
+    /// found", plus one error per missing framework parameter. Found by
+    /// <c>eval verify-build</c> on <c>L1-report-basic</c>.
+    /// </summary>
+    [Fact]
+    public void Report_without_caller_parameters_still_has_the_framework_group()
+    {
+        var doc = XppScaffolder.Report(new ReportSpec("ConFleetReport", Fields: ["VIN"]));
+
+        AssertClean(doc);
+
+        var names = doc.Root!.Element("DefaultParameterGroup")!
+            .Element("ReportParameterBases")!.Elements()
+            .Select(p => p.Element("Name")!.Value)
+            .ToList();
+
+        Assert.Equal(
+            ["AX_PartitionKey", "AX_CompanyName", "AX_UserContext", "AX_RenderingCulture", "AX_ReportContext"],
+            names);
+    }
+
+    /// <summary>
+    /// A public data entity without a key is rejected ("There must be a key defined
+    /// for a public data entity"), so <c>IsPublic</c> and <c>Keys</c> move together —
+    /// the command derives the key from the table's alternate index before it gets
+    /// here. Found by <c>eval verify-build</c> on <c>L2-virtual-entity-basic</c>.
+    /// </summary>
+    [Fact]
+    public void Data_entity_is_only_public_when_it_declares_a_key()
+    {
+        var withKey = XppScaffolder.DataEntity(
+            "ConFleetEntity", "FmVehicle",
+            fields: [new EntityFieldSpec("VIN", "VIN", true)],
+            keyFields: ["VIN"]);
+
+        Assert.Equal("Yes", withKey.Root!.Element("IsPublic")!.Value);
+        Assert.Equal("EntityKey", withKey.Root.Element("PrimaryKey")!.Value);
+        Assert.Equal("VIN", withKey.Root.Element("Keys")!.Descendants("DataField").Single().Value);
+
+        var withoutKey = XppScaffolder.DataEntity(
+            "ConFleetEntity", "FmVehicle",
+            fields: [new EntityFieldSpec("VIN", "VIN", true)]);
+
+        Assert.Equal("No", withoutKey.Root!.Element("IsPublic")!.Value);
+        Assert.Null(withoutKey.Root.Element("PrimaryKey"));
     }
 
     [Fact]

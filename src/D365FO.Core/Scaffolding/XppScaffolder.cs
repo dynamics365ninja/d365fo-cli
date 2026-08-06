@@ -359,6 +359,14 @@ public static class XppScaffolder
                 string.IsNullOrEmpty(dataManagementStagingTable) ? entityName + "Staging" : dataManagementStagingTable)
             : new XElement("DataManagementStagingTable");
 
+        // A public entity must declare a key: the metadata validator rejects it with
+        // "There must be a key defined for a public data entity" and "The Primary Key
+        // property must be set…". IsPublic was hard-coded Yes here while Keys stayed
+        // optional, so every entity generated without keys was invalid — found by
+        // `eval verify-build` on L2-virtual-entity-basic. Keeping the two in step is
+        // the scaffolder's job; the caller is asked for a key before it gets here.
+        var isPublic = keys.Count > 0;
+
         return new XDocument(
             new XElement("AxDataEntityView",
                 new XElement("Name", entityName),
@@ -367,8 +375,8 @@ public static class XppScaffolder
                 new XElement("PublicCollectionName", pubColl),
                 new XElement("DataManagementEnabled", dataManagementEnabled ? "Yes" : "No"),
                 stagingTable,
-                new XElement("IsPublic", "Yes"),
-                keys.Count > 0 ? new XElement("PrimaryKey", "EntityKey") : null,
+                new XElement("IsPublic", isPublic ? "Yes" : "No"),
+                isPublic ? new XElement("PrimaryKey", "EntityKey") : null,
                 new XElement("Fields", fieldEls),
                 keysEl,
                 // An entity's data sources are not its own member — they belong to the embedded
@@ -709,20 +717,20 @@ public static class XppScaffolder
 
         var dataSetsEl = new XElement("DataSets", datasets.Select(BuildDataSet));
 
-        // Parameters hang off the report's default group, not off the report.
-        XElement? parameterGroupEl = null;
-        if (spec.Parameters is { Count: > 0 })
-        {
-            parameterGroupEl = new XElement("DefaultParameterGroup",
-                new XElement("Name", "Parameters"),
-                new XElement("ReportParameterBases",
-                    spec.Parameters.Select(p => new XElement("AxReportParameterBase",
+        // Parameters hang off the report's default group, not off the report — and the
+        // group itself is not optional. Without it the metadata validator reports
+        // "Report default parameter group is not found" plus one error per missing
+        // framework parameter; a report generated without `--parameter` had neither.
+        var parameterGroupEl = new XElement("DefaultParameterGroup",
+            new XElement("Name", "Parameters"),
+            new XElement("ReportParameterBases",
+                FrameworkParameters().Concat(
+                    (spec.Parameters ?? []).Select(p => new XElement("AxReportParameterBase",
                         new XAttribute(Xsi + "type", "AxReportParameter"),
                         new XElement("Name",       p.Name),
                         new XElement("AllowBlank", p.AllowBlank ? "true" : "false"),
                         new XElement("DataType",   ReportDataType(p.DataType)),
-                        p.Prompt ? null : new XElement("UserVisibility", "Hidden")))));
-        }
+                        p.Prompt ? null : new XElement("UserVisibility", "Hidden"))))));
 
         var designEl = new XElement("Designs",
             new XElement("AxReportDesign",
@@ -736,7 +744,20 @@ public static class XppScaffolder
                     ? null
                     : new XElement("TitleOverridden", "true"),
                 new XElement("DataRegions",
-                    datasets.Select((ds, i) => BuildTableDataRegion(ds, i)))));
+                    datasets.Select((ds, i) => BuildTableDataRegion(ds, i))),
+                // Page geometry, in contract order after DataRegions. Without it the
+                // design's height and width are zero and the metadata validator refuses
+                // the report: "Invalid page size. The page height and the page width
+                // cannot be less than or equal to 0." Values are portrait Letter with
+                // half-inch margins — what every shipped auto design carries.
+                ReportSize("InteractiveSize"),
+                new XElement("Margin",
+                    new XElement("Name", "Margin"),
+                    new XElement("Bottom", PageMargin),
+                    new XElement("Left", PageMargin),
+                    new XElement("Right", PageMargin),
+                    new XElement("Top", PageMargin)),
+                ReportSize("PageSize")));
 
         return new XDocument(
             new XElement("AxReport",
@@ -745,6 +766,49 @@ public static class XppScaffolder
                 dataSetsEl,
                 parameterGroupEl,
                 designEl));
+    }
+
+    private const string PageHeight = "11in";
+    private const string PageWidth = "8.5in";
+    private const string PageMargin = ".5in";
+
+    /// <summary>
+    /// One <c>AxReportSize</c>-valued member of the design (<c>PageSize</c>,
+    /// <c>InteractiveSize</c>) — the element is named after the member, not the type.
+    /// </summary>
+    private static XElement ReportSize(string member) =>
+        new(member,
+            new XElement("Name", member),
+            new XElement("Height", PageHeight),
+            new XElement("Width", PageWidth));
+
+    /// <summary>
+    /// The framework parameters the SSRS runtime injects into every report. Their
+    /// absence is an error per parameter, not a warning: the metadata validator says
+    /// "The report &lt;name&gt; does not have the mandatory framework parameter
+    /// AX_PartitionKey" and so on for five of them.
+    /// </summary>
+    /// <remarks>
+    /// Names, order and per-parameter flags are copied from a shipped auto-design
+    /// report (<c>QMSDispBatchProdReport</c>); <c>AX_CompanyName</c> genuinely does
+    /// carry neither <c>AllowBlank</c> nor <c>Nullable</c> there, and none of them
+    /// carries a <c>DataType</c>.
+    /// </remarks>
+    private static IEnumerable<XElement> FrameworkParameters()
+    {
+        string[] nullable = ["AX_PartitionKey", "AX_UserContext", "AX_RenderingCulture", "AX_ReportContext"];
+
+        foreach (var name in (string[])["AX_PartitionKey", "AX_CompanyName", "AX_UserContext", "AX_RenderingCulture", "AX_ReportContext"])
+        {
+            yield return new XElement("AxReportParameterBase",
+                new XAttribute(Xsi + "type", "AxReportParameter"),
+                new XElement("Name", name),
+                nullable.Contains(name) ? new XElement("AllowBlank", "true") : null,
+                nullable.Contains(name) ? new XElement("Nullable", "true") : null,
+                new XElement("UserVisibility", "Hidden"),
+                new XElement("DefaultValue"),
+                new XElement("Values"));
+        }
     }
 
     /// <summary>

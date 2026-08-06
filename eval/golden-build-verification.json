@@ -1,13 +1,13 @@
 {
-  "capturedUtc": "2026-08-06T09:29:53.6946018+00:00",
+  "capturedUtc": "2026-08-06T09:46:43.4636994+00:00",
   "host": "D365ASLDEV2-1",
   "packagesRoot": "K:\\AosService\\PackagesLocalDirectory",
   "compiler": "K:\\AosService\\PackagesLocalDirectory\\Bin\\xppc.exe",
-  "compilerArgs": "-metadata=C:\\Users\\Admin7e00859cee\\AppData\\Local\\Temp\\2\\claude\\K--repos-d365fo-cli\\ac58616d-375a-4381-b289-fca2d371276f\\scratchpad\\l3attr2 -modelmodule=D365FoCliEvalGoldens -output=C:\\Users\\Admin7e00859cee\\AppData\\Local\\Temp\\2\\claude\\K--repos-d365fo-cli\\ac58616d-375a-4381-b289-fca2d371276f\\scratchpad\\l3attr2\\bin -referencefolder=K:\\AosService\\PackagesLocalDirectory -refPath=C:\\Users\\Admin7e00859cee\\AppData\\Local\\Temp\\2\\claude\\K--repos-d365fo-cli\\ac58616d-375a-4381-b289-fca2d371276f\\scratchpad\\l3attr2\\bin -log=C:\\Users\\Admin7e00859cee\\AppData\\Local\\Temp\\2\\claude\\K--repos-d365fo-cli\\ac58616d-375a-4381-b289-fca2d371276f\\scratchpad\\l3attr2\\Dynamics.AX.D365FoCliEvalGoldens.xppc.log",
+  "compilerArgs": "-metadata=C:\\Users\\Admin7e00859cee\\AppData\\Local\\Temp\\2\\claude\\K--repos-d365fo-cli\\ac58616d-375a-4381-b289-fca2d371276f\\scratchpad\\l3rep2 -modelmodule=D365FoCliEvalGoldens -output=C:\\Users\\Admin7e00859cee\\AppData\\Local\\Temp\\2\\claude\\K--repos-d365fo-cli\\ac58616d-375a-4381-b289-fca2d371276f\\scratchpad\\l3rep2\\bin -referencefolder=K:\\AosService\\PackagesLocalDirectory -refPath=C:\\Users\\Admin7e00859cee\\AppData\\Local\\Temp\\2\\claude\\K--repos-d365fo-cli\\ac58616d-375a-4381-b289-fca2d371276f\\scratchpad\\l3rep2\\bin -log=C:\\Users\\Admin7e00859cee\\AppData\\Local\\Temp\\2\\claude\\K--repos-d365fo-cli\\ac58616d-375a-4381-b289-fca2d371276f\\scratchpad\\l3rep2\\Dynamics.AX.D365FoCliEvalGoldens.xppc.log",
   "modelName": "D365FoCliEvalGoldens",
   "total": 51,
-  "clean": 36,
-  "failed": 15,
+  "clean": 39,
+  "failed": 12,
   "skipped": 0,
   "cases": [
     {
@@ -251,36 +251,19 @@
     },
     {
       "caseId": "L1-report-basic",
-      "verdict": "errors",
-      "errors": 8,
+      "verdict": "clean",
+      "errors": 0,
       "warnings": 0,
       "ruleIds": [],
-      "messages": [
-        "The report ConFmVehicleReport does not have the mandatory framework parameter AX_PartitionKey.",
-        "The report ConFmVehicleReport does not have the mandatory framework parameter AX_CompanyName.",
-        "The report ConFmVehicleReport does not have the mandatory framework parameter AX_UserContext.",
-        "The report ConFmVehicleReport does not have the mandatory framework parameter AX_RenderingCulture.",
-        "The report ConFmVehicleReport does not have the mandatory framework parameter AX_ReportContext.",
-        "AutoDesign: Invalid page size. The page height and the page width cannot be less than or equal to 0.",
-        "Report default parameter group is not found."
-      ]
+      "messages": []
     },
     {
       "caseId": "L1-report-parameters",
-      "verdict": "errors",
-      "errors": 9,
+      "verdict": "clean",
+      "errors": 0,
       "warnings": 0,
       "ruleIds": [],
-      "messages": [
-        "The report ConFmVehicleParamReport does not have the mandatory framework parameter AX_PartitionKey.",
-        "The report ConFmVehicleParamReport does not have the mandatory framework parameter AX_CompanyName.",
-        "The report ConFmVehicleParamReport does not have the mandatory framework parameter AX_UserContext.",
-        "The report ConFmVehicleParamReport does not have the mandatory framework parameter AX_RenderingCulture.",
-        "The report ConFmVehicleParamReport does not have the mandatory framework parameter AX_ReportContext.",
-        "The dataset ConFmVehicleSummaryDS has no fields specified.",
-        "AutoDesign: Invalid page size. The page height and the page width cannot be less than or equal to 0.",
-        "Table2: Missing Data fields. A Table data region must have one or more data fields."
-      ]
+      "messages": []
     },
     {
       "caseId": "L1-role-basic",
@@ -477,15 +460,11 @@
     },
     {
       "caseId": "L2-virtual-entity-basic",
-      "verdict": "errors",
-      "errors": 3,
+      "verdict": "clean",
+      "errors": 0,
       "warnings": 0,
       "ruleIds": [],
-      "messages": [
-        "The Primary Key property must be set, when the Is Public property is set to \u0027Yes\u0027.",
-        "The Primary Key property must be set to an existing EntityKey name, when the Is Public property is set to \u0027Yes\u0027.",
-        "There must be a key defined for a public data entity."
-      ]
+      "messages": []
     }
   ]
 }

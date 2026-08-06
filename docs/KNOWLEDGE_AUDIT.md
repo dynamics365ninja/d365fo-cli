@@ -34,11 +34,12 @@ uneven:
   no L3/L4 tier, `classification` is null on every corpus record, and the corpus schema
   contradicts reality about gitignoring.
   *Closed 2026-08-06 in Phase 4, except the L4 runtime tier: the catalog replays in CI, `eval
-  verify-build` compiles every golden with `xppc` on a real installation (36/51 clean, zero
-  unattributed diagnostics; four shipping defects it found — in `generate query`,
-  `generate event-handler`, `generate migration-script` and `generate business-event` — are fixed,
-  and the remaining reds are an honest generation-depth queue), replay runs now carry a triage
-  hypothesis, and `eval/COVERAGE.md` reports K ∧ E ∧ T per family and per `generate` capability.*
+  verify-build` compiles every golden with `xppc` on a real installation (39/51 clean, zero
+  unattributed diagnostics; six shipping defects it found — in `generate query`,
+  `generate event-handler`, `generate migration-script`, `generate business-event`,
+  `generate report` and `generate entity` — are fixed, and the remaining reds are an honest
+  generation-depth queue), replay runs now carry a triage hypothesis, and `eval/COVERAGE.md`
+  reports K ∧ E ∧ T per family and per `generate` capability.*
 - **The predecessor `d365fo-mcp-server`** contains battle-tested material this repo has not yet
   absorbed — see §7.
 

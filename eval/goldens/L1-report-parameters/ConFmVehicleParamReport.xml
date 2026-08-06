@@ -31,13 +31,64 @@
       <DynamicFilters>true</DynamicFilters>
       <Query>SELECT * FROM ConFmVehicleSummaryDP.ConFmVehicleSummaryDPTmp</Query>
       <FieldGroups />
-      <Fields />
+      <Fields>
+        <AxReportDataSetField>
+          <Name>VIN</Name>
+          <Alias>ConFmVehicleSummaryDPTmp.1.VIN</Alias>
+          <DataType>System.String</DataType>
+          <UserDefined>false</UserDefined>
+        </AxReportDataSetField>
+        <AxReportDataSetField>
+          <Name>Make</Name>
+          <Alias>ConFmVehicleSummaryDPTmp.1.Make</Alias>
+          <DataType>System.String</DataType>
+          <UserDefined>false</UserDefined>
+        </AxReportDataSetField>
+      </Fields>
       <Parameters />
     </AxReportDataSet>
   </DataSets>
   <DefaultParameterGroup>
     <Name xmlns="">Parameters</Name>
     <ReportParameterBases xmlns="">
+      <AxReportParameterBase i:type="AxReportParameter">
+        <Name>AX_PartitionKey</Name>
+        <AllowBlank>true</AllowBlank>
+        <Nullable>true</Nullable>
+        <UserVisibility>Hidden</UserVisibility>
+        <DefaultValue />
+        <Values />
+      </AxReportParameterBase>
+      <AxReportParameterBase i:type="AxReportParameter">
+        <Name>AX_CompanyName</Name>
+        <UserVisibility>Hidden</UserVisibility>
+        <DefaultValue />
+        <Values />
+      </AxReportParameterBase>
+      <AxReportParameterBase i:type="AxReportParameter">
+        <Name>AX_UserContext</Name>
+        <AllowBlank>true</AllowBlank>
+        <Nullable>true</Nullable>
+        <UserVisibility>Hidden</UserVisibility>
+        <DefaultValue />
+        <Values />
+      </AxReportParameterBase>
+      <AxReportParameterBase i:type="AxReportParameter">
+        <Name>AX_RenderingCulture</Name>
+        <AllowBlank>true</AllowBlank>
+        <Nullable>true</Nullable>
+        <UserVisibility>Hidden</UserVisibility>
+        <DefaultValue />
+        <Values />
+      </AxReportParameterBase>
+      <AxReportParameterBase i:type="AxReportParameter">
+        <Name>AX_ReportContext</Name>
+        <AllowBlank>true</AllowBlank>
+        <Nullable>true</Nullable>
+        <UserVisibility>Hidden</UserVisibility>
+        <DefaultValue />
+        <Values />
+      </AxReportParameterBase>
       <AxReportParameterBase i:type="AxReportParameter">
         <Name>FromDate</Name>
         <AllowBlank>true</AllowBlank>
@@ -86,12 +137,40 @@
           <StyleTemplate>TableStyleTemplate</StyleTemplate>
           <Data>
             <Name>Data</Name>
-            <DetailData />
+            <DetailData>
+              <AxReportItem i:type="AxReportTableDetailData">
+                <Name>VIN</Name>
+                <Caption>VIN</Caption>
+                <Expression>=Fields!VIN.Value</Expression>
+              </AxReportItem>
+              <AxReportItem i:type="AxReportTableDetailData">
+                <Name>Make</Name>
+                <Caption>Make</Caption>
+                <Expression>=Fields!Make.Value</Expression>
+              </AxReportItem>
+            </DetailData>
           </Data>
           <Groupings />
           <Sorting />
         </AxReportDataRegion>
       </DataRegions>
+      <InteractiveSize>
+        <Name>InteractiveSize</Name>
+        <Height>11in</Height>
+        <Width>8.5in</Width>
+      </InteractiveSize>
+      <Margin>
+        <Name>Margin</Name>
+        <Bottom>.5in</Bottom>
+        <Left>.5in</Left>
+        <Right>.5in</Right>
+        <Top>.5in</Top>
+      </Margin>
+      <PageSize>
+        <Name>PageSize</Name>
+        <Height>11in</Height>
+        <Width>8.5in</Width>
+      </PageSize>
     </AxReportDesign>
   </Designs>
 </AxReport>

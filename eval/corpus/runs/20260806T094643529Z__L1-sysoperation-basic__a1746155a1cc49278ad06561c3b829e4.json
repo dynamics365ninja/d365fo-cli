@@ -1,0 +1,21 @@
+{
+  "runId": "20260806T094643529Z__L1-sysoperation-basic__a1746155a1cc49278ad06561c3b829e4",
+  "caseId": "L1-sysoperation-basic",
+  "tier": 1,
+  "timestampUtc": "2026-08-06T09:46:43.529942+00:00",
+  "source": "build-oracle",
+  "score": {
+    "xppErrors": 0,
+    "referenceErrors": 0,
+    "goldenMatch": true,
+    "goldenDiff": {
+      "missing": [],
+      "extra": [],
+      "changed": [],
+      "isMatch": true
+    },
+    "buildClean": false,
+    "buildErrors": 2
+  },
+  "note": "expected for a known-reference-gap case \u2014 xppc reported 2 error(s) against this golden: The \u0027ConFmVehicleImportService\u0027 argument of the \u0027classStr\u0027 compile-time function does not specify a known class.; The \u0027ConFmVehicleImportService\u0027 argument of the \u0027methodStr\u0027 compile-time function does not specify a known class."
+}

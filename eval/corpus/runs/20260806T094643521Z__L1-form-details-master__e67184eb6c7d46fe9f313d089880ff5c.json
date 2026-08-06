@@ -1,0 +1,22 @@
+{
+  "runId": "20260806T094643521Z__L1-form-details-master__e67184eb6c7d46fe9f313d089880ff5c",
+  "caseId": "L1-form-details-master",
+  "tier": 1,
+  "timestampUtc": "2026-08-06T09:46:43.5211396+00:00",
+  "source": "build-oracle",
+  "score": {
+    "xppErrors": 0,
+    "referenceErrors": 0,
+    "goldenMatch": true,
+    "goldenDiff": {
+      "missing": [],
+      "extra": [],
+      "changed": [],
+      "isMatch": true
+    },
+    "buildClean": false,
+    "buildErrors": 2
+  },
+  "classification": "TOOL_DEFECT",
+  "note": "xppc reported 2 error(s) against this golden: Field group \u0027Overview\u0027 does not exist.; Field group \u0027General\u0027 does not exist."
+}

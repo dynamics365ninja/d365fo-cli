@@ -1,0 +1,22 @@
+{
+  "runId": "20260806T094643539Z__L2-security-duty-extension__82cf5f5ce31946ada4eb812a8f6a23c2",
+  "caseId": "L2-security-duty-extension",
+  "tier": 2,
+  "timestampUtc": "2026-08-06T09:46:43.5391228+00:00",
+  "source": "build-oracle",
+  "score": {
+    "xppErrors": 0,
+    "referenceErrors": 0,
+    "goldenMatch": true,
+    "goldenDiff": {
+      "missing": [],
+      "extra": [],
+      "changed": [],
+      "isMatch": true
+    },
+    "buildClean": false,
+    "buildErrors": 1
+  },
+  "classification": "TOOL_DEFECT",
+  "note": "xppc reported 1 error(s) against this golden: Duplicate value \u0027ConFmVehicleMaintainPriv\u0027 detected."
+}
