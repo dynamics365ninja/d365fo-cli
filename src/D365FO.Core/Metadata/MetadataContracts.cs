@@ -1,4 +1,5 @@
 using System.Reflection;
+using System.Xml.Linq;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
@@ -10,19 +11,31 @@ namespace D365FO.Core.Metadata;
 /// <param name="IsAbstract">Type cannot be instantiated — the file must pin a concrete <c>i:type</c>.</param>
 /// <param name="Members">Member names in the exact order the serializer reads and writes them.</param>
 /// <param name="EnumOf">Members whose value is constrained to an enum, keyed by member name.</param>
+/// <param name="TypeOf">
+/// Members that hold a contract object, mapped to that contract's type name. An element named
+/// after such a member (<c>&lt;Grant&gt;</c>, <c>&lt;Design&gt;</c>) is the only way to reach the
+/// type inside it, since the element carries the member's name rather than the type's.
+/// </param>
 public sealed record MetadataContract(
     string Name,
     string Namespace,
     bool IsAbstract,
     string? BaseType,
     IReadOnlyList<string> Members,
-    IReadOnlyDictionary<string, string> EnumOf)
+    IReadOnlyDictionary<string, string> EnumOf,
+    IReadOnlyDictionary<string, string> TypeOf)
 {
     private Dictionary<string, int>? _index;
 
     /// <summary>The enum constraining <paramref name="member"/>, or null when it is free text.</summary>
     public string? EnumFor(string member)
         => EnumOf.TryGetValue(member, out var e) ? e : null;
+
+    /// <summary>
+    /// The contract type <paramref name="member"/> holds, or null when the member is a scalar.
+    /// </summary>
+    public string? ContractTypeFor(string member)
+        => TypeOf.TryGetValue(member, out var t) ? t : null;
 
     /// <summary>Position of <paramref name="member"/> in the contract, or -1 when the type has no such member.</summary>
     public int IndexOf(string member)
@@ -85,93 +98,25 @@ public static class MetadataContracts
         => Find(string.IsNullOrEmpty(xsiType) ? elementName : xsiType);
 
     /// <summary>
-    /// True when <paramref name="member"/> survives a read of an element named after
-    /// <paramref name="contract"/> — which depends on whether the contract can be instantiated.
+    /// True when an element named after <paramref name="contract"/> keeps
+    /// <paramref name="member"/> on read.
     /// </summary>
     /// <remarks>
-    /// <para>
-    /// An element named after an <em>abstract</em> contract has to become something else, and
-    /// the serializer resolves that from the collection holding it — no <c>i:type</c> is
-    /// written. Every shipped form does this: <c>&lt;AxFormDataSource&gt;</c> is abstract and
-    /// five members wide, yet carries an <c>AxFormDataSourceRoot</c>'s thirty. Judging those
-    /// against the base alone would call a dozen correct properties unknown.
-    /// </para>
-    /// <para>
-    /// A <em>concrete</em> contract gets no such promotion. It is instantiated as named, and a
-    /// subtype's member is simply not on the object — read, dropped, gone. That is the
-    /// difference between a form data source keeping its <c>DataSourceLinks</c> and a data
-    /// entity losing every field's <c>DataField</c> and <c>DataSource</c>, which is what
-    /// happened: those live on <c>AxDataEntityViewMappedField</c>, while the file said
-    /// <c>&lt;AxDataEntityViewField&gt;</c> — concrete, and therefore taken at its word.
-    /// </para>
+    /// Simply whether the contract declares it — there is deliberately no walk into subtypes.
+    /// That walk existed to explain <c>&lt;AxFormDataSource&gt;</c>, which carries thirty
+    /// members while the CLR type of that name is abstract and has five. The real explanation
+    /// was that the element does not name that CLR type at all: <c>AxFormDataSourceRoot</c>
+    /// <em>contracts</em> to <c>AxFormDataSource</c>, and the catalog was keyed by CLR name.
+    /// Keyed by contract name, the element names exactly the type the reader instantiates, and
+    /// a subtype's member really is absent — accepting one would hide the very defect this rule
+    /// exists to find, as it did for every data entity field's <c>DataField</c>.
     /// </remarks>
     public static bool AcceptsMember(MetadataContract contract, string member)
-    {
-        if (contract.IndexOf(member) >= 0) return true;
-        if (!contract.IsAbstract) return false;
-
-        foreach (var derived in DerivedFrom(contract.Name))
-            if (derived.IndexOf(member) >= 0) return true;
-
-        return false;
-    }
+        => contract.IndexOf(member) >= 0;
 
     /// <summary>Every contract that derives, directly or transitively, from <paramref name="typeName"/>.</summary>
     public static IReadOnlyList<MetadataContract> DerivedFrom(string typeName)
         => _catalog.Value.Derived.TryGetValue(typeName, out var list) ? list : Array.Empty<MetadataContract>();
-
-    /// <summary>
-    /// The contract whose member order actually governs an element — which is not always the
-    /// contract its name points at.
-    /// </summary>
-    /// <remarks>
-    /// <para>
-    /// A collection writes its items under the <em>declared</em> item type's name, and the
-    /// serializer resolves the concrete type from the collection itself, so no <c>i:type</c> is
-    /// written. Every shipped form does this: <c>&lt;AxFormDataSource&gt;</c> — an abstract type
-    /// with five members — carries an <c>AxFormDataSourceRoot</c>, whose thirty members include
-    /// <c>AllowDelete</c> and <c>DataSourceLinks</c>. Ranking those against the base finds no
-    /// position for them, leaves them where they were, and the serializer drops them on read.
-    /// </para>
-    /// <para>
-    /// So when an abstract contract does not account for every member present, the subtype that
-    /// accounts for the most of them wins; ties go to the smallest contract, then ordinal name,
-    /// so the choice is deterministic. A concrete contract is taken at its word — it is what
-    /// gets instantiated — and an explicit <c>i:type</c> is always authoritative.
-    /// </para>
-    /// </remarks>
-    public static MetadataContract? EffectiveContract(string elementName, string? xsiType, IEnumerable<string> presentMembers)
-    {
-        if (!string.IsNullOrEmpty(xsiType)) return Find(xsiType);
-
-        var named = Find(elementName);
-        if (named is null || !named.IsAbstract) return named;
-
-        var unresolved = presentMembers.Where(m => named.IndexOf(m) < 0).ToList();
-        if (unresolved.Count == 0) return named;
-
-        MetadataContract? best = null;
-        var bestScore = 0;
-        foreach (var candidate in DerivedFrom(named.Name))
-        {
-            var score = unresolved.Count(m => candidate.IndexOf(m) >= 0);
-            if (score == 0) continue;
-
-            if (score > bestScore
-                || (score == bestScore && best is not null && IsPreferredOver(candidate, best)))
-            {
-                best = candidate;
-                bestScore = score;
-            }
-        }
-
-        return best ?? named;
-    }
-
-    private static bool IsPreferredOver(MetadataContract candidate, MetadataContract incumbent)
-        => candidate.Members.Count != incumbent.Members.Count
-            ? candidate.Members.Count < incumbent.Members.Count
-            : string.CompareOrdinal(candidate.Name, incumbent.Name) < 0;
 
     /// <summary>
     /// The values <paramref name="enumName"/> accepts, or an empty list when the catalog has no
@@ -189,6 +134,46 @@ public static class MetadataContracts
 
     /// <summary>Every enum the catalog knows, keyed by name.</summary>
     public static IReadOnlyDictionary<string, IReadOnlyList<string>> Enums => _catalog.Value.Enums;
+
+    /// <summary>
+    /// The contract governing what appears <em>inside</em> a member element, or null when the
+    /// member is a scalar or the parent is unknown.
+    /// </summary>
+    /// <remarks>
+    /// A member element is named after the member, not the type it holds, so its contents are
+    /// unreachable without this: <c>&lt;Grant&gt;</c> is an <c>AccessGrant</c> and
+    /// <c>&lt;Design&gt;</c> an <c>AxFormDesign</c>, but neither name appears in the catalog.
+    /// Until this existed, every such subtree was simply unchecked and unordered — which is how
+    /// <c>&lt;AccessLevel&gt;</c> sat inside a privilege's <c>&lt;Grant&gt;</c>, a member of no
+    /// type at all, through a full audit.
+    /// </remarks>
+    public static MetadataContract? MemberContract(MetadataContract? parent, string member)
+        => parent is null ? null : Find(parent.ContractTypeFor(member));
+
+    /// <summary>
+    /// The contract governing what may appear inside <paramref name="element"/>, given the
+    /// contract governing its parent's contents.
+    /// </summary>
+    /// <remarks>
+    /// Three shapes reach the same question. An element with an <c>i:type</c> says what it is;
+    /// an element named after a type <em>is</em> that type (a collection item, or a document
+    /// root); anything else is a member, and what it holds is whatever the parent declares it to
+    /// hold. Resolving all three in one place is what lets the order canonicaliser and the shape
+    /// rules agree about every element in a document.
+    /// </remarks>
+    public static MetadataContract? GoverningContract(XElement element, MetadataContract? parent)
+    {
+        var local = element.Name.LocalName;
+        var xsiType = element.Attribute(XsiType)?.Value;
+
+        if (!string.IsNullOrEmpty(xsiType) || Find(local) is not null)
+            return ForElement(local, xsiType);
+
+        return MemberContract(parent, local);
+    }
+
+    private static readonly XName XsiType =
+        XNamespace.Get("http://www.w3.org/2001/XMLSchema-instance") + "type";
 
     /// <summary>
     /// The enum constraining <paramref name="member"/> on <paramref name="contract"/> or on any
@@ -242,8 +227,11 @@ public static class MetadataContracts
                 t.Base,
                 t.Members ?? Array.Empty<string>(),
                 t.EnumOf is null
-                    ? EmptyEnumOf
-                    : new Dictionary<string, string>(t.EnumOf, StringComparer.Ordinal));
+                    ? EmptyMap
+                    : new Dictionary<string, string>(t.EnumOf, StringComparer.Ordinal),
+                t.TypeOf is null
+                    ? EmptyMap
+                    : new Dictionary<string, string>(t.TypeOf, StringComparer.Ordinal));
 
         // Transitive subtype index: walking up each type's base chain is cheaper than walking
         // down, and both directions are needed only once.
@@ -273,7 +261,7 @@ public static class MetadataContracts
             enums);
     }
 
-    private static readonly IReadOnlyDictionary<string, string> EmptyEnumOf =
+    private static readonly IReadOnlyDictionary<string, string> EmptyMap =
         new Dictionary<string, string>(0, StringComparer.Ordinal);
 
     private sealed class CatalogDto
@@ -294,5 +282,6 @@ public static class MetadataContracts
         public string? Base { get; set; }
         public string[]? Members { get; set; }
         public Dictionary<string, string>? EnumOf { get; set; }
+        public Dictionary<string, string>? TypeOf { get; set; }
     }
 }

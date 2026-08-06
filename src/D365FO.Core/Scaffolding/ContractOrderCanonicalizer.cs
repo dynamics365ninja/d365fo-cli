@@ -16,9 +16,11 @@ namespace D365FO.Core.Scaffolding;
 /// for it (audit finding R2).
 /// </para>
 /// <para>
-/// Ordering is applied to any element whose name (or <c>i:type</c>) names a known contract;
-/// everything else is left exactly as authored, including the relative order of items inside
-/// a collection, which is data rather than contract.
+/// Which contract governs an element is a question in itself: an element may be named after a
+/// type, after a member holding a type, or after an abstract base standing in for a subtype.
+/// All three are resolved by <see cref="MetadataContracts.GoverningContract"/>. Anything
+/// unresolvable is left exactly as authored, as is the relative order of items inside a
+/// collection, which is data rather than contract.
 /// </para>
 /// </remarks>
 public static class ContractOrderCanonicalizer
@@ -33,21 +35,16 @@ public static class ContractOrderCanonicalizer
 
     /// <summary>Reorders <paramref name="element"/> and its descendants in place.</summary>
     public static void Apply(XElement element)
+        => Apply(element, MetadataContracts.GoverningContract(element, parent: null));
+
+    private static void Apply(XElement element, MetadataContract? contract)
     {
-        foreach (var child in element.Elements().ToList())
-            Apply(child);
-
         var children = element.Elements().ToList();
-        if (children.Count < 2) return;
 
-        // Resolved from the members actually present, not from the element name alone: a
-        // collection item is written under its declared base type's name and carries a
-        // subtype's members, so the base's order cannot rank them (see EffectiveContract).
-        var contract = MetadataContracts.EffectiveContract(
-            element.Name.LocalName,
-            element.Attribute(Xsi + "type")?.Value,
-            children.Select(c => c.Name.LocalName));
-        if (contract is null) return;
+        foreach (var child in children)
+            Apply(child, MetadataContracts.GoverningContract(child, contract));
+
+        if (contract is null || children.Count < 2) return;
 
         // Members the contract does not know keep their position relative to the member they
         // follow, so a document with an unknown element is not scrambled on top of being

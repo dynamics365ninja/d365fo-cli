@@ -1,109 +1,64 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
-<AxReport xmlns="Microsoft.Dynamics.AX.Metadata.V2">
+<AxReport xmlns:i="http://www.w3.org/2001/XMLSchema-instance" xmlns="Microsoft.Dynamics.AX.Metadata.V2">
   <Name>ConFmVehicleReport</Name>
-  <Datasets>
-    <AxReportDataset xmlns="">
+  <DataMethods />
+  <DataSets>
+    <AxReportDataSet xmlns="">
       <Name>ConFmVehicleReportDS</Name>
-      <DataProvider>ConFmVehicleReportDP</DataProvider>
-      <QueryType>DataProvider</QueryType>
-      <DynamicFilters>Yes</DynamicFilters>
-    </AxReportDataset>
-  </Datasets>
+      <DataSourceType>ReportDataProvider</DataSourceType>
+      <DynamicFilters>true</DynamicFilters>
+      <Query>SELECT * FROM ConFmVehicleReportDP.ConFmVehicleReportDPTmp</Query>
+      <FieldGroups />
+      <Fields>
+        <AxReportDataSetField>
+          <Name>VIN</Name>
+          <Alias>ConFmVehicleReportDPTmp.1.VIN</Alias>
+          <DataType>System.String</DataType>
+          <UserDefined>false</UserDefined>
+        </AxReportDataSetField>
+        <AxReportDataSetField>
+          <Name>Make</Name>
+          <Alias>ConFmVehicleReportDPTmp.1.Make</Alias>
+          <DataType>System.String</DataType>
+          <UserDefined>false</UserDefined>
+        </AxReportDataSetField>
+      </Fields>
+      <Parameters />
+    </AxReportDataSet>
+  </DataSets>
   <Designs>
-    <AxReportDesign xmlns="">
-      <Name>Report</Name>
-      <Caption>Fleet vehicle report</Caption>
-      <AutoDesignSpecs>
-        <AxReportAutoDesignNode>
-          <Name>AutoDesign</Name>
+    <AxReportDesign i:type="AxReportAutoDesign" xmlns="">
+      <Name>AutoDesign</Name>
+      <LayoutTemplate>ReportLayoutStyleTemplate</LayoutTemplate>
+      <Title>Fleet vehicle report</Title>
+      <TitleOverridden>true</TitleOverridden>
+      <DataRegions>
+        <AxReportDataRegion i:type="AxReportTable">
+          <Name>Table</Name>
           <DataSet>ConFmVehicleReportDS</DataSet>
-          <ReportAutoDesignItems>
-            <AxReportAutoDesignDataSet>
-              <Name>AutoDesignDataSet1</Name>
-              <DataSet>ConFmVehicleReportDS</DataSet>
-              <AutoFields>Yes</AutoFields>
-            </AxReportAutoDesignDataSet>
-          </ReportAutoDesignItems>
-        </AxReportAutoDesignNode>
-      </AutoDesignSpecs>
-      <ReportDesignItems>
-        <AxReportTablix>
-          <Name>Tablix1</Name>
-          <DataSetName>ConFmVehicleReportDS</DataSetName>
-          <TablixBody>
-            <TablixColumns>
-              <TablixColumn>
-                <Width>2in</Width>
-              </TablixColumn>
-              <TablixColumn>
-                <Width>2in</Width>
-              </TablixColumn>
-            </TablixColumns>
-            <TablixRows>
-              <TablixRow>
-                <Height>0.25in</Height>
-                <TablixCells>
-                  <TablixCell>
-                    <CellContents>
-                      <Textbox Name="Tablix1_VIN_Header">
-                        <Value>VIN</Value>
-                        <Style>
-                          <FontWeight>Bold</FontWeight>
-                          <BackgroundColor>#e0e0e0</BackgroundColor>
-                        </Style>
-                      </Textbox>
-                    </CellContents>
-                  </TablixCell>
-                  <TablixCell>
-                    <CellContents>
-                      <Textbox Name="Tablix1_Make_Header">
-                        <Value>Make</Value>
-                        <Style>
-                          <FontWeight>Bold</FontWeight>
-                          <BackgroundColor>#e0e0e0</BackgroundColor>
-                        </Style>
-                      </Textbox>
-                    </CellContents>
-                  </TablixCell>
-                </TablixCells>
-              </TablixRow>
-              <TablixRow>
-                <Height>0.25in</Height>
-                <TablixCells>
-                  <TablixCell>
-                    <CellContents>
-                      <Textbox Name="Tablix1_VIN">
-                        <Value>=Fields!VIN.Value</Value>
-                      </Textbox>
-                    </CellContents>
-                  </TablixCell>
-                  <TablixCell>
-                    <CellContents>
-                      <Textbox Name="Tablix1_Make">
-                        <Value>=Fields!Make.Value</Value>
-                      </Textbox>
-                    </CellContents>
-                  </TablixCell>
-                </TablixCells>
-              </TablixRow>
-            </TablixRows>
-          </TablixBody>
-          <TablixColumnHierarchy>
-            <TablixMembers>
-              <TablixMember />
-              <TablixMember />
-            </TablixMembers>
-          </TablixColumnHierarchy>
-          <TablixRowHierarchy>
-            <TablixMembers>
-              <TablixMember />
-              <TablixMember>
-                <Group Name="Detail" />
-              </TablixMember>
-            </TablixMembers>
-          </TablixRowHierarchy>
-        </AxReportTablix>
-      </ReportDesignItems>
+          <Title>ConFmVehicleReportDS</Title>
+          <Filters />
+          <RepeatHeaderOnEachPage>true</RepeatHeaderOnEachPage>
+          <StyleTemplate>TableStyleTemplate</StyleTemplate>
+          <Data>
+            <Name>Data</Name>
+            <DetailData>
+              <AxReportItem i:type="AxReportTableDetailData">
+                <Name>VIN</Name>
+                <Caption>VIN</Caption>
+                <Expression>=Fields!VIN.Value</Expression>
+              </AxReportItem>
+              <AxReportItem i:type="AxReportTableDetailData">
+                <Name>Make</Name>
+                <Caption>Make</Caption>
+                <Expression>=Fields!Make.Value</Expression>
+              </AxReportItem>
+            </DetailData>
+          </Data>
+          <Groupings />
+          <Sorting />
+        </AxReportDataRegion>
+      </DataRegions>
     </AxReportDesign>
   </Designs>
 </AxReport>

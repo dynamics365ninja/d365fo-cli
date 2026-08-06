@@ -35,10 +35,10 @@ public class {FormName} extends FormRun
       <ReferencedDataSources />
       <InsertIfEmpty>No</InsertIfEmpty>
       <DataSourceLinks>
-        <AxFormDataSourceLink>
+        <AxFormDataSourceRootLink>
+          <Name>{DsName}</Name>
           <LinkType>Active</LinkType>
-          <Table>{DsName}</Table>
-        </AxFormDataSourceLink>
+        </AxFormDataSourceRootLink>
       </DataSourceLinks>
       <DerivedDataSources />
     </AxFormDataSource>

@@ -14,6 +14,9 @@ namespace D365FO.Core.Scaffolding;
 /// </summary>
 public static class XppScaffolder
 {
+    /// <summary>Discriminator namespace: how a document pins a subtype the element name cannot.</summary>
+    private static readonly XNamespace Xsi = "http://www.w3.org/2001/XMLSchema-instance";
+
     /// <summary>
     /// Scaffolds an <c>AxTable</c> XML skeleton: fields (from <paramref name="fields"/>
     /// or the <paramref name="pattern"/> preset), an alternate-key index, and the
@@ -317,17 +320,38 @@ public static class XppScaffolder
         string? publicCollectionName = null,
         IEnumerable<EntityFieldSpec>? fields = null,
         bool dataManagementEnabled = false,
-        string? dataManagementStagingTable = null)
+        string? dataManagementStagingTable = null,
+        string? entityCategory = null,
+        IEnumerable<string>? keyFields = null)
     {
         var pubEntity = string.IsNullOrEmpty(publicEntityName) ? entityName : publicEntityName;
         var pubColl = string.IsNullOrEmpty(publicCollectionName) ? pubEntity + "s" : publicCollectionName;
+        var fieldList = (fields ?? []).ToList();
 
-        var fieldEls = (fields ?? Enumerable.Empty<EntityFieldSpec>()).Select(f =>
+        // A field that names a table column is an AxDataEntityViewMappedField, and saying so is
+        // not optional: AxDataEntityViewField is concrete, so without the discriminator the
+        // reader instantiates the plain field type and DataField/DataSource — the entire mapping
+        // — are dropped. The entity then exposes columns bound to nothing.
+        var fieldEls = fieldList.Select(f =>
             new XElement("AxDataEntityViewField",
+                new XAttribute(Xsi + "type", "AxDataEntityViewMappedField"),
                 new XElement("Name", f.Name),
+                // The member is Mandatory; IsMandatory is not one, and was silently discarded.
+                f.IsMandatory ? new XElement("Mandatory", "Yes") : null,
                 new XElement("DataField", f.DataField ?? f.Name),
-                new XElement("DataSource", table),
-                f.IsMandatory ? new XElement("IsMandatory", "Yes") : null));
+                new XElement("DataSource", table)));
+
+        var keys = keyFields?.ToList() ?? [];
+        XElement? keysEl = null;
+        if (keys.Count > 0)
+        {
+            keysEl = new XElement("Keys",
+                new XElement("AxDataEntityViewKey",
+                    new XElement("Name", "EntityKey"),
+                    new XElement("Fields",
+                        keys.Select(k => new XElement("AxDataEntityViewKeyField",
+                            new XElement("DataField", k))))));
+        }
 
         var stagingTable = dataManagementEnabled
             ? new XElement("DataManagementStagingTable",
@@ -337,16 +361,25 @@ public static class XppScaffolder
         return new XDocument(
             new XElement("AxDataEntityView",
                 new XElement("Name", entityName),
+                string.IsNullOrEmpty(entityCategory) ? null : new XElement("EntityCategory", entityCategory),
                 new XElement("PublicEntityName", pubEntity),
                 new XElement("PublicCollectionName", pubColl),
                 new XElement("DataManagementEnabled", dataManagementEnabled ? "Yes" : "No"),
                 stagingTable,
                 new XElement("IsPublic", "Yes"),
-                new XElement("DataSources",
-                    new XElement("AxQuerySimpleRootDataSource",
-                        new XElement("Name", table),
-                        new XElement("Table", table))),
-                new XElement("Fields", fieldEls)));
+                keys.Count > 0 ? new XElement("PrimaryKey", "EntityKey") : null,
+                new XElement("Fields", fieldEls),
+                keysEl,
+                // An entity's data sources are not its own member — they belong to the embedded
+                // query in ViewMetadata. A <DataSources> element on the entity is discarded, and
+                // the entity loads with nothing to select from.
+                new XElement("ViewMetadata",
+                    new XElement("Name", "Metadata"),
+                    new XElement("DataSources",
+                        new XElement("AxQuerySimpleRootDataSource",
+                            new XElement("Name", table),
+                            new XElement("DynamicFields", "Yes"),
+                            new XElement("Table", table))))));
     }
 
     /// <summary>
@@ -488,16 +521,8 @@ public static class XppScaffolder
         XElement? dataEntityPermissions = null;
         if (!string.IsNullOrEmpty(dataEntity))
         {
-            var maintain = string.Equals(dataEntityAccess, "maintain", StringComparison.OrdinalIgnoreCase);
-            var grant = maintain
-                ? new XElement("Grant",
-                    new XElement("Correct", "Allow"),
-                    new XElement("Create", "Allow"),
-                    new XElement("Delete", "Allow"),
-                    new XElement("Read", "Allow"),
-                    new XElement("Update", "Allow"))
-                : new XElement("Grant",
-                    new XElement("Read", "Allow"));
+            var grant = SecurityGrant(
+                string.Equals(dataEntityAccess, "maintain", StringComparison.OrdinalIgnoreCase) ? "Delete" : "Read");
             dataEntityPermissions = new XElement("DataEntityPermissions",
                 new XElement("AxSecurityDataEntityPermission",
                     grant,
@@ -515,9 +540,43 @@ public static class XppScaffolder
                     string.IsNullOrEmpty(entryPointName) ? null :
                     new XElement("AxSecurityEntryPointReference",
                         new XElement("Name", entryPointName),
+                        SecurityGrant(access),
                         new XElement("ObjectName", entryPointObject ?? entryPointName),
-                        new XElement("ObjectType", entryPointKind ?? "MenuItemDisplay"),
-                        new XElement("AccessLevel", access ?? "Read")))));
+                        new XElement("ObjectType", entryPointKind ?? "MenuItemDisplay")))));
+    }
+
+    /// <summary>
+    /// The <c>&lt;Grant&gt;</c> block for an access level, as an <c>AccessGrant</c>.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// There is no <c>AccessLevel</c> member anywhere in the security model — access is six
+    /// independent permissions (<c>Correct</c>, <c>Create</c>, <c>Delete</c>, <c>Invoke</c>,
+    /// <c>Read</c>, <c>Update</c>), each Allow, Deny or unset. Writing
+    /// <c>&lt;AccessLevel&gt;Update&lt;/AccessLevel&gt;</c> produced a privilege that granted
+    /// nothing at all: the element was discarded on read and the entry point came back with an
+    /// empty grant, which is indistinguishable from a deliberate no-access privilege.
+    /// </para>
+    /// <para>
+    /// The levels are cumulative, which is how shipped privileges use them — of ~760 sampled
+    /// entry points, every grant is one of these five shapes.
+    /// </para>
+    /// </remarks>
+    internal static XElement SecurityGrant(string? access)
+    {
+        var allow = (access ?? "Read").Trim().ToLowerInvariant() switch
+        {
+            "delete" or "full" or "maintain" => new[] { "Correct", "Create", "Delete", "Read", "Update" },
+            "invoke"                         => new[] { "Invoke" },
+            "create"                         => new[] { "Create", "Read", "Update" },
+            "correct"                        => new[] { "Correct", "Read", "Update" },
+            "update" or "edit"               => new[] { "Read", "Update" },
+            _                                => new[] { "Read" },
+        };
+
+        // Contract order — Correct, Create, Delete, Invoke, Read, Update — which is what the
+        // array literals above already follow.
+        return new XElement("Grant", allow.Select(p => new XElement(p, "Allow")));
     }
 
     /// <summary>Scaffolds an <c>AxSecurityDuty</c> grouping given privileges.</summary>
@@ -588,136 +647,167 @@ public static class XppScaffolder
     }
 
     /// <summary>
-    /// Scaffolds an <c>AxReport</c> XML with full dataset / tablix / parameter structure.
-    /// Supports multiple datasets (each bound to a DP class), tablix column definitions
-    /// derived from <paramref name="spec"/>.<c>Fields</c> / <c>Datasets[i].Fields</c>,
-    /// and <c>AxReportParameter</c> elements for report-dialog filters.
-    /// Mirrors upstream MCP <c>generate_smart_report</c>. Pair with
-    /// <see cref="ReportDp"/> and (when parameters exist) <see cref="ReportContract"/>.
+    /// Scaffolds an <c>AxReport</c>: one <c>AxReportDataSet</c> per data provider and an
+    /// auto-design with a table data region over each.
     /// </summary>
+    /// <remarks>
+    /// <para>
+    /// This is modelled on what an AOS actually holds, not on RDL. The previous version emitted
+    /// <c>&lt;Datasets&gt;</c> (the member is <c>DataSets</c>), <c>&lt;ReportParameters&gt;</c>
+    /// (parameters live in <c>DefaultParameterGroup</c>), and a hand-rolled
+    /// <c>AxReportTablix</c>/<c>TablixBody</c> tree — none of which are AOT types. Every one of
+    /// those elements was discarded on read, so the report loaded with no datasets and no
+    /// design at all while the file looked complete.
+    /// </para>
+    /// <para>
+    /// Designs come in two kinds. <c>AxReportAutoDesign</c> describes the layout in AOT terms
+    /// and is what this emits; <c>AxReportPrecisionDesign</c> carries a full RDL document as an
+    /// escaped string in its <c>Text</c> member. Precision is the more common of the two in
+    /// shipped code, but generating a correct RDL 2016 body is a separate problem from
+    /// generating correct AOT, and a wrong one is far harder to detect — so it is left to the
+    /// designer rather than guessed at here.
+    /// </para>
+    /// </remarks>
     public static XDocument Report(ReportSpec spec)
     {
         ArgumentNullException.ThrowIfNull(spec);
 
         var datasets = spec.EffectiveDatasets;
 
-        // --- <ReportParameters> (optional) ---
-        XElement? parametersEl = null;
+        var dataSetsEl = new XElement("DataSets", datasets.Select(BuildDataSet));
+
+        // Parameters hang off the report's default group, not off the report.
+        XElement? parameterGroupEl = null;
         if (spec.Parameters is { Count: > 0 })
         {
-            parametersEl = new XElement("ReportParameters",
-                spec.Parameters.Select(p => new XElement("AxReportParameter",
-                    new XElement("Name",       p.Name),
-                    new XElement("AllowBlank", p.AllowBlank ? "Yes" : "No"),
-                    new XElement("DataType",   p.DataType),
-                    new XElement("Prompt",     p.Prompt     ? "Yes" : "No"))));
+            parameterGroupEl = new XElement("DefaultParameterGroup",
+                new XElement("Name", "Parameters"),
+                new XElement("ReportParameterBases",
+                    spec.Parameters.Select(p => new XElement("AxReportParameterBase",
+                        new XAttribute(Xsi + "type", "AxReportParameter"),
+                        new XElement("Name",       p.Name),
+                        new XElement("AllowBlank", p.AllowBlank ? "true" : "false"),
+                        new XElement("DataType",   ReportDataType(p.DataType)),
+                        p.Prompt ? null : new XElement("UserVisibility", "Hidden")))));
         }
-
-        // --- <Datasets> ---
-        var datasetsEl = new XElement("Datasets",
-            datasets.Select(ds => new XElement("AxReportDataset",
-                new XElement("Name",           ds.Name),
-                new XElement("DataProvider",   ds.DpClass),
-                new XElement("QueryType",      "DataProvider"),
-                new XElement("DynamicFilters", "Yes"))));
-
-        // --- <Designs> with AutoDesignSpecs + one tablix per dataset ---
-        var autoNodes = datasets.Select((ds, i) => new XElement("AxReportAutoDesignNode",
-            new XElement("Name",    i == 0 ? "AutoDesign" : $"AutoDesign{i + 1}"),
-            new XElement("DataSet", ds.Name),
-            new XElement("ReportAutoDesignItems",
-                new XElement("AxReportAutoDesignDataSet",
-                    new XElement("Name",       $"AutoDesignDataSet{i + 1}"),
-                    new XElement("DataSet",    ds.Name),
-                    new XElement("AutoFields", "Yes")))));
-
-        var tablixItems = datasets.Select((ds, i) => BuildTablix(ds.Name, ds.Fields, i + 1));
 
         var designEl = new XElement("Designs",
             new XElement("AxReportDesign",
-                new XElement("Name", "Report"),
-                string.IsNullOrEmpty(spec.Caption) ? null : new XElement("Caption", spec.Caption),
-                new XElement("AutoDesignSpecs", autoNodes),
-                new XElement("ReportDesignItems", tablixItems)));
+                new XAttribute(Xsi + "type", "AxReportAutoDesign"),
+                new XElement("Name", "AutoDesign"),
+                new XElement("LayoutTemplate", "ReportLayoutStyleTemplate"),
+                string.IsNullOrEmpty(spec.Caption)
+                    ? null
+                    : new XElement("Title", spec.Caption),
+                string.IsNullOrEmpty(spec.Caption)
+                    ? null
+                    : new XElement("TitleOverridden", "true"),
+                new XElement("DataRegions",
+                    datasets.Select((ds, i) => BuildTableDataRegion(ds, i)))));
 
         return new XDocument(
             new XElement("AxReport",
                 new XElement("Name", spec.Name),
-                parametersEl,
-                datasetsEl,
+                new XElement("DataMethods"),
+                dataSetsEl,
+                parameterGroupEl,
                 designEl));
     }
 
     /// <summary>
-    /// Builds one <c>AxReportTablix</c> element. When <paramref name="fields"/> is
-    /// provided, emits a column hierarchy, a bold header row, and a detail data row.
-    /// When empty, produces a minimal tablix shell for manual completion.
+    /// One <c>AxReportDataSet</c> bound to a report data provider.
     /// </summary>
-    private static XElement BuildTablix(string datasetName, IReadOnlyList<string>? fields, int index)
+    /// <remarks>
+    /// A DP-backed dataset is not described by naming the class — the binding is the
+    /// pseudo-query <c>SELECT * FROM &lt;DpClass&gt;.&lt;TmpTable&gt;</c> in <c>Query</c>, with
+    /// <c>DataSourceType</c> saying how to read it. That is the form every shipped
+    /// DP-backed report uses.
+    /// </remarks>
+    private static XElement BuildDataSet(ReportDatasetSpec ds)
     {
-        var name = $"Tablix{index}";
+        var tmpTable = ds.DpClass + "Tmp";
 
-        if (fields is not { Count: > 0 })
-        {
-            // Minimal shell — developer fills in columns manually.
-            return new XElement("AxReportTablix",
-                new XElement("Name",        name),
-                new XElement("DataSetName", datasetName),
-                new XElement("TablixBody",
-                    new XElement("TablixColumns"),
-                    new XElement("TablixRows")),
-                new XElement("TablixColumnHierarchy",
-                    new XElement("TablixMembers")),
-                new XElement("TablixRowHierarchy",
-                    new XElement("TablixMembers",
-                        new XElement("TablixMember",
-                            new XElement("Group", new XAttribute("Name", "Detail"))))));
-        }
-
-        // Column width definitions (2 in per column).
-        var columnEls = fields.Select(_ =>
-            new XElement("TablixColumn", new XElement("Width", "2in")));
-
-        // Header row — one bold textbox per field.
-        var headerCells = fields.Select(f =>
-            new XElement("TablixCell",
-                new XElement("CellContents",
-                    new XElement("Textbox", new XAttribute("Name", $"{name}_{f}_Header"),
-                        new XElement("Value", f),
-                        new XElement("Style",
-                            new XElement("FontWeight", "Bold"),
-                            new XElement("BackgroundColor", "#e0e0e0"))))));
-
-        // Detail row — one =Fields!<Field>.Value textbox per field.
-        var dataCells = fields.Select(f =>
-            new XElement("TablixCell",
-                new XElement("CellContents",
-                    new XElement("Textbox", new XAttribute("Name", $"{name}_{f}"),
-                        new XElement("Value", $"=Fields!{f}.Value")))));
-
-        // Column hierarchy: one static member per column.
-        var colMembers = fields.Select(_ => new XElement("TablixMember"));
-
-        return new XElement("AxReportTablix",
-            new XElement("Name",        name),
-            new XElement("DataSetName", datasetName),
-            new XElement("TablixBody",
-                new XElement("TablixColumns", columnEls),
-                new XElement("TablixRows",
-                    new XElement("TablixRow",
-                        new XElement("Height", "0.25in"),
-                        new XElement("TablixCells", headerCells)),
-                    new XElement("TablixRow",
-                        new XElement("Height", "0.25in"),
-                        new XElement("TablixCells", dataCells)))),
-            new XElement("TablixColumnHierarchy",
-                new XElement("TablixMembers", colMembers)),
-            new XElement("TablixRowHierarchy",
-                new XElement("TablixMembers",
-                    new XElement("TablixMember"), // static header row
-                    new XElement("TablixMember",  // detail data row
-                        new XElement("Group", new XAttribute("Name", "Detail"))))));
+        return new XElement("AxReportDataSet",
+            new XElement("Name",           ds.Name),
+            new XElement("DataSourceType", "ReportDataProvider"),
+            new XElement("DynamicFilters", "true"),
+            new XElement("Query",          $"SELECT * FROM {ds.DpClass}.{tmpTable}"),
+            new XElement("FieldGroups"),
+            new XElement("Fields",
+                (ds.Fields ?? []).Select(f => BuildDataSetField(f, tmpTable))),
+            new XElement("Parameters"));
     }
+
+    /// <summary>
+    /// One <c>AxReportDataSetField</c>. <paramref name="field"/> may carry an explicit type as
+    /// <c>Name:XppType</c>; without one the field is typed as a string, which is the safe
+    /// default for display but is worth correcting when the temp table says otherwise.
+    /// </summary>
+    private static XElement BuildDataSetField(string field, string tmpTable)
+    {
+        var (name, xppType) = SplitTyped(field);
+
+        return new XElement("AxReportDataSetField",
+            new XElement("Name",        name),
+            // The alias is positional: <table>.<ordinal>.<field>, and the designer relies on it.
+            new XElement("Alias",       $"{tmpTable}.1.{name}"),
+            new XElement("DataType",    ReportDataType(xppType)),
+            new XElement("UserDefined", "false"));
+    }
+
+    private static XElement BuildTableDataRegion(ReportDatasetSpec ds, int index)
+    {
+        var fields = ds.Fields ?? [];
+
+        return new XElement("AxReportDataRegion",
+            new XAttribute(Xsi + "type", "AxReportTable"),
+            new XElement("Name",    index == 0 ? "Table" : $"Table{index + 1}"),
+            new XElement("DataSet", ds.Name),
+            new XElement("Title",   ds.Name),
+            new XElement("Filters"),
+            new XElement("RepeatHeaderOnEachPage", "true"),
+            new XElement("StyleTemplate",          "TableStyleTemplate"),
+            new XElement("Data",
+                new XElement("Name", "Data"),
+                new XElement("DetailData",
+                    fields.Select(f =>
+                    {
+                        var (name, _) = SplitTyped(f);
+                        return new XElement("AxReportItem",
+                            new XAttribute(Xsi + "type", "AxReportTableDetailData"),
+                            new XElement("Name",       name),
+                            new XElement("Caption",    name),
+                            new XElement("Expression", $"=Fields!{name}.Value"));
+                    }))),
+            new XElement("Groupings"),
+            new XElement("Sorting"));
+    }
+
+    /// <summary>Splits <c>Name:Type</c>, tolerating a bare name.</summary>
+    private static (string Name, string? Type) SplitTyped(string raw)
+    {
+        var parts = raw.Split(':', 2);
+        return parts.Length > 1 && !string.IsNullOrWhiteSpace(parts[1])
+            ? (parts[0].Trim(), parts[1].Trim())
+            : (raw.Trim(), null);
+    }
+
+    /// <summary>
+    /// Maps an X++ (or plain) type name onto the CLR type name SSRS datasets are written in.
+    /// Unknown and absent types become <c>System.String</c> — a string column renders, where a
+    /// wrong numeric type does not.
+    /// </summary>
+    internal static string ReportDataType(string? xppType) => (xppType ?? string.Empty).ToLowerInvariant() switch
+    {
+        "int" or "integer" or "int32" or "enum"        => "System.Int32",
+        "int64" or "long" or "recid"                   => "System.Int64",
+        "real" or "decimal" or "amount"                => "System.Decimal",
+        "date" or "datetime" or "utcdatetime"          => "System.DateTime",
+        "boolean" or "bool" or "noyes"                 => "System.Boolean",
+        "guid"                                         => "System.Guid",
+        "container" or "bytes"                         => "System.Byte[]",
+        _                                              => "System.String",
+    };
 
     /// <summary>
     /// Scaffolds an <c>AxClass</c> implementing <c>SrsReportDataProviderBase</c>

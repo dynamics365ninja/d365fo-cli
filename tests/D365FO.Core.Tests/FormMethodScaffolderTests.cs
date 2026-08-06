@@ -109,7 +109,7 @@ public class FormMethodScaffolderTests
         var sourceCode = Local(doc.Root!, "SourceCode")!;
         var container = sourceCode.Elements().First(e => e.Name.LocalName == "DataControls");
         Assert.Equal("", container.Name.NamespaceName);
-        var dc = container.Elements().First(e => e.Name.LocalName == "DataControl");
+        var dc = container.Elements().First(e => e.Name.LocalName == "Control");
         Assert.Equal("Vehicle_VIN", Local(dc, "Name")!.Value);
         Assert.Contains("public boolean modified()", Local(dc, "Source")!.Value);
     }

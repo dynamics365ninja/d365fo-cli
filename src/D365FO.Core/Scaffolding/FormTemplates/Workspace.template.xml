@@ -71,27 +71,22 @@ public class {FormName} extends FormRun
         <HeightMode>SizeToAvailable</HeightMode>
         <FormControlExtension i:nil="true" />
         <Controls>
+          <!-- The tile strip is the tab page itself under the SectionTiles pattern, which is
+               how every shipped workspace expresses it. This used to be a nested group with
+               Style=TileSection and Pattern=Workspace_SummaryNumbers_UnboundFields: neither
+               exists — the style is not a value of GroupStyle, so the serializer threw and the
+               entire form was unreadable, not merely misshapen. -->
           <AxFormControl xmlns="" i:type="AxFormTabPageControl">
             <Name>SummarySection</Name>
             <Caption>Summary</Caption>
             <ElementPosition>536870911</ElementPosition>
+            <Pattern>SectionTiles</Pattern>
+            <PatternVersion>1.1</PatternVersion>
             <Type>TabPage</Type>
+            <WidthMode>SizeToAvailable</WidthMode>
             <FormControlExtension i:nil="true" />
             <Controls>
-              <AxFormControl xmlns="" i:type="AxFormGroupControl">
-                <Name>TileSection</Name>
-                <Pattern>Workspace_SummaryNumbers_UnboundFields</Pattern>
-                <PatternVersion>1.0</PatternVersion>
-                <Type>Group</Type>
-                <WidthMode>SizeToAvailable</WidthMode>
-                <FormControlExtension i:nil="true" />
-                <Controls>
-                  <!-- Add AxFormControlButtonControl tiles here -->
-                </Controls>
-                <ArrangeMethod>HorizontalLeft</ArrangeMethod>
-                <FrameType>None</FrameType>
-                <Style>TileSection</Style>
-              </AxFormControl>
+              <!-- Add AxFormControl i:type="AxFormButtonControl" tiles here -->
               <AxFormControl xmlns="" i:type="AxFormGroupControl">
                 <Name>ChartSection</Name>
                 <Type>Group</Type>
@@ -104,7 +99,7 @@ public class {FormName} extends FormRun
                 <FrameType>None</FrameType>
               </AxFormControl>
             </Controls>
-            <FrameType>None</FrameType>
+            <ArrangeMethod>HorizontalLeft</ArrangeMethod>
           </AxFormControl>
 {ListSections}        </Controls>
         <AlignChild>No</AlignChild>

@@ -56,7 +56,6 @@ public class ConFmVehicleParametersForm extends FormRun
           
           
           
-          
         <Name>TabPageGeneral</Name><Pattern>FieldsFieldGroups</Pattern><PatternVersion>1.1</PatternVersion><Type>TabPage</Type><FormControlExtension i:nil="true" /><Controls>
             <AxFormControl xmlns="" i:type="AxFormStringControl">
               <Name>VIN</Name>
@@ -72,7 +71,7 @@ public class ConFmVehicleParametersForm extends FormRun
               <DataField>Make</DataField>
               <DataSource>FmVehicle</DataSource>
             </AxFormControl>
-          </Controls><Caption>General</Caption><FrameType>None</FrameType></AxFormControl>
+          </Controls><Caption>General</Caption></AxFormControl>
         <AxFormControl xmlns="" i:type="AxFormTabPageControl">
           
           
@@ -81,8 +80,7 @@ public class ConFmVehicleParametersForm extends FormRun
           
           
           
-          
-        <Name>TabPageSetup</Name><Pattern>FieldsFieldGroups</Pattern><PatternVersion>1.1</PatternVersion><Type>TabPage</Type><FormControlExtension i:nil="true" /><Controls /><Caption>Setup</Caption><FrameType>None</FrameType></AxFormControl>
+        <Name>TabPageSetup</Name><Pattern>FieldsFieldGroups</Pattern><PatternVersion>1.1</PatternVersion><Type>TabPage</Type><FormControlExtension i:nil="true" /><Controls /><Caption>Setup</Caption></AxFormControl>
         </Controls>
       </AxFormControl>
     </Controls>

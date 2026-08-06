@@ -73,8 +73,14 @@ public class MetadataContractsAotTests
         }
     }
 
+    /// <summary>
+    /// Runs the real rules over shipped files. Broader than the catalog-completeness check in
+    /// <see cref="ObjectTypeRegistryAotTests"/>, which resolves each element by its own name:
+    /// this walks the way the rules do, descending into member-typed sub-objects
+    /// (<c>&lt;Grant&gt;</c>, <c>&lt;Design&gt;</c>) that name no type at all.
+    /// </summary>
     [Fact]
-    public void No_shipped_file_trips_the_invalid_enum_rule()
+    public void No_shipped_file_trips_the_contract_shape_rules()
     {
         var root = PackagesRoot();
         if (root is null) return;
@@ -92,43 +98,56 @@ public class MetadataContractsAotTests
             var violations = new List<XppViolation>();
             ContractShapeRules.Check(xml, violations);
 
-            foreach (var v in violations.Where(v => v.Rule == ContractShapeRules.RuleInvalidEnumValue).Take(2))
-                findings.Add($"{Path.GetFileName(file)}: {v.Excerpt} — {v.Fix}");
+            foreach (var v in violations.Take(2))
+                findings.Add($"{Path.GetFileName(file)}: {v.Rule} {v.Excerpt} — {v.Fix}");
 
             if (findings.Count > 20) break;
         }
 
         Assert.True(findings.Count == 0,
-            $"XML008 flagged enum values in files Microsoft ships ({samples.Count} sampled), so the "
-            + "catalog's enum data — not the files — is wrong:\n  " + string.Join("\n  ", findings.Take(10)));
+            $"The contract-shape rules flagged files Microsoft ships ({samples.Count} sampled), so the "
+            + "rules — not the files — are wrong:\n  " + string.Join("\n  ", findings.Take(10)));
     }
 
     /// <summary>
-    /// The reason ordering needs an <em>effective</em> type: shipped forms write
-    /// <c>&lt;AxFormDataSource&gt;</c>, an abstract five-member contract, and fill it with an
-    /// <c>AxFormDataSourceRoot</c>. Ranking those members against the base finds no position for
-    /// them, so they stay where they were and the serializer drops them on read.
+    /// <c>&lt;AxFormDataSource&gt;</c> in a shipped form is not the abstract CLR type of that
+    /// name — it is <c>AxFormDataSourceRoot</c>, which <em>contracts</em> to that name. Keyed by
+    /// CLR name the catalog answered with the abstract base's five members, leaving
+    /// <c>AllowDelete</c> and <c>DataSourceLinks</c> unrankable and therefore dropped on read.
     /// </summary>
     [Fact]
-    public void Element_named_after_an_abstract_base_resolves_to_the_subtype_it_carries()
+    public void An_element_resolves_to_the_type_that_contracts_to_its_name()
     {
-        var members = new[] { "Name", "Table", "Fields", "ReferencedDataSources", "AllowDelete", "DataSourceLinks" };
-
-        var resolved = MetadataContracts.EffectiveContract("AxFormDataSource", xsiType: null, members);
+        var resolved = MetadataContracts.Find("AxFormDataSource");
 
         Assert.NotNull(resolved);
-        Assert.Equal("AxFormDataSourceRoot", resolved!.Name);
-        Assert.All(members, m => Assert.True(resolved.IndexOf(m) >= 0, $"{m} unranked on {resolved.Name}"));
+        Assert.False(resolved!.IsAbstract);
+        foreach (var m in new[] { "Name", "Table", "Fields", "AllowDelete", "DataSourceLinks" })
+            Assert.True(resolved.IndexOf(m) >= 0, $"{m} unranked on {resolved.Name}");
     }
 
-    /// <summary>An explicit discriminator is authoritative and must not be second-guessed.</summary>
+    /// <summary>
+    /// The same slip in the other direction: a collection item may be named after neither its
+    /// CLR type nor its member. <c>&lt;Method&gt;</c> is an <c>AxMethodPropertyCollection</c>.
+    /// </summary>
     [Fact]
-    public void An_explicit_xsi_type_wins_over_member_based_resolution()
+    public void A_contract_name_that_looks_nothing_like_its_clr_type_still_resolves()
     {
-        var resolved = MetadataContracts.EffectiveContract(
-            "AxReportDesign", xsiType: "AxReportPrecisionDesign", ["Name", "StyleTemplate", "Text"]);
+        var method = MetadataContracts.Find("Method");
+
+        Assert.NotNull(method);
+        Assert.True(method!.IndexOf("Source") >= 0);
+        Assert.True(method.IndexOf("Visibility") >= 0);
+    }
+
+    /// <summary>An explicit discriminator names the type; the element name is then irrelevant.</summary>
+    [Fact]
+    public void An_explicit_xsi_type_decides_the_contract()
+    {
+        var resolved = MetadataContracts.ForElement("AxReportDesign", xsiType: "AxReportPrecisionDesign");
 
         Assert.Equal("AxReportPrecisionDesign", resolved?.Name);
+        Assert.True(resolved!.IndexOf("Text") >= 0, "the RDL body lives in Text");
     }
 
     [Fact]

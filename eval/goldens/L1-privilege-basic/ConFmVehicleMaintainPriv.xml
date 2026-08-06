@@ -4,9 +4,12 @@
   <EntryPoints>
     <AxSecurityEntryPointReference>
       <Name>ConFmVehicleListMenuItem</Name>
+      <Grant>
+        <Read>Allow</Read>
+        <Update>Allow</Update>
+      </Grant>
       <ObjectName>ConFmVehicleListMenuItem</ObjectName>
       <ObjectType>MenuItemDisplay</ObjectType>
-      <AccessLevel>Update</AccessLevel>
     </AxSecurityEntryPointReference>
   </EntryPoints>
 </AxSecurityPrivilege>

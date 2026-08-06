@@ -55,22 +55,30 @@ public static class ContractShapeRules
             return; // Not well-formed — other rules and the parser report that.
         }
 
-        if (doc.Root is not null) CheckElement(doc.Root, doc.Root.Name.LocalName, violations);
+        if (doc.Root is not null)
+            CheckElement(
+                doc.Root,
+                doc.Root.Name.LocalName,
+                MetadataContracts.GoverningContract(doc.Root, parent: null),
+                violations);
     }
 
-    private static void CheckElement(XElement element, string path, List<XppViolation> violations)
+    private static void CheckElement(XElement element, string path, MetadataContract? contract, List<XppViolation> violations)
     {
-        var contract = MetadataContracts.ForElement(
-            element.Name.LocalName,
-            element.Attribute(Xsi + "type")?.Value);
-
-        if (contract is not null)
+        foreach (var child in element.Elements())
         {
-            foreach (var child in element.Elements())
+            var name = child.Name.LocalName;
+            var childContract = MetadataContracts.GoverningContract(child, contract);
+
+            // An element named after a type is a collection item or a nested object, not a
+            // member of the enclosing one — judging <AxTableField> as a member of AxTableField
+            // would flag every collection in every file.
+            var isMember = MetadataContracts.Find(name) is null;
+
+            if (contract is not null && isMember)
             {
-                var name = child.Name.LocalName;
-                // Subtypes count: an element named after a base type routinely carries a
-                // derived type's members, with no i:type to announce it.
+                // Subtypes count when the named contract is abstract: the element then stands in
+                // for a derived type, with no i:type to announce it.
                 if (!MetadataContracts.AcceptsMember(contract, name))
                 {
                     violations.Add(new XppViolation(
@@ -86,10 +94,9 @@ public static class ContractShapeRules
 
                 CheckEnumValue(contract, child, path, violations);
             }
-        }
 
-        foreach (var child in element.Elements())
-            CheckElement(child, path + "/" + child.Name.LocalName, violations);
+            CheckElement(child, path + "/" + name, childContract, violations);
+        }
     }
 
     /// <summary>
