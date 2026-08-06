@@ -1,0 +1,22 @@
+{
+  "runId": "20260806T101245596Z__L1-form-list-page__be6feb827eeb49e2b84223244d796861",
+  "caseId": "L1-form-list-page",
+  "tier": 1,
+  "timestampUtc": "2026-08-06T10:12:45.5963802+00:00",
+  "source": "build-oracle",
+  "score": {
+    "xppErrors": 0,
+    "referenceErrors": 0,
+    "goldenMatch": true,
+    "goldenDiff": {
+      "missing": [],
+      "extra": [],
+      "changed": [],
+      "isMatch": true
+    },
+    "buildClean": false,
+    "buildErrors": 1
+  },
+  "classification": "TOOL_DEFECT",
+  "note": "xppc reported 1 error(s) against this golden: Unable to validate pattern \u0027ListPage 1.1\u0027. Message: Pattern \u0027ListPage 1.1\u0027 not found."
+}

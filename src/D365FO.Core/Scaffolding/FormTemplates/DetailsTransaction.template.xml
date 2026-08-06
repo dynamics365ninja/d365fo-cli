@@ -115,10 +115,12 @@ public class {FormName} extends FormRun
                 <Name>HeaderGeneralGroup</Name>
                 <Type>Group</Type>
                 <Caption>General</Caption>
-                <DataGroup>Overview</DataGroup>
                 <FormControlExtension i:nil="true" />
                 <Controls>
 {HeaderFieldControls}                </Controls>
+                <!-- DataGroup is meaningless without the DataSource naming its table. -->
+                <DataGroup>Overview</DataGroup>
+                <DataSource>{DsName}</DataSource>
               </AxFormControl>
             </Controls>
           </AxFormControl>
@@ -128,17 +130,33 @@ public class {FormName} extends FormRun
             <Caption>Lines</Caption>
             <FormControlExtension i:nil="true" />
             <Controls>
-              <AxFormControl xmlns="" i:type="AxFormActionPaneTabControl">
+              <!--
+                The ActionPaneTab sits inside an ActionPane, never directly under the
+                tab page: "Child form control of type 'AxFormActionPaneTabControl' is
+                not allowed for parent control of type 'AxFormTabPageControl'". Shape
+                copied from a shipped ToolbarList tab page
+                (QMSApprovedCustomerGroup): TabPage > ActionPane > ActionPaneTab >
+                ButtonGroup. Found by `eval verify-build` on
+                L1-form-details-transaction.
+              -->
+              <AxFormControl xmlns="" i:type="AxFormActionPaneControl">
                 <Name>LinesActionPane</Name>
-                <Type>ActionPaneTab</Type>
+                <Type>ActionPane</Type>
                 <FormControlExtension i:nil="true" />
                 <Controls>
-                  <AxFormControl xmlns="" i:type="AxFormButtonGroupControl">
-                    <Name>LinesButtonGroup</Name>
-                    <Type>ButtonGroup</Type>
+                  <AxFormControl xmlns="" i:type="AxFormActionPaneTabControl">
+                    <Name>LinesActionPaneTab</Name>
+                    <Type>ActionPaneTab</Type>
                     <FormControlExtension i:nil="true" />
-                    <Controls />
-                    <ArrangeMethod>Vertical</ArrangeMethod>
+                    <Controls>
+                      <AxFormControl xmlns="" i:type="AxFormButtonGroupControl">
+                        <Name>LinesButtonGroup</Name>
+                        <Type>ButtonGroup</Type>
+                        <FormControlExtension i:nil="true" />
+                        <Controls />
+                        <ArrangeMethod>Vertical</ArrangeMethod>
+                      </AxFormControl>
+                    </Controls>
                   </AxFormControl>
                 </Controls>
               </AxFormControl>
@@ -147,8 +165,8 @@ public class {FormName} extends FormRun
                 <Type>Grid</Type>
                 <FormControlExtension i:nil="true" />
                 <Controls />
-                <DataSource>{LinesDsName}</DataSource>
                 <DataGroup>Overview</DataGroup>
+                <DataSource>{LinesDsName}</DataSource>
                 <Style>Tabular</Style>
               </AxFormControl>
             </Controls>

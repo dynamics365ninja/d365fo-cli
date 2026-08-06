@@ -135,12 +135,10 @@ public class ConFmVehicleListDetails extends FormRun
                 
               <Name>TabPageOverview</Name><Pattern>FieldsFieldGroups</Pattern><PatternVersion>1.1</PatternVersion><Type>TabPage</Type><FormControlExtension i:nil="true" /><Controls>
                   <AxFormControl xmlns="" i:type="AxFormGroupControl">
-                    
-                    
-                    
-                    
-                    
-                  <Name>OverviewGroup</Name><Type>Group</Type><FormControlExtension i:nil="true" /><Controls>
+                    <Name>OverviewGroup</Name>
+                    <Type>Group</Type>
+                    <FormControlExtension i:nil="true" />
+                    <Controls>
                     <AxFormControl xmlns="" i:type="AxFormStringControl">
                       <Name>Overview_VIN</Name>
                       <Type>String</Type>
@@ -155,7 +153,11 @@ public class ConFmVehicleListDetails extends FormRun
                       <DataField>Make</DataField>
                       <DataSource>FmVehicle</DataSource>
                     </AxFormControl>
-                    </Controls><DataGroup>Overview</DataGroup></AxFormControl>
+                    </Controls>
+                    <!-- DataGroup is meaningless without the DataSource naming its table. -->
+                    <DataGroup>Overview</DataGroup>
+                    <DataSource>FmVehicle</DataSource>
+                  </AxFormControl>
                 </Controls><Caption>Overview</Caption></AxFormControl>
               <AxFormControl xmlns="" i:type="AxFormTabPageControl">
                 
@@ -167,12 +169,13 @@ public class ConFmVehicleListDetails extends FormRun
                 
               <Name>TabPageGeneral</Name><Pattern>FieldsFieldGroups</Pattern><PatternVersion>1.1</PatternVersion><Type>TabPage</Type><FormControlExtension i:nil="true" /><Controls>
                   <AxFormControl xmlns="" i:type="AxFormGroupControl">
-                    
-                    
-                    
-                    
-                    
-                  <Name>GeneralGroup</Name><Type>Group</Type><FormControlExtension i:nil="true" /><Controls /><DataGroup>General</DataGroup></AxFormControl>
+                    <Name>GeneralGroup</Name>
+                    <Type>Group</Type>
+                    <FormControlExtension i:nil="true" />
+                    <Controls />
+                    <DataGroup>General</DataGroup>
+                    <DataSource>FmVehicle</DataSource>
+                  </AxFormControl>
                 </Controls><Caption>General</Caption></AxFormControl>
             </Controls>
           </AxFormControl>

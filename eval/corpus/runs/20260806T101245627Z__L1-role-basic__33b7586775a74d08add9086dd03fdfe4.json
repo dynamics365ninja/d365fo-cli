@@ -1,0 +1,20 @@
+{
+  "runId": "20260806T101245627Z__L1-role-basic__33b7586775a74d08add9086dd03fdfe4",
+  "caseId": "L1-role-basic",
+  "tier": 1,
+  "timestampUtc": "2026-08-06T10:12:45.6272044+00:00",
+  "source": "build-oracle",
+  "score": {
+    "xppErrors": 0,
+    "referenceErrors": 0,
+    "goldenMatch": true,
+    "goldenDiff": {
+      "missing": [],
+      "extra": [],
+      "changed": [],
+      "isMatch": true
+    },
+    "buildClean": true,
+    "buildErrors": 0
+  }
+}

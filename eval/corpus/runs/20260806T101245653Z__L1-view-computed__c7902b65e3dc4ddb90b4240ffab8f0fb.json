@@ -1,0 +1,20 @@
+{
+  "runId": "20260806T101245653Z__L1-view-computed__c7902b65e3dc4ddb90b4240ffab8f0fb",
+  "caseId": "L1-view-computed",
+  "tier": 1,
+  "timestampUtc": "2026-08-06T10:12:45.6537448+00:00",
+  "source": "build-oracle",
+  "score": {
+    "xppErrors": 0,
+    "referenceErrors": 0,
+    "goldenMatch": true,
+    "goldenDiff": {
+      "missing": [],
+      "extra": [],
+      "changed": [],
+      "isMatch": true
+    },
+    "buildClean": true,
+    "buildErrors": 0
+  }
+}

@@ -1,0 +1,22 @@
+{
+  "runId": "20260806T101245660Z__L2-enum-extension__370f8c5a51a141c18ccf6f4d2e209ddc",
+  "caseId": "L2-enum-extension",
+  "tier": 2,
+  "timestampUtc": "2026-08-06T10:12:45.6607082+00:00",
+  "source": "build-oracle",
+  "score": {
+    "xppErrors": 0,
+    "referenceErrors": 0,
+    "goldenMatch": true,
+    "goldenDiff": {
+      "missing": [],
+      "extra": [],
+      "changed": [],
+      "isMatch": true
+    },
+    "buildClean": false,
+    "buildErrors": 1
+  },
+  "classification": "TOOL_DEFECT",
+  "note": "xppc reported 1 error(s) against this golden: Base enum \u0027NoYes\u0027 cannot be extended. To fix it set property \u0027IsExtensible\u0027 to \u0027True\u0027."
+}

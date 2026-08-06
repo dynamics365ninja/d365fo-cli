@@ -1,0 +1,20 @@
+{
+  "runId": "20260806T101245617Z__L1-privilege-data-entity__269a05a72173478a8f16f393d2f0ee7c",
+  "caseId": "L1-privilege-data-entity",
+  "tier": 1,
+  "timestampUtc": "2026-08-06T10:12:45.6176563+00:00",
+  "source": "build-oracle",
+  "score": {
+    "xppErrors": 0,
+    "referenceErrors": 0,
+    "goldenMatch": true,
+    "goldenDiff": {
+      "missing": [],
+      "extra": [],
+      "changed": [],
+      "isMatch": true
+    },
+    "buildClean": true,
+    "buildErrors": 0
+  }
+}

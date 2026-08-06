@@ -120,10 +120,12 @@ public class {FormName} extends FormRun
                   <AxFormControl xmlns="" i:type="AxFormGroupControl">
                     <Name>OverviewGroup</Name>
                     <Type>Group</Type>
-                    <DataGroup>Overview</DataGroup>
                     <FormControlExtension i:nil="true" />
                     <Controls>
 {DetailFieldControls}                    </Controls>
+                    <!-- DataGroup is meaningless without the DataSource naming its table. -->
+                    <DataGroup>Overview</DataGroup>
+                    <DataSource>{DsName}</DataSource>
                   </AxFormControl>
                 </Controls>
               </AxFormControl>
@@ -138,9 +140,10 @@ public class {FormName} extends FormRun
                   <AxFormControl xmlns="" i:type="AxFormGroupControl">
                     <Name>GeneralGroup</Name>
                     <Type>Group</Type>
-                    <DataGroup>General</DataGroup>
                     <FormControlExtension i:nil="true" />
                     <Controls />
+                    <DataGroup>General</DataGroup>
+                    <DataSource>{DsName}</DataSource>
                   </AxFormControl>
                 </Controls>
               </AxFormControl>

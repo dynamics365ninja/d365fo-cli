@@ -1,0 +1,20 @@
+{
+  "runId": "20260806T101245619Z__L1-report-basic__17a81f33dfc047a28fae7f3f087029c5",
+  "caseId": "L1-report-basic",
+  "tier": 1,
+  "timestampUtc": "2026-08-06T10:12:45.6197497+00:00",
+  "source": "build-oracle",
+  "score": {
+    "xppErrors": 0,
+    "referenceErrors": 0,
+    "goldenMatch": true,
+    "goldenDiff": {
+      "missing": [],
+      "extra": [],
+      "changed": [],
+      "isMatch": true
+    },
+    "buildClean": true,
+    "buildErrors": 0
+  }
+}

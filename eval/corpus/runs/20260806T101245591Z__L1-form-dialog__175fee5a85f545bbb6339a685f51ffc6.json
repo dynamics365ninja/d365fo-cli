@@ -1,0 +1,22 @@
+{
+  "runId": "20260806T101245591Z__L1-form-dialog__175fee5a85f545bbb6339a685f51ffc6",
+  "caseId": "L1-form-dialog",
+  "tier": 1,
+  "timestampUtc": "2026-08-06T10:12:45.59191+00:00",
+  "source": "build-oracle",
+  "score": {
+    "xppErrors": 0,
+    "referenceErrors": 0,
+    "goldenMatch": true,
+    "goldenDiff": {
+      "missing": [],
+      "extra": [],
+      "changed": [],
+      "isMatch": true
+    },
+    "buildClean": false,
+    "buildErrors": 5
+  },
+  "classification": "TOOL_DEFECT",
+  "note": "xppc reported 5 error(s) against this golden: Property \u0027WidthMode\u0027 on control AxForm/ConFmVehicleCreateDialog/Design/Controls/DialogBody must have value \u0027SizeToAvailable\u0027 per pattern \u0027Dialog - Basic\u0027.; Property \u0027HeightMode\u0027 on control AxForm/ConFmVehicleCreateDialog/Design/Controls/DialogBody must have value \u0027SizeToAvailable\u0027 per pattern \u0027Dialog - Basic\u0027.; Property \u0027WidthMode\u0027 on control AxForm/ConFmVehicleCreateDialog/Design/Controls/ButtonGroup must have value \u0027SizeToAvailable\u0027 per pattern \u0027Dialog - Basic\u0027."
+}

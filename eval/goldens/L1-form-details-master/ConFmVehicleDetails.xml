@@ -109,12 +109,10 @@ public class ConFmVehicleDetails extends FormRun
             
           <Name>TabPageOverview</Name><Pattern>FieldsFieldGroups</Pattern><PatternVersion>1.1</PatternVersion><Type>TabPage</Type><FormControlExtension i:nil="true" /><Controls>
               <AxFormControl xmlns="" i:type="AxFormGroupControl">
-                
-                
-                
-                
-                
-              <Name>OverviewGroup</Name><Type>Group</Type><FormControlExtension i:nil="true" /><Controls>
+                <Name>OverviewGroup</Name>
+                <Type>Group</Type>
+                <FormControlExtension i:nil="true" />
+                <Controls>
                 <AxFormControl xmlns="" i:type="AxFormStringControl">
                   <Name>Overview_VIN</Name>
                   <Type>String</Type>
@@ -129,7 +127,17 @@ public class ConFmVehicleDetails extends FormRun
                   <DataField>Make</DataField>
                   <DataSource>FmVehicle</DataSource>
                 </AxFormControl>
-                </Controls><DataGroup>Overview</DataGroup></AxFormControl>
+                </Controls>
+                <!--
+                  DataGroup names a field group on a table, so it is meaningless
+                  without the sibling DataSource that says which table — the reader
+                  reports "Field group 'Overview' does not exist" even when the table
+                  defines it. Both belong after Controls, which is where the contract
+                  declares them and where every shipped form puts them.
+                -->
+                <DataGroup>Overview</DataGroup>
+                <DataSource>FmVehicle</DataSource>
+              </AxFormControl>
             </Controls><Caption>Overview</Caption></AxFormControl>
           <AxFormControl xmlns="" i:type="AxFormTabPageControl">
             
@@ -141,12 +149,13 @@ public class ConFmVehicleDetails extends FormRun
             
           <Name>TabPageGeneral</Name><Pattern>FieldsFieldGroups</Pattern><PatternVersion>1.1</PatternVersion><Type>TabPage</Type><FormControlExtension i:nil="true" /><Controls>
               <AxFormControl xmlns="" i:type="AxFormGroupControl">
-                
-                
-                
-                
-                
-              <Name>GeneralGroup</Name><Type>Group</Type><FormControlExtension i:nil="true" /><Controls /><DataGroup>General</DataGroup></AxFormControl>
+                <Name>GeneralGroup</Name>
+                <Type>Group</Type>
+                <FormControlExtension i:nil="true" />
+                <Controls />
+                <DataGroup>General</DataGroup>
+                <DataSource>FmVehicle</DataSource>
+              </AxFormControl>
             </Controls><Caption>General</Caption></AxFormControl>
         </Controls>
         <Style>FastTabs</Style>

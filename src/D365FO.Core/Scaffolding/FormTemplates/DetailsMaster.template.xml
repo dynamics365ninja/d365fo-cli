@@ -108,10 +108,18 @@ public class {FormName} extends FormRun
               <AxFormControl xmlns="" i:type="AxFormGroupControl">
                 <Name>OverviewGroup</Name>
                 <Type>Group</Type>
-                <DataGroup>Overview</DataGroup>
                 <FormControlExtension i:nil="true" />
                 <Controls>
 {OverviewFieldControls}                </Controls>
+                <!--
+                  DataGroup names a field group on a table, so it is meaningless
+                  without the sibling DataSource that says which table — the reader
+                  reports "Field group 'Overview' does not exist" even when the table
+                  defines it. Both belong after Controls, which is where the contract
+                  declares them and where every shipped form puts them.
+                -->
+                <DataGroup>Overview</DataGroup>
+                <DataSource>{DsName}</DataSource>
               </AxFormControl>
             </Controls>
           </AxFormControl>
@@ -126,9 +134,10 @@ public class {FormName} extends FormRun
               <AxFormControl xmlns="" i:type="AxFormGroupControl">
                 <Name>GeneralGroup</Name>
                 <Type>Group</Type>
-                <DataGroup>General</DataGroup>
                 <FormControlExtension i:nil="true" />
                 <Controls />
+                <DataGroup>General</DataGroup>
+                <DataSource>{DsName}</DataSource>
               </AxFormControl>
             </Controls>
           </AxFormControl>

@@ -245,17 +245,18 @@ report a verdict nobody collected*:
 - a diagnostic naming an object no case provisioned is reported as *unattributed*
   rather than spread across every case.
 
-Its first runs found six shipping defects the offline loop had no way to see —
+Its first runs found seven shipping defects the offline loop had no way to see —
 every generated `AxQuery` crashed the metadata reader; a generated event handler
 put its method where the provider could not find the name; a generated migration
 script named its counter `count`, an X++ keyword; a generated business event's
 `[BusinessEvents]` attribute named the wrong class and passed a string where the
 `ModuleAxapta` enum belongs; every generated report was missing the five mandatory
-`AX_*` framework parameters and a page size; and every generated data entity
-declared itself public without the key that makes that legal. All six are fixed.
-Each became visible only once the one before it stopped aborting the compile
-earlier, which is the usual shape of a compiler-backed oracle: the queue deepens as
-it clears.
+`AX_*` framework parameters and a page size; every generated data entity declared
+itself public without the key that makes that legal; and every generated form bound
+a `<DataGroup>` with no sibling `<DataSource>` to say which table it meant. All
+seven are fixed. Each became visible only once the one before it stopped aborting
+the compile earlier, which is the usual shape of a compiler-backed oracle: the queue
+deepens as it clears.
 
 **Attribution is the load-bearing part.** Every diagnostic must land on the case
 whose golden produced the object it names, and the parser must recognise the shapes

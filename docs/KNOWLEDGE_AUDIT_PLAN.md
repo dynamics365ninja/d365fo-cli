@@ -250,7 +250,7 @@ Four things this could only be learned by running it, and all four were wrong fi
   Information` are now parsed, as are the two line shapes without a `dynamics://` URL or without a
   source location. TODO markers are `information` and count as neither error nor warning.
 
-**Six shipping defects the offline loop could never see, all now fixed:**
+**Seven shipping defects the offline loop could never see, all now fixed:**
 - `generate query` (2 cases) — the reader threw `KeyNotFoundException` on every generated query.
   Ground-truthed against shipped queries (300/300 carry it):
   `<SourceCode><Methods><Method><Name>classDeclaration` is mandatory, and each data source needs
@@ -280,9 +280,20 @@ Four things this could only be learned by running it, and all four were wrong fi
   derives the EntityKey from the table's alternate-key index (or `--key`, or explicitly mandatory
   fields) and asks rather than guessing when it cannot; the scaffolder keeps `IsPublic` and
   `Keys` in step so the two can no longer disagree.
+- `generate form` — the R5 trap the audit listed as absorbable predecessor knowledge, confirmed:
+  `<DataGroup>` was emitted without its sibling `<DataSource>` and *before* `<Controls>` rather
+  than after, so a group control reported "Field group 'Overview' does not exist" even once the
+  table declared the group. Both now sit after `Controls` in contract order. Separately, an
+  `AxFormActionPaneTabControl` sat directly under a tab page; the reader requires an
+  `AxFormActionPaneControl` between them. The mini-AOT tables gained the field groups
+  `generate table` produces for exactly this reason — the fixture was hand-written without them,
+  which is the contract `generate form`'s preflight check already warns about.
 
-**Baseline: 39 of 51 goldens compile clean, with zero unattributed diagnostics.** It dipped to 36
-first, as the oracle got more honest rather than as the tool got worse: the metadata validator
+**Baseline: 35 of 51 goldens compile clean, with zero unattributed diagnostics.** The count moves
+in both directions and only one of them is about the tool — it drops whenever the parser learns a
+severity prefix it had been discarding, and rises when a scaffolder is fixed. The signal to watch
+is the unattributed count, not the clean count. It first dipped from a flattering 48 because the
+metadata validator
 reports in its own shape (`Metadata Error: AxForm/<object>/Design/Controls/…/DataGroup: …`), which
 the parser did not recognise, and the attribution key was the golden's file stem, which truncates
 `NoYes.Extension` at the dot. Both dropped real findings on the floor while the scoreboard looked
@@ -294,12 +305,21 @@ cannot contain. The mini-AOT fixture gained a query (once `generate query` could
 readable one) and an `OnInitialized` delegate on `FmVehicleService`, without which the
 event-handler case could not compile however correct the scaffolder was.
 
-**The 12 remaining reds are the honest work queue** — form patterns binding `DataGroup` to field
-groups the table does not declare, and one putting an `AxFormActionPaneTabControl` under a tab
-page, which the metadata validator forbids; a workflow and a security policy with an empty
-mandatory property; a custom service naming a class that is not generated; and `L2-enum-extension`
-extending `NoYes`, which is not extensible on this platform — a case-authoring bug rather than a
-scaffolder one. Phase 2-shaped generation-depth work, for the improver's next round.
+**The 16 remaining reds are the honest work queue**, and the largest slice is one project:
+**AOT form-pattern compliance**. Seven form cases fail `FormPatternValidation` — a different
+validator from this repo's own FP001–FP010, run by the AOS against its pattern registry. Five
+design `<Pattern>` values name patterns that registry does not have (`DetailsMaster 1.1`,
+`ListPage 1.1`, `Lookup 1.2`, `DetailsTransaction 1.1`, `Workspace 1.0`, plus `SidePanel 1.0` on a
+container), and the rest are missing required children (`TOC Tabs`, `Details Tabs`) and required
+property values (`ColumnsMode=Fill`, `WidthMode`/`HeightMode=SizeToAvailable`,
+`ArrangeMethod=HorizontalRight`, `ViewEditMode=Edit`). Reconciling `FormPatternCatalog` with the
+registry the AOS validates against — and teaching FP001–FP010 the same rules, so the offline gate
+catches them — is its own piece of work.
+
+The rest: a workflow and two security objects with an empty mandatory property; a custom service
+naming a class the command does not generate; `L2-enum-extension` extending `NoYes`, which is not
+extensible on this platform (a case-authoring bug, not a scaffolder one); and the three
+`known-reference-gap` cases, which are recorded but never classified.
 
 4.3 ❌ **L4 runtime oracle — not built.** It needs a live AOS, a `SysTestRunner` result parser
 (none exists; `test run` returns a raw output tail) and per-run fixture provisioning inside a real

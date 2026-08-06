@@ -1,0 +1,20 @@
+{
+  "runId": "20260806T101245659Z__L2-datasource-method-basic__516de10c8e0942dab0196362a8cd1bf8",
+  "caseId": "L2-datasource-method-basic",
+  "tier": 2,
+  "timestampUtc": "2026-08-06T10:12:45.6598749+00:00",
+  "source": "build-oracle",
+  "score": {
+    "xppErrors": 0,
+    "referenceErrors": 0,
+    "goldenMatch": true,
+    "goldenDiff": {
+      "missing": [],
+      "extra": [],
+      "changed": [],
+      "isMatch": true
+    },
+    "buildClean": true,
+    "buildErrors": 0
+  }
+}

@@ -90,6 +90,13 @@ public class XppcDiagnosticsTests
     [InlineData(
         "Metadata Error: AxEnumExtension/NoYes.Extension: Base enum 'NoYes' cannot be extended.",
         "error", "NoYes.Extension")]
+    // The AOT form-pattern registry reports under its own prefix again.
+    [InlineData(
+        "FormPatternValidation Error: AxForm/ConFmVehicleDetails/Design/Controls/Tab/TabPageGeneral/ColumnsMode: Property 'ColumnsMode' must have value 'Fill' per pattern 'Fields and Field Groups'.",
+        "error", "ConFmVehicleDetails")]
+    [InlineData(
+        "FormPatternValidation Fatal Error: AxForm/ConFmVehicleListPage/Design: Unable to validate pattern 'ListPage 1.1'. Message: Pattern 'ListPage 1.1' not found.",
+        "error", "ConFmVehicleListPage")]
     public void Parses_the_forms_a_real_compiler_emits(string line, string severity, string obj)
     {
         var d = Assert.Single(XppcDiagnostics.Parse(line));

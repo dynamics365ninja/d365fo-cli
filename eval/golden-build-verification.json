@@ -1,13 +1,13 @@
 {
-  "capturedUtc": "2026-08-06T09:46:43.4636994+00:00",
+  "capturedUtc": "2026-08-06T10:12:45.5010324+00:00",
   "host": "D365ASLDEV2-1",
   "packagesRoot": "K:\\AosService\\PackagesLocalDirectory",
   "compiler": "K:\\AosService\\PackagesLocalDirectory\\Bin\\xppc.exe",
-  "compilerArgs": "-metadata=C:\\Users\\Admin7e00859cee\\AppData\\Local\\Temp\\2\\claude\\K--repos-d365fo-cli\\ac58616d-375a-4381-b289-fca2d371276f\\scratchpad\\l3rep2 -modelmodule=D365FoCliEvalGoldens -output=C:\\Users\\Admin7e00859cee\\AppData\\Local\\Temp\\2\\claude\\K--repos-d365fo-cli\\ac58616d-375a-4381-b289-fca2d371276f\\scratchpad\\l3rep2\\bin -referencefolder=K:\\AosService\\PackagesLocalDirectory -refPath=C:\\Users\\Admin7e00859cee\\AppData\\Local\\Temp\\2\\claude\\K--repos-d365fo-cli\\ac58616d-375a-4381-b289-fca2d371276f\\scratchpad\\l3rep2\\bin -log=C:\\Users\\Admin7e00859cee\\AppData\\Local\\Temp\\2\\claude\\K--repos-d365fo-cli\\ac58616d-375a-4381-b289-fca2d371276f\\scratchpad\\l3rep2\\Dynamics.AX.D365FoCliEvalGoldens.xppc.log",
+  "compilerArgs": "-metadata=C:\\Users\\Admin7e00859cee\\AppData\\Local\\Temp\\2\\claude\\K--repos-d365fo-cli\\ac58616d-375a-4381-b289-fca2d371276f\\scratchpad\\l3form3-w -modelmodule=D365FoCliEvalGoldens -output=C:\\Users\\Admin7e00859cee\\AppData\\Local\\Temp\\2\\claude\\K--repos-d365fo-cli\\ac58616d-375a-4381-b289-fca2d371276f\\scratchpad\\l3form3-w\\bin -referencefolder=K:\\AosService\\PackagesLocalDirectory -refPath=C:\\Users\\Admin7e00859cee\\AppData\\Local\\Temp\\2\\claude\\K--repos-d365fo-cli\\ac58616d-375a-4381-b289-fca2d371276f\\scratchpad\\l3form3-w\\bin -log=C:\\Users\\Admin7e00859cee\\AppData\\Local\\Temp\\2\\claude\\K--repos-d365fo-cli\\ac58616d-375a-4381-b289-fca2d371276f\\scratchpad\\l3form3-w\\Dynamics.AX.D365FoCliEvalGoldens.xppc.log",
   "modelName": "D365FoCliEvalGoldens",
   "total": 51,
-  "clean": 39,
-  "failed": 12,
+  "clean": 35,
+  "failed": 16,
   "skipped": 0,
   "cases": [
     {
@@ -93,81 +93,98 @@
     {
       "caseId": "L1-form-details-master",
       "verdict": "errors",
-      "errors": 2,
+      "errors": 3,
       "warnings": 0,
-      "ruleIds": [
-        "XPPC-FIELD-MISSING"
-      ],
+      "ruleIds": [],
       "messages": [
-        "Field group \u0027Overview\u0027 does not exist.",
-        "Field group \u0027General\u0027 does not exist."
+        "Unable to validate pattern \u0027DetailsMaster 1.1\u0027. Message: Pattern \u0027DetailsMaster 1.1\u0027 not found.",
+        "Property \u0027ColumnsMode\u0027 on control AxForm/ConFmVehicleDetails/Design/Controls/Tab/TabPageOverview must have value \u0027Fill\u0027 per pattern \u0027Fields and Field Groups\u0027.",
+        "Property \u0027ColumnsMode\u0027 on control AxForm/ConFmVehicleDetails/Design/Controls/Tab/TabPageGeneral must have value \u0027Fill\u0027 per pattern \u0027Fields and Field Groups\u0027."
       ]
     },
     {
       "caseId": "L1-form-details-transaction",
       "verdict": "errors",
-      "errors": 3,
+      "errors": 2,
       "warnings": 0,
-      "ruleIds": [
-        "XPPC-FIELD-MISSING"
-      ],
+      "ruleIds": [],
       "messages": [
-        "Field group \u0027Overview\u0027 does not exist.",
-        "Child form control of type \u0027AxFormActionPaneTabControl\u0027 is not allowed for parent control of type \u0027AxFormTabPageControl\u0027."
+        "Unable to validate pattern \u0027DetailsTransaction 1.1\u0027. Message: Pattern \u0027DetailsTransaction 1.1\u0027 not found.",
+        "Property \u0027ColumnsMode\u0027 on control AxForm/ConFmVehicleServiceOrder/Design/Controls/Tab/TabPageHeader must have value \u0027Fill\u0027 per pattern \u0027Fields and Field Groups\u0027."
       ]
     },
     {
       "caseId": "L1-form-dialog",
-      "verdict": "clean",
-      "errors": 0,
+      "verdict": "errors",
+      "errors": 5,
       "warnings": 0,
       "ruleIds": [],
-      "messages": []
+      "messages": [
+        "Property \u0027WidthMode\u0027 on control AxForm/ConFmVehicleCreateDialog/Design/Controls/DialogBody must have value \u0027SizeToAvailable\u0027 per pattern \u0027Dialog - Basic\u0027.",
+        "Property \u0027HeightMode\u0027 on control AxForm/ConFmVehicleCreateDialog/Design/Controls/DialogBody must have value \u0027SizeToAvailable\u0027 per pattern \u0027Dialog - Basic\u0027.",
+        "Property \u0027WidthMode\u0027 on control AxForm/ConFmVehicleCreateDialog/Design/Controls/ButtonGroup must have value \u0027SizeToAvailable\u0027 per pattern \u0027Dialog - Basic\u0027.",
+        "Property \u0027ArrangeMethod\u0027 on control AxForm/ConFmVehicleCreateDialog/Design/Controls/ButtonGroup must have value \u0027HorizontalRight\u0027 per pattern \u0027Dialog - Basic\u0027.",
+        "Property \u0027ColumnsMode\u0027 on control AxForm/ConFmVehicleCreateDialog/Design/Controls/DialogBody must have value \u0027Fill\u0027 per pattern \u0027Fields and Field Groups\u0027."
+      ]
     },
     {
       "caseId": "L1-form-list-page",
-      "verdict": "clean",
-      "errors": 0,
+      "verdict": "errors",
+      "errors": 1,
       "warnings": 0,
       "ruleIds": [],
-      "messages": []
+      "messages": [
+        "Unable to validate pattern \u0027ListPage 1.1\u0027. Message: Pattern \u0027ListPage 1.1\u0027 not found."
+      ]
     },
     {
       "caseId": "L1-form-lookup",
-      "verdict": "clean",
-      "errors": 0,
+      "verdict": "errors",
+      "errors": 2,
       "warnings": 0,
       "ruleIds": [],
-      "messages": []
+      "messages": [
+        "Unable to validate pattern \u0027Lookup 1.2\u0027. Message: Pattern \u0027Lookup 1.2\u0027 not found.",
+        "Property \u0027ViewEditMode\u0027 on control AxForm/ConFmVehicleLookupForm/Design/Controls/CustomFilterGroup must have value \u0027Edit\u0027 per pattern \u0027Custom and Quick Filters\u0027."
+      ]
     },
     {
       "caseId": "L1-form-simplelist-details",
       "verdict": "errors",
-      "errors": 2,
+      "errors": 4,
       "warnings": 0,
-      "ruleIds": [
-        "XPPC-FIELD-MISSING"
-      ],
+      "ruleIds": [],
       "messages": [
-        "Field group \u0027Overview\u0027 does not exist.",
-        "Field group \u0027General\u0027 does not exist."
+        "Control \u0027AxForm/ConFmVehicleListDetails/Design\u0027 is missing child \u0027Details Tabs\u0027 required by pattern \u0027Simple List and Details - List Grid\u0027.",
+        "Unable to validate pattern \u0027SidePanel 1.0\u0027. Message: Pattern \u0027SidePanel 1.0\u0027 not found.",
+        "Property \u0027ColumnsMode\u0027 on control AxForm/ConFmVehicleListDetails/Design/Controls/DetailsGroup/Tab/TabPageOverview must have value \u0027Fill\u0027 per pattern \u0027Fields and Field Groups\u0027.",
+        "Property \u0027ColumnsMode\u0027 on control AxForm/ConFmVehicleListDetails/Design/Controls/DetailsGroup/Tab/TabPageGeneral must have value \u0027Fill\u0027 per pattern \u0027Fields and Field Groups\u0027."
       ]
     },
     {
       "caseId": "L1-form-table-of-contents",
-      "verdict": "clean",
-      "errors": 0,
+      "verdict": "errors",
+      "errors": 4,
       "warnings": 0,
       "ruleIds": [],
-      "messages": []
+      "messages": [
+        "Control \u0027AxForm/ConFmVehicleParametersForm/Design\u0027 is missing child \u0027TOC Tabs\u0027 required by pattern \u0027Table of Contents\u0027.",
+        "Control \u0027AxForm/ConFmVehicleParametersForm/Design/Controls\u0027 has child \u0027ActionPane\u0027 which is not allowed at its current location by pattern \u0027Table of Contents\u0027.",
+        "Property \u0027ColumnsMode\u0027 on control AxForm/ConFmVehicleParametersForm/Design/Controls/Tab/TabPageGeneral must have value \u0027Fill\u0027 per pattern \u0027Fields and Field Groups\u0027.",
+        "Property \u0027ColumnsMode\u0027 on control AxForm/ConFmVehicleParametersForm/Design/Controls/Tab/TabPageSetup must have value \u0027Fill\u0027 per pattern \u0027Fields and Field Groups\u0027."
+      ]
     },
     {
       "caseId": "L1-form-workspace",
-      "verdict": "clean",
-      "errors": 0,
+      "verdict": "errors",
+      "errors": 3,
       "warnings": 0,
       "ruleIds": [],
-      "messages": []
+      "messages": [
+        "Unable to validate pattern \u0027Workspace 1.0\u0027. Message: Pattern \u0027Workspace 1.0\u0027 not found.",
+        "Control \u0027AxForm/ConFmVehicleWorkspace/Design/Controls/PanoramaBody/SummarySection\u0027 has child \u0027ChartSection\u0027 which is not allowed at its current location by pattern \u0027Section Tiles\u0027.",
+        "Property \u0027ViewEditMode\u0027 on control AxForm/ConFmVehicleWorkspace/Design/Controls/PanoramaBody/FmVehicleSection/FmVehicleCustomFilterGroup must have value \u0027Edit\u0027 per pattern \u0027Custom and Quick Filters\u0027."
+      ]
     },
     {
       "caseId": "L1-map-basic",
@@ -189,7 +206,7 @@
       "caseId": "L1-menu-item-action",
       "verdict": "clean",
       "errors": 0,
-      "warnings": 0,
+      "warnings": 1,
       "ruleIds": [],
       "messages": []
     },
@@ -336,7 +353,7 @@
       "caseId": "L1-workflow-basic",
       "verdict": "errors",
       "errors": 1,
-      "warnings": 0,
+      "warnings": 3,
       "ruleIds": [],
       "messages": [
         "Property cannot be empty."
@@ -360,15 +377,11 @@
     },
     {
       "caseId": "L2-datasource-method-basic",
-      "verdict": "errors",
-      "errors": 1,
+      "verdict": "clean",
+      "errors": 0,
       "warnings": 0,
-      "ruleIds": [
-        "XPPC-FIELD-MISSING"
-      ],
-      "messages": [
-        "Field group \u0027Overview\u0027 does not exist."
-      ]
+      "ruleIds": [],
+      "messages": []
     },
     {
       "caseId": "L2-edt-extension",

@@ -85,9 +85,15 @@ returns `EVAL_BUILD_INVOCATION` and writes **no** verdicts — an argument mista
 must never be recorded as a broken golden. `EvalScoreCard.BuildClean` is `null`
 wherever no compiler ran; it is never `false` by default.
 
-Current baseline: **39 of 51 goldens compile clean**, with **zero unattributed
+Current baseline: **35 of 51 goldens compile clean**, with **zero unattributed
 diagnostics** — every complaint the compiler makes is blamed on the case that
 produced the object it names.
+
+The number has moved both ways, and only one direction is about the tool: it drops
+whenever the parser learns a severity prefix it was silently discarding
+(`Metadata Error`, `FormPatternValidation Error`, …), and rises when a scaffolder is
+fixed. Treat a *rise in unattributed diagnostics*, not a fall in the clean count, as
+the sign something is wrong with the harness.
 
 That number went *down* from 48 as the oracle got more honest, not as the tool got
 worse. The metadata validator reports in its own shape
@@ -112,6 +118,16 @@ golden diff or to any offline validator, which is the whole argument for the tie
 | `generate business-event` | "Cannot implicitly convert from type 'str' to type 'Extensible Enumeration(ModuleAxapta)'", plus a `parmId()` that exists on no business event |
 | `generate report` | five missing mandatory `AX_*` framework parameters, no default parameter group, "Invalid page size", and an extra dataset with no fields |
 | `generate entity` | "There must be a key defined for a public data entity" — `IsPublic` was hard-coded `Yes` while `Keys` stayed optional |
+| `generate form` | `<DataGroup>` emitted without its sibling `<DataSource>` and before `<Controls>` instead of after, so "Field group 'Overview' does not exist" even once the table declared it; and an `AxFormActionPaneTabControl` placed directly under a tab page, which the reader forbids |
+
+**Open: AOT form-pattern compliance.** Seven form cases still fail
+`FormPatternValidation`, which is a different validator from this repo's own
+FP001–FP010: five design `<Pattern>` values name patterns the AOS registry does not
+have (`DetailsMaster 1.1`, `ListPage 1.1`, `Lookup 1.2`, `DetailsTransaction 1.1`,
+`Workspace 1.0`), and the rest are required child controls and required property
+values (`ColumnsMode=Fill`, `WidthMode=SizeToAvailable`, `ViewEditMode=Edit`).
+Reconciling `FormPatternCatalog` with the registry the AOS actually validates
+against is its own piece of work.
 
 ## Improver toolchain
 
