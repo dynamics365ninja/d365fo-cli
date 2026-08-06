@@ -260,6 +260,10 @@ public static class XppScaffolder
     /// <param name="gridFields">Field names rendered as grid / detail columns.</param>
     /// <param name="sections">Sections for <c>TableOfContents</c> / <c>Dialog</c> / <c>Workspace</c>.</param>
     /// <param name="linesTable">Lines datasource table for <see cref="FormPattern.DetailsTransaction"/>.</param>
+    /// <param name="controlTypeResolver">
+    /// Field name → form control type (issue #164 / R5). Without it every bound field is
+    /// rendered as a string control, whatever the field really is.
+    /// </param>
     public static string Form(
         string formName,
         string? dataSourceTable = null,
@@ -267,7 +271,8 @@ public static class XppScaffolder
         string? caption = null,
         IReadOnlyList<string>? gridFields = null,
         IReadOnlyList<FormSectionSpec>? sections = null,
-        string? linesTable = null)
+        string? linesTable = null,
+        Func<string, (string AxType, string TypeElement)>? controlTypeResolver = null)
     {
         var opt = new FormTemplateOptions
         {
@@ -279,6 +284,7 @@ public static class XppScaffolder
             Sections     = sections ?? Array.Empty<FormSectionSpec>(),
             LinesDsName  = linesTable,
             LinesDsTable = linesTable,
+            ControlTypeResolver = controlTypeResolver,
         };
         return FormPatternTemplates.Build(pattern, opt);
     }

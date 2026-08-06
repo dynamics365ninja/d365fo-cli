@@ -1,4 +1,5 @@
 using System.Text;
+using D365FO.Core.FormPatterns;
 
 namespace D365FO.Core.Scaffolding;
 
@@ -32,6 +33,16 @@ public sealed record FormTemplateOptions
 
     /// <summary>Lines datasource table for <see cref="FormPattern.DetailsTransaction"/>. Defaults to <see cref="LinesDsName"/>.</summary>
     public string? LinesDsTable { get; init; }
+
+    /// <summary>
+    /// Field name → the form control it should be rendered as (issue #164 / R5).
+    /// </summary>
+    /// <remarks>
+    /// Supplied by the caller because resolving it needs the index, which this assembly's
+    /// rendering layer has no business opening. Absent, every field falls back to a string
+    /// control — which is what these templates always emitted, whatever the field really was.
+    /// </remarks>
+    public Func<string, (string AxType, string TypeElement)>? ControlTypeResolver { get; init; }
 }
 
 /// <summary>A named TabPage / section used by Dialog, TableOfContents, Workspace.</summary>
@@ -81,7 +92,7 @@ public static class FormPatternTemplates
     public static string BuildSimpleList(FormTemplateOptions opt)
     {
         var (dsName, dsTable) = ResolveDs(opt);
-        var grid = string.Concat(opt.GridFields.Select(f => RenderGridFieldControl("Grid", f, dsName, indent: 10)));
+        var grid = string.Concat(opt.GridFields.Select(f => RenderGridFieldControl("Grid", f, dsName, 10, opt.ControlTypeResolver)));
         return Fill("SimpleList.template.xml", new()
         {
             ["FormName"]          = opt.FormName,
@@ -97,8 +108,8 @@ public static class FormPatternTemplates
     public static string BuildSimpleListDetails(FormTemplateOptions opt)
     {
         var (dsName, dsTable) = ResolveDs(opt);
-        var listFields = string.Concat(opt.GridFields.Take(3).Select(f => RenderGridFieldControl("Grid", f, dsName, indent: 14)));
-        var detail = string.Concat(opt.GridFields.Select(f => RenderGridFieldControl("Overview", f, dsName, indent: 20)));
+        var listFields = string.Concat(opt.GridFields.Take(3).Select(f => RenderGridFieldControl("Grid", f, dsName, 14, opt.ControlTypeResolver)));
+        var detail = string.Concat(opt.GridFields.Select(f => RenderGridFieldControl("Overview", f, dsName, 20, opt.ControlTypeResolver)));
         return Fill("SimpleListDetails.template.xml", new()
         {
             ["FormName"]            = opt.FormName,
@@ -114,7 +125,7 @@ public static class FormPatternTemplates
     public static string BuildDetailsMaster(FormTemplateOptions opt)
     {
         var (dsName, dsTable) = ResolveDs(opt);
-        var overview = string.Concat(opt.GridFields.Select(f => RenderGridFieldControl("Overview", f, dsName, indent: 24)));
+        var overview = string.Concat(opt.GridFields.Select(f => RenderGridFieldControl("Overview", f, dsName, 24, opt.ControlTypeResolver)));
 
         // The pattern's title group requires a HeaderTitle control — the field shown as
         // the record's title on the details panel. The first requested field is the
@@ -138,7 +149,7 @@ public static class FormPatternTemplates
         var (dsName, dsTable) = ResolveDs(opt);
         var linesDs = string.IsNullOrEmpty(opt.LinesDsName) ? $"{dsName}Lines" : opt.LinesDsName!;
         var linesTable = string.IsNullOrEmpty(opt.LinesDsTable) ? linesDs : opt.LinesDsTable!;
-        var header = string.Concat(opt.GridFields.Select(f => RenderGridFieldControl("Header", f, dsName, indent: 34)));
+        var header = string.Concat(opt.GridFields.Select(f => RenderGridFieldControl("Header", f, dsName, 34, opt.ControlTypeResolver)));
         var headerTitle = RenderHeaderTitle(opt.GridFields.FirstOrDefault(), dsName, indent: 16);
 
         return Fill("DetailsTransaction.template.xml", new()
@@ -173,11 +184,11 @@ public static class FormPatternTemplates
         if (opt.Sections.Count > 0)
         {
             body = string.Concat(opt.Sections.Select(s =>
-                RenderDialogFieldGroup(s, opt.GridFields, dsName, indent: 10)));
+                RenderDialogFieldGroup(s, opt.GridFields, dsName, 10, opt.ControlTypeResolver)));
         }
         else
         {
-            body = string.Concat(opt.GridFields.Select(f => RenderDialogField(f, dsName, indent: 10)));
+            body = string.Concat(opt.GridFields.Select(f => RenderDialogField(f, dsName, 10, opt.ControlTypeResolver)));
         }
 
         return Fill("Dialog.template.xml", new()
@@ -204,7 +215,7 @@ public static class FormPatternTemplates
         // before) silently discarded --field while the command still reported
         // fieldCount = N.
         var pages = string.Concat(sections.Select((s, i) =>
-            RenderTocTabPage(s, i == 0 ? opt.GridFields : Array.Empty<string>(), opt.DsName, indent: 8)));
+            RenderTocTabPage(s, i == 0 ? opt.GridFields : Array.Empty<string>(), opt.DsName, 8, opt.ControlTypeResolver)));
 
         var (dsName, dsTable) = (opt.DsName, opt.DsTable);
         var dsXml = !string.IsNullOrEmpty(dsName) && !string.IsNullOrEmpty(dsTable)
@@ -225,7 +236,7 @@ public static class FormPatternTemplates
     public static string BuildLookup(FormTemplateOptions opt)
     {
         var (dsName, dsTable) = ResolveDs(opt);
-        var grid = string.Concat(opt.GridFields.Select(f => RenderGridFieldControl("Grid", f, dsName, indent: 10)));
+        var grid = string.Concat(opt.GridFields.Select(f => RenderGridFieldControl("Grid", f, dsName, 10, opt.ControlTypeResolver)));
         return Fill("Lookup.template.xml", new()
         {
             ["FormName"]          = opt.FormName,
@@ -240,7 +251,7 @@ public static class FormPatternTemplates
     public static string BuildListPage(FormTemplateOptions opt)
     {
         var (dsName, dsTable) = ResolveDs(opt);
-        var grid = string.Concat(opt.GridFields.Select(f => RenderGridFieldControl("Grid", f, dsName, indent: 10)));
+        var grid = string.Concat(opt.GridFields.Select(f => RenderGridFieldControl("Grid", f, dsName, 10, opt.ControlTypeResolver)));
         return Fill("ListPage.template.xml", new()
         {
             ["FormName"]          = opt.FormName,
@@ -289,6 +300,31 @@ public static class FormPatternTemplates
     private static string RenderCaption(string? caption) =>
         string.IsNullOrEmpty(caption) ? string.Empty : $"    <Caption xmlns=\"\">{caption}</Caption>\n";
 
+    /// <summary>
+    /// The control a bound field gets, or a string control when nothing can say otherwise.
+    /// </summary>
+    /// <remarks>
+    /// A resolver that throws must not take the generation down with it: the index is a cache,
+    /// and a form scaffolded against a stale one should still be a form. Falling back leaves the
+    /// caller exactly where they were before <see cref="FieldControlTypes"/> existed.
+    /// </remarks>
+    private static (string AxType, string TypeElement) Resolve(
+        Func<string, (string AxType, string TypeElement)>? resolve, string field)
+    {
+        if (resolve is null) return (FieldControlTypes.DefaultControl, "String");
+        try
+        {
+            var (axType, typeElement) = resolve(SplitTypedName(field));
+            return string.IsNullOrWhiteSpace(axType)
+                ? (FieldControlTypes.DefaultControl, "String")
+                : (axType, typeElement);
+        }
+        catch
+        {
+            return (FieldControlTypes.DefaultControl, "String");
+        }
+    }
+
     private static string RenderDsFields(IReadOnlyList<string> fields, int indent)
     {
         if (fields.Count == 0) return new string(' ', indent) + "<Fields />\n";
@@ -298,13 +334,16 @@ public static class FormPatternTemplates
         return $"{pad}<Fields>\n{inner}{pad}</Fields>\n";
     }
 
-    private static string RenderGridFieldControl(string namePrefix, string field, string ds, int indent)
+    private static string RenderGridFieldControl(
+        string namePrefix, string field, string ds, int indent,
+        Func<string, (string AxType, string TypeElement)>? resolve = null)
     {
         var pad = new string(' ', indent);
+        var (axType, typeElement) = Resolve(resolve, field);
         var sb = new StringBuilder();
-        sb.Append(pad).Append("<AxFormControl xmlns=\"\" i:type=\"AxFormStringControl\">\n");
+        sb.Append(pad).Append("<AxFormControl xmlns=\"\" i:type=\"").Append(axType).Append("\">\n");
         sb.Append(pad).Append("  <Name>").Append(namePrefix).Append('_').Append(field).Append("</Name>\n");
-        sb.Append(pad).Append("  <Type>String</Type>\n");
+        sb.Append(pad).Append("  <Type>").Append(typeElement).Append("</Type>\n");
         sb.Append(pad).Append("  <FormControlExtension i:nil=\"true\" />\n");
         sb.Append(pad).Append("  <DataField>").Append(field).Append("</DataField>\n");
         sb.Append(pad).Append("  <DataSource>").Append(ds).Append("</DataSource>\n");
@@ -312,13 +351,16 @@ public static class FormPatternTemplates
         return sb.ToString();
     }
 
-    private static string RenderDialogField(string field, string? ds, int indent)
+    private static string RenderDialogField(
+        string field, string? ds, int indent,
+        Func<string, (string AxType, string TypeElement)>? resolve = null)
     {
         var pad = new string(' ', indent);
+        var (axType, typeElement) = Resolve(resolve, field);
         var sb = new StringBuilder();
-        sb.Append(pad).Append("<AxFormControl xmlns=\"\" i:type=\"AxFormStringControl\">\n");
+        sb.Append(pad).Append("<AxFormControl xmlns=\"\" i:type=\"").Append(axType).Append("\">\n");
         sb.Append(pad).Append("  <Name>").Append(field).Append("</Name>\n");
-        sb.Append(pad).Append("  <Type>String</Type>\n");
+        sb.Append(pad).Append("  <Type>").Append(typeElement).Append("</Type>\n");
         sb.Append(pad).Append("  <FormControlExtension i:nil=\"true\" />\n");
         if (!string.IsNullOrEmpty(ds))
         {
@@ -334,7 +376,8 @@ public static class FormPatternTemplates
     /// fields — the deepest nesting the FieldsFieldGroups sub-pattern permits.
     /// </summary>
     private static string RenderDialogFieldGroup(
-        FormSectionSpec s, IReadOnlyList<string> fields, string? ds, int indent)
+        FormSectionSpec s, IReadOnlyList<string> fields, string? ds, int indent,
+        Func<string, (string AxType, string TypeElement)>? resolve = null)
     {
         var pad = new string(' ', indent);
         var sb = new StringBuilder();
@@ -350,7 +393,7 @@ public static class FormPatternTemplates
         else
         {
             sb.Append(pad).Append("  <Controls>\n");
-            foreach (var f in fields) sb.Append(RenderDialogField(f, ds, indent + 4));
+            foreach (var f in fields) sb.Append(RenderDialogField(f, ds, indent + 4, resolve));
             sb.Append(pad).Append("  </Controls>\n");
         }
         sb.Append(pad).Append("  <FrameType>None</FrameType>\n");
@@ -388,7 +431,8 @@ public static class FormPatternTemplates
         field.Split(':', 2)[0].Trim();
 
     private static string RenderTocTabPage(
-        FormSectionSpec s, IReadOnlyList<string> fields, string? ds, int indent)
+        FormSectionSpec s, IReadOnlyList<string> fields, string? ds, int indent,
+        Func<string, (string AxType, string TypeElement)>? resolve = null)
     {
         var pad = new string(' ', indent);
         var sb = new StringBuilder();
@@ -457,7 +501,7 @@ public static class FormPatternTemplates
         else
         {
             sb.Append(pad).Append("      <Controls>\n");
-            foreach (var f in fields) sb.Append(RenderDialogField(f, ds, indent + 8));
+            foreach (var f in fields) sb.Append(RenderDialogField(f, ds, indent + 8, resolve));
             sb.Append(pad).Append("      </Controls>\n");
         }
         sb.Append(pad).Append("      <FrameType>None</FrameType>\n");
@@ -477,7 +521,8 @@ public static class FormPatternTemplates
     }
 
     private static string RenderWorkspaceListSection(
-        FormSectionSpec s, int idx, string dsName, IReadOnlyList<string> fields, int indent)
+        FormSectionSpec s, int idx, string dsName, IReadOnlyList<string> fields, int indent,
+        Func<string, (string AxType, string TypeElement)>? resolve = null)
     {
         // ElementPosition follows MCP's heuristic: 536870912 * (idx + 2)
         var pos = 536870912L * (idx + 2);
@@ -535,7 +580,7 @@ public static class FormPatternTemplates
         {
             sb.Append(pad).Append("      <Controls>\n");
             foreach (var f in fields)
-                sb.Append(RenderGridFieldControl($"{s.Name}Grid", f, dsName, indent + 8));
+                sb.Append(RenderGridFieldControl($"{s.Name}Grid", f, dsName, indent + 8, resolve));
             sb.Append(pad).Append("      </Controls>\n");
         }
         sb.Append(pad).Append("      <DataSource>").Append(dsName).Append("</DataSource>\n");
