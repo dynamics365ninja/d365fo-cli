@@ -399,29 +399,48 @@ public static class XppScaffolder
     public static XDocument Extension(
         string kind, string targetName, string suffix, Func<string, string?>? edtBaseTypeResolver = null)
     {
-        var elementName = kind switch
+        // The type name is not derivable from the kind: a query's extension is
+        // AxQuerySimpleExtension, not AxQueryExtension — there is no type or AOT folder of the
+        // latter name anywhere on an AOS.
+        var elementName = kind.ToLowerInvariant() switch
         {
-            "Table" => "AxTableExtension",
-            "Form" => "AxFormExtension",
-            "Edt" => "AxEdtExtension",
-            "Enum" => "AxEnumExtension",
-            _ => throw new ArgumentException($"Unsupported extension kind: {kind}", nameof(kind)),
+            "table"           => "AxTableExtension",
+            "form"            => "AxFormExtension",
+            "edt"             => "AxEdtExtension",
+            "enum"            => "AxEnumExtension",
+            "view"            => "AxViewExtension",
+            "query"           => "AxQuerySimpleExtension",
+            "dataentityview"  => "AxDataEntityViewExtension",
+            _ => throw new ArgumentException(
+                $"Unsupported extension kind: {kind}. Extensible: table, form, edt, enum, view, query, dataEntityView.",
+                nameof(kind)),
         };
 
         var root = new XElement(elementName, new XElement("Name", $"{targetName}.{suffix}"));
 
-        if (elementName == "AxEdtExtension")
-        {
-            XNamespace xsi = "http://www.w3.org/2001/XMLSchema-instance";
-            root.SetAttributeValue(XNamespace.Xmlns + "i", xsi.NamespaceName);
-            // Shape of every shipped AxEdtExtension: the array-elements collection, then the
-            // property overrides this extension applies.
-            root.Add(new XElement("ArrayElements"));
-            root.Add(new XElement("PropertyModifications"));
-        }
+        XNamespace xsi = "http://www.w3.org/2001/XMLSchema-instance";
+        root.SetAttributeValue(XNamespace.Xmlns + "i", xsi.NamespaceName);
+
+        // The empty collections a shipped extension of each kind carries. They are not
+        // decoration: an extension is a list of modifications, and the collections are where a
+        // caller's later edits go — emitting the container means the next tool has somewhere to
+        // write instead of guessing at the order itself.
+        foreach (var collection in ExtensionCollections(elementName))
+            root.Add(new XElement(collection));
 
         return new XDocument(root);
     }
+
+    /// <summary>Collections a freshly scaffolded extension of <paramref name="elementName"/> declares.</summary>
+    private static IEnumerable<string> ExtensionCollections(string elementName) => elementName switch
+    {
+        // Shape of every shipped AxEdtExtension: array elements, then property overrides.
+        "AxEdtExtension"           => ["ArrayElements", "PropertyModifications"],
+        "AxViewExtension"          => ["DataSources", "FieldGroupExtensions", "FieldGroups", "FieldModifications", "Fields", "PropertyModifications"],
+        "AxDataEntityViewExtension" => ["DataSources", "FieldGroupExtensions", "FieldGroups", "FieldModifications", "Fields", "PropertyModifications"],
+        "AxQuerySimpleExtension"   => ["DataSources", "Fields", "PropertyModifications", "Ranges"],
+        _                          => [],
+    };
 
     /// <summary>
     /// Scaffolds an <c>AxSecurityDutyExtension</c> — adds privileges to an
@@ -1374,17 +1393,46 @@ public static class ScaffoldFileWriter
     public static WriteResult Write(XDocument doc, string path, bool overwrite = false)
     {
         ArgumentNullException.ThrowIfNull(doc);
-        // Before any shape check: put the document in the namespace its DataContract
-        // declares, and in the member order that contract expects. Neither is formatting —
-        // the wrong namespace makes the file unreadable, and a misordered element is
-        // silently dropped on read, which is worse because nothing complains.
+        Finalize(doc, path);
+        return WriteCore(doc.ToString(SaveOptions.None), path, overwrite, declarationOnSaveFromXDoc: true, doc);
+    }
+
+    /// <summary>
+    /// Puts a scaffolded document into its final on-disk form and returns it, without writing.
+    /// </summary>
+    /// <remarks>
+    /// The same treatment a written file gets — contract namespace, contract member order, and
+    /// the shape rules — for callers that hand the XML somewhere other than a path: MCP returns
+    /// it to the agent, and the bridge install path passes it straight to
+    /// <c>IMetadataProvider</c>. Those callers used to render the raw scaffold, so the same
+    /// request could produce a correct file through the CLI and a silently lossy document
+    /// through MCP, with nothing on disk afterwards to explain the difference.
+    /// </remarks>
+    public static string ToAotXml(XDocument doc, string? name = null)
+    {
+        ArgumentNullException.ThrowIfNull(doc);
+        Finalize(doc, name ?? doc.Root?.Name.LocalName ?? "document");
+        return doc.ToString(SaveOptions.None);
+    }
+
+    /// <summary>
+    /// Canonicalises <paramref name="doc"/> and refuses it if the AOT reader would mangle it.
+    /// </summary>
+    /// <remarks>
+    /// Order matters here. The namespace a DataContract declares and the member order it
+    /// expects are not formatting — the wrong namespace makes the file unreadable, and a
+    /// misordered element is silently dropped on read, which is worse because nothing
+    /// complains. Both are applied before anything judges the document, so the shape rules see
+    /// what the reader will see.
+    /// </remarks>
+    private static void Finalize(XDocument doc, string path)
+    {
         ContractNamespaceApplier.Apply(doc);
         ContractOrderCanonicalizer.Apply(doc);
         EnsureConcreteAxRoot(doc.Root);
         EnsureValidEdtRoot(doc.Root);
         EnsureValueShapes(doc.Root);
         EnsureContractShape(doc.ToString(SaveOptions.DisableFormatting), path);
-        return WriteCore(doc.ToString(SaveOptions.None), path, overwrite, declarationOnSaveFromXDoc: true, doc);
     }
 
     /// <summary>

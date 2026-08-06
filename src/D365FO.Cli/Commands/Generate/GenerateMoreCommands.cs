@@ -114,7 +114,7 @@ public sealed class GenerateExtensionCommand : Command<GenerateExtensionCommand.
     public sealed class Settings : GenerateSettings
     {
         [CommandArgument(0, "<KIND>")]
-        [System.ComponentModel.Description("Extension kind: Table, Form, Edt, Enum, SecurityDuty, SecurityRole.")]
+        [System.ComponentModel.Description("Extension kind: Table, Form, Edt, Enum, View, Query, DataEntityView, SecurityDuty, SecurityRole.")]
         public string Kind { get; init; } = "";
 
         [CommandArgument(1, "<TARGET>")]
@@ -154,13 +154,18 @@ public sealed class GenerateExtensionCommand : Command<GenerateExtensionCommand.
             "form" => "AxFormExtension",
             "edt" => "AxEdtExtension",
             "enum" => "AxEnumExtension",
+            "view" => "AxViewExtension",
+            // A query's extension type is AxQuerySimpleExtension. There is no AxQueryExtension
+            // type and no folder of that name on any AOS.
+            "query" => "AxQuerySimpleExtension",
+            "dataentityview" => "AxDataEntityViewExtension",
             "securityduty" => "AxSecurityDutyExtension",
             "securityrole" => "AxSecurityRoleExtension",
             _ => null,
         };
         if (axFolder is null)
             return RenderHelpers.Render(kind, ToolResult<object>.Fail(D365FoErrorCodes.BadInput,
-                $"Unsupported extension kind: {settings.Kind}. Expected Table|Form|Edt|Enum|SecurityDuty|SecurityRole."));
+                $"Unsupported extension kind: {settings.Kind}. Expected Table|Form|Edt|Enum|View|Query|DataEntityView|SecurityDuty|SecurityRole."));
 
         var fullName = $"{settings.Target}.{suffix}";
         var outPath = settings.Out;
@@ -174,6 +179,11 @@ public sealed class GenerateExtensionCommand : Command<GenerateExtensionCommand.
         {
             "AxSecurityDutyExtension" => XppScaffolder.SecurityDutyExtension(settings.Target, suffix, settings.Privileges),
             "AxSecurityRoleExtension" => XppScaffolder.SecurityRoleExtension(settings.Target, suffix, settings.Duties, settings.Privileges),
+            // The EDT case needs the index-backed base-type resolver to pin the concrete
+            // AxEdt*Extension subtype; the other kinds ignore it.
+            // The scaffolder takes the base kind, not the type name — and the two differ for
+            // queries, whose extension is AxQuerySimpleExtension.
+            "AxQuerySimpleExtension" => XppScaffolder.Extension("query", settings.Target, suffix),
             // The EDT case needs the index-backed base-type resolver to pin the concrete
             // AxEdt*Extension subtype; the other kinds ignore it.
             _ => XppScaffolder.Extension(axFolder["Ax".Length..^"Extension".Length], settings.Target, suffix,

@@ -98,38 +98,70 @@ round-trip stays a VM-only L3 gate — Phase 4.)
 
 ## Phase 2 — Generation depth where the audit found it shallow
 
-2.1 **SSRS reports (G7, R3).** Port `generateSmartReport` semantics into a
-`ReportStackScaffolder`: one command emits TmpTable (TempDB) + Contract + DP + Controller +
-Output menu item + AxReport **with embedded RDL 2016** (page header injection, SimpleList +
-GroupedWithTotals designs, grouped tablix with subtotals). Reuse the shared EDT-resolution path
-(regression R3 shows resolver and emitted `i:type` must come from one computation). Unit tests
-+ new eval case `L2-report-stack`.
+**Before any of it: the catalog was keyed wrong.** Eighteen MetaModel types serialize under a
+DataContract name different from their CLR name, and the 1.3 catalog was keyed by the latter.
+`AxFormDataSourceRoot` contracts to `<AxFormDataSource>` — the same name as a real *abstract*
+CLR type — so every form data source resolved to five members instead of thirty.
+`AxMethodPropertyCollection` writes as `<Method>`, `AxFormControlPropertyCollection` as
+`<Control>`. Keying by contract name removed the subtype-substitution heuristic 1.3 had
+reverse-engineered from the symptom, and made "a member this type does not declare" mean what it
+says. Two gaps closed with it: member *value* types are now recorded (so a walker can descend
+into `<Grant>` and `<Design>`, elements named after a member rather than a type), and the Core
+assembly is scanned, where `AccessGrant` lives.
 
-2.2 **Menu items, security, entities, extensions.**
-- Menu item: add `EnumTypeParameter`, `Parameters`, `ConfigurationKey`, `NeededPermission`,
-  `LinkedPermissionObject`, `Query`.
-- Security: privilege entry-point shapes are OK; deepen duty/role beyond reference lists,
-  give `AxSecurityPolicy` its `PolicyGroup`/`Constrained*` collections, make
-  `Security{Duty,Role}Extension` emit real `PropertyModifications` payloads.
-- Data entity: keys, `EntityCategory`, `PrimaryCompanyContext`, relations, computed columns,
-  optional staging-table emission; support `AxDataEntityViewExtension`.
-- `generate extension`: add `view`/`query`/`dataEntityView` kinds already known to
-  `ObjectModifyEngine.ExtensionKindFor`.
+2.1 ✅ **SSRS reports (G7, R3).** `AxReport` was largely fiction: `<Datasets>` (the member is
+`DataSets`), `<ReportParameters>` (parameters live in `DefaultParameterGroup`), and a hand-rolled
+`AxReportTablix`/`TablixBody` tree matching no AOT type — all discarded on read, so the report
+loaded with no datasets and no design. Rebuilt as `AxReportAutoDesign` with table data regions.
+`generate report` now emits the whole stack: TempDB table per dataset, DP, contract,
+`SrsReportRunController`, and an output menu item. Six files, all six verified lossless against
+the live provider.
 
-2.3 **Guardrails uniformly applied (G4).** Move `GroundingGate` invocation into the shared
-`GenerateInstaller` path so all 29 commands honor `D365FO_GROUNDING_ENFORCE`; port
-property-honesty reconciliation (R6) into `ScaffoldFileWriter`/bridge writes (requested vs.
-written diff in the result envelope).
+**RDL is deliberately not generated.** It lives in `AxReportPrecisionDesign.Text` as an escaped
+document, and although precision designs outnumber auto designs in shipped code, a wrong RDL is
+far harder to detect than a wrong contract — the file loads and the report renders wrongly.
+Auto-design is describable in AOT terms and checkable; RDL wants its own evidence base first.
 
-2.4 **MCP parity (G6).** Widen `generate_object` from 11 to the full registry (registry-driven
-enum), add `validate` tool exposing `xpp` + `references` + `form-pattern` modes over MCP.
+2.2 ✅ (mostly) **Menu items, security, entities, extensions.**
+- Menu item: `EnumTypeParameter`/`EnumParameter`, `Parameters`, `Query`, `ConfigurationKey`,
+  `LinkedPermissionObject`/`LinkedPermissionType`. **`NeededPermission` is not a menu-item
+  member** — it belongs to form controls. A menu item has five independent `*Permissions` flags,
+  so an access level is expanded into those, cumulatively.
+- Security: `<AccessLevel>` exists nowhere in the security model. Access is six Allow/Deny
+  permissions inside `<Grant>`, so every generated privilege granted nothing — and the extractor
+  read the same non-member, indexing every shipped privilege with a blank access level too.
+- Data entity: `<DataSources>` is not a member (they belong to the embedded `ViewMetadata`
+  query); fields needed `i:type="AxDataEntityViewMappedField"` or every `DataField`/`DataSource`
+  mapping was dropped; `<IsMandatory>` is `Mandatory`. Keys and `EntityCategory` added.
+- `generate extension`: `view`, `query`, `dataEntityView` added. The type for a query extension
+  is **`AxQuerySimpleExtension`** — there is no `AxQueryExtension` type or folder on any AOS.
 
-2.5 **prepare type-awareness (G8).** Drive `StrategiesFor` and advertised kind lists from the
-registry; add bespoke strategies for report/entity/security (the new depth areas).
+Still open: duty/role depth beyond reference lists, `AxSecurityPolicy`'s
+`PolicyGroup`/`Constrained*` collections, `Security{Duty,Role}Extension` property-modification
+payloads, and entity relations / computed columns / staging-table emission.
 
-**Gate:** new unit tests per family (kill the zero-test list: report, workflow,
-number-sequence, migration-script, `entity --all-fields`); eval cases added for each deepened
-family; MCP schema snapshot test.
+2.3 ◐ **Guardrails uniformly applied (G4).** The contract rules now run on *every* write:
+`ScaffoldFileWriter` refuses a document the reader would mangle, so an unknown member or an
+out-of-range enum fails at the point of the mistake rather than on the AOS. It found one
+immediately — `generate number-sequence` wrote `<NumberSequenceModule>` onto an EDT that has no
+such member, which its golden could not catch because the case captures the extension class and
+the EDT was a sibling artifact nobody validated. Still open: moving `GroundingGate` into the
+shared `GenerateInstaller` path, and property-honesty reconciliation (R6).
+
+2.4 ✅ **MCP parity (G6).** The real gap was fidelity, not coverage: the XML-only handlers
+returned the raw scaffold, skipping the namespace, the member order and the shape rules the file
+path applies — the same request produced a correct file through the CLI and a document no AOS
+would read through MCP. Both surfaces now render through one emitter. `generate_object` gained
+menu-item, privilege, duty, role, entity and extension; a `validate` tool exposes `xpp`,
+`references`, `form-pattern` and `metadata-shape` — the last being the offline half of
+`validate metadata`, needing no bridge.
+
+2.5 ✅ **prepare type-awareness (G8).** `StrategiesFor` gains bespoke strategies for report,
+entity and security, and derives the rest from the registry: a kind with an extension object gets
+it named, and a kind without one is told so instead of being sent looking.
+
+**Gate:** all 51 goldens readable-and-lossless against the live provider (was 43); offline lint
+clean; MCP parity tests green.
 
 ## Phase 3 — Knowledge: absorb, single-source, audit
 
