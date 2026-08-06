@@ -23,6 +23,7 @@ namespace D365FO.Core.Tests;
 ///
 /// Exercised against a fake in-process bridge, so no D365FO VM is involved.
 /// </summary>
+[Collection(EnvironmentCollectionDefinition.Name)]
 public sealed class ObjectModifyEngineTests : IDisposable
 {
     private readonly string _dbPath = Path.Combine(Path.GetTempPath(), $"objmodify-{Guid.NewGuid():N}.sqlite");

@@ -10,7 +10,7 @@ namespace D365FO.Core.Tests;
 /// <c>generate *</c> CLI command and the MCP <c>generate_object</c> tool funnel disk writes
 /// through — journals every write (issue #113) without the caller having to opt in.
 /// </summary>
-[Collection("ScaffoldFileWriter")]
+[Collection(EnvironmentCollectionDefinition.Name)]
 public sealed class ScaffoldFileWriterJournalTests : IDisposable
 {
     private readonly string _dir = Path.Combine(Path.GetTempPath(), $"sfw-journal-{Guid.NewGuid():N}");

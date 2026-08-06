@@ -1795,7 +1795,13 @@ public static class ScaffoldFileWriter
             File.Move(full, backup);
         }
 
-        var tmp = full + ".tmp";
+        // The staging name is unique per call, not the deterministic "<target>.tmp" it used to
+        // be (issue #158). Two writers aiming at the same path shared that sibling: the second
+        // File.Create truncated the first one's staged bytes, so whichever move landed first
+        // published the *other* writer's content, and the loser threw a FileNotFoundException
+        // from a path that looks like a successful atomic write. A per-call name makes the
+        // stage-then-rename genuinely private to the call, which is what "atomic" claimed.
+        var tmp = full + "." + Guid.NewGuid().ToString("N") + ".tmp";
         try
         {
             if (declarationOnSaveFromXDoc && doc is not null)
@@ -1808,7 +1814,7 @@ public static class ScaffoldFileWriter
                 File.WriteAllText(tmp, xml);
             }
 
-            File.Move(tmp, full);
+            MoveOntoTarget(tmp, full);
         }
         catch
         {
@@ -1829,6 +1835,63 @@ public static class ScaffoldFileWriter
         var bytes = new FileInfo(full).Length;
         RecordJournalEntry(full, preImage, preImageHadBom);
         return new WriteResult(full, bytes, backup);
+    }
+
+    /// <summary>
+    /// Publish the staged file onto its target, and refuse to report success unless the target
+    /// is actually there afterwards.
+    /// </summary>
+    /// <remarks>
+    /// Issue #158: a scaffold write returned normally and the file was gone by the time the
+    /// caller looked. <c>File.Move</c> is the only step that can fail without an exception in
+    /// practice — a scanner or indexer holding the source or the target makes the rename fail
+    /// transiently, and the surrounding code treated "no exception" as "written". Retrying a
+    /// handful of times covers the transient case; a post-move existence check turns the
+    /// non-transient case into a loud error at the write, naming the directory's real contents,
+    /// instead of a mystery count mismatch somewhere downstream.
+    /// </remarks>
+    private static void MoveOntoTarget(string tmp, string full)
+    {
+        const int attempts = 5;
+        for (var attempt = 1; ; attempt++)
+        {
+            try
+            {
+                File.Move(tmp, full);
+                if (File.Exists(full)) return;
+            }
+            catch (IOException) when (attempt < attempts)
+            {
+                // Transient sharing violation — fall through to the backoff below.
+            }
+            catch (UnauthorizedAccessException) when (attempt < attempts)
+            {
+                // Same shape, different exception type depending on who holds the handle.
+            }
+
+            if (attempt >= attempts)
+            {
+                var dir = Path.GetDirectoryName(full);
+                var siblings = SafeListDirectory(dir);
+                throw new IOException(
+                    $"Wrote the staged file but '{full}' is not on disk afterwards. " +
+                    $"Staged file {(File.Exists(tmp) ? "still present" : "gone")}: {tmp}. " +
+                    $"Directory now contains [{siblings}].");
+            }
+
+            Thread.Sleep(20 * attempt);
+        }
+    }
+
+    private static string SafeListDirectory(string? dir)
+    {
+        try
+        {
+            return string.IsNullOrEmpty(dir)
+                ? "<no directory>"
+                : string.Join(", ", Directory.EnumerateFileSystemEntries(dir).Select(Path.GetFileName));
+        }
+        catch (Exception ex) { return $"<unreadable: {ex.GetType().Name}>"; }
     }
 
     /// <summary>

@@ -186,7 +186,11 @@ public class WorkflowScaffolderTests
                 WorkflowScaffolder.WorkflowTask("ConVehicleTask", "ConVehicleReviewDocument"),
                 Path.Combine(dir, "ConVehicleTask.xml"));
 
-            Assert.Equal(3, Directory.GetFiles(dir, "*.xml").Length);
+            // Listed, not counted (issue #158): when this went red the message said
+            // "Expected 3, Actual 2" and nothing about which write was missing.
+            Assert.Equal(
+                new[] { "ConVehicleApproval.xml", "ConVehicleReview.xml", "ConVehicleTask.xml" },
+                Directory.GetFiles(dir, "*.xml").Select(Path.GetFileName).Order().ToArray());
         }
         finally
         {
