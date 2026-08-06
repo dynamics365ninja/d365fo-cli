@@ -7,13 +7,23 @@ Single source of truth: skills/_source/<id>.md with YAML frontmatter.
 Frontmatter keys:
   id:           (required) stable identifier, used as file/folder name
   description:  (required) one-line trigger description
+  covers:       (required) short phrase for the SKILL.md reference table
   applyTo:      (Copilot)  list of globs
   appliesWhen:  (Anthropic) plain-text trigger description
+
+Body markers:
+  <!-- canon:<id> --> … <!-- /canon -->   a rule-canon block. The same blocks are
+  read at runtime by D365FO.Core.Knowledge.RuleCanon, which composes the CLI's
+  agent prompt and the MCP server instructions from them — so the rule canon has
+  exactly one home. This script writes them into skills/d365fo-cli/SKILL.md, the
+  one consumer that is a file on disk rather than a runtime composition; CI fails
+  if that file drifts from the source topics.
 
 Outputs:
   skills/copilot/<id>.instructions.md
   skills/anthropic/<id>/SKILL.md
   skills/d365fo-cli/references/<id>.md
+  skills/d365fo-cli/SKILL.md            (generated regions only)
 """
 from __future__ import annotations
 
@@ -96,6 +106,47 @@ def emit_copilot_skill(meta: dict, body: str, out_dir: Path) -> Path:
     return path
 
 
+CANON_RX = re.compile(r"<!--\s*canon:([a-z0-9-]+)\s*-->\n(.*?)\n<!--\s*/canon\s*-->", re.DOTALL)
+
+# Canon blocks written into SKILL.md, in reading order, with the heading each gets.
+SKILL_CANON = [
+    ("never-auto", "Never-auto"),
+    ("core", "Non-negotiable X++ rules"),
+    ("coc", "Chain of Command"),
+    ("aot-xml-safety", "AOT XML safety"),
+    ("bp", "Best practice — must pass `d365fo bp check`"),
+]
+
+
+def replace_region(text: str, name: str, body: str) -> str:
+    """Replace the content between <!-- BEGIN <name> --> and <!-- END <name> -->."""
+    begin, end = f"<!-- BEGIN {name} -->", f"<!-- END {name} -->"
+    i, j = text.find(begin), text.find(end)
+    if i < 0 or j < 0:
+        raise SystemExit(f"SKILL.md is missing the '{name}' generated region markers")
+    return text[: i + len(begin)] + "\n" + body.rstrip("\n") + "\n" + text[j:]
+
+
+def emit_skill_md(topics: list[dict], canon: dict[str, str], path: Path) -> None:
+    """Refresh the generated regions of the hand-written d365fo-cli SKILL.md."""
+    if not path.exists():
+        raise SystemExit(f"{path} not found")
+
+    rows = ["| Resource file | Covers |", "|---|---|"]
+    rows += [f"| `{t['id']}` | {t['covers']} |" for t in topics]
+
+    blocks = []
+    for canon_id, heading in SKILL_CANON:
+        if canon_id not in canon:
+            raise SystemExit(f"no canon block '{canon_id}' in skills/_source")
+        blocks.append(f"### {heading}\n\n{canon[canon_id]}")
+
+    text = path.read_text(encoding="utf-8")
+    text = replace_region(text, "references", "\n".join(rows))
+    text = replace_region(text, "canon", "\n\n".join(blocks))
+    path.write_text(text, encoding="utf-8")
+
+
 def main() -> int:
     copilot_out      = OUT_ROOT / "copilot"
     anthropic_out    = OUT_ROOT / "anthropic"
@@ -112,19 +163,31 @@ def main() -> int:
         print("no source skills found", file=sys.stderr)
         return 0
 
+    topics: list[dict] = []
+    canon: dict[str, str] = {}
+
     for f in files:
         print(f"» {f.name}")
         text = f.read_text(encoding="utf-8")
         fm_text, body = split_frontmatter(text)
         meta = parse_yaml(fm_text)
-        for required in ("id", "description"):
+        for required in ("id", "description", "covers"):
             if required not in meta:
                 raise SystemExit(f"{f.name}: missing '{required}'")
         emit_copilot(meta, body, copilot_out)
         emit_anthropic(meta, body, anthropic_out)
         emit_copilot_skill(meta, body, copilot_skill_out)
+        topics.append(meta)
 
-    print(f"\nDone. {len(files)} skill(s) emitted to all three targets (copilot, anthropic, d365fo-cli).")
+        for canon_id, block in CANON_RX.findall(body.replace("\r\n", "\n")):
+            if canon_id in canon:
+                raise SystemExit(f"canon id '{canon_id}' is declared by more than one topic")
+            canon[canon_id] = block.strip()
+
+    emit_skill_md(topics, canon, OUT_ROOT / "d365fo-cli" / "SKILL.md")
+
+    print(f"\nDone. {len(files)} skill(s) emitted to all three targets (copilot, anthropic, d365fo-cli); "
+          f"{len(canon)} canon block(s) written into skills/d365fo-cli/SKILL.md.")
     return 0
 
 

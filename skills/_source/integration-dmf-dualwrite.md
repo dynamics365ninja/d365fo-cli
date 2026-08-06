@@ -1,6 +1,7 @@
 ---
 id: integration-dmf-dualwrite
 description: Move data in and out of D365 Finance & Operations in bulk or in sync — the Data Management Framework (DMF/DIXF), dual-write to Dataverse, virtual entities, and the Power Platform surface. Invoke when the user asks about data import/export, staging tables, recurring integrations, data packages, dual-write, Dataverse sync, virtual entities, or Power Automate.
+covers: DMF, dual-write, virtual entities, uploaded-file readers
 applyTo:
   - "**/AxDataEntityView/**"
   - "**/AxTable/**Staging*.xml"

@@ -1,6 +1,7 @@
 ---
 id: runtime-frameworks
 description: Use the D365FO platform frameworks that decide behaviour at runtime — Feature Management, the SysExtension plug-in factory, telemetry and infolog, and the Global Address Book. Invoke when the user asks to add a feature flag, replace an if/switch chain with a registered strategy, log or capture infolog output, or read a party's address or contact details.
+covers: Feature Management, SysExtension, telemetry, Global Address Book
 applyTo:
   - "**/AxClass/**Feature*.xml"
   - "**/AxClass/**Attribute.xml"

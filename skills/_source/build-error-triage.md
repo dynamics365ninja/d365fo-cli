@@ -1,6 +1,7 @@
 ---
 id: build-error-triage
 description: Turn a D365FO compiler, best-practice, or runtime error into the specific fix it calls for. Invoke when the user pastes a build log, an xppc message, a BP violation, or an infolog stack trace and asks what it means or how to fix it.
+covers: Compiler/BP/runtime message to the specific fix, via `explain-error`
 applyTo:
   - "**/*.log"
   - "**/*.xpp"

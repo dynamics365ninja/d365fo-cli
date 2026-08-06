@@ -1,6 +1,7 @@
 ---
 id: performance-and-caching
 description: Make D365FO code fast and keep it fast — set-based operations, indexes, the table CacheLookup modes, SysGlobalObjectCache and RecordViewCache, temp-table choice, and parallel batch fan-out. Invoke when the user asks why something is slow, how to cache, how to process a large volume, or which temp table type to use.
+covers: Set-based work, `CacheLookup`, explicit caches, parallel batch
 applyTo:
   - "**/*.xpp"
   - "**/AxTable/**"

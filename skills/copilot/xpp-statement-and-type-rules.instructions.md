@@ -90,3 +90,19 @@ Local functions inside a method **can read** variables declared earlier in the e
 - **Never** test `myDate == null` — there is no null in X++.
 - **Never** rely on switch fall-through — always `break` (or use the comma-list form).
 - **Never** down-cast an `Object` without an `is` guard (or an `as` + null check).
+
+
+## Rule canon — statements and types
+
+<!-- canon:statements -->
+- `switch break` required. Multi-value: `case 13, 17, 21:`.
+- Ternary branches must share the same type.
+- **X++ has NO database null.** Sentinels: `int 0`, `real 0.0`, `str ""`,
+  `date 1900-01-01` (`dateNull()`), `utcDateTime` date-part `1900-01-01`,
+  `enum 0`. Test `if (!myDate)` or `if (myDate == dateNull())`. NEVER
+  `if (myDate == null)`.
+- Casting: prefer `as`/`is` over hard down-cast. Late binding only on
+  `Object` / `FormRun`.
+- `using` blocks for `IDisposable`.
+- Embedded function declarations: read-only access to enclosing locals.
+<!-- /canon -->

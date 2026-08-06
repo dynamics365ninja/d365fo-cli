@@ -1,5 +1,5 @@
 {
-  "capturedAt": "2026-08-06T06:02:13.4458189Z",
+  "capturedAt": "2026-08-06T06:14:35.4637427Z",
   "indexedAt": "2026-05-19T14:46:43.8643815Z",
   "ok": [
     "analytics-and-er|static-call|ERModelDefinitionInputParametersAction::addParameter",
@@ -186,6 +186,8 @@
     "x\u002B\u002B-class-authoring|static-call|NumberSeqFormHandler::newForm",
     "x\u002B\u002B-class-authoring|static-call|NumberSeqReference::findReference",
     "x\u002B\u002B-class-authoring|static-call|SysPluginFactory::Instance",
+    "xpp-best-practice-rules|attribute|DataEventHandler",
+    "xpp-best-practice-rules|attribute|SysObsolete",
     "xpp-best-practice-rules|declaration|TransDate",
     "xpp-best-practice-rules|static-call|Box::yesNo",
     "xpp-best-practice-rules|static-call|DateTimeUtil::getToday",

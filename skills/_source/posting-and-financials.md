@@ -1,6 +1,7 @@
 ---
 id: posting-and-financials
 description: Work with D365FO financial dimensions, the posting/voucher engine, currency conversion, multi-company data, and trade-agreement pricing. Invoke when the user asks about DefaultDimension/LedgerDimension, posting a voucher, ledger entries, exchange rates, crossCompany/changeCompany, or price and discount evaluation.
+covers: Financial dimensions, voucher posting, currency, pricing
 applyTo:
   - "**/AxClass/**Posting*.xml"
   - "**/AxClass/**Ledger*.xml"

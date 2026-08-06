@@ -1,6 +1,7 @@
 ---
 id: number-sequence-patterns
 description: Register and consume a D365FO number sequence — the NumberSeqApplicationModule subclass, the parameters-table accessor, form auto-numbering, and runtime fetch. Invoke when the user asks to add an auto-numbered id, register a number sequence for a module, or wire NumberSeqFormHandler into a form.
+covers: `NumberSeqApplicationModule`, form handler, runtime fetch
 applyTo:
   - "**/AxClass/**NumberSeq*.xml"
   - "**/AxEdt/**"

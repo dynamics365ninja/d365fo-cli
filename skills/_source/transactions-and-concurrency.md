@@ -1,6 +1,7 @@
 ---
 id: transactions-and-concurrency
 description: Scope transactions and survive concurrency in D365FO — ttsbegin/ttscommit rules, optimistic concurrency and UpdateConflict retry, UnitOfWork, and the error-handling patterns that go with them. Invoke when the user asks about transactions, tts levels, locking, update conflicts, retry, or where to put try/catch.
+covers: tts scoping, OCC retry, `UnitOfWork`, error handling
 applyTo:
   - "**/*.xpp"
   - "**/AxClass/**"

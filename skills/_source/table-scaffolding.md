@@ -1,6 +1,7 @@
 ---
 id: table-scaffolding
 description: Create AxTable XML in D365 Finance & Operations using business-role pattern presets (Main / Transaction / Parameter / Group / Reference / WorksheetHeader / WorksheetLine), or add fields / indexes / relations to existing tables. Use whenever the user asks to "create a table", "scaffold a master/transaction/parameter table", "add a field", or "set TableGroup / TableType".
+covers: Table creation, EDTs, relations, indexes, `TableGroup` vs `TableType`, inheritance
 applyTo:
   - "**/AxTable/**"
   - "**/*Table.xml"

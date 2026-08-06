@@ -1,6 +1,7 @@
 ---
 id: forms-and-navigation
 description: Extend a D365FO form at the right lifecycle point, and wire objects into the navigation menus. Invoke when the user asks where to put form logic (init, executeQuery, active, validateWrite, clicked, modified), how to refresh a grid, how to read caller context, or how to add a menu item or a nested submenu.
+covers: Form lifecycle extension points, menus and submenu nesting
 applyTo:
   - "**/AxForm/**"
   - "**/AxMenu/**"

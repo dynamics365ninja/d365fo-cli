@@ -66,7 +66,10 @@ jobs:
         run: python3 scripts/emit-skills.py
       - name: Fail on untracked drift
         run: |
-          if [ -n "$(git status --porcelain skills/copilot skills/anthropic skills/d365fo-cli/references)" ]; then
+          # SKILL.md is included: its rule-canon and reference-table regions are
+          # generated from skills/_source, so an edited topic that was not re-emitted
+          # shows up here rather than as a quietly stale rule shipped to agents.
+          if [ -n "$(git status --porcelain skills/copilot skills/anthropic skills/d365fo-cli)" ]; then
             echo "::error::skills/ artifacts drift from skills/_source. Run scripts/emit-skills.py locally and commit."
             git status --porcelain skills/
             exit 1

@@ -1,6 +1,7 @@
 ---
 id: x++-class-authoring
 description: Guidance for authoring or extending X++ classes in D365 Finance & Operations. Invoke whenever the user asks to "create a class", "extend a class", "add a method", or write any X++ that touches CoC.
+covers: Class hierarchy, CoC, access modifiers, constructor patterns
 applyTo:
   - "**/*.xpp"
   - "**/AxClass/**"

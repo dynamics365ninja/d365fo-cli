@@ -135,6 +135,10 @@ public sealed class StdioDispatcher
                             ["name"] = ServerName,
                             ["version"] = ServerVersion,
                         },
+                        // Spec-defined field clients surface to the model once, before any
+                        // tool call. Carries the rule canon so it is not re-paid per tool
+                        // description — see ServerInstructions.
+                        ["instructions"] = ServerInstructions.Text,
                     });
 
                 case "initialized":

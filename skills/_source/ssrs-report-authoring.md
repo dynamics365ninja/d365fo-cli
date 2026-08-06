@@ -1,6 +1,7 @@
 ---
 id: ssrs-report-authoring
 description: Author or extend an SSRS report in D365 Finance & Operations — the TmpTable → Contract → DP → Controller → AxReport stack, RDL designs, and Print management integration. Invoke when the user asks to create a report, add a dataset, change a report design, or wire a report into Print management.
+covers: TmpTable to Contract to DP to Controller to AxReport, Print management
 applyTo:
   - "**/AxReport/**"
   - "**/AxClass/**DP.xml"

@@ -1,6 +1,7 @@
 ---
 id: sysoperation-batch-patterns
 description: Scaffold batch jobs, SysOperation triplets (DataContract + Service + Controller), RunBase/RunBaseBatch classes, or data migration scripts in D365 Finance & Operations. Invoke when the user asks to "create a batch job", "scaffold a SysOperation", "create a RunBase class", "build a batch class", "generate a migration script", "migrate data between tables", or "create a scheduled batch".
+covers: SysOperation batch jobs, RunBase, migration scripts, retryable/async batch
 applyTo:
   - "**/AxClass/**Controller*.xml"
   - "**/AxClass/**Service*.xml"

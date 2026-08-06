@@ -1,6 +1,7 @@
 ---
 id: inventory-and-warehouse
 description: Work with D365FO inventory and warehouse management — InventTrans/InventDim/InventSum, on-hand queries, reservations, and the WHS work/wave model. Invoke when the user asks about on-hand stock, inventory dimensions, inventory transactions, reservations, warehouse work, waves, location directives, or mobile device flows.
+covers: InventTrans/InventDim/InventSum, on-hand, WHS work and waves
 applyTo:
   - "**/AxClass/**Invent*.xml"
   - "**/AxClass/**WHS*.xml"

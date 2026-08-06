@@ -1,6 +1,7 @@
 ---
 id: xpp-runtime-types
 description: Use the X++ runtime type surface correctly — collections and containers, utcdatetime and time zones, .NET interop, the Dict* reflection API, and macros. Invoke when the user asks about List/Map/Set/Struct/container, date and time zone handling, calling .NET from X++, runtime metadata, or macro libraries.
+covers: Collections, date/time zones, .NET interop, `Dict*`, macros
 applyTo:
   - "**/*.xpp"
   - "**/AxClass/**"

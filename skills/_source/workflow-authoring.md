@@ -1,6 +1,7 @@
 ---
 id: workflow-authoring
 description: Build a D365FO workflow — the workflow template, its document class, approvals and tasks, the submit menu item, and the generated event handlers. Invoke when the user asks to create an approval workflow, add a workflow to a table or form, or wire canSubmitToWorkflow.
+covers: `AxWorkflowTemplate`, document class, approvals and tasks
 applyTo:
   - "**/AxWorkflowTemplate/**"
   - "**/AxWorkflowApproval/**"

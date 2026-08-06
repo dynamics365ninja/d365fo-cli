@@ -1,6 +1,7 @@
 ---
 id: security-modeling
 description: Model D365FO security — the role → duty → privilege → entry-point chain, XDS policies, runtime access checks, and configuration keys as the compile-time counterpart. Invoke when the user asks to create or extend a privilege, duty or role, restrict access to a form or table, add an XDS policy, or gate functionality with a configuration key.
+covers: Privilege/duty/role chain, XDS policies, configuration keys
 applyTo:
   - "**/AxSecurityPrivilege/**"
   - "**/AxSecurityDuty/**"

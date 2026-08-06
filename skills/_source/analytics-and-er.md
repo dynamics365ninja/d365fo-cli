@@ -1,6 +1,7 @@
 ---
 id: analytics-and-er
 description: Model the D365FO analytical and document-generation surfaces — aggregate measurements and the entity store, tiles/cues and KPIs, and Electronic Reporting (ER). Invoke when the user asks about a workspace tile, a KPI, an aggregate measurement, the entity store, Power BI content, or running/binding an ER format.
+covers: Tiles/cues, KPIs, aggregate measurements, Electronic Reporting
 applyTo:
   - "**/AxAggregateMeasurement/**"
   - "**/AxAggregateDimension/**"

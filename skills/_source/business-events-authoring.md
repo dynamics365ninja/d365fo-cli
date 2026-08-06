@@ -1,6 +1,7 @@
 ---
 id: business-events-authoring
 description: Author or extend custom Business Events in D365 Finance & Operations. Invoke when the user asks to "create a business event", "add a business event", "build a custom business event", or wire D365FO outbound notifications to Power Automate / Service Bus / Event Grid.
+covers: `BusinessEventsBase`, contract class, payload, catalog activation
 applyTo:
   - "**/AxClass/**"
   - "**/*BusinessEvent*.xml"

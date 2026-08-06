@@ -1,6 +1,7 @@
 ---
 id: xpp-data-access-apis
 description: Choose and use the right D365FO data-access API when a plain `select` will not do — the SysDa fluent API, the AOT Query/QueryRun object model, and direct SQL. Invoke when the user asks about dynamic queries, building a query at runtime, QueryBuildDataSource/QueryBuildRange, SysDa, or executing raw SQL from X++.
+covers: `Query`/`QueryRun`, SysDa, direct SQL
 applyTo:
   - "**/AxQuery/**"
   - "**/AxClass/**Query*.xml"

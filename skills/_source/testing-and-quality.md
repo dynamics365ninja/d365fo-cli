@@ -1,6 +1,7 @@
 ---
 id: testing-and-quality
 description: Write and run D365FO tests — SysTestCase unit tests, the ATL acceptance library, and the offline gates (`validate xpp`, `validate references`, `lint`) that catch defects before a build. Invoke when the user asks how to test X++, add a unit test, assert on behaviour, or check code quality without a VM.
+covers: SysTestCase, ATL, and the offline validate/lint gates
 applyTo:
   - "**/AxClass/**Test*.xml"
   - "**/AxClass/**Test.xml"
