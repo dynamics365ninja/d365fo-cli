@@ -226,7 +226,7 @@ public sealed class KnowledgeAuditCommand : Command<KnowledgeAuditCommand.Settin
         int symbolDefects;
         if (live)
         {
-            var result = KnowledgeAudit.Audit(refs, repo!, allow.Symbols);
+            var result = KnowledgeAudit.Audit(refs, repo!, allow);
             symbolDefects = result.Findings.Count;
             if (settings.Capture)
             {
@@ -262,7 +262,7 @@ public sealed class KnowledgeAuditCommand : Command<KnowledgeAuditCommand.Settin
                     "Run `d365fo knowledge audit --capture` on a machine with a real index and commit the snapshot."));
             }
 
-            var uncovered = KnowledgeAudit.VerifyAgainstSnapshot(refs, snapshot, allow.Symbols);
+            var uncovered = KnowledgeAudit.VerifyAgainstSnapshot(refs, snapshot, allow);
             var stale = KnowledgeAudit.StaleSnapshotKeys(refs, snapshot);
             symbolDefects = uncovered.Count;
             symbols = new

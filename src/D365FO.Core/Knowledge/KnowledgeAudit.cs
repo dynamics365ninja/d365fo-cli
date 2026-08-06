@@ -86,12 +86,11 @@ public static class KnowledgeAudit
     };
 
     /// <summary>
-    /// Names that legitimately never appear in the symbol index — .NET BCL types reachable
-    /// from X++ and platform constructs the metadata parser does not index. Recognised by
-    /// namespace prefix; everything else must be a reviewed entry in
-    /// <c>eval/knowledge-audit.allow.json</c>.
+    /// Namespaces that never appear in the symbol index by construction — .NET BCL and
+    /// platform types reachable from X++ only when written fully qualified. Everything else
+    /// must be a reviewed entry in <c>eval/knowledge-audit.allow.json</c>.
     /// </summary>
-    private static readonly string[] AllowedPrefixes = ["System.", "Microsoft."];
+    private static readonly string[] DotNetPrefixes = ["System.", "Microsoft."];
 
     /// <summary>
     /// Canonical AppSuite/platform elements every real index carries. The live gate only
@@ -117,7 +116,7 @@ public static class KnowledgeAudit
     public static KnowledgeAuditResult Audit(
         IReadOnlyList<KnowledgeRef> refs,
         IKnowledgeSymbolLookup lookup,
-        IReadOnlyDictionary<string, string>? allow = null)
+        KnowledgeAuditAllow? allow = null)
     {
         var findings = new List<KnowledgeAuditFinding>();
         int resolved = 0, allowed = 0;
@@ -174,9 +173,11 @@ public static class KnowledgeAudit
         return new KnowledgeAuditResult(refs.Count, resolved, allowed, findings);
     }
 
-    private static bool IsAllowed(string name, IReadOnlyDictionary<string, string>? allow) =>
-        (allow is not null && allow.ContainsKey(name)) ||
-        AllowedPrefixes.Any(p => name.StartsWith(p, StringComparison.Ordinal));
+    private static bool IsAllowed(string name, KnowledgeAuditAllow? allow) =>
+        DotNetPrefixes.Any(p => name.StartsWith(p, StringComparison.Ordinal)) ||
+        (allow is not null &&
+            (allow.Symbols.ContainsKey(name) ||
+             allow.Prefixes.Keys.Any(p => name.StartsWith(p, StringComparison.Ordinal))));
 
     /// <summary>Human-readable audit report, grouped by topic, worst first.</summary>
     public static string Render(KnowledgeAuditResult result)
@@ -226,7 +227,7 @@ public static class KnowledgeAudit
     public static IReadOnlyList<KnowledgeRef> VerifyAgainstSnapshot(
         IReadOnlyList<KnowledgeRef> refs,
         KnowledgeAuditSnapshot snapshot,
-        IReadOnlyDictionary<string, string>? allow = null)
+        KnowledgeAuditAllow? allow = null)
     {
         var ok = snapshot.Ok.ToHashSet(StringComparer.Ordinal);
         return refs.Where(r => !ok.Contains(r.Key) && !IsAllowed(r.Name, allow)).ToList();

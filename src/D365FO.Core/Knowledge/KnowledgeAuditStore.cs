@@ -23,6 +23,15 @@ public sealed record KnowledgeAuditAllow
     public Dictionary<string, string> Symbols { get; init; } = new(StringComparer.Ordinal);
 
     /// <summary>
+    /// <c>name prefix → why</c>: whole naming families the corpus invents rather than
+    /// references. Coarser than <see cref="Symbols"/> and therefore rarer — one entry excuses
+    /// every name beneath it, so each needs a reason that says why the family can never
+    /// resolve.
+    /// </summary>
+    [JsonPropertyName("prefixes")]
+    public Dictionary<string, string> Prefixes { get; init; } = new(StringComparer.Ordinal);
+
+    /// <summary>
     /// <c>topic::field::rule → why</c>: examples that deliberately show the wrong pattern next
     /// to the right one, so they stay teachable. A pin that stops firing is reported as dead.
     /// </summary>

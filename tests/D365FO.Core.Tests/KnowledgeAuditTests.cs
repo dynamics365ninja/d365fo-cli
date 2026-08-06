@@ -50,7 +50,7 @@ public class KnowledgeAuditTests
         var snapshot = KnowledgeAuditStore.LoadSnapshot(EvalPaths.KnowledgeSnapshotPath(RepoRoot));
         Assert.NotNull(snapshot);
 
-        var uncovered = KnowledgeAudit.VerifyAgainstSnapshot(Refs, snapshot!, Allow.Symbols);
+        var uncovered = KnowledgeAudit.VerifyAgainstSnapshot(Refs, snapshot!, Allow);
         Assert.True(uncovered.Count == 0,
             $"{uncovered.Count} reference(s) not in the audited snapshot — re-run " +
             "`d365fo knowledge audit --capture` against a real index and commit the result:\n" +
@@ -95,7 +95,7 @@ public class KnowledgeAuditTests
         var repo = LiveStandardIndex();
         if (repo is null) return; // no full standard index here — the snapshot gate above is authoritative
 
-        var result = KnowledgeAudit.Audit(Refs, repo, Allow.Symbols);
+        var result = KnowledgeAudit.Audit(Refs, repo, Allow);
         Assert.True(result.Findings.Count == 0, "\n" + KnowledgeAudit.Render(result));
     }
 
@@ -273,7 +273,7 @@ public class KnowledgeAuditTests
         [
             Ref(KnowledgeRefKinds.StaticCall, "DateTimeUtil", "getToday"),
             Ref(KnowledgeRefKinds.New, "System.Text.StringBuilder"),
-        ], lookup, new Dictionary<string, string> { ["DateTimeUtil"] = "kernel class" });
+        ], lookup, new KnowledgeAuditAllow { Symbols = { ["DateTimeUtil"] = "kernel class" } });
 
         Assert.Empty(result.Findings);
         Assert.Equal(2, result.Allowed);

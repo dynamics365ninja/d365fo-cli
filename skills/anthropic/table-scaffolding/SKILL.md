@@ -172,6 +172,39 @@ str nextNum = numSeq.num();
 numSeq.used();   // or numSeq.abort() to roll back
 ```
 
+## Table inheritance
+
+Table inheritance gives a base table shared fields and each row a concrete type —
+class inheritance for data. It is a **design-time** feature of the base table, not
+a runtime cast.
+
+- Base table: `SupportInheritance = Yes` plus an `InstanceRelationType` field, the
+  discriminator holding the tableId of the concrete (leaf) table for each row.
+  Mark it `Abstract = Yes` when it should never hold rows of its own type.
+- Derived table: `Extends = <BaseTable>`. It inherits every base field and adds its
+  own. **Do not duplicate the common fields.**
+- A `select` on the base returns rows of **all** derived types; narrow with an
+  `is` check or by selecting the specific derived buffer.
+- **`SupportInheritance` and `Extends` cannot be changed on a shipped table via an
+  extension** — inheritance is fixed at base-table design time. Choosing it later
+  means a new hierarchy and a data migration.
+- Use it only for a genuine is-a hierarchy with shared fields and behaviour. For
+  optional add-on data, a related table plus a relation is simpler and extensible.
+
+```xpp
+// Polymorphic select: returns rows of every derived type.
+FmVehicleBase party;
+
+while select party
+{
+    if (party is FmVehicleCar)
+    {
+        FmVehicleCar car = party;   // narrow to the leaf type
+        // …
+    }
+}
+```
+
 ## Hard rules
 
 - Never guess EDTs — `d365fo get edt <Name>` first.

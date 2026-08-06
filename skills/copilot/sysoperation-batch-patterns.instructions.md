@@ -108,6 +108,49 @@ d365fo generate migration-script FmVehicleMigration \
 
 **Modes:** `Insert` (default, fails on duplicate) | `Update` (updates existing records) | `Upsert` (insert or update).
 
+---
+
+## 4. Retryable and asynchronous batch
+
+A batch task can opt into automatic retry on transient faults (deadlock, SQL
+timeout) by implementing `BatchRetryable` and returning `true` from
+`isRetryable()`.
+
+```xpp
+/// <summary>
+/// Reconciles fleet service charges; safe to re-run, so the batch engine may retry it.
+/// </summary>
+class FmReconciliationService extends SysOperationServiceBase implements BatchRetryable
+{
+    public boolean isRetryable()
+    {
+        return true;
+    }
+
+    public void run(FmReconciliationContract _contract)
+    {
+        ttsbegin;
+        this.reconcile(_contract.parmFromDate());
+        ttscommit;
+    }
+}
+```
+
+**Hard rules:**
+
+- `isRetryable()` only **opts in**; the framework decides how many times to re-run.
+  The task must therefore be **idempotent** — guard with a completed-marker record
+  or a RecId watermark if it is not naturally so.
+- **Never swallow the transient exception yourself.** Catching it defeats the
+  retry you just asked for; let it propagate.
+- Run work off the caller's thread by setting
+  `controller.parmExecutionMode(SysOperationExecutionMode::ScheduledBatch)` and
+  calling `startOperation()` — a form button must not block on a long operation.
+- **Never hold an open transaction across an async boundary.** `ttsbegin` /
+  `ttscommit` go *inside* the asynchronous unit, not around the scheduling call.
+- For genuine parallelism, partition the work and fan it out —
+  `d365fo knowledge get performance-and-caching`.
+
 **Hard rules:**
 
 - Always run migration scripts in a test environment before production.
