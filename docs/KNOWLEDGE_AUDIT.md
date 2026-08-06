@@ -231,7 +231,14 @@ assets, in value order:
   `exampleValidation.test.ts` prove that symbols named in entries exist and examples pass the BP
   validator — and its own `eval/README.md:179` explicitly flags that this repo's skill files
   have never had that treatment.
-- **R2 — AOT XML serializer-quirk knowledge.** `src/utils/axTablePropertyOrder.ts`: the AxTable
+- **R2 — AOT XML serializer-quirk knowledge.** *Absorbed 2026-08-05 in Phase 1.3, and
+  generalised: rather than porting the predecessor's hand-captured `axTablePropertyOrder`, the
+  whole contract catalog is derived from `Microsoft.Dynamics.AX.Metadata.dll` (564 types,
+  namespace + member order + base type) and committed as an embedded resource, so it covers
+  every family and needs no D365FO install to use. `XML007` (member the type does not declare)
+  ships; a strict order rule does not — shipped Microsoft files deviate from contract order and
+  the provider still reads them losslessly, so order is enforced on output instead of asserted
+  as a defect elsewhere.* `src/utils/axTablePropertyOrder.ts`: the AxTable
   deserializer **silently drops misordered property elements** (file looks right, validators
   pass, xppbp later fails with `BPErrorTableTitleField1NotDeclared`). Canonical property order
   captured from a VM-built golden, plus `AX_TABLE_NON_EXISTENT_PROPERTIES` (plausible-but-fake

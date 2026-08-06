@@ -40,7 +40,13 @@ public interface IPropertyStatsProvider
 ///   XML003  AxTable missing &lt;TableGroup&gt;       (data-driven, suggests common standard values)
 ///   XML004  AxTableField without &lt;ExtendedDataType&gt;/&lt;EnumType&gt; (data-driven)
 ///   XML005  AxTable missing &lt;ClusteredIndex&gt;   (only when standard usage ≥ threshold)
+///   XML007  Member the AOT type does not declare — silently dropped when the file is read
 /// </summary>
+/// <remarks>
+/// XML007 comes from <see cref="D365FO.Core.Metadata.MetadataContracts"/> and applies to every
+/// AOT family, not just tables. It is the offline counterpart of <c>validate metadata</c>,
+/// which asks the live provider the same question.
+/// </remarks>
 public static class XppValidator
 {
     public const string CodeTypeXpp = "xpp";
@@ -83,12 +89,15 @@ public static class XppValidator
             CheckMissingAlternateKey(code, violations);
             CheckTableProperties(code, stats, violations);
             CheckFieldEdt(code, stats, violations);
+            ContractShapeRules.Check(code, violations);
         }
         else
         {
             CheckMissingAlternateKey(code, violations);
             CheckTableProperties(code, stats, violations);
             CheckFieldEdt(code, stats, violations);
+            // Applies to every AOT family, not just tables: the contract catalog knows them all.
+            ContractShapeRules.Check(code, violations);
         }
         return violations;
     }

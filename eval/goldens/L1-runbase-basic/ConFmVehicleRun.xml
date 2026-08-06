@@ -1,7 +1,6 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
 <AxClass>
   <Name>ConFmVehicleRun</Name>
-  <Extends>RunBase</Extends>
   <SourceCode>
     <Declaration>public class ConFmVehicleRun extends RunBase
 {

@@ -167,8 +167,17 @@ internal static class GenerateInstaller
         Func<EmitResult, object> buildPayload,
         List<string>? warnings = null,
         bool verify = false)
-        => EmitCore(kind, axKind, axSubfolder, name, installTo, outPath, doc.ToString(),
+    {
+        // Canonicalise here, not only in ScaffoldFileWriter: the bridge path hands the XML
+        // string straight to IMetadataProvider, so a document left in the wrong namespace or
+        // member order would be silently stripped of properties on the way in — with no file
+        // on disk to inspect afterwards.
+        ContractNamespaceApplier.Apply(doc);
+        ContractOrderCanonicalizer.Apply(doc);
+
+        return EmitCore(kind, axKind, axSubfolder, name, installTo, outPath, doc.ToString(),
             path => ScaffoldFileWriter.Write(doc, path, overwrite), buildPayload, warnings, verify);
+    }
 
     /// <summary>String-rendered counterpart of <see cref="Emit"/> (used for forms).</summary>
     internal static int EmitString(

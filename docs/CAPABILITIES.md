@@ -233,6 +233,13 @@ d365fo suggest extension CustTable                  # rank extension strategies
 d365fo validate name Table FmVehicle --prefix Fm    # naming-rule check
 ```
 
+`validate xpp` carries the offline half of the same question as rule **XML007**: a member the
+AOT type does not declare is silently discarded on read, so `<Datasets>` (it is `DataSets`) or
+`<Image>` on a menu item leaves a file that looks deliberate and is missing data. The member
+catalog is generated from the metadata assembly by `scripts/emit-metadata-contracts.ps1` and
+committed, so this works with no D365FO install. Generated files are also written in contract
+order, which is what keeps a table's field groups from being dropped.
+
 ### `validate metadata` — the provider's own verdict
 
 Every other validator checks the XML against *our* expectations. This one hands the file to

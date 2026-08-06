@@ -15,6 +15,18 @@ namespace D365FO.Cli.Tests;
 [Collection("EnvIndexDb")]
 public class ScaffoldingSnapshotTests
 {
+
+    /// <summary>
+    /// AxClass has no Extends member — Name, SourceCode, IsObsolete, Tags, Visibility is the
+    /// whole contract, and no shipped class file carries one. The base class is part of the
+    /// X++ declaration, so that is where these tests look for it.
+    /// </summary>
+    private static void AssertExtends(XDocument doc, string baseClass)
+    {
+        var xml = doc.Root!.ToString();
+        Assert.Null(doc.Root!.Element("Extends"));
+        Assert.Matches($@"class\s+\w+\s+extends\s+{baseClass}\b", xml);
+    }
     // ---- SysOperation (Phase 2) ----
 
     [Fact]
@@ -34,7 +46,7 @@ public class ScaffoldingSnapshotTests
         var doc = SysOperationScaffolder.Service("MyService", "MyContract", "process");
         var root = doc.Root!;
         Assert.Equal("AxClass", root.Name.LocalName);
-        Assert.Equal("SysOperationServiceBase", root.Element("Extends")!.Value);
+        AssertExtends(doc, "SysOperationServiceBase");
         var methods = root.Element("SourceCode")!.Element("Methods")!.Elements("Method").ToList();
         var method = Assert.Single(methods);
         Assert.Equal("process", method.Element("Name")!.Value);
@@ -45,7 +57,7 @@ public class ScaffoldingSnapshotTests
     {
         var doc = SysOperationScaffolder.Controller("MyController", "MyService", "process");
         var root = doc.Root!;
-        Assert.Equal("SysOperationServiceController", root.Element("Extends")!.Value);
+        AssertExtends(doc, "SysOperationServiceController");
         var newMethod = root.Element("SourceCode")!.Element("Methods")!
             .Elements("Method").First(m => m.Element("Name")!.Value == "new");
         Assert.Contains("classStr(MyService)", newMethod.Element("Source")!.Value);
@@ -523,7 +535,7 @@ public class ScaffoldingSnapshotTests
         var doc = BusinessEventScaffolder.EventClass("MyEvent", "MyEventContract", "Payments");
         var root = doc.Root!;
         Assert.Equal("AxClass", root.Name.LocalName);
-        Assert.Equal("BusinessEventsBase", root.Element("Extends")!.Value);
+        AssertExtends(doc, "BusinessEventsBase");
         var decl = root.Element("SourceCode")!.Element("Declaration")!.Value;
         Assert.Contains("[BusinessEvents(", decl);
         Assert.Contains("classStr(MyEvent)", decl);
@@ -547,7 +559,7 @@ public class ScaffoldingSnapshotTests
     {
         var doc = RunBaseScaffolder.RunBaseClass("MyRunBase", false);
         var root = doc.Root!;
-        Assert.Equal("RunBase", root.Element("Extends")!.Value);
+        AssertExtends(doc, "RunBase");
     }
 
     [Fact]
@@ -555,7 +567,7 @@ public class ScaffoldingSnapshotTests
     {
         var doc = RunBaseScaffolder.RunBaseClass("MyBatch", true);
         var root = doc.Root!;
-        Assert.Equal("RunBaseBatch", root.Element("Extends")!.Value);
+        AssertExtends(doc, "RunBaseBatch");
         var methods = root.Element("SourceCode")!.Element("Methods")!.Elements("Method");
         Assert.Contains(methods, m => m.Element("Name")!.Value == "canGoBatch");
     }
@@ -622,7 +634,7 @@ public class ScaffoldingSnapshotTests
         var root = doc.Root!;
         Assert.Equal("AxClass", root.Name.LocalName);
         Assert.Equal("CustServiceTest", root.Element("Name")!.Value);
-        Assert.Equal("SysTestCase", root.Element("Extends")!.Value);
+        AssertExtends(doc, "SysTestCase");
 
         var decl = root.Element("SourceCode")!.Element("Declaration")!.Value;
         Assert.Contains("public class CustServiceTest extends SysTestCase", decl);
@@ -772,7 +784,7 @@ public class ScaffoldingSnapshotTests
 
             var doc = XDocument.Load(outPath);
             Assert.Equal("AxClass", doc.Root!.Name.LocalName);
-            Assert.Equal("SysTestCase", doc.Root.Element("Extends")!.Value);
+            AssertExtends(doc, "SysTestCase");
             var decl = doc.Root.Element("SourceCode")!.Element("Declaration")!.Value;
             Assert.Contains("[SysTestCaseDataDependency('USMF')]", decl);
             Assert.Contains("AtlDataRootNode data;", decl);
@@ -794,7 +806,7 @@ public class ScaffoldingSnapshotTests
         var doc = MenuItemScaffolder.MenuItem(MenuItemKind.Display, "MyMenuItem", "MyForm");
         var root = doc.Root!;
         Assert.Equal("AxMenuItemDisplay", root.Name.LocalName);
-        Assert.Equal("Symbol", root.Element("Image")!.Element("ImageType")!.Value);
+        Assert.Null(root.Element("Image"));
     }
 
     [Theory]
@@ -806,6 +818,6 @@ public class ScaffoldingSnapshotTests
         var doc = MenuItemScaffolder.MenuItem(kind, "MyMenuItem", "MyObject");
         var root = doc.Root!;
         Assert.Equal(expectedRoot, root.Name.LocalName);
-        Assert.Equal("Symbol", root.Element("Image")!.Element("ImageType")!.Value);
+        Assert.Null(root.Element("Image"));
     }
 }

@@ -61,11 +61,32 @@ Deferred to 1.3 and Phase 2: routing the XML-only `generate` commands through th
 remaining R4 workarounds — `AxFormDataSourceRoot`, provider-side relation writes,
 never-retry-writes, read-back-after-write by default.
 
-1.3 **Serializer-order knowledge (R2).** Port `axTablePropertyOrder` + non-existent-property
-catalog as `XML006` (misordered property will be silently dropped) and `XML007`
-(plausible-but-nonexistent property) in `XppValidator`; apply canonical ordering in
-`XppScaffolder.Table` and `TablePattern`. Extend the same treatment to other families where
-goldens reveal order sensitivity.
+1.3 ✅ **Serializer-order knowledge (R2)** — and generalised: instead of porting a hand-captured
+`axTablePropertyOrder`, `scripts/emit-metadata-contracts.ps1` derives the whole catalog from
+`Microsoft.Dynamics.AX.Metadata.dll` (564 types, 8,820 members, namespace + order + base type)
+and commits it as an embedded resource, so the knowledge covers every family and CI needs no
+D365FO install. `ContractOrderCanonicalizer` applies that order on every write path — the
+XDocument writer, the pre-rendered form templates, and the bridge install path, which hands XML
+straight to the provider.
+
+`XML007` (a member the type does not declare, silently dropped on read) ships as an error.
+**`XML006` deliberately does not.** The strict rule "any member out of contract order is
+dropped" is not supported by evidence: shipped Microsoft files deviate from contract order in
+places and the provider reads them back with zero loss. Ordering is therefore enforced where it
+demonstrably helps — on output — rather than asserted as a defect in files we did not write.
+Getting this wrong the other way would have shipped a validator that flags Microsoft's own AOT.
+
+Measured against the live provider, the golden catalog went from 19/51 readable-and-lossless to
+**43/51**. Fixed on the way: tables lost every field group (`Fields` written before
+`FieldGroups`); `AxSecurityDuty` used `PrivilegeReferences` instead of `Privileges`, discarding
+every privilege; menu items emitted an invented `<Image><ImageType>` block; and every generated
+class carried an `<Extends>` element that AxClass has no member for (the base class lives in the
+X++ declaration, which the extractor now reads).
+
+Remaining 8, with exact causes recorded for Phase 2: report `Datasets`→`DataSets` plus the
+`AxReportDesign` subtype shape (2.1), `AxDataEntityView` data sources and field mappings (2.2),
+`AxSecurityEntryPointReference.AccessLevel` → the `Grant` sub-element (2.2), and four form
+details (`DataSourceLinks`, `AllowDelete`, `FrameType` on a tab page).
 
 1.4 **Deserialization self-check without Windows.** Add an eval/CI-side structural check per
 family: root element + `xsi:type` policy + property-order lint driven by the registry, so

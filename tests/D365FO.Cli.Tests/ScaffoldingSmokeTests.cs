@@ -207,7 +207,7 @@ public class ScaffoldingSmokeTests
     public void Duty_lists_given_privileges()
     {
         var doc = XppScaffolder.Duty("PurchOrderMaintainDuty", new[] { "PrivA", "PrivB" });
-        var refs = doc.Root!.Element("PrivilegeReferences")!.Elements().ToList();
+        var refs = doc.Root!.Element("Privileges")!.Elements().ToList();
         Assert.Equal(2, refs.Count);
         Assert.Equal("PrivA", refs[0].Element("Name")!.Value);
         Assert.Equal("PrivB", refs[1].Element("Name")!.Value);

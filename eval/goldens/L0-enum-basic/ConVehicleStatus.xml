@@ -2,7 +2,6 @@
 <AxEnum xmlns:i="http://www.w3.org/2001/XMLSchema-instance">
   <Name>ConVehicleStatus</Name>
   <Label>Vehicle status</Label>
-  <IsExtensible>true</IsExtensible>
   <UseEnumValue>No</UseEnumValue>
   <EnumValues>
     <AxEnumValue>
@@ -18,4 +17,5 @@
       <Value>2</Value>
     </AxEnumValue>
   </EnumValues>
+  <IsExtensible>true</IsExtensible>
 </AxEnum>

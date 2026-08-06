@@ -50,7 +50,6 @@ public static class WorkflowScaffolder
         return new XDocument(
             new XElement("AxClass",
                 new XElement("Name", documentClassName),
-                new XElement("Extends", "WorkflowDocument"),
                 new XElement("SourceCode",
                     new XElement("Declaration", declaration),
                     new XElement("Methods",
