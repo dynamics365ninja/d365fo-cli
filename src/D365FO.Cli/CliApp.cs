@@ -216,6 +216,7 @@ public static class CliApp
                 b.AddCommand<IndexExtractCommand>("extract").WithDescription("Walk PACKAGES_PATH and ingest AOT metadata.");
                 b.AddCommand<IndexRefreshCommand>("refresh").WithDescription("Incremental extract — skip models whose XMLs haven't changed since last extract.");
                 b.AddCommand<IndexHistoryCommand>("history").WithDescription("Show recent ExtractionRuns (per-model timings persisted across runs).");
+                b.AddCommand<IndexCrossCheckCommand>("cross-check").WithDescription("Report where this tool's catalogs are narrower than the installation.");
                 b.AddCommand<IndexOptimizeCommand>("optimize").WithDescription("VACUUM + ANALYZE the index (reclaim space, refresh query-planner stats).");
                 b.AddCommand<IndexExportCommand>("export").WithDescription("Export index as a GZip-compressed snapshot for sharing or CI caching.");
                 b.AddCommand<IndexImportCommand>("import").WithDescription("Import a GZip-compressed index snapshot.");

@@ -24,8 +24,33 @@ By default the index stores object/method *metadata* only — method bodies (the
 | `index history` | Show per-model extraction run history |
 | `index export` | Dump the index to a portable archive |
 | `index import` | Restore from an archive |
+| `index cross-check` | Report where this tool's catalogs are narrower than the installation |
 | `index optimize` | Run `VACUUM` + `ANALYZE` to compact and re-plan |
 | `doctor` | End-to-end health check: paths, schema version, object counts |
+
+### `index cross-check`
+
+Every catalog this tool answers from — the form-pattern registry, the object-type registry, the
+DataContract catalog — is generated from one platform version and then committed. That makes it
+right when it was made and silent about drift afterwards. This asks the installation instead.
+
+```sh
+d365fo index cross-check                       # gaps only
+d365fo index cross-check --show-uncovered      # plus families the tool does not cover
+```
+
+Two findings, deliberately kept apart:
+
+- **Gaps** are where the tool will be *wrong* — something the installation uses that a catalog
+  claims to cover and does not. A form pattern in the wild that the registry has never heard of
+  means `generate form`, `form-pattern validate` and `form-pattern repair` cannot judge those
+  forms, and will say so in the confident voice of a tool that has a catalog. Exit code 2.
+- **Uncovered** families are where the tool is merely *narrow* — an AOT folder it was never built
+  to handle. On a real installation that is dozens of entries (40 of 83 on the box this was
+  written against), so it is off by default and never fails the command.
+
+The fix for a gap is to regenerate the named catalog on the installation that produced it
+(`scripts/emit-form-patterns.ps1`, `scripts/emit-metadata-contracts.ps1`), not to hand-add an entry.
 
 ---
 
