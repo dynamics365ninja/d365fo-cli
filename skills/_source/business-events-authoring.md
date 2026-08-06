@@ -1,6 +1,7 @@
 ---
 id: business-events-authoring
 description: Author or extend custom Business Events in D365 Finance & Operations. Invoke when the user asks to "create a business event", "add a business event", "build a custom business event", or wire D365FO outbound notifications to Power Automate / Service Bus / Event Grid.
+covers: `BusinessEventsBase`, contract class, payload, catalog activation
 applyTo:
   - "**/AxClass/**"
   - "**/*BusinessEvent*.xml"
@@ -153,7 +154,7 @@ Call the static factory from the business process at the right lifecycle point �
 ```xpp
 // In CustTrans.insert() CoC or a posting service method:
 [ExtensionOf(tableStr(CustTrans))]
-final class CustTrans_MyExt
+final class CustTrans_MyExt_Extension
 {
     public void insert()
     {
@@ -182,7 +183,7 @@ After scaffolding and compiling:
 
 ## Hard rules
 
-- **`[BusinessEvents(...)]` must be on the event class declaration** — not on methods. The `BusinessEventsAttribute` constructor is `new(ClassName _businessEventsContractClassStr, LabelString _nameLabel, LabelString _descriptionLabel, ModuleAxapta _module)` — four arguments: `classStr(ContractClass)`, a name-label token, a description-label token, and a `ModuleAxapta::<Module>` enum value (not a free-text category, and no `classStr(EventClass)` — the attribute already decorates the event class itself).
+- **`[BusinessEvents(...)]` must be on the event class declaration** — not on methods. The `BusinessEventsAttribute` constructor is `new(ClassName _businessEventsContractClassStr, LabelString _nameLabel, LabelString _descriptionLabel, ModuleAxapta _module)` — four arguments: `classStr(<ContractClass>)`, a name-label token, a description-label token, and a `ModuleAxapta::<Module>` enum value (not a free-text category, and no `classStr(<EventClass>)` — the attribute already decorates the event class itself).
 - **`buildContract()` is called by the framework** — return the populated contract instance; never return `null`.
 - **Contract `parmXxx()` accessors must be decorated with `[DataMemberAttribute]`** — the serialization layer uses these to build the JSON payload.
 - **Use EDTs for payload fields** (e.g. `CustAccount`, `AmountCur`) — not primitive types. Run `d365fo get edt <Name>` to confirm the EDT exists.

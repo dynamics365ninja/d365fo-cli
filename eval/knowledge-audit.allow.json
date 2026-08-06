@@ -1,0 +1,53 @@
+{
+  "symbols": {
+    "AccessType": "Kernel base enum used by SecurityRights::hasTableAccess.",
+    "CLRInterop": "Kernel class — lives in the AOS binaries, not in PackagesLocalDirectory metadata XML.",
+    "CodeAccessPermission": "Kernel class — lives in the AOS binaries, not in PackagesLocalDirectory metadata XML.",
+    "Connection": "Kernel class — lives in the AOS binaries, not in PackagesLocalDirectory metadata XML.",
+    "DateTimeUtil": "Kernel class. Kernel types live in the AOS binaries, not in PackagesLocalDirectory metadata XML, so the index cannot carry them (same reason ReferenceResolver allow-lists them).",
+    "DictClass": "Kernel class — lives in the AOS binaries, not in PackagesLocalDirectory metadata XML.",
+    "DictEnum": "Kernel class — lives in the AOS binaries, not in PackagesLocalDirectory metadata XML.",
+    "DictField": "Kernel class — lives in the AOS binaries, not in PackagesLocalDirectory metadata XML.",
+    "DictTable": "Kernel class — lives in the AOS binaries, not in PackagesLocalDirectory metadata XML.",
+    "Exception": "Kernel enum (Exception::Error / ::CLRError). Not an AxEnum on disk.",
+    "ExportAttribute": "System.ComponentModel.Composition.ExportAttribute, written unqualified after a `using`. The Feature Management registration attribute is a .NET type, not an AxClass.",
+    "IFeatureMetadata": "Microsoft.Dynamics.ApplicationPlatform.FeatureExposure.IFeatureMetadata — a .NET interface X++ implements, not an AOT element.",
+    "IO_Status": "Kernel enum — lives in the AOS binaries, not as an AxEnum on disk.",
+    "InteropKind": "Kernel enum — lives in the AOS binaries, not as an AxEnum on disk.",
+    "InteropPermission": "Kernel class — lives in the AOS binaries, not in PackagesLocalDirectory metadata XML.",
+    "JoinMode": "Kernel enum used by the Query object model (JoinMode::InnerJoin).",
+    "List": "Kernel class — lives in the AOS binaries, not in PackagesLocalDirectory metadata XML.",
+    "ListEnumerator": "Kernel class — lives in the AOS binaries, not in PackagesLocalDirectory metadata XML.",
+    "Map": "Kernel class — lives in the AOS binaries, not in PackagesLocalDirectory metadata XML.",
+    "MapEnumerator": "Kernel class — lives in the AOS binaries, not in PackagesLocalDirectory metadata XML.",
+    "MenuItemType": "Kernel base enum (MenuItemType::Display / Action / Output).",
+    "NoYes": "Kernel base enum. Base enums live in the AOS binaries, not in AxEnum metadata XML.",
+    "OpenXmlReader": "A .NET type written unqualified after a `using` declaration; only fully-qualified names match the System./Microsoft. prefix rule.",
+    "QueryBuildDataSource": "Kernel class of the Query object model.",
+    "QueryRun": "Kernel class of the Query object model.",
+    "RecordViewCache": "Kernel class — lives in the AOS binaries, not in PackagesLocalDirectory metadata XML.",
+    "ResultSet": "Kernel class — lives in the AOS binaries, not in PackagesLocalDirectory metadata XML.",
+    "SecurityRights": "Kernel class exposing the runtime access checks.",
+    "ServiceAttribute": "Named by custom-service-authoring only in order to state that no such class-level decorator exists in X++. The corpus is right precisely because this does not resolve.",
+    "Set": "Kernel class — lives in the AOS binaries, not in PackagesLocalDirectory metadata XML.",
+    "SpreadsheetDocument": "A .NET type written unqualified after a `using` declaration; only fully-qualified names match the System./Microsoft. prefix rule.",
+    "SqlStatementExecutePermission": "Kernel class — lives in the AOS binaries, not in PackagesLocalDirectory metadata XML.",
+    "Statement": "Kernel class — lives in the AOS binaries, not in PackagesLocalDirectory metadata XML.",
+    "StreamReader": "System.IO.StreamReader, written unqualified after a `using System.IO;` in the example. .NET BCL types are matched by namespace prefix when qualified; this one is not.",
+    "StringBuilder": "A .NET type written unqualified after a `using` declaration; only fully-qualified names match the System./Microsoft. prefix rule.",
+    "Struct": "Kernel class — lives in the AOS binaries, not in PackagesLocalDirectory metadata XML.",
+    "SysGlobalObjectCache": "Kernel class — lives in the AOS binaries, not in PackagesLocalDirectory metadata XML.",
+    "Timezone": "Kernel enum — lives in the AOS binaries, not as an AxEnum on disk.",
+    "Types": "Kernel enum — lives in the AOS binaries, not as an AxEnum on disk.",
+    "UnitOfWork": "Kernel class — lives in the AOS binaries, not in PackagesLocalDirectory metadata XML.",
+    "WorkbookPart": "A .NET type written unqualified after a `using` declaration; only fully-qualified names match the System./Microsoft. prefix rule.",
+    "WorksheetPart": "A .NET type written unqualified after a `using` declaration; only fully-qualified names match the System./Microsoft. prefix rule."
+  },
+  "prefixes": {
+    "Fm": "The corpus's Fleet example namespace — objects the reader is being told to create, plus the checked-in mini-AOT fixture (tests/Samples/MiniAot: FmVehicle, FmVehicleLine, FmVehicleService). None of them exist in a standard AOT. Note the overlap with Microsoft's FleetManagement demo model, which spells its own elements FM*: the two are different objects, and the demo model is not present in a customer environment."
+  },
+  "examples": {
+    "coc-extension-authoring::§🚨 NEVER copy default parameter values into the wrapper · ```xpp::COC001": "Intentional wrong-vs-right demonstration — the forbidden wrapper signature is shown next to the correct one.",
+    "xpp-database-queries::§`crossCompany` belongs on the OUTER buffer · ```xpp::SEL003": "Intentional wrong-vs-right demonstration — crossCompany on a joined buffer is shown as the counter-example."
+  }
+}

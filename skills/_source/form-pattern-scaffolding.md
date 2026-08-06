@@ -1,6 +1,7 @@
 ---
 id: form-pattern-scaffolding
 description: Scaffold an AxForm in D365 Finance & Operations using one of the nine canonical patterns (SimpleList, SimpleListDetails, DetailsMaster, DetailsTransaction, Dialog, TableOfContents, Lookup, ListPage, Workspace), or create a Display / Action / Output menu item. Invoke whenever the user asks to "create a form", "scaffold a list page", "make a dialog", "build a workspace", "create a menu item", "add a Display menu item", or "add an Action menu item".
+covers: FormRun lifecycle, 9 form patterns, Display/Action/Output menu items
 applyTo:
   - "**/AxForm/**"
   - "**/*Form.xml"

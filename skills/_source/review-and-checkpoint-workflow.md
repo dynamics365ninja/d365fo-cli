@@ -1,6 +1,7 @@
 ---
 id: review-and-checkpoint-workflow
 description: Use Git as the review layer for AI-driven D365FO edits, and use `d365fo review diff` for a shallow BP-style probe (missing EDT/Label, hard-coded strings, dynamic query) over changed AxTable/AxClass XML on top of the raw byte diff. Invoke whenever the user is about to start a non-trivial change, before "accepting" AI edits, or wants a quick heuristic pass over what changed.
+covers: Git checkpoint, `d365fo review diff`, accept/reject workflow
 applyTo:
   - "**/AxClass/**"
   - "**/AxTable/**"
@@ -113,3 +114,13 @@ changedFiles, violationCount, violations: [{file, rule, severity, message,
   scaffold-overwrite backups don't pollute commits.
 - Always show `d365fo review diff` output BEFORE asking the user to accept
   — they need the heuristic-probe summary to make a decision.
+
+
+## Rule canon — never-auto
+
+<!-- canon:never-auto -->
+- NEVER auto-run `d365fo build`, `sync`, `bp check`, `test run`. Slow + Windows-only.
+  Say *"Changes scaffolded. Run `d365fo build` when you're ready."*
+- NEVER hand-edit AOT XML when `index refresh` hasn't been run.
+- NEVER infer the target model from search results — ask.
+<!-- /canon -->

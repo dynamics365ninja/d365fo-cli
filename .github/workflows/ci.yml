@@ -41,6 +41,20 @@ jobs:
           name: test-results-${{ matrix.os }}
           path: "**/TestResults/**"
 
+  # The knowledge corpus is gated the same fail-closed way generated code is: every named
+  # AOT type/API must be covered by the snapshot captured against a real standard index, and
+  # every X++/XML example must pass the offline BP validator. CI has no index, so this is the
+  # snapshot half — `d365fo knowledge audit --capture` re-captures it on a machine that has one.
+  knowledge-audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+      - name: Audit the knowledge corpus
+        run: dotnet run --project src/D365FO.Cli -c Release -- knowledge audit --verify --output json
+
   skills:
     runs-on: ubuntu-latest
     steps:
@@ -52,7 +66,10 @@ jobs:
         run: python3 scripts/emit-skills.py
       - name: Fail on untracked drift
         run: |
-          if [ -n "$(git status --porcelain skills/copilot skills/anthropic skills/d365fo-cli/references)" ]; then
+          # SKILL.md is included: its rule-canon and reference-table regions are
+          # generated from skills/_source, so an edited topic that was not re-emitted
+          # shows up here rather than as a quietly stale rule shipped to agents.
+          if [ -n "$(git status --porcelain skills/copilot skills/anthropic skills/d365fo-cli)" ]; then
             echo "::error::skills/ artifacts drift from skills/_source. Run scripts/emit-skills.py locally and commit."
             git status --porcelain skills/
             exit 1

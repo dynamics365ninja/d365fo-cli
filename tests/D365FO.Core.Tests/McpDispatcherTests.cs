@@ -43,6 +43,12 @@ public class McpDispatcherTests : IDisposable
         var result = doc.RootElement.GetProperty("result");
         Assert.Equal("2024-11-05", result.GetProperty("protocolVersion").GetString());
         Assert.True(result.GetProperty("capabilities").GetProperty("tools").ValueKind == JsonValueKind.Object);
+
+        // Clients surface `instructions` to the model once, before any tool call. It carries
+        // the rule canon, so losing it silently drops every X++ rule from the MCP surface.
+        var instructions = result.GetProperty("instructions").GetString();
+        Assert.False(string.IsNullOrWhiteSpace(instructions));
+        Assert.Contains(D365FO.Core.Knowledge.RuleCanon.Require("core"), instructions!, StringComparison.Ordinal);
     }
 
     [Fact]

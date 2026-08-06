@@ -339,6 +339,7 @@ public static class CliApp
                 b.AddCommand<KnowledgeListCommand>("list").WithDescription("List knowledge topics with descriptions and token cost.");
                 b.AddCommand<KnowledgeGetCommand>("get").WithDescription("Fetch a topic, one of its '##' sections, or just its outline.");
                 b.AddCommand<KnowledgeSearchCommand>("search").WithDescription("Rank topic sections against a free-text question.");
+                b.AddCommand<KnowledgeAuditCommand>("audit").WithDescription("Prove the corpus itself: every named API resolves against the index (live or snapshot) and every example passes the BP validator.");
             });
 
             cfg.AddCommand<ExplainErrorCommand>("explain-error").WithDescription("Score xppc/build errors (argument, --file, or stdin) against the fix-hint rules and point at the knowledge topic behind each.");

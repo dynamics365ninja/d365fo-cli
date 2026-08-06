@@ -165,30 +165,61 @@ clean; MCP parity tests green.
 
 ## Phase 3 — Knowledge: absorb, single-source, audit
 
-3.1 **Port the 63-entry knowledge base (R1).** Convert `xppKnowledge.ts` entries into
-`skills/_source/` topics (grouped: ~10–14 new topic files, e.g. `ssrs-report-authoring`,
-`security-modeling`, `posting-and-financials`, `integration-dmf-dualwrite`,
-`performance-and-caching`, `runtime-frameworks`), preserving the
-`{summary, migration, rules, examples}` structure. Extend `emit-skills.py` if new frontmatter
-fields are needed. Port `d365foErrorHelp.ts` patterns into `XppcFixHints` rules + a knowledge
-topic each.
+3.1 ✅ **Ported the 63-entry knowledge base (R1)** — 16 new topics (19 → 35), grouped by
+domain rather than one per entry: `posting-and-financials`, `ssrs-report-authoring`,
+`security-modeling`, `integration-dmf-dualwrite`, `runtime-frameworks`,
+`inventory-and-warehouse`, `xpp-data-access-apis`, `forms-and-navigation`,
+`transactions-and-concurrency`, `performance-and-caching`, `xpp-runtime-types`,
+`number-sequence-patterns`, `workflow-authoring`, `testing-and-quality`, `analytics-and-er`,
+`build-error-triage`; plus retryable/async batch on `sysoperation-batch-patterns` and table
+inheritance on `table-scaffolding`. `emit-skills.py` gained a `covers:` frontmatter field
+(see 3.3). `d365foErrorHelp.ts` became 11 new `XppcFixHints` rules plus the
+`build-error-triage` topic, each rule back-pointing at a topic that now exists (a test
+asserts that).
 
-3.2 **Knowledge audit harness (R1).** Add xUnit equivalents of `apiSymbols` +
-`exampleValidation`: every API symbol named in `skills/_source` must exist in the fixture/std
-index or an allowlist; every ```xpp example must pass `XppValidator` + `ReferenceResolver`.
-CI-gate it. (The predecessor explicitly flags this repo as un-audited.)
+Every topic was audited against the live index before landing, which is why the corpus says
+`SrsReportParameterAttribute`, `<DefaultAggregate>`, `SysGlobalTelemetry` and
+`AxMenuElementSubMenu`/`<SubMenu>` — two casing defects in the new text were caught by the
+gate rather than by review.
 
-3.3 **Single-source the rule canon (K1).** Generate the rule sections of
-`AgentPromptCommand` output and the long MCP tool descriptions from `skills/_source` (new
-emit target in `emit-skills.py`, embedded as resources like the knowledge corpus). CI drift
-check covers all three consumers.
+3.2 ✅ **Knowledge audit harness (R1)** — `KnowledgeRefExtractor` pulls every named AOT
+element out of `skills/_source` (static call, extends, new, attribute, intrinsic,
+declaration; markdown links, `<Slot>` placeholders, container literals and XML fences
+excluded), `KnowledgeAudit` resolves them through a new `IKnowledgeSymbolLookup` that
+`MetadataRepository` answers over 22 named AOT collections, and `KnowledgeExamples` routes
+every example through the offline BP validator. `d365fo knowledge audit [--capture|--verify]`
+runs both halves: live against a full standard index, otherwise against the committed
+`eval/knowledge-audit.snapshot.json`, so CI (which has no index) still refuses an un-audited
+edit. Exceptions are reviewed data in `eval/knowledge-audit.allow.json`.
 
-3.4 **Wire skills for consumption (K2).** Add an installer for the `skills/anthropic/`
-variant (mirror `Install-D365FoCopilotSkills.ps1`), and reference the emitted skills from this
-repo's own `.claude/` so sessions here load the D365FO knowledge.
+The first run found and this phase fixed a real tool defect: `MigrationScriptScaffolder`
+emitted `extends SysRunnable`, a type that exists in no AOT — the same class of defect the
+predecessor's audit was built to catch.
 
-**Gate:** `d365fo knowledge search` hits the new domains; knowledge-audit CI job green; drift
-job covers agent-prompt + MCP descriptions.
+3.3 ✅ **Single-sourced the rule canon (K1)** — rule blocks are fenced in the topic that
+explains them (`<!-- canon:<id> -->`), and `RuleCanon` reads them from the corpus already
+embedded in the assembly. *Deviation from the plan, and an improvement on it:* no generated
+side-artifact is needed for the two runtime consumers (`agent-prompt`, the new MCP
+`initialize` `instructions` field), so drift there cannot be represented rather than merely
+being detected. The one on-disk consumer, `skills/d365fo-cli/SKILL.md`, has generated regions
+written by `emit-skills.py` and is covered by CI's drift job. Its reference table was listing
+19 of 35 topics; it is now generated from the `covers:` frontmatter.
+
+The MCP *tool* descriptions turned out not to carry the X++ canon — they are tool-usage text
+— so the third consumer became the server `instructions`, which is where clients want the
+rules anyway: paid once per session instead of restated per tool.
+
+3.4 ✅ **Wired skills for consumption (K2)** — `scripts/Install-D365FoClaudeSkills.ps1`
+mirrors the Copilot installer for the `skills/anthropic/` variant (regenerates when empty,
+prunes retired topics, leaves unrelated skills in `.claude/skills/` alone). This repo's own
+`.claude/skills/d365fo-knowledge/` routes a session to the corpus, the audit workflow and the
+canon rather than duplicating 35 files into the repo twice.
+
+**Gate:** ✅ `d365fo knowledge search` lands on the new domains (posting, feature management,
+dual-write change tracking, SYS10028, on-hand, aggregate measurements); ✅ `knowledge-audit`
+CI job runs the snapshot half; ✅ the drift job covers agent-prompt and the MCP instructions
+through `RuleCanonTests` + `AgentPromptCanonTests`, and `skills/d365fo-cli/SKILL.md` through
+the widened `skills` job.
 
 ## Phase 4 — Eval loop to predecessor parity (R7)
 

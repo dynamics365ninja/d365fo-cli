@@ -1,6 +1,7 @@
 ---
 id: custom-service-authoring
 description: Build or extend a D365FO custom service (JSON/SOAP REST endpoint) using the AxService + AxServiceGroup + SysOperation or plain class pattern. Invoke when the user asks to "create a custom service", "expose an X++ method as a REST endpoint", "build a service class", or "register a service group".
+covers: JSON/SOAP custom service scaffolding
 applyTo:
   - "**/AxService/**"
   - "**/AxServiceGroup/**"

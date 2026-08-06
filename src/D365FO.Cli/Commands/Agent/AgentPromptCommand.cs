@@ -1,4 +1,5 @@
 using D365FO.Core;
+using D365FO.Core.Knowledge;
 using Spectre.Console.Cli;
 
 namespace D365FO.Cli.Commands.Agent;
@@ -28,7 +29,46 @@ public sealed class AgentPromptCommand : Command<AgentPromptCommand.Settings>
 
 internal static class PromptGenerator
 {
-    public static string Build() => """
+    /// <summary>
+    /// The agent system prompt. The narrative half — how to drive the CLI — is written here;
+    /// the rule half is composed from the canon blocks in <c>skills/_source</c> through
+    /// <see cref="RuleCanon"/>, so a rule corrected in the topic that explains it is corrected
+    /// here, in the MCP server instructions, and in the emitted skill files at the same time.
+    /// </summary>
+    public static string Build() => string.Concat(
+        Head,
+        Section("🚫 Never-auto rules", "never-auto", null),
+        Section("📜 Non-negotiable X++ rules", "core", null),
+        Section("📐 X++ database query rules (`select` / `while select`)", "queries", """
+Source: <https://learn.microsoft.com/en-us/dynamics365/fin-ops-core/dev-itpro/dev-ref/xpp-data/xpp-select-statement>.
+Worked examples: `d365fo knowledge get xpp-database-queries`.
+"""),
+        Section("🪝 Chain of Command rules", "coc", """
+Source: <https://learn.microsoft.com/en-us/dynamics365/fin-ops-core/dev-itpro/extensibility/method-wrapping-coc>.
+Worked examples: `d365fo knowledge get coc-extension-authoring`.
+"""),
+        Section("🧾 AOT XML safety", "aot-xml-safety", null),
+        Section("🏛️ Class & method rules", "classes", """
+Source: <https://learn.microsoft.com/en-us/dynamics365/fin-ops-core/dev-itpro/dev-ref/xpp-classes-methods>.
+"""),
+        Section("🧮 Statement & type rules", "statements", """
+Sources: <https://learn.microsoft.com/en-us/dynamics365/fin-ops-core/dev-itpro/dev-ref/xpp-conditional>
++ <https://learn.microsoft.com/en-us/dynamics365/fin-ops-core/dev-itpro/dev-ref/xpp-variables-data-types>.
+"""),
+        Section("🚦 Best-practice rules — must pass `d365fo bp check`", "bp", null),
+        Tail);
+
+    /// <summary>One canon-backed section, rendered the way the hand-written sections are.</summary>
+    private static string Section(string heading, string canonId, string? source)
+    {
+        var lead = source is null ? "" : source + "\n\n";
+        return $"\n{Separator}\n## {heading}\n\n{lead}{RuleCanon.Require(canonId)}\n";
+    }
+
+    private const string Separator =
+        "────────────────────────────────────────────────────────────────────────────";
+
+    private static readonly string Head = """
 # d365fo CLI — agent system prompt
 
 > This prompt mirrors the rule canon from `d365fo-mcp-server`'s
@@ -151,178 +191,9 @@ hand-edited form XML (exit 2 = structural errors). (These map to the MCP
 - NEVER dump entire indexes; use `--limit N`.
 - Pipe `jq` for specific fields.
 - Two narrow `search` calls beat one wide.
+""";
 
-## 🚫 Never-auto rules
-
-- NEVER auto-run `d365fo build`, `sync`, `bp check`, `test run`. Slow + Windows-only.
-  Say *"Changes scaffolded. Run `d365fo build` when you're ready."*
-- NEVER hand-edit AOT XML when `index refresh` hasn't been run.
-- NEVER infer the target model from search results — ask.
-
-────────────────────────────────────────────────────────────────────────────
-## 📜 Non-negotiable X++ rules
-
-1. NEVER guess method signatures — `d365fo get class <Name>` first.
-2. NEVER use `today()` — use `DateTimeUtil::getToday(DateTimeUtil::getUserPreferredTimeZone())`.
-3. NEVER call functions in `where` — assign to a local first.
-4. NEVER hardcode strings in `info()`/`warning()`/`error()`. Search labels first.
-5. NEVER nest `while select` — use `join` / `exists join` / `notExists join`.
-6. EDT-label exception: when adding a field whose EDT carries a label, do NOT
-   set `--label` on the field — it inherits.
-7. ALWAYS write meaningful `/// <summary>` on public/protected members.
-8. NEVER call `[SysObsolete]` methods.
-9. NEVER make instance fields `public` — default `protected`; expose via `parmFoo`.
-10. NEVER `doInsert`/`doUpdate`/`doDelete` for normal logic — migration only.
-11. Standard data events: `[DataEventHandler]`, NOT `[SubscribesTo + delegateStr]`.
-    `delegateStr` is for *custom* delegates only.
-12. NEVER pass `tableGroup="TempDB"`. `TableGroup` is business role
-    (`Main` / `Transaction` / `Parameter` / `WorksheetHeader` / `WorksheetLine`
-    / `Reference` / `Framework` / `Group` / `Miscellaneous`). `TableType` is
-    storage (`RegularTable` / `TempDB` / `InMemory`). Temp tables:
-    `tableType=TempDB`, `tableGroup=Main`.
-13. Class member variables go INSIDE the class `{ }`; methods at top level.
-
-────────────────────────────────────────────────────────────────────────────
-## 📐 X++ database query rules (`select` / `while select`)
-
-Source: <https://learn.microsoft.com/en-us/dynamics365/fin-ops-core/dev-itpro/dev-ref/xpp-data/xpp-select-statement>.
-
-**Order:** `select [FindOption…] [FieldList from] tableBuffer [index…] [order/group by] [where …] [join … [where …]]`.
-`FindOption` keywords sit between `select` and the buffer (sole exception:
-`forUpdate` may target a specific buffer in a join). `order by`/`group by`/
-`where` come AFTER the last `join`.
-
-**`crossCompany` belongs on the OUTER buffer** — query-level, not per-table:
-```xpp
-// ✅
-select crossCompany custTable
-    join custInvoiceJour where custInvoiceJour.OrderAccount == custTable.AccountNum;
-// ❌
-select custTable join crossCompany custInvoiceJour where …;
-```
-Optional company filter: `select crossCompany : myContainer custTable …` —
-`myContainer` is a `container` literal `(['dat'] + ['dmo'])`.
-
-**`in`** works with ANY primitive (`str`, `int`, `int64`, `real`, `enum`,
-`boolean`, `date`, `utcDateTime`, `RecId`). Operand is a `container` literal.
-One `in` per `where`. NEVER expand to `OR == OR ==`.
-
-**Other rules:**
-- Field list before table; never `select * from`.
-- `firstOnly` when ≤1 row; cannot combine with `next`.
-- `forUpdate` before any `.update()`/`.delete()`; pair with `ttsbegin`/`ttscommit`.
-- `exists join` / `notExists join` over nested `while select`.
-- Outer join is LEFT only; no `on` keyword (use `where`).
-- `index hint` requires `myTable.allowIndexHint(true)` first.
-- Aggregates: int/real fields only; sum-with-no-rows returns no row.
-- `forceLiterals` FORBIDDEN. Use `forcePlaceholders`.
-- `validTimeState(dateFrom, dateTo)` for date-effective tables.
-- Set-based ops over loops (`RecordInsertList`, `insert_recordset`,
-  `update_recordset`, `delete_from`).
-- Dynamic queries: `executeQueryWithParameters` — never string concat.
-- Timeouts: 30 min interactive, 3 h batch. Override `queryTimeout`.
-
-────────────────────────────────────────────────────────────────────────────
-## 🪝 Chain of Command rules
-
-Source: <https://learn.microsoft.com/en-us/dynamics365/fin-ops-core/dev-itpro/extensibility/method-wrapping-coc>.
-
-**🚨 NEVER copy default parameter values into the wrapper signature.**
-```xpp
-// Base:  public void salute(str message = "Hi") { … }
-public void salute(str message)        // ✅ no  "= 'Hi'"
-{ next salute(message); }
-public void salute(str message = "Hi") // ❌ forbidden
-```
-
-- Wrapper must call `next` unconditionally (exception: `[Replaceable]`).
-- `next` at first-level scope — NOT in `if`/`while`/`for`/`do-while`/boolean
-  expressions/after `return`. PU21+: `try`/`catch`/`finally` allowed.
-- Signature otherwise matches base EXACTLY.
-- Static methods: repeat `static`. Forms cannot be wrapped statically.
-- Cannot wrap constructors.
-- Class shape: `[ExtensionOf(...)] final class <Target>_<Suffix>`.
-- `[Hookable(false)]` blocks all CoC + handlers.
-- `[Wrappable(false)]` blocks wrapping; allows handlers.
-- Form-nested wrapping (`formdatasourcestr`, `formdatafieldstr`,
-  `formControlStr`) cannot ADD new methods.
-- Wrappers can read `protected` (PU9+); not `private`.
-- Reuse existing target/model extension and handler classes before creating new
-  ones. Example: with active target model `<ActiveCustomModel>`, add to
-  `<Target>_<ExistingSuffix>_Extension`,
-  `<Form>_<ExistingSuffix>_Form_EH`, or
-  `<Form>_<ExistingSuffix>_Form_EventHandler` if they already own the target.
-  If no existing suffix can be derived and the user did not provide one, ask;
-  do not create parallel feature-named artifacts unless the user explicitly
-  requests that separation.
-
-────────────────────────────────────────────────────────────────────────────
-## 🧾 AOT XML safety
-
-- Never rewrite an existing AOT XML file wholesale. Preserve unrelated
-  `<DataSourceModifications>`, `<DataSourceReferences>`, `<DataSources>`,
-  `<Controls>`, methods, extension properties, and pattern metadata.
-- Validate every changed XML file: XML parser first, then
-  `d365fo validate xpp --file <f> --code-type xml-any --output json`, then
-  `d365fo index refresh --model <Model>`, then re-read the object with
-  `d365fo get ... --output json`.
-- For new forms based on an example, read the example and keep the same pattern
-  contract unless the user asked otherwise. Required pattern controls/datasources
-  are mandatory, not optional inspiration.
-
-────────────────────────────────────────────────────────────────────────────
-## 🏛️ Class & method rules
-
-Source: <https://learn.microsoft.com/en-us/dynamics365/fin-ops-core/dev-itpro/dev-ref/xpp-classes-methods>.
-
-- Default class access = `public`. `internal`/`final`/`abstract` as needed.
-- Instance fields default = `protected`. **NEVER `public`.**
-- Constructors: `protected new()` + `public static construct()` + `protected init()`.
-- Modifier order: `[edit|display] [public|protected|private|internal] [static|abstract|final]`.
-- Override visibility ≥ base.
-- Optional params last; no skipping; `prmIsDefault(_x)` in `parmX`.
-- All parameters pass-by-value.
-- `this`: required for instance calls; never on member vars / static methods;
-  not in static methods.
-- Extension methods: `static class _Extension`; methods `public static`;
-  first param is target type (caller omits).
-- `public const str FOO = 'bar';` over `#define.FOO('bar')`.
-- `var` for type-inferred locals when RHS is obvious.
-
-────────────────────────────────────────────────────────────────────────────
-## 🧮 Statement & type rules
-
-Sources: <https://learn.microsoft.com/en-us/dynamics365/fin-ops-core/dev-itpro/dev-ref/xpp-conditional>
-+ <https://learn.microsoft.com/en-us/dynamics365/fin-ops-core/dev-itpro/dev-ref/xpp-variables-data-types>.
-
-- `switch break` required. Multi-value: `case 13, 17, 21:`.
-- Ternary branches must share the same type.
-- **X++ has NO database null.** Sentinels: `int 0`, `real 0.0`, `str ""`,
-  `date 1900-01-01` (`dateNull()`), `utcDateTime` date-part `1900-01-01`,
-  `enum 0`. Test `if (!myDate)` or `if (myDate == dateNull())`. NEVER
-  `if (myDate == null)`.
-- Casting: prefer `as`/`is` over hard down-cast. Late binding only on
-  `Object` / `FormRun`.
-- `using` blocks for `IDisposable`.
-- Embedded function declarations: read-only access to enclosing locals.
-
-────────────────────────────────────────────────────────────────────────────
-## 🚦 Best-practice rules — must pass `d365fo bp check`
-
-- `BPUpgradeCodeToday` — never `today()`.
-- `BPErrorLabelIsText` — `info`/`warning`/`error` need labels.
-- `BPErrorEDTNotMigrated` — modern `EDT.Relations` element only.
-- `BPCheckNestedLoopinCode` — no nested `while select`.
-- `BPCheckAlternateKeyAbsent` — every table needs a unique alternate key.
-- `BPErrorUnknownLabel` — referenced labels must exist.
-- `BPXmlDocNoDocumentationComments` — meaningful `/// <summary>`.
-- `BPDuplicateMethod` — no duplicates on the inheritance chain.
-
-```sh
-d365fo lint --output sarif > lint.sarif      # fast, in-process
-d365fo bp check --output json                # Windows VM, on user request
-```
-
+    private static readonly string Tail = """
 ────────────────────────────────────────────────────────────────────────────
 ## 🔁 Workflow templates
 

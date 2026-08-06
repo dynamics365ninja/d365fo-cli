@@ -138,62 +138,145 @@ Copilot: "Since I cannot access the codebase, I'll provide generic guidance…"
 > **`--output json` is mandatory** in agent contexts. Write-path: `--install-to <Model>` for bridge-installed scaffolds; `--out <PATH>` for standalone. Generated files land at `PackagesLocalDirectory/<Model>/<Model>/Ax<Type>/<Name>.xml`.
 
 ---
+## Key rules — driving this CLI
 
-## Key rules (condensed)
+These are the rules about *how to use the tooling*. The X++ rule canon itself is
+generated below from `skills/_source`, so it cannot drift from the topic files or
+from the `d365fo agent-prompt` / MCP server instructions.
 
 1. **Never create/edit AOT XML by hand or via scripts** (`Set-Content`, `Out-File`, `New-Item`, PS/Python scripts). If `d365fo` fails, stop and report — do not fall back to scripts.
 2. **Never use code search / `@workspace` / `file_search` / `grep_search` on AOT XML.** Always `d365fo search`.
-3. **Never auto-run `d365fo build`, `sync`, `bp check`, or `test run`** — slow, blocks the user. Only on explicit request.
-4. **Never copy default parameter values into CoC wrapper signatures.** Causes compile errors.
-5. **Never use `today()`** — use `DateTimeUtil::getToday(DateTimeUtil::getUserPreferredTimeZone())`.
-6. **Never hardcode strings in `Info()` / `warning()` / `error()`** — use `@Model:Label`. Search first: `d365fo labels search`.
-7. **Never nest `while select` loops** — use joins, `exists join`, or pre-load to `Map` / temp table.
-8. **Never use `replace_string_in_file` on `.xml` AOT files without running `d365fo index refresh` after** — stale index returns pre-edit data.
-9. **Never rewrite an existing AOT XML file wholesale.** Preserve all unrelated
-   elements exactly. A diff that removes unrelated `<DataSourceModifications>`,
-   `<DataSourceReferences>`, `<DataSources>`, `<Controls>`, methods, pattern
-   metadata, or extension properties is a failed edit.
-10. **Validate every changed AOT XML file before considering the task done:**
-   parse it with an XML validator, run `d365fo validate xpp --file <file>
-   --code-type xml-any --output json`, refresh the index for the model, and
-   re-read the object with `d365fo get ... --output json`.
-11. **For new forms based on an existing example, preserve the pattern contract.**
-   First read the example with `d365fo get form <Example> --output json`; scaffold
-   with `d365fo generate form --pattern ...`; then verify the generated form has
-   the required pattern scaffolding (datasources, design pattern/version,
-   ActionPane/Body/Tab/FastTab/grid/QuickFilter elements as applicable). Never
-   drop required pattern elements just because they were not mentioned in the
-   prompt.
-12. **Form writes are pattern-gated.** `d365fo generate form` validates the
-   generated XML against the pattern catalog (FP001–FP010) and **rejects
-   structural violations** while `D365FO_FORM_PATTERN_ENFORCE=true` (default).
-   Consult `d365fo form-pattern spec <Pattern>` for the required tree, and run
-   `d365fo form-pattern validate <file>` after any manual form-XML edit.
+3. **Never use `replace_string_in_file` on `.xml` AOT files without running `d365fo index refresh` after** — a stale index returns pre-edit data.
+4. **Form writes are pattern-gated.** `d365fo generate form` validates the generated XML against the pattern catalog (FP001–FP010) and **rejects structural violations** while `D365FO_FORM_PATTERN_ENFORCE=true` (default). Consult `d365fo form-pattern spec <Pattern>` for the required tree, and run `d365fo form-pattern validate <file>` after any manual form-XML edit.
+5. **For new forms based on an existing example, preserve the pattern contract.** Read the example with `d365fo get form <Example> --output json`, scaffold with `d365fo generate form --pattern ...`, then verify the required datasources, design pattern/version and ActionPane/Body/Tab/FastTab/grid/QuickFilter elements survived. Never drop required pattern elements just because the prompt did not mention them.
+6. **Triage build output with `d365fo explain-error`** rather than reading the log by eye — it returns the ranked cause plus the knowledge topic behind each message.
+
+---
+
+## X++ rule canon
+
+> Generated from `skills/_source` by `scripts/emit-skills.py`. Do not edit by hand —
+> edit the topic that owns the rule and re-run the script. CI fails on drift.
+
+<!-- BEGIN canon -->
+### Never-auto
+
+- NEVER auto-run `d365fo build`, `sync`, `bp check`, `test run`. Slow + Windows-only.
+  Say *"Changes scaffolded. Run `d365fo build` when you're ready."*
+- NEVER hand-edit AOT XML when `index refresh` hasn't been run.
+- NEVER infer the target model from search results — ask.
+
+### Non-negotiable X++ rules
+
+1. NEVER guess method signatures — `d365fo get class <Name>` first.
+2. NEVER use `today()` — use `DateTimeUtil::getToday(DateTimeUtil::getUserPreferredTimeZone())`.
+3. NEVER call functions in `where` — assign to a local first.
+4. NEVER hardcode strings in `info()`/`warning()`/`error()`. Search labels first.
+5. NEVER nest `while select` — use `join` / `exists join` / `notExists join`.
+6. EDT-label exception: when adding a field whose EDT carries a label, do NOT
+   set `--label` on the field — it inherits.
+7. ALWAYS write meaningful `/// <summary>` on public/protected members.
+8. NEVER call `[SysObsolete]` methods.
+9. NEVER make instance fields `public` — default `protected`; expose via `parmFoo`.
+10. NEVER `doInsert`/`doUpdate`/`doDelete` for normal logic — migration only.
+11. Standard data events: `[DataEventHandler]`, NOT `[SubscribesTo + delegateStr]`.
+    `delegateStr` is for *custom* delegates only.
+12. NEVER pass `tableGroup="TempDB"`. `TableGroup` is business role
+    (`Main` / `Transaction` / `Parameter` / `WorksheetHeader` / `WorksheetLine`
+    / `Reference` / `Framework` / `Group` / `Miscellaneous`). `TableType` is
+    storage (`RegularTable` / `TempDB` / `InMemory`). Temp tables:
+    `tableType=TempDB`, `tableGroup=Main`.
+13. Class member variables go INSIDE the class `{ }`; methods at top level.
+
+### Chain of Command
+
+**NEVER copy default parameter values into the wrapper signature.** The base
+method's defaults are already in effect when `next` runs.
+
+- Wrapper must call `next` unconditionally (exception: `[Replaceable]`).
+- `next` at first-level scope — NOT in `if`/`while`/`for`/`do-while`/boolean
+  expressions/after `return`. PU21+: `try`/`catch`/`finally` allowed.
+- Signature otherwise matches base EXACTLY.
+- Static methods: repeat `static`. Forms cannot be wrapped statically.
+- Cannot wrap constructors.
+- Class shape: `[ExtensionOf(...)] final class <Target>_<Suffix>`.
+- `[Hookable(false)]` blocks all CoC + handlers.
+- `[Wrappable(false)]` blocks wrapping; allows handlers.
+- Form-nested wrapping (`formdatasourcestr`, `formdatafieldstr`,
+  `formControlStr`) cannot ADD new methods.
+- Wrappers can read `protected` (PU9+); not `private`.
+- Reuse existing target/model extension and handler classes before creating new
+  ones. If no existing suffix can be derived and the user did not provide one,
+  ask; do not create parallel feature-named artifacts unless the user explicitly
+  requests that separation.
+
+### AOT XML safety
+
+- Never rewrite an existing AOT XML file wholesale. Preserve unrelated
+  `<DataSourceModifications>`, `<DataSourceReferences>`, `<DataSources>`,
+  `<Controls>`, methods, extension properties, and pattern metadata.
+- Validate every changed XML file: XML parser first, then
+  `d365fo validate xpp --file <f> --code-type xml-any --output json`, then
+  `d365fo index refresh --model <Model>`, then re-read the object with
+  `d365fo get ... --output json`.
+- For new forms based on an example, read the example and keep the same pattern
+  contract unless the user asked otherwise. Required pattern controls/datasources
+  are mandatory, not optional inspiration.
+
+### Best practice — must pass `d365fo bp check`
+
+- `BPUpgradeCodeToday` — never `today()`.
+- `BPErrorLabelIsText` — `info`/`warning`/`error` need labels.
+- `BPErrorEDTNotMigrated` — modern `EDT.Relations` element only.
+- `BPCheckNestedLoopinCode` — no nested `while select`.
+- `BPCheckAlternateKeyAbsent` — every table needs a unique alternate key.
+- `BPErrorUnknownLabel` — referenced labels must exist.
+- `BPXmlDocNoDocumentationComments` — meaningful `/// <summary>`.
+- `BPDuplicateMethod` — no duplicates on the inheritance chain.
+<!-- END canon -->
 
 ---
 
 ## Full X++ rules — loaded on demand from references
 
-Detailed rules are in `references/` (lazily loaded by Copilot when relevant):
+Detailed rules are in `references/` (lazily loaded when relevant):
 
+<!-- BEGIN references -->
 | Resource file | Covers |
 |---|---|
+| `analytics-and-er` | Tiles/cues, KPIs, aggregate measurements, Electronic Reporting |
+| `build-error-triage` | Compiler/BP/runtime message to the specific fix, via `explain-error` |
+| `business-events-authoring` | `BusinessEventsBase`, contract class, payload, catalog activation |
 | `coc-extension-authoring` | CoC wrapper rules, `next` placement, signature matching, `[Hookable]`/`[Wrappable]` |
-| `xpp-database-queries` | `select` grammar, `crossCompany`, `in` operator, joins, aggregates, SysDa, QueryRun |
-| `x++-class-authoring` | Class structure, visibility, constructor patterns, extension methods, `var`, constants |
-| `xpp-class-and-method-rules` | Method modifiers, override visibility, optional params, `this`, pass-by-value |
-| `xpp-statement-and-type-rules` | `switch`, ternary, null handling, `using`, casting, `is`/`as` |
-| `xpp-best-practice-rules` | BP rules: `today()`, labels, nested loops, alternate keys, `[SysObsolete]` |
-| `form-pattern-scaffolding` | FormRun lifecycle, 9 form patterns, Display/Action/Output menu items |
-| `table-scaffolding` | Table creation, EDT assignment, relations, indexes, number sequences, `TableGroup` vs `TableType` |
+| `custom-service-authoring` | JSON/SOAP custom service scaffolding |
 | `data-entity-scaffolding` | Data entity (`AxDataEntityView`) patterns, OData exposure |
 | `event-handler-authoring` | `[DataEventHandler]`, `[SubscribesTo]`, pre/post handlers |
-| `object-extension-authoring` | Table / Form / EDT / Enum extensions; new EDT and Enum creation |
-| `security-hierarchy-trace` | Role → Duty → Privilege → Entry Point tracing; scaffold privilege/duty/role |
-| `sysoperation-batch-patterns` | SysOperation batch jobs, RunBase/RunBaseBatch, data migration scripts |
-| `business-events-authoring` | Custom business event contract + class scaffolding |
-| `custom-service-authoring` | JSON/SOAP custom service scaffolding |
-| `integration-patterns` | OData, DMF, business events, number sequences |
+| `form-pattern-scaffolding` | FormRun lifecycle, 9 form patterns, Display/Action/Output menu items |
+| `forms-and-navigation` | Form lifecycle extension points, menus and submenu nesting |
+| `integration-dmf-dualwrite` | DMF, dual-write, virtual entities, uploaded-file readers |
+| `integration-patterns` | OData, custom services, DMF, business events |
+| `inventory-and-warehouse` | InventTrans/InventDim/InventSum, on-hand, WHS work and waves |
 | `label-translation` | Label search, reuse, creation, multi-language |
 | `model-dependency-and-coupling` | Model reference chains, ISV/customer boundary rules |
+| `number-sequence-patterns` | `NumberSeqApplicationModule`, form handler, runtime fetch |
+| `object-extension-authoring` | Table / Form / EDT / Enum extensions; AOT XML safety |
+| `performance-and-caching` | Set-based work, `CacheLookup`, explicit caches, parallel batch |
+| `posting-and-financials` | Financial dimensions, voucher posting, currency, pricing |
 | `review-and-checkpoint-workflow` | Git checkpoint, `d365fo review diff`, accept/reject workflow |
+| `runtime-frameworks` | Feature Management, SysExtension, telemetry, Global Address Book |
+| `security-hierarchy-trace` | Role to duty to privilege to entry-point tracing |
+| `security-modeling` | Privilege/duty/role chain, XDS policies, configuration keys |
+| `ssrs-report-authoring` | TmpTable to Contract to DP to Controller to AxReport, Print management |
+| `sysoperation-batch-patterns` | SysOperation batch jobs, RunBase, migration scripts, retryable/async batch |
+| `table-scaffolding` | Table creation, EDTs, relations, indexes, `TableGroup` vs `TableType`, inheritance |
+| `testing-and-quality` | SysTestCase, ATL, and the offline validate/lint gates |
+| `transactions-and-concurrency` | tts scoping, OCC retry, `UnitOfWork`, error handling |
+| `workflow-authoring` | `AxWorkflowTemplate`, document class, approvals and tasks |
+| `x++-class-authoring` | Class hierarchy, CoC, access modifiers, constructor patterns |
+| `xpp-best-practice-rules` | BP rules: `today()`, labels, nested loops, alternate keys, `[SysObsolete]` |
+| `xpp-class-and-method-rules` | Method modifiers, override visibility, optional params, `this` |
+| `xpp-data-access-apis` | `Query`/`QueryRun`, SysDa, direct SQL |
+| `xpp-database-queries` | `select` grammar, `crossCompany`, `in`, joins, aggregates |
+| `xpp-runtime-types` | Collections, date/time zones, .NET interop, `Dict*`, macros |
+| `xpp-statement-and-type-rules` | `switch`, ternary, null handling, `using`, casting, `is`/`as` |
+<!-- END references -->

@@ -4,9 +4,10 @@
   <SourceCode>
     <Declaration>/// &lt;summary&gt;
 /// Data migration: FmVehicle → FmVehicle.
-/// Run once via Batch or SysRunnable; uses doInsert/doUpdate (permitted exception).
+/// Run once as a runnable class (right-click the class, Set as startup object) or
+/// from a batch job; uses doInsert/doUpdate (permitted exception).
 /// &lt;/summary&gt;
-public class ConFmVehicleMigration extends SysRunnable
+public class ConFmVehicleMigration
 {
     private static int BatchSize = 1000;
 }

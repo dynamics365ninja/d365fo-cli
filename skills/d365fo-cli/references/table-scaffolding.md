@@ -44,7 +44,8 @@ d365fo generate table FmTrans \
     --install-to FleetManagement
 
 # Parameter table (CustParameters-style; one record per company)
-d365fo generate table FmParameters \
+# Check the name is free first — `FMParameters` already exists in the FleetManagement demo model.
+d365fo generate table FmVehicleParameters \
     --pattern parameter \
     --label "@Fleet:Parameters" \
     --install-to FleetManagement
@@ -154,15 +155,49 @@ This emits:
 
 Manual consumption in X++ — the `numRef<EdtName>()` accessor lives as a `static
 NumberSequenceReference` method on the module's **own parameter table** (e.g.
-`FmParameters`, mirroring how `CustParameters::numRefCustAccount()` returns
+`FmVehicleParameters`, mirroring how `CustParameters::numRefCustAccount()` returns
 `NumberSeqReference::findReference(extendedTypeNum(CustAccount))` in the real
 platform) — **not** on `CompanyInfo` (that class does exist and is the
 standard way to read the current legal entity via `CompanyInfo::find()`,
-but it isn't where a module's own number-sequence accessor belongs):
+but it isn't where a module's own number-sequence accessor belongs).
+`MyModuleParameters` below stands in for your module's parameter table:
 ```xpp
-NumberSeq numSeq = NumberSeq::newGetNum(FmParameters::numRefMySequence());
+NumberSeq numSeq = NumberSeq::newGetNum(MyModuleParameters::numRefMyNumberId());
 str nextNum = numSeq.num();
 numSeq.used();   // or numSeq.abort() to roll back
+```
+
+## Table inheritance
+
+Table inheritance gives a base table shared fields and each row a concrete type —
+class inheritance for data. It is a **design-time** feature of the base table, not
+a runtime cast.
+
+- Base table: `SupportInheritance = Yes` plus an `InstanceRelationType` field, the
+  discriminator holding the tableId of the concrete (leaf) table for each row.
+  Mark it `Abstract = Yes` when it should never hold rows of its own type.
+- Derived table: `Extends = <BaseTable>`. It inherits every base field and adds its
+  own. **Do not duplicate the common fields.**
+- A `select` on the base returns rows of **all** derived types; narrow with an
+  `is` check or by selecting the specific derived buffer.
+- **`SupportInheritance` and `Extends` cannot be changed on a shipped table via an
+  extension** — inheritance is fixed at base-table design time. Choosing it later
+  means a new hierarchy and a data migration.
+- Use it only for a genuine is-a hierarchy with shared fields and behaviour. For
+  optional add-on data, a related table plus a relation is simpler and extensible.
+
+```xpp
+// Polymorphic select: returns rows of every derived type.
+FmVehicleBase party;
+
+while select party
+{
+    if (party is FmVehicleCar)
+    {
+        FmVehicleCar car = party;   // narrow to the leaf type
+        // …
+    }
+}
 ```
 
 ## Hard rules

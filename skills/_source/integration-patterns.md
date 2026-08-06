@@ -1,6 +1,7 @@
 ---
 id: integration-patterns
 description: Guidance for building or debugging integrations between D365 Finance & Operations and external systems. Invoke when the user asks about OData, custom services, DMF/Data Management Framework, business events, Power Automate connectors, Service Bus, or external system connectivity.
+covers: OData, custom services, DMF, business events
 applyTo:
   - "**/AxDataEntityView/**"
   - "**/AxService/**"

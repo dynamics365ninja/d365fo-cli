@@ -141,3 +141,41 @@ d365fo search batch FreeTextInvoice PrintFreeTxt FreeInv --output json
 - Use the **English AOT name** (`FreeTextInvoice`, not `volná faktura`).
 - If the result set has >50 hits, refine with a tighter fragment instead of adding more queries.
 - After identifying candidate names, resolve details with `d365fo get class <Name> --output json`.
+
+
+## Rule canon — non-negotiables
+
+<!-- canon:core -->
+1. NEVER guess method signatures — `d365fo get class <Name>` first.
+2. NEVER use `today()` — use `DateTimeUtil::getToday(DateTimeUtil::getUserPreferredTimeZone())`.
+3. NEVER call functions in `where` — assign to a local first.
+4. NEVER hardcode strings in `info()`/`warning()`/`error()`. Search labels first.
+5. NEVER nest `while select` — use `join` / `exists join` / `notExists join`.
+6. EDT-label exception: when adding a field whose EDT carries a label, do NOT
+   set `--label` on the field — it inherits.
+7. ALWAYS write meaningful `/// <summary>` on public/protected members.
+8. NEVER call `[SysObsolete]` methods.
+9. NEVER make instance fields `public` — default `protected`; expose via `parmFoo`.
+10. NEVER `doInsert`/`doUpdate`/`doDelete` for normal logic — migration only.
+11. Standard data events: `[DataEventHandler]`, NOT `[SubscribesTo + delegateStr]`.
+    `delegateStr` is for *custom* delegates only.
+12. NEVER pass `tableGroup="TempDB"`. `TableGroup` is business role
+    (`Main` / `Transaction` / `Parameter` / `WorksheetHeader` / `WorksheetLine`
+    / `Reference` / `Framework` / `Group` / `Miscellaneous`). `TableType` is
+    storage (`RegularTable` / `TempDB` / `InMemory`). Temp tables:
+    `tableType=TempDB`, `tableGroup=Main`.
+13. Class member variables go INSIDE the class `{ }`; methods at top level.
+<!-- /canon -->
+
+## Rule canon — must pass `d365fo bp check`
+
+<!-- canon:bp -->
+- `BPUpgradeCodeToday` — never `today()`.
+- `BPErrorLabelIsText` — `info`/`warning`/`error` need labels.
+- `BPErrorEDTNotMigrated` — modern `EDT.Relations` element only.
+- `BPCheckNestedLoopinCode` — no nested `while select`.
+- `BPCheckAlternateKeyAbsent` — every table needs a unique alternate key.
+- `BPErrorUnknownLabel` — referenced labels must exist.
+- `BPXmlDocNoDocumentationComments` — meaningful `/// <summary>`.
+- `BPDuplicateMethod` — no duplicates on the inheritance chain.
+<!-- /canon -->

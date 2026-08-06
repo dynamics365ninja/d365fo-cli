@@ -1,6 +1,7 @@
 ---
 id: object-extension-authoring
 description: Create a Table / Form / Edt / Enum extension, a new EDT (Extended Data Type), or a new base enum in D365 Finance & Operations. Use when the user asks to "extend a table", "add a field to standard CustTable", "extend an EDT", "add an enum value", "extend a form via FormExtension", "create an EDT", "create a new EDT", "create an enum", "generate edt", or "generate enum".
+covers: Table / Form / EDT / Enum extensions; AOT XML safety
 applyTo:
   - "**/AxTableExtension/**"
   - "**/AxFormExtension/**"
@@ -183,3 +184,19 @@ d365fo get security-policy CustCustomSecurityPolicy --output json
 - Never guess EDT base types — `d365fo get edt <Name>` first.
 - Always check for existing security policies before adding a new one — `d365fo search security-policy` first.
 - After scaffolding, run `d365fo build` only on user request.
+
+
+## Rule canon — AOT XML safety
+
+<!-- canon:aot-xml-safety -->
+- Never rewrite an existing AOT XML file wholesale. Preserve unrelated
+  `<DataSourceModifications>`, `<DataSourceReferences>`, `<DataSources>`,
+  `<Controls>`, methods, extension properties, and pattern metadata.
+- Validate every changed XML file: XML parser first, then
+  `d365fo validate xpp --file <f> --code-type xml-any --output json`, then
+  `d365fo index refresh --model <Model>`, then re-read the object with
+  `d365fo get ... --output json`.
+- For new forms based on an example, read the example and keep the same pattern
+  contract unless the user asked otherwise. Required pattern controls/datasources
+  are mandatory, not optional inspiration.
+<!-- /canon -->

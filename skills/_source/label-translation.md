@@ -1,6 +1,7 @@
 ---
 id: label-translation
 description: Reuse, search, create, rename, or delete D365FO label entries. Invoke whenever a UI string is about to be added to X++/XML, when translating a label across languages, or when refactoring label keys.
+covers: Label search, reuse, creation, multi-language
 applyTo:
   - "**/*.xpp"
   - "**/AxLabelFile/**"

@@ -137,3 +137,36 @@ d365fo get table <Table> --output json                 # field list, indexes, re
 d365fo find relations <Table> --output json            # FK relations to model joins
 d365fo find usages <field|method> --output json        # caller risk before refactor
 ```
+
+
+## Rule canon — `select` grammar
+
+<!-- canon:queries -->
+**Order:** `select [FindOption…] [FieldList from] tableBuffer [index…] [order/group by] [where …] [join … [where …]]`.
+`FindOption` keywords sit between `select` and the buffer (sole exception:
+`forUpdate` may target a specific buffer in a join). `order by`/`group by`/
+`where` come AFTER the last `join`.
+
+**`crossCompany` belongs on the OUTER buffer** — query-level, not per-table.
+Optional company filter: `select crossCompany : myContainer custTable …` —
+`myContainer` is a `container` literal `(['dat'] + ['dmo'])`.
+
+**`in`** works with ANY primitive (`str`, `int`, `int64`, `real`, `enum`,
+`boolean`, `date`, `utcDateTime`, `RecId`). Operand is a `container` literal.
+One `in` per `where`. NEVER expand to `OR == OR ==`.
+
+**Other rules:**
+- Field list before table; never `select * from`.
+- `firstOnly` when ≤1 row; cannot combine with `next`.
+- `forUpdate` before any `.update()`/`.delete()`; pair with `ttsbegin`/`ttscommit`.
+- `exists join` / `notExists join` over nested `while select`.
+- Outer join is LEFT only; no `on` keyword (use `where`).
+- `index hint` requires `myTable.allowIndexHint(true)` first.
+- Aggregates: int/real fields only; sum-with-no-rows returns no row.
+- `forceLiterals` FORBIDDEN. Use `forcePlaceholders`.
+- `validTimeState(dateFrom, dateTo)` for date-effective tables.
+- Set-based ops over loops (`RecordInsertList`, `insert_recordset`,
+  `update_recordset`, `delete_from`).
+- Dynamic queries: `executeQueryWithParameters` — never string concat.
+- Timeouts: 30 min interactive, 3 h batch. Override `queryTimeout`.
+<!-- /canon -->

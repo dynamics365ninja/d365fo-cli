@@ -365,6 +365,7 @@ d365fo knowledge list --output json                       # catalog + per-topic 
 d365fo knowledge search "add a field to a standard table" # rank sections across the corpus
 d365fo knowledge get table-scaffolding --outline          # cheap table of contents
 d365fo knowledge get table-scaffolding --section "Pre-flight"
+d365fo knowledge audit --output json                      # prove the corpus itself
 ```
 
 Prefer `search` → `get --section` over fetching a whole topic; a full topic runs to
@@ -475,9 +476,9 @@ d365fo-mcp --http --port 8080
 
 ## Copilot Skills
 
-The `d365fo-cli` agent skill (`skills/d365fo-cli/`) covers the full X++ authoring and review canon: `SKILL.md` holds the rule canon and tool mapping, and 19 topic files in `references/` are loaded on demand. Deploy to an X++ project with the `Install-D365FoCopilotSkills.ps1` script (see [SETUP.md](SETUP.md)), which installs it to `.github/skills/d365fo-cli/`.
+The `d365fo-cli` agent skill (`skills/d365fo-cli/`) covers the full X++ authoring and review canon: `SKILL.md` holds the rule canon and tool mapping, and 35 topic files in `references/` are loaded on demand. Deploy to an X++ project with the `Install-D365FoCopilotSkills.ps1` script (see [SETUP.md](SETUP.md)), which installs it to `.github/skills/d365fo-cli/`.
 
-The same 19 topics are also emitted as `skills/copilot/*.instructions.md` (legacy `applyTo` format) and `skills/anthropic/<id>/SKILL.md` (Claude Code / Claude Desktop).
+The same 35 topics are also emitted as `skills/copilot/*.instructions.md` (legacy `applyTo` format) and `skills/anthropic/<id>/SKILL.md` (Claude Code / Claude Desktop).
 
 | Skill | Covers |
 |-------|--------|
@@ -499,6 +500,23 @@ The same 19 topics are also emitted as `skills/copilot/*.instructions.md` (legac
 | `business-events-authoring` | `BusinessEventsBase`, contract class, payload |
 | `integration-patterns` | OData, custom services, Dual-write surface |
 | `custom-service-authoring` | JSON/SOAP services |
+| `sysoperation-batch-patterns` | SysOperation triplet, RunBase, migration scripts, retryable/async batch |
+| `analytics-and-er` | Tiles/cues, KPIs, aggregate measurements, Electronic Reporting |
+| `build-error-triage` | Compiler/BP/runtime message → the specific fix, via `explain-error` |
+| `forms-and-navigation` | Form lifecycle extension points, menus and submenu nesting |
+| `integration-dmf-dualwrite` | DMF, dual-write, virtual entities, uploaded-file readers |
+| `inventory-and-warehouse` | InventTrans/InventDim/InventSum, on-hand, WHS work and waves |
+| `number-sequence-patterns` | `NumberSeqApplicationModule`, form handler, runtime fetch |
+| `performance-and-caching` | Set-based work, `CacheLookup`, explicit caches, parallel batch |
+| `posting-and-financials` | Financial dimensions, voucher posting, currency, pricing |
+| `runtime-frameworks` | Feature Management, SysExtension, telemetry, Global Address Book |
+| `security-modeling` | Privilege/duty/role chain, XDS policies, configuration keys |
+| `ssrs-report-authoring` | TmpTable → Contract → DP → Controller → AxReport, Print management |
+| `testing-and-quality` | SysTestCase, ATL, and the offline validate/lint gates |
+| `transactions-and-concurrency` | tts scoping, OCC retry, `UnitOfWork`, error handling |
+| `workflow-authoring` | `AxWorkflowTemplate`, document class, approvals and tasks |
+| `xpp-data-access-apis` | `Query`/`QueryRun`, SysDa, direct SQL |
+| `xpp-runtime-types` | Collections, date/time zones, .NET interop, `Dict*`, macros |
 
 ---
 
