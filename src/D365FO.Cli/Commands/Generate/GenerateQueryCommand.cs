@@ -77,7 +77,11 @@ public sealed class GenerateQueryCommand : Command<GenerateQueryCommand.Settings
 
         try
         {
-            var res = ScaffoldFileWriter.Write(doc, outPath!, settings.Overwrite);
+            // Grounding gate (issue #161): uniform across every generate subcommand.
+            var gate = GenerateInstaller.Gate(settings, settings.Name, doc);
+            if (gate.Failure is not null) return RenderHelpers.Render(kind, gate.Failure);
+
+            var res = GenerateInstaller.Write(gate, doc, outPath!, settings.Overwrite);
             var roots = dsList.Where(d => string.IsNullOrEmpty(d.ParentDs)).Select(d => d.Table).ToList();
             var joins  = dsList.Where(d => !string.IsNullOrEmpty(d.ParentDs))
                                .Select(d => new { d.Table, d.JoinMode, parentDs = d.ParentDs }).ToList();
@@ -92,7 +96,7 @@ public sealed class GenerateQueryCommand : Command<GenerateQueryCommand.Settings
                 bytes       = res.Bytes,
                 backup      = res.BackupPath,
                 model       = settings.InstallTo,
-            }));
+            }, gate.Warnings));
         }
         catch (Exception ex)
         {

@@ -43,6 +43,22 @@ public sealed class GenerateEntityCommand : Command<GenerateEntityCommand.Settin
         [CommandOption("--key <FIELD>")]
         [System.ComponentModel.Description("Repeatable: entity field forming the EntityKey. Derived from the table's alternate-key index when omitted — a public entity is invalid without one.")]
         public string[] Keys { get; init; } = Array.Empty<string>();
+
+        [CommandOption("--relation <SPEC>")]
+        [System.ComponentModel.Description("Repeatable: <Name>:<RelatedEntity>:<field>=<relatedField>[[,<field>=<relatedField>]][[:<Cardinality>]][[:<RelationshipType>]]. Example: --relation Customer:CustCustomerV3Entity:CustomerAccount=CustomerAccount:ZeroOne:Association")]
+        public string[] Relations { get; init; } = Array.Empty<string>();
+
+        [CommandOption("--computed-field <SPEC>")]
+        [System.ComponentModel.Description("Repeatable: <Name>:<staticMethodName>[[:<EDT>]]. Emits an AxDataEntityViewUnmappedField with IsComputedField=Yes; write the method on the entity yourself — it must return the SQL text of the expression.")]
+        public string[] ComputedFields { get; init; } = Array.Empty<string>();
+
+        [CommandOption("--out-staging <PATH>")]
+        [System.ComponentModel.Description("Where to write the DMF staging table generated alongside a --data-management entity (default: a sibling of the entity, under AxTable when --install-to is used).")]
+        public string? OutStaging { get; init; }
+
+        [CommandOption("--no-staging-table")]
+        [System.ComponentModel.Description("With --data-management, do not generate the staging table. The entity then names a table that must already exist, or the next build fails.")]
+        public bool NoStagingTable { get; init; }
     }
 
     public override int Execute(CommandContext ctx, Settings settings)
@@ -80,12 +96,48 @@ public sealed class GenerateEntityCommand : Command<GenerateEntityCommand.Settin
         var (keys, keySource, keyFailure) = ResolveKeys(kind, settings, fields);
         if (keyFailure.HasValue) return keyFailure.Value;
 
+        if (!TryParseRelations(settings.Relations, out var relations, out var relErr))
+            return RenderHelpers.Render(kind, ToolResult<object>.Fail(D365FoErrorCodes.BadInput, relErr!));
+        if (!TryParseComputedFields(settings.ComputedFields, out var computed, out var compErr))
+            return RenderHelpers.Render(kind, ToolResult<object>.Fail(D365FoErrorCodes.BadInput, compErr!));
+
         var doc = XppScaffolder.DataEntity(
             settings.EntityName, settings.Table!, settings.PublicEntity, settings.PublicCollection, fields,
-            settings.DataManagement, settings.StagingTable, entityCategory: null, keyFields: keys);
+            settings.DataManagement, settings.StagingTable, entityCategory: null, keyFields: keys,
+            relations: relations, computedFields: computed);
         try
         {
-            var res = ScaffoldFileWriter.Write(doc, outPath!, settings.Overwrite);
+            // Grounding gate (issue #161): uniform across every generate subcommand.
+            var gate = GenerateInstaller.Gate(settings, settings.EntityName, doc);
+            if (gate.Failure is not null) return RenderHelpers.Render(kind, gate.Failure);
+
+            var res = GenerateInstaller.Write(gate, doc, outPath!, settings.Overwrite);
+
+            // The staging table is not optional decoration: DataManagementEnabled=Yes names a
+            // table, and the build fails on the next compile if it is not there (issue #162).
+            object? staging = null;
+            if (settings.DataManagement && !settings.NoStagingTable)
+            {
+                var stagingName = string.IsNullOrWhiteSpace(settings.StagingTable)
+                    ? settings.EntityName + "Staging"
+                    : settings.StagingTable!;
+
+                var stagingPath = settings.OutStaging;
+                if (string.IsNullOrWhiteSpace(stagingPath))
+                {
+                    stagingPath = hasInstall && !hasOut
+                        ? GenerateInstaller.ResolveInstallPath(kind, Folders.Table, stagingName, settings.InstallTo!, out var sf)
+                        : System.IO.Path.Combine(System.IO.Path.GetDirectoryName(res.Path)!, stagingName + ".xml");
+                    if (stagingPath is null)
+                        return RenderHelpers.Render(kind, ToolResult<object>.Fail(D365FoErrorCodes.WriteFailed,
+                            $"Wrote the entity but could not resolve where to put its staging table '{stagingName}'."));
+                }
+
+                var stagingRes = GenerateInstaller.Write(gate,
+                    XppScaffolder.EntityStagingTable(stagingName, fields), stagingPath!, settings.Overwrite);
+                staging = new { name = stagingName, path = stagingRes.Path, bytes = stagingRes.Bytes };
+            }
+
             return RenderHelpers.Render(kind, ToolResult<object>.Success(new
             {
                 kind = "AxDataEntityView",
@@ -98,13 +150,106 @@ public sealed class GenerateEntityCommand : Command<GenerateEntityCommand.Settin
                 fieldsFromTable = autoFromTable,
                 keyFields = keys,
                 keySource,
+                relations = relations.Select(r => new { r.Name, related = r.RelatedDataEntity, constraints = r.Constraints.Count }).ToList(),
+                computedFields = computed.Select(c => new { c.Name, c.Method, c.Edt }).ToList(),
+                stagingTable = staging,
                 model = settings.InstallTo,
-            }));
+            }, gate.Warnings));
         }
         catch (Exception ex)
         {
             return RenderHelpers.Render(kind, ToolResult<object>.Fail(D365FoErrorCodes.WriteFailed, ex.Message));
         }
+    }
+
+    /// <summary>
+    /// Parse <c>--relation &lt;Name&gt;:&lt;RelatedEntity&gt;:&lt;f&gt;=&lt;rf&gt;[,…][:Cardinality][:RelationshipType]</c>.
+    /// </summary>
+    /// <remarks>
+    /// The enum values are checked here rather than left to the writer: they come from the
+    /// contract catalog, and a value outside the enum is XML008 — the whole entity fails to
+    /// deserialize, so refusing at parse time with the list of valid values is strictly better
+    /// than a rejected write.
+    /// </remarks>
+    private static bool TryParseRelations(
+        string[] raw, out List<EntityRelationSpec> relations, out string? error)
+    {
+        relations = [];
+        error = null;
+
+        foreach (var spec in raw.Where(r => !string.IsNullOrWhiteSpace(r)))
+        {
+            var parts = spec.Split(':', StringSplitOptions.TrimEntries);
+            if (parts.Length < 3)
+            {
+                error = $"Invalid --relation '{spec}'. Expected <Name>:<RelatedEntity>:<field>=<relatedField>[,…][:<Cardinality>][:<RelationshipType>].";
+                return false;
+            }
+
+            var constraints = new List<EntityRelationConstraintSpec>();
+            foreach (var pair in parts[2].Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+            {
+                var kv = pair.Split('=', 2, StringSplitOptions.TrimEntries);
+                if (kv.Length != 2 || kv[0].Length == 0 || kv[1].Length == 0)
+                {
+                    error = $"Invalid constraint '{pair}' in --relation '{spec}'. Expected <field>=<relatedField>.";
+                    return false;
+                }
+                constraints.Add(new EntityRelationConstraintSpec(kv[0], kv[1]));
+            }
+            if (constraints.Count == 0)
+            {
+                error = $"--relation '{spec}' has no constraints. A relation that joins on nothing is not a relation.";
+                return false;
+            }
+
+            string? cardinality = parts.Length > 3 && parts[3].Length > 0 ? parts[3] : null;
+            string? relationshipType = parts.Length > 4 && parts[4].Length > 0 ? parts[4] : null;
+
+            if (!EnumValueOk("Cardinality", cardinality, out error)) return false;
+            if (!EnumValueOk("RelationshipType", relationshipType, out error)) return false;
+
+            relations.Add(new EntityRelationSpec(
+                parts[0], parts[1], constraints,
+                Cardinality: cardinality,
+                RelationshipType: relationshipType));
+        }
+
+        return true;
+    }
+
+    private static bool EnumValueOk(string enumName, string? value, out string? error)
+    {
+        error = null;
+        if (string.IsNullOrWhiteSpace(value)) return true;
+
+        var allowed = D365FO.Core.Metadata.MetadataContracts.EnumValues(enumName);
+        if (allowed.Count == 0 || allowed.Contains(value, StringComparer.Ordinal)) return true;
+
+        error = $"'{value}' is not a value of {enumName}. Valid: {string.Join(", ", allowed)}.";
+        return false;
+    }
+
+    /// <summary>Parse <c>--computed-field &lt;Name&gt;:&lt;method&gt;[:&lt;EDT&gt;]</c>.</summary>
+    private static bool TryParseComputedFields(
+        string[] raw, out List<EntityComputedFieldSpec> computed, out string? error)
+    {
+        computed = [];
+        error = null;
+
+        foreach (var spec in raw.Where(c => !string.IsNullOrWhiteSpace(c)))
+        {
+            var parts = spec.Split(':', StringSplitOptions.TrimEntries);
+            if (parts.Length < 2 || parts[0].Length == 0 || parts[1].Length == 0)
+            {
+                error = $"Invalid --computed-field '{spec}'. Expected <Name>:<staticMethodName>[:<EDT>].";
+                return false;
+            }
+            computed.Add(new EntityComputedFieldSpec(
+                parts[0], parts[1], parts.Length > 2 && parts[2].Length > 0 ? parts[2] : null));
+        }
+
+        return true;
     }
 
     private static EntityFieldSpec ParseField(string raw)
@@ -185,6 +330,38 @@ public sealed class GenerateExtensionCommand : Command<GenerateExtensionCommand.
         [CommandOption("--duty <NAME>")]
         [System.ComponentModel.Description("Repeatable; SecurityRole only: duty reference to add to the base role.")]
         public string[] Duties { get; init; } = Array.Empty<string>();
+
+        [CommandOption("--set-property <SPEC>")]
+        [System.ComponentModel.Description("Repeatable; SecurityDuty/SecurityRole only: <Member>=<Value>. Overrides a property of the base object (Enabled, Label, Description, ContextString…) without overlaying it.")]
+        public string[] PropertyModifications { get; init; } = Array.Empty<string>();
+    }
+
+    /// <summary>Parse <c>--set-property &lt;Member&gt;=&lt;Value&gt;</c> pairs.</summary>
+    /// <remarks>
+    /// The member is not checked against the base type's contract here: an extension's
+    /// PropertyModifications name members of the object being extended, and this command does
+    /// not read that object. A misspelled member is caught where it shows — the provider
+    /// ignores the modification — which is a weaker guarantee than the rest of the write path
+    /// gives and is called out in the command's help rather than papered over.
+    /// </remarks>
+    private static bool TryParsePropertyModifications(
+        string[] raw, out List<XppScaffolder.PropertyModificationSpec> mods, out string? error)
+    {
+        mods = [];
+        error = null;
+
+        foreach (var spec in raw.Where(p => !string.IsNullOrWhiteSpace(p)))
+        {
+            var kv = spec.Split('=', 2, StringSplitOptions.TrimEntries);
+            if (kv.Length != 2 || kv[0].Length == 0)
+            {
+                error = $"Invalid --set-property '{spec}'. Expected <Member>=<Value>.";
+                return false;
+            }
+            mods.Add(new XppScaffolder.PropertyModificationSpec(kv[0], kv[1]));
+        }
+
+        return true;
     }
 
     public override int Execute(CommandContext ctx, Settings settings)
@@ -229,10 +406,18 @@ public sealed class GenerateExtensionCommand : Command<GenerateExtensionCommand.
             if (fail.HasValue) return fail.Value;
         }
 
+        if (!TryParsePropertyModifications(settings.PropertyModifications, out var propertyMods, out var pmErr))
+            return RenderHelpers.Render(kind, ToolResult<object>.Fail(D365FoErrorCodes.BadInput, pmErr!));
+        if (propertyMods.Count > 0 && axFolder is not ("AxSecurityDutyExtension" or "AxSecurityRoleExtension"))
+            return RenderHelpers.Render(kind, ToolResult<object>.Fail(
+                D365FoErrorCodes.BadInput,
+                $"--set-property applies to SecurityDuty and SecurityRole extensions only; {axFolder} has no PropertyModifications member, " +
+                "so the overrides would be dropped on read."));
+
         var doc = axFolder switch
         {
-            "AxSecurityDutyExtension" => XppScaffolder.SecurityDutyExtension(settings.Target, suffix, settings.Privileges),
-            "AxSecurityRoleExtension" => XppScaffolder.SecurityRoleExtension(settings.Target, suffix, settings.Duties, settings.Privileges),
+            "AxSecurityDutyExtension" => XppScaffolder.SecurityDutyExtension(settings.Target, suffix, settings.Privileges, propertyMods),
+            "AxSecurityRoleExtension" => XppScaffolder.SecurityRoleExtension(settings.Target, suffix, settings.Duties, settings.Privileges, propertyMods),
             // The EDT case needs the index-backed base-type resolver to pin the concrete
             // AxEdt*Extension subtype; the other kinds ignore it.
             // The scaffolder takes the base kind, not the type name — and the two differ for
@@ -246,13 +431,13 @@ public sealed class GenerateExtensionCommand : Command<GenerateExtensionCommand.
 
         // Grounding gate: the target object must exist in the index; fail
         // closed under D365FO_GROUNDING_ENFORCE=true.
-        var gate = GroundingGate.Check(settings.GroundingToken, settings.Target, doc,
+        var gate = GenerateInstaller.Gate(settings, settings.Target, doc,
             requiredSymbols: new[] { settings.Target });
         if (gate.Failure is not null) return RenderHelpers.Render(kind, gate.Failure);
 
         try
         {
-            var res = ScaffoldFileWriter.Write(doc, outPath!, settings.Overwrite);
+            var res = GenerateInstaller.Write(gate, doc, outPath!, settings.Overwrite);
             return RenderHelpers.Render(kind, ToolResult<object>.Success(new
             {
                 kind = axFolder,
@@ -264,7 +449,7 @@ public sealed class GenerateExtensionCommand : Command<GenerateExtensionCommand.
                 backup = res.BackupPath,
                 model = settings.InstallTo,
                 grounding = gate.Grounding,
-            }, warnings: gate.Warnings.Count > 0 ? gate.Warnings : null));
+            }, gate.Warnings));
         }
         catch (Exception ex)
         {
@@ -308,12 +493,12 @@ public sealed class GenerateEventHandlerCommand : Command<GenerateEventHandlerCo
 
         // Grounding gate: the event source object must exist in the index;
         // fail closed under D365FO_GROUNDING_ENFORCE=true.
-        var gate = GroundingGate.Check(settings.GroundingToken, settings.SourceObject!, doc,
+        var gate = GenerateInstaller.Gate(settings, settings.SourceObject!, doc,
             requiredSymbols: new[] { settings.SourceObject! });
         if (gate.Failure is not null) return RenderHelpers.Render(kind, gate.Failure);
 
         return GenerateInstaller.Emit(
-            kind, "class", Folders.Class, settings.ClassName,
+            kind, gate, "class", Folders.Class, settings.ClassName,
             settings.InstallTo, settings.Out, settings.Overwrite, doc,
             r => new
             {
@@ -331,7 +516,7 @@ public sealed class GenerateEventHandlerCommand : Command<GenerateEventHandlerCo
                 model = settings.InstallTo,
                 grounding = gate.Grounding,
             },
-            gate.Warnings.Count > 0 ? gate.Warnings.ToList() : null,
+            gate.Warnings,
             verify: settings.Verify);
     }
 }
@@ -400,7 +585,11 @@ public sealed class GeneratePrivilegeCommand : Command<GeneratePrivilegeCommand.
             settings.DataEntity, settings.DataEntityAccess);
         try
         {
-            var res = ScaffoldFileWriter.Write(doc, outPath!, settings.Overwrite);
+            // Grounding gate (issue #161): uniform across every generate subcommand.
+            var gate = GenerateInstaller.Gate(settings, settings.Name, doc);
+            if (gate.Failure is not null) return RenderHelpers.Render(kind, gate.Failure);
+
+            var res = GenerateInstaller.Write(gate, doc, outPath!, settings.Overwrite);
             object? intoRole = null;
             if (!string.IsNullOrWhiteSpace(settings.IntoRole))
             {
@@ -427,7 +616,7 @@ public sealed class GeneratePrivilegeCommand : Command<GeneratePrivilegeCommand.
                 backup = res.BackupPath,
                 model = settings.InstallTo,
                 intoRole,
-            }));
+            }, gate.Warnings));
         }
         catch (Exception ex)
         {
@@ -454,6 +643,18 @@ public sealed class GenerateDutyCommand : Command<GenerateDutyCommand.Settings>
         [CommandOption("--into-role <PATH>")]
         [System.ComponentModel.Description("Path to an existing AxSecurityRole XML; after scaffolding, merge this duty's Name into the role's <Duties>.")]
         public string? IntoRole { get; init; }
+
+        [CommandOption("--description <TEXT>")]
+        [System.ComponentModel.Description("Description shown to administrators in the security-configuration UI.")]
+        public string? Description { get; init; }
+
+        [CommandOption("--context-string <TEXT>")]
+        [System.ComponentModel.Description("ContextString the role-assignment rules match on.")]
+        public string? ContextString { get; init; }
+
+        [CommandOption("--disabled")]
+        [System.ComponentModel.Description("Emit Enabled=No — the duty ships switched off.")]
+        public bool Disabled { get; init; }
     }
 
     public override int Execute(CommandContext ctx, Settings settings)
@@ -474,10 +675,18 @@ public sealed class GenerateDutyCommand : Command<GenerateDutyCommand.Settings>
             if (fail.HasValue) return fail.Value;
         }
 
-        var doc = XppScaffolder.Duty(settings.Name, settings.Privileges, settings.Label);
+        var doc = XppScaffolder.Duty(
+            settings.Name, settings.Privileges, settings.Label,
+            description: settings.Description,
+            enabled: settings.Disabled ? false : null,
+            contextString: settings.ContextString);
         try
         {
-            var res = ScaffoldFileWriter.Write(doc, outPath!, settings.Overwrite);
+            // Grounding gate (issue #161): uniform across every generate subcommand.
+            var gate = GenerateInstaller.Gate(settings, settings.Name, doc);
+            if (gate.Failure is not null) return RenderHelpers.Render(kind, gate.Failure);
+
+            var res = GenerateInstaller.Write(gate, doc, outPath!, settings.Overwrite);
             object? intoRole = null;
             if (!string.IsNullOrWhiteSpace(settings.IntoRole))
             {
@@ -501,7 +710,7 @@ public sealed class GenerateDutyCommand : Command<GenerateDutyCommand.Settings>
                 backup = res.BackupPath,
                 model = settings.InstallTo,
                 intoRole,
-            }));
+            }, gate.Warnings));
         }
         catch (Exception ex)
         {
@@ -538,6 +747,22 @@ public sealed class GenerateRoleCommand : Command<GenerateRoleCommand.Settings>
         [CommandOption("--add-to <PATH>")]
         [System.ComponentModel.Description("Path to an existing AxSecurityRole XML file; duties/privileges are merged in-place instead of creating a new file.")]
         public string? AddTo { get; init; }
+
+        [CommandOption("--sub-role <NAME>")]
+        [System.ComponentModel.Description("Repeatable. Roles composed into this one — how the shipped roles are actually built.")]
+        public string[] SubRoles { get; init; } = Array.Empty<string>();
+
+        [CommandOption("--context-string <TEXT>")]
+        [System.ComponentModel.Description("ContextString the role-assignment rules match on.")]
+        public string? ContextString { get; init; }
+
+        [CommandOption("--disabled")]
+        [System.ComponentModel.Description("Emit Enabled=No — the role ships switched off.")]
+        public bool Disabled { get; init; }
+
+        [CommandOption("--no-delete-from-ui")]
+        [System.ComponentModel.Description("Emit CanBeDeletedFromUI=No — administrators cannot remove the role.")]
+        public bool NoDeleteFromUI { get; init; }
     }
 
     public override int Execute(CommandContext ctx, Settings settings)
@@ -549,10 +774,10 @@ public sealed class GenerateRoleCommand : Command<GenerateRoleCommand.Settings>
 
         if (string.IsNullOrWhiteSpace(settings.Name))
             return RenderHelpers.Render(kind, ToolResult<object>.Fail(D365FoErrorCodes.BadInput, "Role name required."));
-        if (settings.Duties.Length == 0 && settings.Privileges.Length == 0)
+        if (settings.Duties.Length == 0 && settings.Privileges.Length == 0 && settings.SubRoles.Length == 0)
             return RenderHelpers.Render(kind, ToolResult<object>.Fail(
                 D365FoErrorCodes.BadInput,
-                "At least one --duty or --privilege required."));
+                "At least one --duty, --privilege or --sub-role required."));
 
         var hasInstall = !string.IsNullOrWhiteSpace(settings.InstallTo);
         var hasOut = !string.IsNullOrWhiteSpace(settings.Out);
@@ -565,10 +790,19 @@ public sealed class GenerateRoleCommand : Command<GenerateRoleCommand.Settings>
             if (fail.HasValue) return fail.Value;
         }
 
-        var doc = XppScaffolder.Role(settings.Name, settings.Duties, settings.Privileges, settings.Label, settings.Description);
+        var doc = XppScaffolder.Role(
+            settings.Name, settings.Duties, settings.Privileges, settings.Label, settings.Description,
+            subRoles: settings.SubRoles,
+            contextString: settings.ContextString,
+            enabled: settings.Disabled ? false : null,
+            canBeDeletedFromUI: settings.NoDeleteFromUI ? false : null);
         try
         {
-            var res = ScaffoldFileWriter.Write(doc, outPath!, settings.Overwrite);
+            // Grounding gate (issue #161): uniform across every generate subcommand.
+            var gate = GenerateInstaller.Gate(settings, settings.Name, doc);
+            if (gate.Failure is not null) return RenderHelpers.Render(kind, gate.Failure);
+
+            var res = GenerateInstaller.Write(gate, doc, outPath!, settings.Overwrite);
             return RenderHelpers.Render(kind, ToolResult<object>.Success(new
             {
                 kind = "AxSecurityRole",
@@ -581,7 +815,7 @@ public sealed class GenerateRoleCommand : Command<GenerateRoleCommand.Settings>
                 bytes = res.Bytes,
                 backup = res.BackupPath,
                 model = settings.InstallTo,
-            }));
+            }, gate.Warnings));
         }
         catch (Exception ex)
         {
@@ -809,17 +1043,23 @@ public sealed class GenerateReportCommand : Command<GenerateReportCommand.Settin
                 : null;
         }
 
+        var dpDoc = XppScaffolder.ReportDp(spec);
+
+        // Grounding gate (issue #161) — the DP class carries the report's X++.
+        var gate = GenerateInstaller.Gate(settings, spec.Name, dpDoc);
+        if (gate.Failure is not null) return RenderHelpers.Render(kind, gate.Failure);
+
         try
         {
-            var reportResult   = ScaffoldFileWriter.Write(XppScaffolder.Report(spec),   reportPath!,   settings.Overwrite);
-            var dpResult       = ScaffoldFileWriter.Write(XppScaffolder.ReportDp(spec), dpPath!,       settings.Overwrite);
+            var reportResult   = GenerateInstaller.Write(gate, XppScaffolder.Report(spec), reportPath!, settings.Overwrite);
+            var dpResult       = GenerateInstaller.Write(gate, dpDoc,                      dpPath!,     settings.Overwrite);
 
             ScaffoldFileWriter.WriteResult? contractResult = null;
             if (hasContract && contractPath is not null)
             {
                 var contractDoc = XppScaffolder.ReportContract(spec);
                 if (contractDoc is not null)
-                    contractResult = ScaffoldFileWriter.Write(contractDoc, contractPath, settings.Overwrite);
+                    contractResult = GenerateInstaller.Write(gate, contractDoc, contractPath, settings.Overwrite);
             }
 
             // The rest of the stack. A report is not one object: the DP declares and selects
@@ -836,7 +1076,7 @@ public sealed class GenerateReportCommand : Command<GenerateReportCommand.Settin
                 foreach (var ds in spec.EffectiveDatasets)
                 {
                     var tmpName = ds.DpClass + "Tmp";
-                    var written = ScaffoldFileWriter.Write(
+                    var written = GenerateInstaller.Write(gate,
                         XppScaffolder.ReportTmpTable(ds), SiblingOf(dpPath!, tmpName, Folders.Table), settings.Overwrite);
                     tmpTables.Add(new { name = tmpName, path = written.Path, bytes = written.Bytes });
                 }
@@ -845,7 +1085,7 @@ public sealed class GenerateReportCommand : Command<GenerateReportCommand.Settin
             ScaffoldFileWriter.WriteResult? controllerResult = null;
             if (!settings.NoController)
             {
-                controllerResult = ScaffoldFileWriter.Write(
+                controllerResult = GenerateInstaller.Write(gate,
                     XppScaffolder.ReportController(spec),
                     SiblingOf(dpPath!, spec.EffectiveController, Folders.Class),
                     settings.Overwrite);
@@ -859,7 +1099,7 @@ public sealed class GenerateReportCommand : Command<GenerateReportCommand.Settin
                 var target = settings.NoController ? spec.Name : spec.EffectiveController;
                 var targetType = settings.NoController ? MenuItemObjectType.Report : MenuItemObjectType.Class;
 
-                menuItemResult = ScaffoldFileWriter.Write(
+                menuItemResult = GenerateInstaller.Write(gate,
                     MenuItemScaffolder.MenuItem(
                         MenuItemKind.Output, spec.EffectiveMenuItem, target, targetType, spec.Caption),
                     SiblingOf(reportPath!, spec.EffectiveMenuItem, Folders.MenuItemOutput),
@@ -881,7 +1121,8 @@ public sealed class GenerateReportCommand : Command<GenerateReportCommand.Settin
                 menuItem    = menuItemResult is null ? null : new { name = spec.EffectiveMenuItem, path = menuItemResult.Path, bytes = menuItemResult.Bytes },
                 contract    = contractResult is null ? null : new { path = contractResult.Path, bytes = contractResult.Bytes, backup = contractResult.BackupPath },
                 model       = settings.InstallTo,
-            }));
+                grounding   = gate.Grounding,
+            }, gate.Warnings));
         }
         catch (Exception ex)
         {

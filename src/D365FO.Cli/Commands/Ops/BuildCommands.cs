@@ -160,15 +160,52 @@ public sealed class SyncCommand : Command<SyncCommand.Settings>
     }
 }
 
+/// <summary>
+/// Runs SysTest tests through the platform's own console runner.
+/// </summary>
+/// <remarks>
+/// <para>
+/// Issue #160. This command used to default to <c>SysTestRunner.exe</c> and pass
+/// <c>--suite &lt;name&gt;</c>. Neither exists. The binary shipped in
+/// <c>PackagesLocalDirectory\bin</c> is <b>SysTestConsole.exe</b>, and its options are
+/// slash-prefixed and colon-joined — <c>/test:Class1,Class2</c>, <c>/xml:&lt;file&gt;</c>,
+/// <c>/granularity:</c>, <c>/parallel</c>. Ground-truthed by running the real binary's usage
+/// text on a D365FO host. The old defaults could never have worked, which is why nothing
+/// noticed: the command was never run against a real installation.
+/// </para>
+/// <para>
+/// <c>--results</c> asks the runner for its XML result document, which is the input an L4
+/// oracle needs. Without it the only output is a tail of console text, which is a log, not a
+/// result.
+/// </para>
+/// </remarks>
 public sealed class TestRunCommand : Command<TestRunCommand.Settings>
 {
     public sealed class Settings : D365OutputSettings
     {
         [CommandOption("--runner <PATH>")]
+        [System.ComponentModel.Description("Path to SysTestConsole.exe. Defaults to the one on PATH / in the packages bin folder.")]
         public string? RunnerPath { get; init; }
 
+        [CommandOption("--test <CLASS>")]
+        [System.ComponentModel.Description("Repeatable: test class to run. Maps to the runner's /test: option.")]
+        public string[] TestClasses { get; init; } = Array.Empty<string>();
+
         [CommandOption("--suite <NAME>")]
+        [System.ComponentModel.Description("Deprecated alias for --test; the runner has no notion of a suite.")]
         public string? Suite { get; init; }
+
+        [CommandOption("--granularity <LEVEL>")]
+        [System.ComponentModel.Description("Default | UnitTest | ScenarioTest.")]
+        public string? Granularity { get; init; }
+
+        [CommandOption("--results <PATH>")]
+        [System.ComponentModel.Description("Write the runner's XML result document here (/xml:). Required for any structured verdict.")]
+        public string? ResultsPath { get; init; }
+
+        [CommandOption("--parallel")]
+        [System.ComponentModel.Description("Run the tests through the batch framework in parallel.")]
+        public bool Parallel { get; init; }
     }
 
     public override int Execute(CommandContext ctx, Settings settings)
@@ -177,21 +214,59 @@ public sealed class TestRunCommand : Command<TestRunCommand.Settings>
         var guard = WindowsGuard.Check("d365fo test run");
         if (guard is not null) return RenderHelpers.Render(kind, guard);
 
-        var runner = settings.RunnerPath ?? "SysTestRunner.exe";
+        var runner = settings.RunnerPath ?? "SysTestConsole.exe";
+
+        var classes = settings.TestClasses
+            .Concat(string.IsNullOrWhiteSpace(settings.Suite) ? [] : new[] { settings.Suite! })
+            .Where(c => !string.IsNullOrWhiteSpace(c))
+            .ToList();
+
         var args = new List<string>();
-        if (!string.IsNullOrEmpty(settings.Suite))
-        {
-            // Two argv elements, not one. ProcessRunner passes each element through
-            // ArgumentList, so `args.Add($"--suite {suite}")` reaches the runner as the
-            // single literal argument "--suite MySuite" and is rejected. Nothing exercised
-            // --suite until the L4 oracle came to depend on it.
-            args.Add("--suite");
-            args.Add(settings.Suite!);
-        }
+        if (classes.Count > 0) args.Add("/test:" + string.Join(',', classes));
+        if (!string.IsNullOrWhiteSpace(settings.Granularity)) args.Add("/granularity:" + settings.Granularity);
+        if (!string.IsNullOrWhiteSpace(settings.ResultsPath)) args.Add("/xml:" + settings.ResultsPath);
+        if (settings.Parallel) args.Add("/parallel");
+
         var (exit, stdout, stderr, elapsed) = ProcessRunner.Run(runner, args);
-        return RenderHelpers.Render(kind, exit == 0
-            ? ToolResult<object>.Success(new { exitCode = exit, elapsedMs = (long)elapsed.TotalMilliseconds, tail = stdout.Split('\n').TakeLast(40).ToArray() })
-            : ToolResult<object>.Fail("TESTS_FAILED", $"Runner exited with {exit}.", string.Join('\n', stderr.Split('\n').TakeLast(5))));
+
+        var resultsWritten = !string.IsNullOrWhiteSpace(settings.ResultsPath)
+                             && System.IO.File.Exists(settings.ResultsPath!);
+
+        if (exit != 0)
+            return RenderHelpers.Render(kind, ToolResult<object>.Fail(
+                "TESTS_FAILED", $"Runner exited with {exit}.", string.Join('\n', stderr.Split('\n').TakeLast(5))));
+
+        // The verdict comes from the runner's own result document, not from its exit code: a
+        // run that dies half way still exits 0 with its remaining cases marked pending.
+        var results = D365FO.Core.Eval.SysTestResults.TryParseFile(settings.ResultsPath);
+
+        var warnings = new List<string>();
+        if (!resultsWritten && !string.IsNullOrWhiteSpace(settings.ResultsPath))
+            warnings.Add($"The runner exited cleanly but wrote no result document at {settings.ResultsPath}.");
+        else if (resultsWritten && results is null)
+            warnings.Add($"{settings.ResultsPath} is not a SysTest result document (expected a <test-results> root).");
+
+        var payload = ToolResult<object>.Success(new
+        {
+            exitCode = exit,
+            elapsedMs = (long)elapsed.TotalMilliseconds,
+            testClasses = classes,
+            resultsPath = resultsWritten ? settings.ResultsPath : null,
+            results = results is null ? null : new
+            {
+                clean = results.Clean,
+                passed = results.Passed,
+                failed = results.Failed,
+                skipped = results.Skipped,
+                pending = results.Pending,
+                failures = results.Failures.Select(f => new { name = f.Name, message = f.FailureMessage }).ToList(),
+            },
+            tail = stdout.Split('\n').TakeLast(40).ToArray(),
+        }, warnings.Count > 0 ? warnings : null);
+
+        var rc = RenderHelpers.Render(kind, payload);
+        // A parsed run that is not clean is a failed run, whatever the exit code said.
+        return rc != 0 ? rc : results is { Clean: false } ? 2 : 0;
     }
 }
 

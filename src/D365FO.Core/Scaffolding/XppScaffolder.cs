@@ -260,6 +260,10 @@ public static class XppScaffolder
     /// <param name="gridFields">Field names rendered as grid / detail columns.</param>
     /// <param name="sections">Sections for <c>TableOfContents</c> / <c>Dialog</c> / <c>Workspace</c>.</param>
     /// <param name="linesTable">Lines datasource table for <see cref="FormPattern.DetailsTransaction"/>.</param>
+    /// <param name="controlTypeResolver">
+    /// Field name → form control type (issue #164 / R5). Without it every bound field is
+    /// rendered as a string control, whatever the field really is.
+    /// </param>
     public static string Form(
         string formName,
         string? dataSourceTable = null,
@@ -267,7 +271,8 @@ public static class XppScaffolder
         string? caption = null,
         IReadOnlyList<string>? gridFields = null,
         IReadOnlyList<FormSectionSpec>? sections = null,
-        string? linesTable = null)
+        string? linesTable = null,
+        Func<string, (string AxType, string TypeElement)>? controlTypeResolver = null)
     {
         var opt = new FormTemplateOptions
         {
@@ -279,6 +284,7 @@ public static class XppScaffolder
             Sections     = sections ?? Array.Empty<FormSectionSpec>(),
             LinesDsName  = linesTable,
             LinesDsTable = linesTable,
+            ControlTypeResolver = controlTypeResolver,
         };
         return FormPatternTemplates.Build(pattern, opt);
     }
@@ -314,6 +320,14 @@ public static class XppScaffolder
     /// the staging table existing (create it as its own table).
     /// </para>
     /// </summary>
+    /// <param name="relations">
+    /// Relations to other entities (issue #162). An entity's relations are what make it
+    /// navigable over OData and what the DMF uses to resolve a lookup to a surrogate key;
+    /// without them the entity is an isolated table projection.
+    /// </param>
+    /// <param name="computedFields">
+    /// Unmapped fields whose value comes from a static X++ method rather than a column.
+    /// </param>
     public static XDocument DataEntity(
         string entityName,
         string table,
@@ -323,7 +337,9 @@ public static class XppScaffolder
         bool dataManagementEnabled = false,
         string? dataManagementStagingTable = null,
         string? entityCategory = null,
-        IEnumerable<string>? keyFields = null)
+        IEnumerable<string>? keyFields = null,
+        IEnumerable<EntityRelationSpec>? relations = null,
+        IEnumerable<EntityComputedFieldSpec>? computedFields = null)
     {
         var pubEntity = string.IsNullOrEmpty(publicEntityName) ? entityName : publicEntityName;
         var pubColl = string.IsNullOrEmpty(publicCollectionName) ? pubEntity + "s" : publicCollectionName;
@@ -340,7 +356,8 @@ public static class XppScaffolder
                 // The member is Mandatory; IsMandatory is not one, and was silently discarded.
                 f.IsMandatory ? new XElement("Mandatory", "Yes") : null,
                 new XElement("DataField", f.DataField ?? f.Name),
-                new XElement("DataSource", table)));
+                new XElement("DataSource", table)))
+            .Concat((computedFields ?? []).Select(ComputedFieldElement));
 
         var keys = keyFields?.ToList() ?? [];
         XElement? keysEl = null;
@@ -369,6 +386,13 @@ public static class XppScaffolder
 
         return new XDocument(
             new XElement("AxDataEntityView",
+                // Every field here carries an i:type, and a discriminator with no namespace in
+                // scope is just an unknown attribute — the mapped fields read back as the plain
+                // field type with DataField/DataSource gone. The write path hoists the
+                // declaration, but a scaffolder that only produces a readable document once
+                // something else has fixed it is a scaffolder whose output cannot be trusted on
+                // its own (XML011, issue #163).
+                new XAttribute(XNamespace.Xmlns + "i", Xsi.NamespaceName),
                 new XElement("Name", entityName),
                 string.IsNullOrEmpty(entityCategory) ? null : new XElement("EntityCategory", entityCategory),
                 new XElement("PublicEntityName", pubEntity),
@@ -379,6 +403,7 @@ public static class XppScaffolder
                 isPublic ? new XElement("PrimaryKey", "EntityKey") : null,
                 new XElement("Fields", fieldEls),
                 keysEl,
+                RelationsElement(relations),
                 // An entity's data sources are not its own member — they belong to the embedded
                 // query in ViewMetadata. A <DataSources> element on the entity is discarded, and
                 // the entity loads with nothing to select from.
@@ -389,6 +414,150 @@ public static class XppScaffolder
                             new XElement("Name", table),
                             new XElement("DynamicFields", "Yes"),
                             new XElement("Table", table))))));
+    }
+
+    /// <summary>
+    /// An unmapped field whose value comes from a static X++ method on the entity.
+    /// </summary>
+    /// <remarks>
+    /// Issue #162. The concrete type is <c>AxDataEntityViewUnmappedField</c> — the only one of
+    /// the two <c>AxDataEntityViewField</c> subtypes that declares <c>ComputedFieldMethod</c>
+    /// and <c>IsComputedField</c>. Written without the discriminator the reader instantiates
+    /// the plain field type, and both of those members are gone: the entity exposes a column
+    /// that is always null, with nothing in the file to explain why. The method itself must
+    /// exist on the entity's <c>SourceCode</c> and return the SQL text of the expression —
+    /// that is the developer's to write; this only wires the field to it.
+    /// </remarks>
+    private static XElement ComputedFieldElement(EntityComputedFieldSpec spec)
+        => new("AxDataEntityViewField",
+            new XAttribute(Xsi + "type", "AxDataEntityViewUnmappedField"),
+            new XElement("Name", spec.Name),
+            string.IsNullOrWhiteSpace(spec.Label) ? null : new XElement("Label", spec.Label),
+            new XElement("ComputedFieldMethod", spec.Method),
+            string.IsNullOrWhiteSpace(spec.Edt) ? null : new XElement("ExtendedDataType", spec.Edt),
+            new XElement("IsComputedField", "Yes"));
+
+    private static XElement? RelationsElement(IEnumerable<EntityRelationSpec>? relations)
+    {
+        var list = (relations ?? []).Where(r => !string.IsNullOrWhiteSpace(r.Name)).ToList();
+        return list.Count == 0 ? null : new XElement("Relations", list.Select(RelationElement));
+    }
+
+    /// <summary>
+    /// One <c>AxDataEntityViewRelation</c> and its field constraints.
+    /// </summary>
+    /// <remarks>
+    /// The constraint items are polymorphic: <c>AxDataEntityViewRelationConstraint</c> is the
+    /// element name, and the concrete subtype (<c>…ConstraintField</c> for a field-to-field
+    /// link, <c>…ConstraintFixed</c> / <c>…ConstraintRelatedFixed</c> for a literal) has to be
+    /// pinned via <c>i:type</c> — the base declares only Name and Tags, so an unpinned
+    /// constraint reads back with neither field and the relation joins on nothing.
+    /// </remarks>
+    private static XElement RelationElement(EntityRelationSpec spec)
+        => new("AxDataEntityViewRelation",
+            new XElement("Name", spec.Name),
+            string.IsNullOrWhiteSpace(spec.Cardinality) ? null : new XElement("Cardinality", spec.Cardinality),
+            new XElement("RelatedDataEntity", spec.RelatedDataEntity),
+            string.IsNullOrWhiteSpace(spec.RelatedCardinality) ? null : new XElement("RelatedDataEntityCardinality", spec.RelatedCardinality),
+            string.IsNullOrWhiteSpace(spec.RelatedRole) ? null : new XElement("RelatedDataEntityRole", spec.RelatedRole),
+            string.IsNullOrWhiteSpace(spec.RelationshipType) ? null : new XElement("RelationshipType", spec.RelationshipType),
+            string.IsNullOrWhiteSpace(spec.Role) ? null : new XElement("Role", spec.Role),
+            new XElement("Constraints",
+                spec.Constraints.Select(c =>
+                    new XElement("AxDataEntityViewRelationConstraint",
+                        new XAttribute(Xsi + "type", "AxDataEntityViewRelationConstraintField"),
+                        new XElement("Name", c.Field),
+                        new XElement("Field", c.Field),
+                        new XElement("RelatedField", c.RelatedField)))));
+
+    /// <summary>
+    /// The DMF staging table that goes with a data-management-enabled entity.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Issue #162. <c>DataManagementEnabled=Yes</c> names a staging table, and the build fails
+    /// on the very next compile if that table does not exist — so an entity generated with data
+    /// management on used to be a guaranteed broken build unless the developer knew to hand-write
+    /// the table. This emits it.
+    /// </para>
+    /// <para>
+    /// The shape is not a guess and not a copy of the entity. It is what 398 of the 400 shipped
+    /// <c>*Staging</c> tables sampled from <c>PackagesLocalDirectory</c> on a real AOS all do:
+    /// <c>TableGroup=Staging</c>, <c>SaveDataPerCompany=No</c>, the four DMF bookkeeping columns
+    /// (<c>DefinitionGroup</c> / <c>ExecutionId</c> as <c>DMF*</c> string EDTs, <c>IsSelected</c>
+    /// and <c>TransferStatus</c> as the <c>DMFIsSelected</c> / <c>DMFTransferStatus</c> enums),
+    /// and a <c>StagingIdx</c> alternate key over
+    /// <c>DefinitionGroup, ExecutionId, &lt;business key&gt;</c> that is also the primary index
+    /// and the replacement key. A staging table missing those columns compiles and is then
+    /// rejected by the framework at run time, which is the worst place to find out.
+    /// </para>
+    /// </remarks>
+    public static XDocument EntityStagingTable(
+        string stagingTableName, IEnumerable<EntityFieldSpec>? fields = null, string? label = null)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(stagingTableName);
+
+        var entityFields = (fields ?? [])
+            .Where(f => !string.IsNullOrWhiteSpace(f.Name))
+            .Select(f => new TableFieldSpec(f.Name, null, null, Mandatory: false))
+            .ToList();
+
+        var framework = new List<TableFieldSpec>
+        {
+            new("DefinitionGroup", "DMFDefinitionGroupName", null, false),
+            new("ExecutionId", "DMFExecutionId", null, false),
+            new("IsSelected", "DMFIsSelected", null, false),
+            new("TransferStatus", "DMFTransferStatus", null, false),
+        };
+
+        var doc = Table(
+            stagingTableName,
+            label,
+            entityFields.Concat(framework).ToList(),
+            TablePattern.None);
+
+        var root = doc.Root!;
+        var fieldEls = root.Element("Fields")!.Elements().ToList();
+
+        // IsSelected and TransferStatus are enum columns. The table scaffolder types fields from
+        // their EDT, and neither of those names an EDT — so the discriminator and EnumType are
+        // corrected here rather than smuggled through a fake EDT name.
+        foreach (var (fieldName, enumName) in new[] { ("IsSelected", "DMFIsSelected"), ("TransferStatus", "DMFTransferStatus") })
+        {
+            var el = fieldEls.FirstOrDefault(f => f.Element("Name")?.Value == fieldName);
+            if (el is null) continue;
+            el.SetAttributeValue(Xsi + "type", "AxTableFieldEnum");
+            el.Element("ExtendedDataType")?.Remove();
+            el.Add(new XElement("EnumType", enumName));
+        }
+
+        // StagingIdx, not the generic PrimaryIdx the table scaffolder emits: the DMF looks the
+        // index up by name, and it keys on the run (DefinitionGroup + ExecutionId) before the
+        // entity's own key — a staging row is unique within a run, not across the table.
+        var businessKey = entityFields.Select(f => f.Name).FirstOrDefault();
+        var indexFields = new List<string> { "DefinitionGroup", "ExecutionId" };
+        if (businessKey is not null) indexFields.Add(businessKey);
+
+        root.Element("Indexes")?.Remove();
+        root.Element("ClusteredIndex")?.Remove();
+        root.Add(
+            new XElement("TableGroup", "Staging"),
+            new XElement("SaveDataPerCompany", "No"),
+            new XElement("PrimaryIndex", "StagingIdx"),
+            new XElement("ReplacementKey", "StagingIdx"),
+            new XElement("ClusteredIndex", "StagingIdx"),
+            new XElement("Indexes",
+                new XElement("AxTableIndex",
+                    new XElement("Name", "StagingIdx"),
+                    new XElement("AlternateKey", "Yes"),
+                    new XElement("AllowDuplicates", "No"),
+                    new XElement("Fields",
+                        indexFields.Select(n => new XElement("AxTableIndexField", new XElement("DataField", n)))))));
+
+        // Members were appended, so put the document back into contract order before anyone
+        // sees it — a misordered member is dropped on read and the file still looks right.
+        ContractOrderCanonicalizer.Apply(doc);
+        return doc;
     }
 
     /// <summary>
@@ -456,8 +625,16 @@ public static class XppScaffolder
     /// the dot-notation convention <c>&lt;BaseDuty&gt;.&lt;Suffix&gt;</c>, same
     /// as table/menu extensions.
     /// </summary>
+    /// <remarks>
+    /// Issue #162: <c>PropertyModifications</c> was emitted as an empty element and could not be
+    /// filled. That collection is the only way an extension can change a property of the base
+    /// duty — switch a Microsoft duty off, relabel it, retarget its context string — without
+    /// overlaying the object. Each entry is an <c>AxPropertyModification</c> naming a member of
+    /// the base <c>AxSecurityDuty</c> and the value to put there.
+    /// </remarks>
     public static XDocument SecurityDutyExtension(
-        string targetDuty, string suffix, IEnumerable<string>? privileges = null)
+        string targetDuty, string suffix, IEnumerable<string>? privileges = null,
+        IEnumerable<PropertyModificationSpec>? propertyModifications = null)
     {
         return new XDocument(
             new XElement("AxSecurityDutyExtension",
@@ -466,7 +643,7 @@ public static class XppScaffolder
                     (privileges ?? Enumerable.Empty<string>())
                         .Where(p => !string.IsNullOrWhiteSpace(p))
                         .Select(p => new XElement("AxSecurityPrivilegeReference", new XElement("Name", p)))),
-                new XElement("PropertyModifications")));
+                PropertyModifications(propertyModifications)));
     }
 
     /// <summary>
@@ -474,9 +651,16 @@ public static class XppScaffolder
     /// privileges to an EXISTING (often Microsoft-owned) role without
     /// overlaying it. Name follows <c>&lt;BaseRole&gt;.&lt;Suffix&gt;</c>.
     /// </summary>
+    /// <remarks>
+    /// Issue #162, same as the duty extension: <c>PropertyModifications</c> is what lets an
+    /// extension change the base role rather than only add to it. <c>AxSecurityRoleExtension</c>
+    /// has no <c>SubRoles</c> member — role composition is expressible on the role itself but
+    /// not through an extension, so asking for it here would write an element the reader drops.
+    /// </remarks>
     public static XDocument SecurityRoleExtension(
         string targetRole, string suffix,
-        IEnumerable<string>? duties = null, IEnumerable<string>? privileges = null)
+        IEnumerable<string>? duties = null, IEnumerable<string>? privileges = null,
+        IEnumerable<PropertyModificationSpec>? propertyModifications = null)
     {
         return new XDocument(
             new XElement("AxSecurityRoleExtension",
@@ -490,7 +674,7 @@ public static class XppScaffolder
                     (privileges ?? Enumerable.Empty<string>())
                         .Where(p => !string.IsNullOrWhiteSpace(p))
                         .Select(p => new XElement("AxSecurityPrivilegeReference", new XElement("Name", p)))),
-                new XElement("PropertyModifications")));
+                PropertyModifications(propertyModifications)));
     }
 
     /// <summary>
@@ -620,20 +804,77 @@ public static class XppScaffolder
         return new XElement("Grant", allow.Select(p => new XElement(p, "Allow")));
     }
 
-    /// <summary>Scaffolds an <c>AxSecurityDuty</c> grouping given privileges.</summary>
-    public static XDocument Duty(string name, IEnumerable<string> privileges, string? label = null)
+    /// <summary>
+    /// A reference from a duty/role to another security object.
+    /// </summary>
+    /// <param name="Name">The referenced object.</param>
+    /// <param name="Enabled">
+    /// Whether the reference is live. <c>AxSecurity*Reference</c> carries an <c>Enabled</c> of
+    /// its own, which is how a shipped role keeps a duty listed but switched off — omitted here
+    /// unless asked for, because the AOT default is enabled and writing it everywhere makes
+    /// every generated file differ from the shipped ones for no reason.
+    /// </param>
+    public sealed record SecurityReferenceSpec(string Name, bool? Enabled = null);
+
+    /// <summary>A single property override carried by a duty/role extension.</summary>
+    public sealed record PropertyModificationSpec(string Name, string Value);
+
+    private static XElement SecurityReference(string itemType, SecurityReferenceSpec spec)
+        => new(itemType,
+            // Contract order for AxSecurity*Reference is Enabled, Name, Tags — a reference that
+            // lists Name first loses its Enabled on read.
+            spec.Enabled is null ? null : new XElement("Enabled", spec.Enabled.Value ? "Yes" : "No"),
+            new XElement("Name", spec.Name));
+
+    private static List<XElement> SecurityReferences(string itemType, IEnumerable<SecurityReferenceSpec>? specs)
+        => (specs ?? [])
+            .Where(s => !string.IsNullOrWhiteSpace(s.Name))
+            .Select(s => SecurityReference(itemType, s))
+            .ToList();
+
+    private static XElement? PropertyModifications(IEnumerable<PropertyModificationSpec>? mods)
     {
+        var items = (mods ?? [])
+            .Where(m => !string.IsNullOrWhiteSpace(m.Name))
+            .Select(m => new XElement("AxPropertyModification",
+                new XElement("Name", m.Name),
+                new XElement("Value", m.Value)))
+            .ToList();
+        return new XElement("PropertyModifications", items);
+    }
+
+    /// <summary>Scaffolds an <c>AxSecurityDuty</c> grouping given privileges.</summary>
+    /// <remarks>
+    /// Issue #162: a duty is more than a list of privileges. <c>Description</c> is what the
+    /// security-configuration UI shows an administrator, <c>Enabled</c> is how a duty ships
+    /// switched off, and <c>ContextString</c> is the string the role-assignment rules match on.
+    /// All three are members of <c>AxSecurityDuty</c> and none of them could be generated.
+    /// </remarks>
+    public static XDocument Duty(
+        string name,
+        IEnumerable<string> privileges,
+        string? label = null,
+        string? description = null,
+        bool? enabled = null,
+        string? contextString = null,
+        IEnumerable<SecurityReferenceSpec>? privilegeRefs = null)
+    {
+        var refs = privilegeRefs is not null
+            ? SecurityReferences("AxSecurityPrivilegeReference", privilegeRefs)
+            : SecurityReferences("AxSecurityPrivilegeReference",
+                (privileges ?? []).Select(p => new SecurityReferenceSpec(p)));
+
         return new XDocument(
             new XElement("AxSecurityDuty",
                 new XElement("Name", name),
+                string.IsNullOrEmpty(contextString) ? null : new XElement("ContextString", contextString),
+                string.IsNullOrEmpty(description) ? null : new XElement("Description", description),
+                enabled is null ? null : new XElement("Enabled", enabled.Value ? "Yes" : "No"),
                 string.IsNullOrEmpty(label) ? null : new XElement("Label", label),
                 // AxSecurityDuty's collection is Privileges; "PrivilegeReferences" (the item
                 // type's name, near enough to look right) is not a member, so every privilege
                 // listed here was discarded when the AOT read the duty back.
-                new XElement("Privileges",
-                    privileges.Select(p =>
-                        new XElement("AxSecurityPrivilegeReference",
-                            new XElement("Name", p))))));
+                new XElement("Privileges", refs)));
     }
 
     /// <summary>
@@ -641,29 +882,41 @@ public static class XppScaffolder
     /// privileges. D365FO best practice is to prefer duties, but a role may
     /// reference privileges directly for narrow use-cases.
     /// </summary>
+    /// <remarks>
+    /// Issue #162. Beyond the two reference lists, <c>AxSecurityRole</c> carries
+    /// <c>SubRoles</c> — role composition, which is how the shipped roles are actually built —
+    /// plus <c>ContextString</c>, <c>Enabled</c> and <c>CanBeDeletedFromUI</c>. A role that can
+    /// only list duties and privileges cannot express any of that.
+    /// </remarks>
     public static XDocument Role(
         string name,
         IEnumerable<string>? duties = null,
         IEnumerable<string>? privileges = null,
         string? label = null,
-        string? description = null)
+        string? description = null,
+        IEnumerable<string>? subRoles = null,
+        string? contextString = null,
+        bool? enabled = null,
+        bool? canBeDeletedFromUI = null)
     {
-        var dutyRefs = (duties ?? Enumerable.Empty<string>())
-            .Where(d => !string.IsNullOrWhiteSpace(d))
-            .Select(d => new XElement("AxSecurityDutyReference", new XElement("Name", d)))
-            .ToList();
-        var privRefs = (privileges ?? Enumerable.Empty<string>())
-            .Where(p => !string.IsNullOrWhiteSpace(p))
-            .Select(p => new XElement("AxSecurityPrivilegeReference", new XElement("Name", p)))
-            .ToList();
+        var dutyRefs = SecurityReferences("AxSecurityDutyReference",
+            (duties ?? []).Select(d => new SecurityReferenceSpec(d)));
+        var privRefs = SecurityReferences("AxSecurityPrivilegeReference",
+            (privileges ?? []).Select(p => new SecurityReferenceSpec(p)));
+        var subRoleRefs = SecurityReferences("AxSecurityRoleReference",
+            (subRoles ?? []).Select(r => new SecurityReferenceSpec(r)));
 
         return new XDocument(
             new XElement("AxSecurityRole",
                 new XElement("Name", name),
-                string.IsNullOrEmpty(label) ? null : new XElement("Label", label),
+                canBeDeletedFromUI is null ? null : new XElement("CanBeDeletedFromUI", canBeDeletedFromUI.Value ? "Yes" : "No"),
+                string.IsNullOrEmpty(contextString) ? null : new XElement("ContextString", contextString),
                 string.IsNullOrEmpty(description) ? null : new XElement("Description", description),
+                enabled is null ? null : new XElement("Enabled", enabled.Value ? "Yes" : "No"),
+                string.IsNullOrEmpty(label) ? null : new XElement("Label", label),
                 dutyRefs.Count == 0 ? null : new XElement("Duties", dutyRefs),
-                privRefs.Count == 0 ? null : new XElement("Privileges", privRefs)));
+                privRefs.Count == 0 ? null : new XElement("Privileges", privRefs),
+                subRoleRefs.Count == 0 ? null : new XElement("SubRoles", subRoleRefs)));
     }
 
     /// <summary>
@@ -1359,6 +1612,39 @@ public static class XppScaffolder
 
 public sealed record EntityFieldSpec(string Name, string? DataField, bool IsMandatory);
 
+/// <summary>One field-to-field constraint of a data-entity relation.</summary>
+public sealed record EntityRelationConstraintSpec(string Field, string RelatedField);
+
+/// <summary>
+/// A relation from a data entity to another entity (issue #162).
+/// </summary>
+/// <param name="Name">Relation name — conventionally the related entity's role.</param>
+/// <param name="RelatedDataEntity">The entity on the other end.</param>
+/// <param name="Constraints">Field pairs that join the two.</param>
+/// <param name="Cardinality">
+/// This entity's side: ExactlyOne | NotSpecified | OneMore | ZeroMore | ZeroOne.
+/// </param>
+/// <param name="RelatedCardinality">The other side: ExactlyOne | NotSpecified | ZeroOne.</param>
+/// <param name="RelationshipType">
+/// Aggregation | Association | Composition | Link | NotSpecified | Specialization.
+/// </param>
+/// <param name="Role">Role name on this side; <paramref name="RelatedRole"/> is the other.</param>
+public sealed record EntityRelationSpec(
+    string Name,
+    string RelatedDataEntity,
+    IReadOnlyList<EntityRelationConstraintSpec> Constraints,
+    string? Cardinality = null,
+    string? RelatedCardinality = null,
+    string? RelationshipType = null,
+    string? Role = null,
+    string? RelatedRole = null);
+
+/// <summary>
+/// A computed (unmapped) data-entity column, backed by a static X++ method that returns the
+/// SQL text of its expression.
+/// </summary>
+public sealed record EntityComputedFieldSpec(string Name, string Method, string? Edt = null, string? Label = null);
+
 /// <summary>One dataset within an <c>AxReport</c>, bound to a DP class.</summary>
 public sealed record ReportDatasetSpec(
     string Name,
@@ -1693,6 +1979,20 @@ public static class ScaffoldFileWriter
     {
         var violations = new List<XppViolation>();
         ContractShapeRules.Check(xml, violations);
+
+        // The root's own shape, from the same catalog (issue #163). Only the two rules nothing
+        // else on this path covers: an unreal root (XML009) and the wrong contract namespace
+        // (XML012) — ContractNamespaceApplier *fixes* a missing namespace but stands aside when
+        // the document already declares one, so a document carrying the wrong one used to be
+        // written unchallenged. The abstract-root and xmlns:i policies (XML010/XML011) are left
+        // to EnsureConcreteAxRoot / EnsureXsiNamespaceDeclared above, whose messages name the
+        // concrete EDT subtype to use; the folder rule (XML013) belongs to `validate xpp`, where
+        // a wrong guess is advice rather than a refused write.
+        var rootShape = new List<XppViolation>();
+        ObjectShapeRules.Check(xml, rootShape);
+        violations.AddRange(rootShape.Where(v =>
+            v.Rule is ObjectShapeRules.RuleUnknownRoot or ObjectShapeRules.RuleContractNamespace));
+
         if (violations.Count == 0) return;
 
         var first = violations[0];
@@ -1795,7 +2095,13 @@ public static class ScaffoldFileWriter
             File.Move(full, backup);
         }
 
-        var tmp = full + ".tmp";
+        // The staging name is unique per call, not the deterministic "<target>.tmp" it used to
+        // be (issue #158). Two writers aiming at the same path shared that sibling: the second
+        // File.Create truncated the first one's staged bytes, so whichever move landed first
+        // published the *other* writer's content, and the loser threw a FileNotFoundException
+        // from a path that looks like a successful atomic write. A per-call name makes the
+        // stage-then-rename genuinely private to the call, which is what "atomic" claimed.
+        var tmp = full + "." + Guid.NewGuid().ToString("N") + ".tmp";
         try
         {
             if (declarationOnSaveFromXDoc && doc is not null)
@@ -1808,7 +2114,7 @@ public static class ScaffoldFileWriter
                 File.WriteAllText(tmp, xml);
             }
 
-            File.Move(tmp, full);
+            MoveOntoTarget(tmp, full);
         }
         catch
         {
@@ -1829,6 +2135,63 @@ public static class ScaffoldFileWriter
         var bytes = new FileInfo(full).Length;
         RecordJournalEntry(full, preImage, preImageHadBom);
         return new WriteResult(full, bytes, backup);
+    }
+
+    /// <summary>
+    /// Publish the staged file onto its target, and refuse to report success unless the target
+    /// is actually there afterwards.
+    /// </summary>
+    /// <remarks>
+    /// Issue #158: a scaffold write returned normally and the file was gone by the time the
+    /// caller looked. <c>File.Move</c> is the only step that can fail without an exception in
+    /// practice — a scanner or indexer holding the source or the target makes the rename fail
+    /// transiently, and the surrounding code treated "no exception" as "written". Retrying a
+    /// handful of times covers the transient case; a post-move existence check turns the
+    /// non-transient case into a loud error at the write, naming the directory's real contents,
+    /// instead of a mystery count mismatch somewhere downstream.
+    /// </remarks>
+    private static void MoveOntoTarget(string tmp, string full)
+    {
+        const int attempts = 5;
+        for (var attempt = 1; ; attempt++)
+        {
+            try
+            {
+                File.Move(tmp, full);
+                if (File.Exists(full)) return;
+            }
+            catch (IOException) when (attempt < attempts)
+            {
+                // Transient sharing violation — fall through to the backoff below.
+            }
+            catch (UnauthorizedAccessException) when (attempt < attempts)
+            {
+                // Same shape, different exception type depending on who holds the handle.
+            }
+
+            if (attempt >= attempts)
+            {
+                var dir = Path.GetDirectoryName(full);
+                var siblings = SafeListDirectory(dir);
+                throw new IOException(
+                    $"Wrote the staged file but '{full}' is not on disk afterwards. " +
+                    $"Staged file {(File.Exists(tmp) ? "still present" : "gone")}: {tmp}. " +
+                    $"Directory now contains [{siblings}].");
+            }
+
+            Thread.Sleep(20 * attempt);
+        }
+    }
+
+    private static string SafeListDirectory(string? dir)
+    {
+        try
+        {
+            return string.IsNullOrEmpty(dir)
+                ? "<no directory>"
+                : string.Join(", ", Directory.EnumerateFileSystemEntries(dir).Select(Path.GetFileName));
+        }
+        catch (Exception ex) { return $"<unreadable: {ex.GetType().Name}>"; }
     }
 
     /// <summary>

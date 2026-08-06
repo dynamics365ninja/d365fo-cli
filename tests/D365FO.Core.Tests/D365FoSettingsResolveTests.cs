@@ -2,6 +2,7 @@ using Xunit;
 
 namespace D365FO.Core.Tests;
 
+[Collection(EnvironmentCollectionDefinition.Name)]
 public class D365FoSettingsResolveTests
 {
     // Use unlikely key names so a real settings.json on the test host cannot

@@ -3,6 +3,7 @@ using Xunit;
 
 namespace D365FO.Core.Tests;
 
+[Collection(EnvironmentCollectionDefinition.Name)]
 public class ProvenanceStoreTests : IDisposable
 {
     private readonly string _home = Path.Combine(Path.GetTempPath(), $"d365fo-home-{Guid.NewGuid():N}");

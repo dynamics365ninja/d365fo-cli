@@ -181,12 +181,12 @@ All scaffolders write atomically (`.tmp` + move, `.bak` on overwrite). Pass `--i
 | `generate form` | `AxForm` XML (9 patterns: SimpleList, DetailsMaster, Workspace …) |
 | `generate datasource-method` | Add/override a method on a form datasource (form-level `SourceCode`); `--list` shows overridable methods |
 | `generate control-method` | Add/override a method on a form control (form-level `SourceCode`); `--list` shows overridable methods |
-| `generate entity` | `AxDataEntityView` (`DataManagementEnabled=No` by default; opt in via `--data-management`) |
+| `generate entity` | `AxDataEntityView` — fields, keys, `--relation` (constraint-joined), `--computed-field` (unmapped, method-backed). `--data-management` also emits the DMF staging table |
 | `generate extension` | `AxTableExtension` / `AxFormExtension` / `AxEdtExtension` / `AxEnumExtension` / `AxSecurityDutyExtension` / `AxSecurityRoleExtension` |
 | `generate event-handler` | X++ event subscriber class with correct attribute |
 | `generate privilege` | `AxSecurityPrivilege` (entry point and/or `--data-entity` OData/DMF grant) |
-| `generate duty` | `AxSecurityDuty` |
-| `generate role` | `AxSecurityRole` (new or merge into existing) |
+| `generate duty` | `AxSecurityDuty` — privileges plus `--description`, `--context-string`, `--disabled` |
+| `generate role` | `AxSecurityRole` (new or merge into existing) — duties, privileges, `--sub-role` composition, `--context-string`, `--disabled`, `--no-delete-from-ui` |
 | `generate menu-item` | `AxMenuItemDisplay` / `AxMenuItemAction` / `AxMenuItemOutput` |
 | `generate report` | `AxReport` + DP class + optional DataContract class |
 | `generate edt` | `AxEdt` |
@@ -200,7 +200,7 @@ All scaffolders write atomically (`.tmp` + move, `.bak` on overwrite). Pass `--i
 | `generate business-event` | Event class + contract class |
 | `generate custom-service` | `AxService` + service class + `AxServiceGroup` |
 | `generate runbase` | `RunBase` / `RunBaseBatch` skeleton with dialog parameters |
-| `generate security-policy` | `AxSecurityPolicy` (XDS row-level security) |
+| `generate security-policy` | `AxSecurityPolicy` (XDS row-level security), including the nested `--constrained` table tree |
 | `generate systest` | `SysTestCase` skeleton — `[SysTestMethod]` Arrange/Act/Assert stub, optional `[SysTestCaseDataDependency]` and `--atl` `AtlDataRootNode` wiring (ATL-ready MVP, no test-logic generation) |
 | `generate migration-script` | Data-fix `Runnable` class with `ttsbegin`/`ttscommit` batching |
 | `generate simple-list` | Alias for `generate form --pattern SimpleList` |
@@ -225,6 +225,37 @@ same object already uses, so a model does not accumulate `CustTable.Fleet` next 
 Every `modify` write (including `modify method`) records its exact pre-image in the
 modification journal — revert with `d365fo undo`.
 
+#### The grounding gate
+
+Every `generate` subcommand runs the same gate before it writes anything — not just the
+extension-shaped ones. The gate does three things:
+
+- **Token.** `--grounding-token` from `d365fo prepare change` / `prepare create` proves the
+  index was consulted first. Tokens are object-bound and expire after 30 minutes. Under
+  `D365FO_GROUNDING_ENFORCE=true` a missing or mismatched token fails the write; otherwise it
+  is a warning.
+- **Self-check.** Every identifier in the generated X++ must resolve in the index, and the
+  code must be free of error-severity BP findings. Each command also names the AOT objects it
+  is claiming exist — a form's datasource, an EDT's `Extends`, a workflow's driving table, a
+  CoC target's methods. Under enforcement, unresolved references fail the write.
+- **Property honesty.** After the write, everything the caller asked for is looked for in the
+  document that actually reached disk. Anything missing comes back as a `property-honesty`
+  warning naming the option and the value:
+
+  ```
+  property-honesty: --primary-key NotAField — "NotAField" is not in the generated object.
+  The scaffolder either does not carry that option onto this AOT type, or the value was
+  dropped on the way to disk.
+  ```
+
+  This is the only check that can see an option being accepted and quietly discarded; every
+  other validator judges the document on its own terms, and a document missing a property
+  nobody asked it for is perfectly valid.
+
+The gate is not something a subcommand can opt out of: `GenerateInstaller.Write` takes the
+gate's result as an argument, so there is no way to reach the writer without having gated, and
+`GenerateGateSurfaceTests` fails the build if a command reaches around the shared path.
+
 ### Scaffolding validation helpers
 
 ```sh
@@ -239,6 +270,38 @@ AOT type does not declare is silently discarded on read, so `<Datasets>` (it is 
 catalog is generated from the metadata assembly by `scripts/emit-metadata-contracts.ps1` and
 committed, so this works with no D365FO install. Generated files are also written in contract
 order, which is what keeps a table's field groups from being dropped.
+
+#### The XML rule canon, and which families each rule speaks for
+
+| Rule | Finds | Families |
+|------|-------|----------|
+| `XML001` | Table with no `<AlternateKey>Yes</AlternateKey>` index | `AxTable` only |
+| `XML002` | Table missing `<Label>` (mined) | `AxTable` only |
+| `XML003` | Table missing `<TableGroup>` (mined) | `AxTable` only |
+| `XML004` | Field with neither `<ExtendedDataType>` nor `<EnumType>` (mined) | `AxTable` only |
+| `XML005` | Table missing `<ClusteredIndex>` (mined) | `AxTable` only |
+| `XML007` | Member the type does not declare — silently dropped on read | every family |
+| `XML008` | Value outside the enum its member is typed as — the read throws | every family |
+| `XML009` | Root element names no AOT type, or one no shipped AOS has | every family |
+| `XML010` | Abstract root with no concrete `i:type`, or one that resolves to nothing | every family |
+| `XML011` | `xmlns:i` missing where the reader needs it | every family |
+| `XML012` | Document not in the XML namespace its contract declares | every family |
+| `XML013` | File sitting in an AOT folder another family owns | every family (path-aware) |
+
+XML001–XML005 are AxTable-only by nature: they are property-presence rules mined from standard
+tables, and there is no equivalent evidence for other families. Everything from XML007 down is
+driven by the `MetadataContracts` catalog (565 types, generated from
+`Microsoft.Dynamics.AX.Metadata.dll`) and by `ObjectTypeRegistry`, so it applies uniformly —
+form, EDT, enum, entity, report, query, view, map and every security type included. XML009–XML012
+are the offline approximation of what the bridge's `Handlers.WriteArtifact` rejects before the
+provider ever sees the document (`TYPE_NOT_FOUND`, `ABSTRACT_TYPE`, and the two
+`XML_DESERIALIZE_FAILED` shapes), which is what lets non-Windows CI catch those failures.
+
+There is deliberately **no member-order lint**. Order matters and generated files are written in
+contract order, but shipped Microsoft files deviate from it in places and the provider reads them
+back with no loss — so flagging deviation in other people's files would assert a defect the
+evidence does not support. The ordering knowledge is applied where it is proven (canonical
+output), not asserted as a rule.
 
 ### `validate metadata` — the provider's own verdict
 

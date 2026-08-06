@@ -52,7 +52,9 @@ public sealed class ValidateXppCommand : Command<ValidateXppCommand.Settings>
         }
         catch { /* no index — static defaults */ }
 
-        var violations = XppValidator.Validate(code!, codeType, stats);
+        // The path is passed through so XML013 can judge the folder the file sits in — it has
+        // nothing to say when the document arrived on stdin.
+        var violations = XppValidator.Validate(code!, codeType, stats, settings.File);
         var errors = violations.Count(v => v.Severity == "error");
         var warnings = violations.Count(v => v.Severity == "warning");
 

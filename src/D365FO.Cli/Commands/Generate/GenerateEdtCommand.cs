@@ -53,8 +53,17 @@ public sealed class GenerateEdtCommand : Command<GenerateEdtCommand.Settings>
         }
 
         var doc = XppScaffolder.Edt(settings.Name, settings.Extends, settings.BaseType, settings.Size, settings.Label, effectiveEnumType);
+
+        // An EDT that extends an EDT the index has never heard of, or is backed by a
+        // non-existent enum, is exactly the hallucination the gate exists to catch.
+        var gate = GenerateInstaller.Gate(
+            settings, settings.Name, doc,
+            requiredSymbols: new[] { settings.Extends, effectiveEnumType }
+                .Where(s => !string.IsNullOrWhiteSpace(s)).Select(s => s!));
+        if (gate.Failure is not null) return RenderHelpers.Render(kind, gate.Failure);
+
         return GenerateInstaller.Emit(
-            kind, "edt", Folders.Edt, settings.Name,
+            kind, gate, "edt", Folders.Edt, settings.Name,
             settings.InstallTo, settings.Out, settings.Overwrite, doc,
             r => new
             {
@@ -70,7 +79,9 @@ public sealed class GenerateEdtCommand : Command<GenerateEdtCommand.Settings>
                 bytes      = r.Bytes,
                 backup     = r.Backup,
                 model      = settings.InstallTo,
+                grounding  = gate.Grounding,
             },
+            gate.Warnings,
             verify: settings.Verify);
     }
 

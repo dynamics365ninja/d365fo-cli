@@ -1539,6 +1539,11 @@ public sealed class ToolHandlers
     private static ToolResult<object> ValidateMetadataShape(string xml, string? context)
     {
         var violations = new List<D365FO.Core.Validation.XppViolation>();
+        // The root's own shape first (issue #163), then everything inside it. Both are driven by
+        // the same catalog, and both speak for every AOT family — an agent that asks about a
+        // document whose root the provider cannot even construct should hear that before it
+        // hears about the members inside it.
+        D365FO.Core.Validation.ObjectShapeRules.Check(xml, violations);
         D365FO.Core.Validation.ContractShapeRules.Check(xml, violations);
 
         return ValidationEnvelope(context, "metadata-shape", violations.Select(v =>

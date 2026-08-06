@@ -94,19 +94,19 @@ public sealed class GenerateCustomServiceCommand : Command<GenerateCustomService
 
         var ops = ParseOperations(settings.Operations, settings.ContractParam);
 
+        var classDoc   = CustomServiceScaffolder.ServiceClass(className, ops);
+        var serviceDoc = CustomServiceScaffolder.ServiceXml(settings.Name, className, ops, settings.ExternalName);
+        var groupDoc   = CustomServiceScaffolder.ServiceGroupXml(groupName, settings.Name);
+
+        // Grounding gate (issue #161) — the service class carries the X++ the gate resolves.
+        var gate = GenerateInstaller.Gate(settings, settings.Name, classDoc);
+        if (gate.Failure is not null) return RenderHelpers.Render(kind, gate.Failure);
+
         try
         {
-            var classResult = ScaffoldFileWriter.Write(
-                CustomServiceScaffolder.ServiceClass(className, ops),
-                classPath!, settings.Overwrite);
-
-            var serviceResult = ScaffoldFileWriter.Write(
-                CustomServiceScaffolder.ServiceXml(settings.Name, className, ops, settings.ExternalName),
-                servicePath!, settings.Overwrite);
-
-            var groupResult = ScaffoldFileWriter.Write(
-                CustomServiceScaffolder.ServiceGroupXml(groupName, settings.Name),
-                groupPath!, settings.Overwrite);
+            var classResult   = GenerateInstaller.Write(gate, classDoc,   classPath!,   settings.Overwrite);
+            var serviceResult = GenerateInstaller.Write(gate, serviceDoc, servicePath!, settings.Overwrite);
+            var groupResult   = GenerateInstaller.Write(gate, groupDoc,   groupPath!,   settings.Overwrite);
 
             return RenderHelpers.Render(kind, ToolResult<object>.Success(new
             {
@@ -120,7 +120,8 @@ public sealed class GenerateCustomServiceCommand : Command<GenerateCustomService
                 service        = new { path = serviceResult.Path, bytes = serviceResult.Bytes, backup = serviceResult.BackupPath },
                 serviceGroup   = new { path = groupResult.Path,   bytes = groupResult.Bytes,   backup = groupResult.BackupPath },
                 model          = settings.InstallTo,
-            }));
+                grounding      = gate.Grounding,
+            }, gate.Warnings));
         }
         catch (Exception ex)
         {

@@ -286,7 +286,7 @@ public static class CliApp
             cfg.AddBranch("test", b =>
             {
                 b.SetDescription("Run D365FO developer tests (Windows VM).");
-                b.AddCommand<TestRunCommand>("run").WithDescription("Invoke SysTestRunner.");
+                b.AddCommand<TestRunCommand>("run").WithDescription("Invoke the platform SysTest console runner (SysTestConsole.exe).");
             });
 
             cfg.AddBranch("bp", b =>

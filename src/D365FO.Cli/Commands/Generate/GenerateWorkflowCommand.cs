@@ -169,9 +169,18 @@ public sealed class GenerateWorkflowCommand : Command<GenerateWorkflowCommand.Se
                 : settings.OutQuery ?? System.IO.Path.Combine(dir, queryName + ".xml");
         }
 
+        var documentDoc = WorkflowScaffolder.WorkflowDocument(docClassName, queryName);
+
+        // Grounding gate (issue #161). The document class is the X++ here, and the driving
+        // table is the claim about the existing AOT.
+        var gate = GenerateInstaller.Gate(
+            settings, settings.Name, documentDoc,
+            requiredSymbols: string.IsNullOrWhiteSpace(settings.TableName) ? null : new[] { settings.TableName! });
+        if (gate.Failure is not null) return RenderHelpers.Render(kind, gate.Failure);
+
         try
         {
-            var workflowResult = ScaffoldFileWriter.Write(
+            var workflowResult = GenerateInstaller.Write(gate,
                 WorkflowScaffolder.WorkflowTemplate(
                     settings.Name,
                     docClassName,
@@ -182,14 +191,12 @@ public sealed class GenerateWorkflowCommand : Command<GenerateWorkflowCommand.Se
                     taskName),
                 workflowPath!, settings.Overwrite);
 
-            var documentResult = ScaffoldFileWriter.Write(
-                WorkflowScaffolder.WorkflowDocument(docClassName, queryName),
-                documentPath!, settings.Overwrite);
+            var documentResult = GenerateInstaller.Write(gate, documentDoc, documentPath!, settings.Overwrite);
 
             ScaffoldFileWriter.WriteResult? queryResult = null;
             if (generateQuery && queryPath is not null)
             {
-                queryResult = ScaffoldFileWriter.Write(
+                queryResult = GenerateInstaller.Write(gate,
                     QueryScaffolder.Query(queryName, [new QueryDataSourceSpec(settings.TableName!)]),
                     queryPath, settings.Overwrite);
             }
@@ -197,7 +204,7 @@ public sealed class GenerateWorkflowCommand : Command<GenerateWorkflowCommand.Se
             ScaffoldFileWriter.WriteResult? approvalResult = null;
             if (approvalName is not null && approvalPath is not null)
             {
-                approvalResult = ScaffoldFileWriter.Write(
+                approvalResult = GenerateInstaller.Write(gate,
                     WorkflowScaffolder.WorkflowApproval(approvalName, docClassName, docMenuItem),
                     approvalPath, settings.Overwrite);
             }
@@ -205,7 +212,7 @@ public sealed class GenerateWorkflowCommand : Command<GenerateWorkflowCommand.Se
             ScaffoldFileWriter.WriteResult? taskResult = null;
             if (taskName is not null && taskPath is not null)
             {
-                taskResult = ScaffoldFileWriter.Write(
+                taskResult = GenerateInstaller.Write(gate,
                     WorkflowScaffolder.WorkflowTask(taskName, docClassName, docMenuItem),
                     taskPath, settings.Overwrite);
             }
@@ -213,7 +220,7 @@ public sealed class GenerateWorkflowCommand : Command<GenerateWorkflowCommand.Se
             ScaffoldFileWriter.WriteResult? submitResult = null;
             if (generateSubmit && submitPath is not null)
             {
-                submitResult = ScaffoldFileWriter.Write(
+                submitResult = GenerateInstaller.Write(gate,
                     WorkflowScaffolder.CanSubmitExtension(settings.TableName!),
                     submitPath, settings.Overwrite);
             }
@@ -234,6 +241,7 @@ public sealed class GenerateWorkflowCommand : Command<GenerateWorkflowCommand.Se
             {
                 "Referenced but not generated — create these before building: " + string.Join("; ", pending),
             };
+            warnings.AddRange(gate.Warnings);
 
             return RenderHelpers.Render(kind, ToolResult<object>.Success(new
             {

@@ -37,6 +37,18 @@ public sealed class GenerateSecurityPolicyCommand : Command<GenerateSecurityPoli
         [CommandOption("--context-value <VALUE>")]
         [System.ComponentModel.Description("Context value (role name or context string). Optional.")]
         public string? ContextValue { get; init; }
+
+        [CommandOption("--constrained <SPEC>")]
+        [System.ComponentModel.Description("Repeatable: <Table>[[/<Child>[[/<Grandchild>]]]][[:unconstrained]]. Tables the policy reaches beyond the primary one; '/' nests, ':unconstrained' marks a table the policy only traverses. Example: --constrained FmVehicleService/FmVehicleServiceLine")]
+        public string[] Constrained { get; init; } = Array.Empty<string>();
+
+        [CommandOption("--label <TEXT>")]
+        [System.ComponentModel.Description("Policy label.")]
+        public string? Label { get; init; }
+
+        [CommandOption("--use-not-exist-join")]
+        [System.ComponentModel.Description("Emit UseNotExistJoin=Yes — the policy excludes rows the query matches instead of restricting to them.")]
+        public bool UseNotExistJoin { get; init; }
     }
 
     public override int Execute(CommandContext ctx, Settings settings)
@@ -78,9 +90,16 @@ public sealed class GenerateSecurityPolicyCommand : Command<GenerateSecurityPoli
                 settings.PolicyQuery!,
                 operation,
                 contextType,
-                settings.ContextValue);
+                settings.ContextValue,
+                constrainedTables: ParseConstrained(settings.Constrained),
+                label: settings.Label,
+                useNotExistJoin: settings.UseNotExistJoin);
 
-            var res = ScaffoldFileWriter.Write(doc, outPath!, settings.Overwrite);
+            // Grounding gate (issue #161): uniform across every generate subcommand.
+            var gate = GenerateInstaller.Gate(settings, settings.Name, doc);
+            if (gate.Failure is not null) return RenderHelpers.Render(kind, gate.Failure);
+
+            var res = GenerateInstaller.Write(gate, doc, outPath!, settings.Overwrite);
 
             return RenderHelpers.Render(kind, ToolResult<object>.Success(new
             {
@@ -91,16 +110,62 @@ public sealed class GenerateSecurityPolicyCommand : Command<GenerateSecurityPoli
                 operation        = operation.ToString(),
                 contextType      = contextType.ToString(),
                 contextValue     = settings.ContextValue,
+                constrainedTables = settings.Constrained,
                 path             = res.Path,
                 bytes            = res.Bytes,
                 backup           = res.BackupPath,
                 model            = settings.InstallTo,
-            }));
+            }, gate.Warnings));
         }
         catch (Exception ex)
         {
             return RenderHelpers.Render(kind, ToolResult<object>.Fail(D365FoErrorCodes.WriteFailed, ex.Message));
         }
+    }
+
+    /// <summary>
+    /// Parse <c>--constrained &lt;Table&gt;[/&lt;Child&gt;…][:unconstrained]</c> into the
+    /// nested <c>ConstrainedTables</c> tree.
+    /// </summary>
+    /// <remarks>
+    /// A path rather than a flat list because <c>AxSecurityPolicyConstrainedEntity</c> nests: a
+    /// policy reaches a line table <em>through</em> its header, and flattening the two would
+    /// claim the line table is joined to the primary table directly. The <c>:unconstrained</c>
+    /// marker applies to the last segment — the common shape is traversing a header to
+    /// constrain its lines.
+    /// </remarks>
+    private static List<SecurityPolicyScaffolder.ConstrainedEntity> ParseConstrained(string[] raw)
+    {
+        var roots = new List<SecurityPolicyScaffolder.ConstrainedEntity>();
+
+        foreach (var spec in raw.Where(s => !string.IsNullOrWhiteSpace(s)))
+        {
+            var body = spec;
+            var constrained = true;
+            var marker = spec.LastIndexOf(':');
+            if (marker > 0 && spec[(marker + 1)..].Trim().Equals("unconstrained", StringComparison.OrdinalIgnoreCase))
+            {
+                body = spec[..marker];
+                constrained = false;
+            }
+
+            var segments = body.Split('/', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+            if (segments.Length == 0) continue;
+
+            // Build from the leaf up: only the leaf carries the caller's constrained flag, the
+            // ancestors are the path taken to reach it.
+            SecurityPolicyScaffolder.ConstrainedEntity? node = null;
+            for (var i = segments.Length - 1; i >= 0; i--)
+            {
+                node = new SecurityPolicyScaffolder.ConstrainedEntity(
+                    segments[i],
+                    Constrained: node is null ? constrained : true,
+                    Children: node is null ? null : [node]);
+            }
+            roots.Add(node!);
+        }
+
+        return roots;
     }
 
     private static bool TryParseOperation(string raw, out PolicyOperation op)

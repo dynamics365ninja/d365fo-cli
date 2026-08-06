@@ -38,8 +38,11 @@ public sealed class GenerateEnumCommand : Command<GenerateEnumCommand.Settings>
         var values = settings.Values.Select(ParseValue).ToList();
         var doc = XppScaffolder.Enum(settings.Name, values, !settings.NonExtensible, settings.Label);
 
+        var gate = GenerateInstaller.Gate(settings, settings.Name, doc);
+        if (gate.Failure is not null) return RenderHelpers.Render(kind, gate.Failure);
+
         return GenerateInstaller.Emit(
-            kind, "enum", Folders.Enum, settings.Name,
+            kind, gate, "enum", Folders.Enum, settings.Name,
             settings.InstallTo, settings.Out, settings.Overwrite, doc,
             r => new
             {
@@ -54,7 +57,9 @@ public sealed class GenerateEnumCommand : Command<GenerateEnumCommand.Settings>
                 bytes        = r.Bytes,
                 backup       = r.Backup,
                 model        = settings.InstallTo,
+                grounding    = gate.Grounding,
             },
+            gate.Warnings,
             verify: settings.Verify);
     }
 
