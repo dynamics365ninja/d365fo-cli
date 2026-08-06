@@ -225,6 +225,37 @@ same object already uses, so a model does not accumulate `CustTable.Fleet` next 
 Every `modify` write (including `modify method`) records its exact pre-image in the
 modification journal — revert with `d365fo undo`.
 
+#### The grounding gate
+
+Every `generate` subcommand runs the same gate before it writes anything — not just the
+extension-shaped ones. The gate does three things:
+
+- **Token.** `--grounding-token` from `d365fo prepare change` / `prepare create` proves the
+  index was consulted first. Tokens are object-bound and expire after 30 minutes. Under
+  `D365FO_GROUNDING_ENFORCE=true` a missing or mismatched token fails the write; otherwise it
+  is a warning.
+- **Self-check.** Every identifier in the generated X++ must resolve in the index, and the
+  code must be free of error-severity BP findings. Each command also names the AOT objects it
+  is claiming exist — a form's datasource, an EDT's `Extends`, a workflow's driving table, a
+  CoC target's methods. Under enforcement, unresolved references fail the write.
+- **Property honesty.** After the write, everything the caller asked for is looked for in the
+  document that actually reached disk. Anything missing comes back as a `property-honesty`
+  warning naming the option and the value:
+
+  ```
+  property-honesty: --primary-key NotAField — "NotAField" is not in the generated object.
+  The scaffolder either does not carry that option onto this AOT type, or the value was
+  dropped on the way to disk.
+  ```
+
+  This is the only check that can see an option being accepted and quietly discarded; every
+  other validator judges the document on its own terms, and a document missing a property
+  nobody asked it for is perfectly valid.
+
+The gate is not something a subcommand can opt out of: `GenerateInstaller.Write` takes the
+gate's result as an argument, so there is no way to reach the writer without having gated, and
+`GenerateGateSurfaceTests` fails the build if a command reaches around the shared path.
+
 ### Scaffolding validation helpers
 
 ```sh

@@ -98,13 +98,18 @@ public sealed class GenerateSysOperationCommand : Command<GenerateSysOperationCo
 
         var parms = settings.Params.Select(ParseParam).ToList();
 
+        var serviceDoc = SysOperationScaffolder.Service(serviceName, contractName, settings.ServiceMethod, parms);
+
+        // Grounding gate (issue #161) — the service class is where this command's X++ lives.
+        var gate = GenerateInstaller.Gate(settings, settings.Name, serviceDoc);
+        if (gate.Failure is not null) return RenderHelpers.Render(kind, gate.Failure);
+
         try
         {
-            var contractResult    = ScaffoldFileWriter.Write(
+            var contractResult    = GenerateInstaller.Write(gate,
                 SysOperationScaffolder.Contract(contractName, parms), contractPath!, settings.Overwrite);
-            var serviceResult     = ScaffoldFileWriter.Write(
-                SysOperationScaffolder.Service(serviceName, contractName, settings.ServiceMethod, parms), servicePath!, settings.Overwrite);
-            var controllerResult  = ScaffoldFileWriter.Write(
+            var serviceResult     = GenerateInstaller.Write(gate, serviceDoc, servicePath!, settings.Overwrite);
+            var controllerResult  = GenerateInstaller.Write(gate,
                 SysOperationScaffolder.Controller(controllerName, serviceName, settings.ServiceMethod, mode), controllerPath!, settings.Overwrite);
 
             return RenderHelpers.Render(kind, ToolResult<object>.Success(new
@@ -121,7 +126,8 @@ public sealed class GenerateSysOperationCommand : Command<GenerateSysOperationCo
                 service        = new { path = serviceResult.Path,    bytes = serviceResult.Bytes,    backup = serviceResult.BackupPath },
                 controller     = new { path = controllerResult.Path, bytes = controllerResult.Bytes, backup = controllerResult.BackupPath },
                 model          = settings.InstallTo,
-            }));
+                grounding      = gate.Grounding,
+            }, gate.Warnings));
         }
         catch (Exception ex)
         {

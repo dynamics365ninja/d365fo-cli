@@ -92,20 +92,26 @@ public sealed class GenerateNumberSequenceCommand : Command<GenerateNumberSequen
                 : settings.OutHandler ?? System.IO.Path.Combine(dir, handlerClass + ".xml");
         }
 
+        var moduleDoc = NumberSequenceScaffolder.ModuleExtension(settings.ModuleName, edtName, scope);
+        var edtDoc    = NumberSequenceScaffolder.Edt(edtName, settings.ModuleName, scope, settings.EdtLabel);
+
+        // Grounding gate (issue #161). The module extension names an existing module class and
+        // the optional form handler an existing table — both are claims about the real AOT.
+        var gate = GenerateInstaller.Gate(
+            settings, edtName, moduleDoc,
+            requiredSymbols: new[] { settings.ModuleName, settings.TableName }
+                .Where(n => !string.IsNullOrWhiteSpace(n)).Select(n => n!));
+        if (gate.Failure is not null) return RenderHelpers.Render(kind, gate.Failure);
+
         try
         {
-            var moduleResult = ScaffoldFileWriter.Write(
-                NumberSequenceScaffolder.ModuleExtension(settings.ModuleName, edtName, scope),
-                modulePath!, settings.Overwrite);
-
-            var edtResult = ScaffoldFileWriter.Write(
-                NumberSequenceScaffolder.Edt(edtName, settings.ModuleName, scope, settings.EdtLabel),
-                edtPath!, settings.Overwrite);
+            var moduleResult = GenerateInstaller.Write(gate, moduleDoc, modulePath!, settings.Overwrite);
+            var edtResult    = GenerateInstaller.Write(gate, edtDoc,    edtPath!,    settings.Overwrite);
 
             ScaffoldFileWriter.WriteResult? handlerResult = null;
             if (handlerClass is not null && handlerPath is not null)
             {
-                handlerResult = ScaffoldFileWriter.Write(
+                handlerResult = GenerateInstaller.Write(gate,
                     NumberSequenceScaffolder.FormHandler(settings.TableName!, edtName, handlerClass),
                     handlerPath, settings.Overwrite);
             }
@@ -120,7 +126,8 @@ public sealed class GenerateNumberSequenceCommand : Command<GenerateNumberSequen
                 edt          = new { path = edtResult.Path,     bytes = edtResult.Bytes,     backup = edtResult.BackupPath },
                 handler      = handlerResult is null ? null : new { path = handlerResult.Path, bytes = handlerResult.Bytes, backup = handlerResult.BackupPath },
                 model        = settings.InstallTo,
-            }));
+                grounding    = gate.Grounding,
+            }, gate.Warnings));
         }
         catch (Exception ex)
         {

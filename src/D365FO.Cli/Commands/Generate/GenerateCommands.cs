@@ -33,6 +33,117 @@ public abstract class GenerateSettings : D365OutputSettings
 internal static class GenerateInstaller
 {
     /// <summary>
+    /// Run the grounding gate for a generate command. Every generate subcommand calls this
+    /// before it writes anything, and writes through the handle it returns.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Issue #161 / finding G4. The gate used to be wired into three subcommands by hand, which
+    /// made it decorative for the other twenty-six: the anti-hallucination token was simply
+    /// optional everywhere else. Moving it here — the path every generate command already goes
+    /// through to reach disk — is what makes it uniform, and pairing it with
+    /// <see cref="Write"/> is what makes bypassing it require deliberately not using the shared
+    /// path. <c>GenerateSurfaceTests</c> fails the build if a command does that.
+    /// </para>
+    /// <para>
+    /// <paramref name="targetObject"/> is the object the write is bound to: the extension or CoC
+    /// target for extension-shaped commands, and the artefact's own name for the rest, which is
+    /// what <c>prepare create</c> issues a token against.
+    /// </para>
+    /// </remarks>
+    internal static GroundingGate.GateResult Gate(
+        GenerateSettings settings,
+        string targetObject,
+        System.Xml.Linq.XDocument? doc = null,
+        IEnumerable<(string Owner, string Method)>? requiredMethods = null,
+        IEnumerable<string>? requiredSymbols = null)
+        => GroundingGate.Check(
+            settings.GroundingToken, targetObject, doc, requiredMethods, requiredSymbols,
+            RequestedValues(settings));
+
+    /// <summary>
+    /// The option/value pairs a caller actually supplied, for the property-honesty
+    /// reconciliation.
+    /// </summary>
+    /// <remarks>
+    /// Read off the settings instance rather than declared per command, because a per-command
+    /// list is exactly the hand-maintained table that goes stale the first time someone adds an
+    /// option. Only properties declared on the command's own settings type count: everything on
+    /// <see cref="GenerateSettings"/> and <c>D365OutputSettings</c> is plumbing (<c>--out</c>,
+    /// <c>--overwrite</c>, <c>--install-to</c>, the token, the output format) and has no business
+    /// appearing in the generated object. Booleans are skipped too — a flag selects a shape, and
+    /// its absence from the document says nothing.
+    /// </remarks>
+    internal static IReadOnlyList<(string Option, string Value)> RequestedValues(GenerateSettings settings)
+    {
+        var requested = new List<(string, string)>();
+
+        foreach (var prop in settings.GetType().GetProperties())
+        {
+            if (prop.DeclaringType is null || prop.DeclaringType == typeof(GenerateSettings)) continue;
+            if (!prop.DeclaringType.IsSubclassOf(typeof(GenerateSettings))) continue;
+
+            var option = OptionNameOf(prop);
+            if (option is null) continue;
+
+            switch (prop.GetValue(settings))
+            {
+                case string s when !string.IsNullOrWhiteSpace(s):
+                    requested.Add((option, s));
+                    break;
+                case string[] many:
+                    foreach (var s in many.Where(s => !string.IsNullOrWhiteSpace(s)))
+                        requested.Add((option, s));
+                    break;
+            }
+        }
+
+        return requested;
+    }
+
+    /// <summary>The command-line spelling of a settings property, or null when it is not an option.</summary>
+    private static string? OptionNameOf(System.Reflection.PropertyInfo prop)
+    {
+        var opt = prop.GetCustomAttributes(typeof(CommandOptionAttribute), inherit: true)
+            .Cast<CommandOptionAttribute>().FirstOrDefault();
+        if (opt is not null)
+        {
+            // "--field <SPEC>" / "-f|--field <SPEC>" → "--field".
+            var longest = opt.LongNames.OrderByDescending(n => n.Length).FirstOrDefault();
+            return longest is null ? null : "--" + longest;
+        }
+
+        var arg = prop.GetCustomAttributes(typeof(CommandArgumentAttribute), inherit: true)
+            .Cast<CommandArgumentAttribute>().FirstOrDefault();
+        return arg is null ? null : "<" + arg.ValueName + ">";
+    }
+
+    /// <summary>
+    /// Write a generated document. Takes the gate handle, so reaching the writer without having
+    /// gated is not something a caller can express.
+    /// </summary>
+    internal static ScaffoldFileWriter.WriteResult Write(
+        GroundingGate.GateResult gate, System.Xml.Linq.XDocument doc, string path, bool overwrite = false)
+    {
+        ArgumentNullException.ThrowIfNull(gate);
+        var result = ScaffoldFileWriter.Write(doc, path, overwrite);
+        // Write finalises the document in place, so this is the form that reached disk — not the
+        // scaffolder's pre-canonicalisation draft.
+        gate.Observe(doc.ToString());
+        return result;
+    }
+
+    /// <summary>String-rendered counterpart of <see cref="Write(GroundingGate.GateResult, System.Xml.Linq.XDocument, string, bool)"/>.</summary>
+    internal static ScaffoldFileWriter.WriteResult Write(
+        GroundingGate.GateResult gate, string xml, string path, bool overwrite = false)
+    {
+        ArgumentNullException.ThrowIfNull(gate);
+        var result = ScaffoldFileWriter.Write(xml, path, overwrite);
+        gate.Observe(xml);
+        return result;
+    }
+
+    /// <summary>
     /// Resolve the on-disk install path for a scaffolded artefact. When
     /// <c>--install-to &lt;MODEL&gt;</c> is supplied we ask the bridge where
     /// the model lives on disk and compose
@@ -161,7 +272,7 @@ internal static class GenerateInstaller
     /// collection kinds: <c>class | table | edt | enum | form</c>.
     /// </summary>
     internal static int Emit(
-        OutputMode.Kind kind, string axKind, string axSubfolder, string name,
+        OutputMode.Kind kind, GroundingGate.GateResult gate, string axKind, string axSubfolder, string name,
         string? installTo, string? outPath, bool overwrite,
         System.Xml.Linq.XDocument doc,
         Func<EmitResult, object> buildPayload,
@@ -175,20 +286,20 @@ internal static class GenerateInstaller
         ContractNamespaceApplier.Apply(doc);
         ContractOrderCanonicalizer.Apply(doc);
 
-        return EmitCore(kind, axKind, axSubfolder, name, installTo, outPath, doc.ToString(),
-            path => ScaffoldFileWriter.Write(doc, path, overwrite), buildPayload, warnings, verify);
+        return EmitCore(kind, gate, axKind, axSubfolder, name, installTo, outPath, doc.ToString(),
+            path => Write(gate, doc, path, overwrite), buildPayload, warnings, verify);
     }
 
     /// <summary>String-rendered counterpart of <see cref="Emit"/> (used for forms).</summary>
     internal static int EmitString(
-        OutputMode.Kind kind, string axKind, string axSubfolder, string name,
+        OutputMode.Kind kind, GroundingGate.GateResult gate, string axKind, string axSubfolder, string name,
         string? installTo, string? outPath, bool overwrite,
         string xml,
         Func<EmitResult, object> buildPayload,
         List<string>? warnings = null,
         bool verify = false)
-        => EmitCore(kind, axKind, axSubfolder, name, installTo, outPath, xml,
-            path => ScaffoldFileWriter.Write(xml, path, overwrite), buildPayload, warnings, verify);
+        => EmitCore(kind, gate, axKind, axSubfolder, name, installTo, outPath, xml,
+            path => Write(gate, xml, path, overwrite), buildPayload, warnings, verify);
 
     /// <summary>
     /// Opt-in post-write check for <c>--verify</c>: read the artefact back through the
@@ -231,8 +342,28 @@ internal static class GenerateInstaller
         }
     }
 
+    /// <summary>
+    /// Fold the gate's property-honesty findings into the warnings a command is about to
+    /// return.
+    /// </summary>
+    /// <remarks>
+    /// The gate can only reconcile once the document exists, which is after the point where
+    /// <see cref="EmitCore"/> has already snapshotted the caller's warnings. Merging here rather
+    /// than appending blindly keeps the report out of the list twice when the caller passed
+    /// <c>gate.Warnings</c> itself, which is the normal case.
+    /// </remarks>
+    private static List<string> WithHonesty(List<string> warnings, GroundingGate.GateResult gate)
+    {
+        foreach (var gap in gate.PropertyGaps)
+        {
+            var message = $"property-honesty: {gap}";
+            if (!warnings.Contains(message)) warnings.Add(message);
+        }
+        return warnings;
+    }
+
     private static int EmitCore(
-        OutputMode.Kind kind, string axKind, string axSubfolder, string name,
+        OutputMode.Kind kind, GroundingGate.GateResult gate, string axKind, string axSubfolder, string name,
         string? installTo, string? outPath, string xml,
         Func<string, ScaffoldFileWriter.WriteResult> write,
         Func<EmitResult, object> buildPayload,
@@ -253,11 +384,14 @@ internal static class GenerateInstaller
 
             if (plan.outcome == InstallOutcome.CreatedViaApi)
             {
+                // Nothing reached disk, but the provider was handed exactly this XML — which is
+                // the document the honesty report has to judge.
+                gate.Observe(xml);
                 if (verify && VerifyWritten(kind, axKind, name, installTo, null, all) is int apiFailure)
                     return apiFailure;
                 return RenderHelpers.Render(kind, ToolResult<object>.Success(
                     buildPayload(new EmitResult("bridge", null, null, null)),
-                    all.Count > 0 ? all : null));
+                    WithHonesty(all, gate) is { Count: > 0 } w ? w : null));
             }
 
             try
@@ -267,7 +401,7 @@ internal static class GenerateInstaller
                     return failure;
                 return RenderHelpers.Render(kind, ToolResult<object>.Success(
                     buildPayload(new EmitResult("scaffold", res.Path, res.Bytes, res.BackupPath)),
-                    all.Count > 0 ? all : null));
+                    WithHonesty(all, gate) is { Count: > 0 } w ? w : null));
             }
             catch (Exception ex)
             {
@@ -282,7 +416,7 @@ internal static class GenerateInstaller
                 return outFailure;
             return RenderHelpers.Render(kind, ToolResult<object>.Success(
                 buildPayload(new EmitResult("scaffold", res.Path, res.Bytes, res.BackupPath)),
-                warnings.Count > 0 ? warnings : null));
+                WithHonesty(warnings, gate) is { Count: > 0 } w ? w : null));
         }
         catch (Exception ex)
         {
@@ -362,10 +496,17 @@ public sealed class GenerateTableCommand : Command<GenerateTableCommand.Settings
                 "worksheet-header|worksheet-line|reference|framework|miscellaneous) to stamp the table's business role.");
         }
 
+        // Grounding gate (issue #161): every generate subcommand runs it, not just the
+        // extension-shaped three. A table is bound to its own name — that is what
+        // `prepare create` issues a token against.
+        var gate = GenerateInstaller.Gate(settings, settings.Name, doc);
+        if (gate.Failure is not null) return RenderHelpers.Render(kind, gate.Failure);
+        warnings.AddRange(gate.Warnings);
+
         // Prefer the live metadata provider for --install-to (canonical output,
         // consistent with VS / d365fo-mcp-server); fall back to the scaffold.
         return GenerateInstaller.Emit(
-            kind, "table", Folders.Table, settings.Name,
+            kind, gate, "table", Folders.Table, settings.Name,
             settings.InstallTo, settings.Out, settings.Overwrite, doc,
             r => new
             {
@@ -382,8 +523,9 @@ public sealed class GenerateTableCommand : Command<GenerateTableCommand.Settings
                 formRef = settings.FormRef,
                 usedPatternDefaults = usedDefaults,
                 model = settings.InstallTo,
+                grounding = gate.Grounding,
             },
-            warnings.Count > 0 ? warnings : null,
+            warnings,
             verify: settings.Verify);
     }
 
@@ -418,14 +560,22 @@ public sealed class GenerateClassCommand : Command<GenerateClassCommand.Settings
             return RenderHelpers.Render(kind, ToolResult<object>.Fail("BAD_INPUT", "Class name required."));
 
         var doc = XppScaffolder.Class(settings.Name, settings.Extends, !settings.NonFinal);
+
+        var gate = GenerateInstaller.Gate(
+            settings, settings.Name, doc,
+            requiredSymbols: string.IsNullOrWhiteSpace(settings.Extends) ? null : new[] { settings.Extends! });
+        if (gate.Failure is not null) return RenderHelpers.Render(kind, gate.Failure);
+
         return GenerateInstaller.Emit(
-            kind, "class", Folders.Class, settings.Name,
+            kind, gate, "class", Folders.Class, settings.Name,
             settings.InstallTo, settings.Out, settings.Overwrite, doc,
             r => new
             {
                 kind = "AxClass", name = settings.Name, source = r.Source,
                 path = r.Path, bytes = r.Bytes, backup = r.Backup, model = settings.InstallTo,
+                grounding = gate.Grounding,
             },
+            gate.Warnings,
             verify: settings.Verify);
     }
 }
@@ -471,8 +621,8 @@ public sealed class GenerateCocCommand : Command<GenerateCocCommand.Settings>
 
         // Grounding gate: prove the target and every wrapped method against the
         // index; fail closed under D365FO_GROUNDING_ENFORCE=true.
-        var gate = GroundingGate.Check(
-            settings.GroundingToken,
+        var gate = GenerateInstaller.Gate(
+            settings,
             settings.Target,
             doc,
             settings.Methods.Select(m => (settings.Target, m)));
@@ -480,7 +630,7 @@ public sealed class GenerateCocCommand : Command<GenerateCocCommand.Settings>
         warnings.AddRange(gate.Warnings);
 
         return GenerateInstaller.Emit(
-            kind, "class", Folders.Class, settings.Target + "_Extension",
+            kind, gate, "class", Folders.Class, settings.Target + "_Extension",
             settings.InstallTo, settings.Out, settings.Overwrite, doc,
             r => new
             {
@@ -513,6 +663,7 @@ public sealed class GenerateSimpleListCommand : Command<GenerateSimpleListComman
     public override int Execute(CommandContext ctx, Settings settings)
     {
         return GenerateFormImpl.Run(
+            settings:     settings,
             output:       settings.Output,
             formName:     settings.FormName,
             table:        settings.Table,
@@ -569,6 +720,7 @@ public sealed class GenerateFormCommand : Command<GenerateFormCommand.Settings>
     public override int Execute(CommandContext ctx, Settings settings)
     {
         return GenerateFormImpl.Run(
+            settings:     settings,
             output:       settings.Output,
             formName:     settings.FormName,
             table:        settings.Table,
@@ -587,6 +739,7 @@ public sealed class GenerateFormCommand : Command<GenerateFormCommand.Settings>
 internal static class GenerateFormImpl
 {
     public static int Run(
+        GenerateSettings settings,
         string? output,
         string formName,
         string? table,
@@ -688,7 +841,8 @@ internal static class GenerateFormImpl
                 caption:         effectiveCaption,
                 gridFields:      fields,
                 sections:        sectionSpecs,
-                linesTable:      linesTable);
+                linesTable:      linesTable,
+                controlTypeResolver: BuildControlTypeResolver(table, linesTable));
         }
         catch (Exception ex)
         {
@@ -715,8 +869,17 @@ internal static class GenerateFormImpl
                 "or set D365FO_FORM_PATTERN_ENFORCE=false to bypass the gate."));
         }
 
+        // A form carries no X++ for the gate to resolve, so what it can prove is the
+        // datasource: a form bound to a table the index has never seen is the hallucination
+        // this gate exists to stop, and it used to sail straight through (issue #161).
+        var gate = GenerateInstaller.Gate(
+            settings, formName, doc: null,
+            requiredSymbols: new[] { table, linesTable }.Where(t => !string.IsNullOrWhiteSpace(t)).Select(t => t!));
+        if (gate.Failure is not null) return RenderHelpers.Render(kind, gate.Failure);
+        patternWarnings.AddRange(gate.Warnings);
+
         return GenerateInstaller.EmitString(
-            kind, "form", Folders.Form, formName,
+            kind, gate, "form", Folders.Form, formName,
             installTo, outPath, overwrite, xml,
             r => new
             {
@@ -736,9 +899,70 @@ internal static class GenerateFormImpl
                     errors   = patternReport.ErrorCount,
                     warnings = patternReport.WarningCount,
                 },
+                grounding    = gate.Grounding,
             },
-            patternWarnings.Count > 0 ? patternWarnings : null,
+            patternWarnings,
             verify: verify);
+    }
+
+    /// <summary>
+    /// Field name → the control it should be rendered as, resolved through the index.
+    /// </summary>
+    /// <remarks>
+    /// Issue #164 / R5. The form templates emitted <c>AxFormStringControl</c> for every bound
+    /// field regardless of what the field was, so a generated form put a text box on a quantity,
+    /// a date and a status enum alike. The index knows each field's EDT and enum, and
+    /// <see cref="D365FO.Core.FormPatterns.FieldControlTypes"/> knows what shipped forms do with
+    /// them. Returns null when there is no index or no table — the templates then fall back to
+    /// the string control, which is exactly the old behaviour and no worse.
+    /// </remarks>
+    private static Func<string, (string AxType, string TypeElement)>? BuildControlTypeResolver(
+        string? table, string? linesTable)
+    {
+        if (string.IsNullOrWhiteSpace(table)) return null;
+
+        Dictionary<string, (string? Edt, string? EnumType)> byField;
+        try
+        {
+            var repo = RepoFactory.Create();
+            byField = new Dictionary<string, (string?, string?)>(StringComparer.OrdinalIgnoreCase);
+            foreach (var t in new[] { table, linesTable }.Where(t => !string.IsNullOrWhiteSpace(t)))
+            {
+                var details = repo.GetTableDetails(t!);
+                if (details is null) continue;
+                foreach (var f in details.Fields)
+                {
+                    // First table wins: the header's fields are the ones the pattern's primary
+                    // controls bind to.
+                    if (byField.ContainsKey(f.Name)) continue;
+                    // The index records the field's kind in Type ("ExtendedDataType" /
+                    // "EnumType") and the name of that type in EdtName — one column doing two
+                    // jobs, so which job it is doing has to be read off Type.
+                    var isEnum = string.Equals(f.Type, "EnumType", StringComparison.OrdinalIgnoreCase);
+                    byField[f.Name] = (isEnum ? null : f.EdtName, isEnum ? f.EdtName : null);
+                }
+            }
+            if (byField.Count == 0) return null;
+
+            return field =>
+            {
+                if (!byField.TryGetValue(field, out var info))
+                    return (D365FO.Core.FormPatterns.FieldControlTypes.DefaultControl, "String");
+
+                if (info.EnumType is not null)
+                    return D365FO.Core.FormPatterns.FieldControlTypes.For("AxTableFieldEnum", info.EnumType);
+
+                string? baseType = null;
+                try { baseType = info.Edt is null ? null : repo.GetEdt(info.Edt)?.BaseType; }
+                catch { /* index hiccup — fall back below */ }
+
+                return D365FO.Core.FormPatterns.FieldControlTypes.ForEdtBaseType(baseType);
+            };
+        }
+        catch
+        {
+            return null;
+        }
     }
 
     /// <summary>Field groups a pattern's controls reference via &lt;DataGroup&gt; (see FormTemplates/*.template.xml).</summary>

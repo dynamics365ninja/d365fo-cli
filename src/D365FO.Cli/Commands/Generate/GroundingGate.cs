@@ -1,6 +1,7 @@
 using D365FO.Core;
 using D365FO.Core.Guardrails;
 using D365FO.Core.Index;
+using D365FO.Core.Scaffolding;
 using D365FO.Core.Validation;
 using System.Xml.Linq;
 
@@ -23,22 +24,78 @@ namespace D365FO.Cli.Commands.Generate;
 /// </summary>
 internal static class GroundingGate
 {
-    public sealed record GateResult(object Grounding, List<string> Warnings, ToolResult<object>? Failure);
+    /// <summary>
+    /// The verdict of one gate run, and the handle a command writes through.
+    /// </summary>
+    /// <remarks>
+    /// <see cref="GenerateInstaller.Write"/> takes one of these, so a generate command cannot
+    /// reach the writer without having gated first — the guarantee issue #161 asked for. It also
+    /// makes the object the natural place to hang the property-honesty report (R6): the gate
+    /// knows what was requested, and every document that reaches disk passes through here, so
+    /// the two halves of "did what I asked for survive?" meet without a command having to
+    /// arrange it.
+    /// </remarks>
+    public sealed record GateResult(object Grounding, List<string> Warnings, ToolResult<object>? Failure)
+    {
+        private readonly List<string> _written = [];
+        private readonly List<string> _honestyWarnings = [];
+
+        /// <summary>What the caller asked for, as option/value pairs.</summary>
+        internal IReadOnlyList<(string Option, string Value)> Requested { get; init; } = [];
+
+        /// <summary>Every document this gate has seen written, in order.</summary>
+        public IReadOnlyList<string> WrittenDocuments => _written;
+
+        /// <summary>Requested values that reached none of the written documents.</summary>
+        public IReadOnlyList<PropertyGap> PropertyGaps { get; private set; } = [];
+
+        /// <summary>
+        /// Record a document as written and re-run the honesty reconciliation over everything
+        /// written so far.
+        /// </summary>
+        /// <remarks>
+        /// Recomputed rather than accumulated, because a multi-document command legitimately
+        /// satisfies a request in its second file: <c>generate report --dataset X</c> puts the
+        /// dataset in the DP class, not in the AxReport. Judging each document alone would report
+        /// a gap that the next write fills. The previously reported gaps are removed from
+        /// <see cref="Warnings"/> before the new ones go in, so the list never accumulates
+        /// superseded findings.
+        /// </remarks>
+        internal void Observe(string xml)
+        {
+            if (string.IsNullOrWhiteSpace(xml)) return;
+            _written.Add(xml);
+
+            foreach (var stale in _honestyWarnings) Warnings.Remove(stale);
+            _honestyWarnings.Clear();
+
+            PropertyGaps = PropertyHonesty.Reconcile(Requested, string.Join('\n', _written));
+            _honestyWarnings.AddRange(PropertyGaps.Select(g => $"property-honesty: {g}"));
+            Warnings.AddRange(_honestyWarnings);
+        }
+    }
 
     /// <param name="token">Value of --grounding-token (may be null).</param>
     /// <param name="targetObject">The AOT object this write is bound to (CoC target, extension target…).</param>
     /// <param name="doc">Scaffolded XML; X++ inside Declaration/Source elements is validated.</param>
     /// <param name="requiredMethods">Methods that must exist on their owner (e.g. CoC-wrapped methods).</param>
     /// <param name="requiredSymbols">AOT names that must exist in the index (e.g. an extension's target object).</param>
+    /// <param name="requested">
+    /// Option/value pairs the caller supplied, for the property-honesty reconciliation (R6).
+    /// Empty means "do not reconcile" — the check is silent rather than reporting everything as
+    /// missing.
+    /// </param>
     public static GateResult Check(
         string? token,
         string targetObject,
         XDocument? doc,
         IEnumerable<(string Owner, string Method)>? requiredMethods = null,
-        IEnumerable<string>? requiredSymbols = null)
+        IEnumerable<string>? requiredSymbols = null,
+        IReadOnlyList<(string Option, string Value)>? requested = null)
     {
         var enforce = ProvenanceStore.EnforcementEnabled;
         var warnings = new List<string>();
+        var asked = requested ?? [];
 
         // ── 1. Grounding token ───────────────────────────────────────────────
         bool tokenValid = false;
@@ -53,7 +110,8 @@ internal static class GroundingGate
                 {
                     return new GateResult(new { enforced = true, tokenValid = false }, warnings,
                         ToolResult<object>.Fail("GROUNDING_REQUIRED", reason,
-                            $"Run `d365fo prepare change {targetObject}` (or `prepare create`) and pass the returned token via --grounding-token."));
+                            $"Run `d365fo prepare change {targetObject}` (or `prepare create`) and pass the returned token via --grounding-token."))
+                        { Requested = asked };
                 }
                 warnings.Add($"grounding: {reason}");
             }
@@ -155,13 +213,14 @@ internal static class GroundingGate
                     $"Generated code contains {refErrors} unresolved reference(s) and {bpErrors} BP error(s) (D365FO_GROUNDING_ENFORCE=true):\n" +
                     string.Join("\n", violationDetails),
                     "Fix the identifiers (use the suggested lookup commands), then retry. " +
-                    "Run `d365fo validate references` on the corrected code to confirm it is clean."));
+                    "Run `d365fo validate references` on the corrected code to confirm it is clean."))
+                { Requested = asked };
         }
 
         foreach (var detail in violationDetails)
             warnings.Add($"grounding: {detail}");
 
-        return new GateResult(grounding, warnings, null);
+        return new GateResult(grounding, warnings, null) { Requested = asked };
     }
 
     /// <summary>Concatenate X++ from Declaration/Source elements of a scaffolded AOT XML.</summary>

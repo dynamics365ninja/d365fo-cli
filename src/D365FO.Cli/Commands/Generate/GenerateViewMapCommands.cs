@@ -92,7 +92,11 @@ public sealed class GenerateViewCommand : Command<GenerateViewCommand.Settings>
 
         try
         {
-            var res = ScaffoldFileWriter.Write(doc, outPath!, settings.Overwrite);
+            // Grounding gate (issue #161): uniform across every generate subcommand.
+            var gate = GenerateInstaller.Gate(settings, settings.Name, doc);
+            if (gate.Failure is not null) return RenderHelpers.Render(kind, gate.Failure);
+
+            var res = GenerateInstaller.Write(gate, doc, outPath!, settings.Overwrite);
             return RenderHelpers.Render(kind, ToolResult<object>.Success(new
             {
                 kind = "AxView",
@@ -105,7 +109,7 @@ public sealed class GenerateViewCommand : Command<GenerateViewCommand.Settings>
                 bytes = res.Bytes,
                 backup = res.BackupPath,
                 model = settings.InstallTo,
-            }));
+            }, gate.Warnings));
         }
         catch (Exception ex)
         {
@@ -235,7 +239,11 @@ public sealed class GenerateMapCommand : Command<GenerateMapCommand.Settings>
 
         try
         {
-            var res = ScaffoldFileWriter.Write(doc, outPath!, settings.Overwrite);
+            // Grounding gate (issue #161): uniform across every generate subcommand.
+            var gate = GenerateInstaller.Gate(settings, settings.Name, doc);
+            if (gate.Failure is not null) return RenderHelpers.Render(kind, gate.Failure);
+
+            var res = GenerateInstaller.Write(gate, doc, outPath!, settings.Overwrite);
             return RenderHelpers.Render(kind, ToolResult<object>.Success(new
             {
                 kind = "AxMap",
@@ -246,7 +254,7 @@ public sealed class GenerateMapCommand : Command<GenerateMapCommand.Settings>
                 bytes = res.Bytes,
                 backup = res.BackupPath,
                 model = settings.InstallTo,
-            }));
+            }, gate.Warnings));
         }
         catch (Exception ex)
         {

@@ -177,8 +177,21 @@ internal static class FormMethodImpl
 
         warnings.Add("Index not auto-refreshed — run `d365fo index refresh` so the new method is searchable.");
 
+        // ---- Grounding gate ----
+        // This command mutates an existing form, which is the strongest case for the gate and
+        // was one of the twenty-six subcommands it never ran for (issue #161). It is gated on
+        // the injected method rather than the whole form: judging Microsoft's form as if this
+        // command had written it would report their code as our hallucinations.
+        var gate = GenerateInstaller.Gate(
+            s, formName,
+            doc: new XDocument(new XElement("Method", new XElement("Source", inject.Source))),
+            requiredSymbols: new[] { formName });
+        if (gate.Failure is not null) return RenderHelpers.Render(kind, gate.Failure);
+        warnings.AddRange(gate.Warnings);
+
         // ---- Persist: bridge update, explicit --out, or in-place ----
         var xml = doc.ToString(SaveOptions.DisableFormatting);
+        gate.Observe(xml);
 
         object PayloadFor(string source, string? path) => new
         {

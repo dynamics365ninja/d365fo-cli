@@ -117,7 +117,11 @@ public sealed class GenerateSysTestCommand : Command<GenerateSysTestCommand.Sett
         try
         {
             var doc = SysTestScaffolder.TestClass(settings.Name, settings.DataAreaId, settings.Atl, subject);
-            var res = ScaffoldFileWriter.Write(doc, outPath!, settings.Overwrite);
+            // Grounding gate (issue #161): uniform across every generate subcommand.
+            var gate = GenerateInstaller.Gate(settings, settings.Name, doc);
+            if (gate.Failure is not null) return RenderHelpers.Render(kind, gate.Failure);
+
+            var res = GenerateInstaller.Write(gate, doc, outPath!, settings.Overwrite);
             var testMethodName = $"{subject ?? "subject"}_scenario_expectedResult";
 
             return RenderHelpers.Render(kind, ToolResult<object>.Success(new
@@ -133,7 +137,7 @@ public sealed class GenerateSysTestCommand : Command<GenerateSysTestCommand.Sett
                 bytes      = res.Bytes,
                 backup     = res.BackupPath,
                 model      = settings.InstallTo,
-            }));
+            }, gate.Warnings));
         }
         catch (Exception ex)
         {

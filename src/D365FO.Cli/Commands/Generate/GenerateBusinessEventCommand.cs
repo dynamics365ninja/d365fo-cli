@@ -89,15 +89,20 @@ public sealed class GenerateBusinessEventCommand : Command<GenerateBusinessEvent
 
         var payload = settings.Payload.Select(ParsePayload).ToList();
 
+        var eventDoc    = BusinessEventScaffolder.EventClass(settings.Name, contractName, module, settings.PrimaryTable);
+        var contractDoc = BusinessEventScaffolder.ContractClass(contractName, payload);
+
+        // Grounding gate (issue #161). The driving table is the one claim this command makes
+        // about the existing AOT, so it is what the gate proves.
+        var gate = GenerateInstaller.Gate(
+            settings, settings.Name, eventDoc,
+            requiredSymbols: string.IsNullOrWhiteSpace(settings.PrimaryTable) ? null : new[] { settings.PrimaryTable! });
+        if (gate.Failure is not null) return RenderHelpers.Render(kind, gate.Failure);
+
         try
         {
-            var eventResult = ScaffoldFileWriter.Write(
-                BusinessEventScaffolder.EventClass(settings.Name, contractName, module, settings.PrimaryTable),
-                eventPath!, settings.Overwrite);
-
-            var contractResult = ScaffoldFileWriter.Write(
-                BusinessEventScaffolder.ContractClass(contractName, payload),
-                contractPath!, settings.Overwrite);
+            var eventResult    = GenerateInstaller.Write(gate, eventDoc, eventPath!, settings.Overwrite);
+            var contractResult = GenerateInstaller.Write(gate, contractDoc, contractPath!, settings.Overwrite);
 
             return RenderHelpers.Render(kind, ToolResult<object>.Success(new
             {
@@ -110,7 +115,8 @@ public sealed class GenerateBusinessEventCommand : Command<GenerateBusinessEvent
                 @event       = new { path = eventResult.Path,    bytes = eventResult.Bytes,    backup = eventResult.BackupPath },
                 contract     = new { path = contractResult.Path, bytes = contractResult.Bytes, backup = contractResult.BackupPath },
                 model        = settings.InstallTo,
-            }));
+                grounding    = gate.Grounding,
+            }, gate.Warnings));
         }
         catch (Exception ex)
         {
