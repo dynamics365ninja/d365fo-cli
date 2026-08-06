@@ -15,12 +15,12 @@ public class ConFmVehicleList extends FormRun
       </Method>
     </Methods>
     <DataSources xmlns="" />
-    <DataControls xmlns=""><DataControl><Name>Grid_VIN</Name><Methods><Method><Name>clicked</Name><Source><![CDATA[
+    <DataControls xmlns=""><Control><Name>Grid_VIN</Name><Methods><Method><Name>clicked</Name><Source><![CDATA[
     public void clicked()
     {
         super();
     }
-]]></Source></Method></Methods></DataControl></DataControls>
+]]></Source></Method></Methods></Control></DataControls>
     <Members xmlns="" />
   </SourceCode>
   <DataSources>

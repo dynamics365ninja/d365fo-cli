@@ -15,7 +15,10 @@ public class ScaffoldingSmokeTests
         Assert.Equal("CustEntity", root.Element("Name")!.Value);
         Assert.Equal("CustEntity", root.Element("PublicEntityName")!.Value);
         Assert.Equal("CustEntitys", root.Element("PublicCollectionName")!.Value);
-        var ds = root.Element("DataSources")!.Elements().First();
+        // The entity's data sources belong to its embedded query, not to the entity: a
+        // <DataSources> element on AxDataEntityView is not a member and is dropped on read.
+        Assert.Null(root.Element("DataSources"));
+        var ds = root.Element("ViewMetadata")!.Element("DataSources")!.Elements().First();
         Assert.Equal("AxQuerySimpleRootDataSource", ds.Name.LocalName);
         Assert.Equal("CustTable", ds.Element("Table")!.Value);
     }
@@ -66,7 +69,10 @@ public class ScaffoldingSmokeTests
         Assert.Equal("PurchTableForm", ep.Element("Name")!.Value);
         Assert.Equal("PurchTable", ep.Element("ObjectName")!.Value);
         Assert.Equal("MenuItemDisplay", ep.Element("ObjectType")!.Value);
-        Assert.Equal("Read", ep.Element("AccessLevel")!.Value);
+        // Access is a <Grant> of per-operation permissions; AccessLevel is not a member of
+        // AxSecurityEntryPointReference and left the privilege granting nothing at all.
+        Assert.Null(ep.Element("AccessLevel"));
+        Assert.Equal(new[] { "Read" }, ep.Element("Grant")!.Elements().Select(e => e.Name.LocalName));
     }
 
     [Fact]

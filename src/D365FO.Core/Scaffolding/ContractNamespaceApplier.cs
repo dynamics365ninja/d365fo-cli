@@ -1,4 +1,5 @@
 using System.Xml.Linq;
+using D365FO.Core.Metadata;
 using D365FO.Core.ObjectTypes;
 
 namespace D365FO.Core.Scaffolding;
@@ -20,23 +21,16 @@ namespace D365FO.Core.Scaffolding;
 /// Nested objects reset to the empty namespace, because their own contracts declare it —
 /// exactly what shipped files show (<c>&lt;AxReportDataSet xmlns=""&gt;</c> inside a V2
 /// <c>AxReport</c>, <c>&lt;AxFormDataSource xmlns=""&gt;</c> inside a V6 <c>AxForm</c>).
-/// Two shapes trigger the reset: an element named after a contract type (<c>Ax*</c>), and the
-/// members listed in <see cref="_emptyNamespaceMembers"/>, whose value type is a contract in
-/// the empty namespace even though the member name is not <c>Ax</c>-prefixed.
+/// Which members reset is not guessed from the element name: the catalog records, per member,
+/// the namespace of the contract that member's value holds. A member named after a type
+/// (<c>Ax*</c>) is the obvious case, but plenty are not — an <c>AxReport</c>'s
+/// <c>DefaultParameterGroup</c> holds an <c>AxReportParameterGroup</c>, and writing its
+/// contents in the report's V2 namespace loses every report parameter.
 /// </para>
 /// </remarks>
 public static class ContractNamespaceApplier
 {
-    /// <summary>
-    /// Members whose children belong to the empty namespace despite a non-<c>Ax</c> name,
-    /// keyed by root element. Ground-truthed against shipped files: an
-    /// <c>AxWorkflowApproval</c>'s four outcome members each hold an outcome contract that
-    /// declares no namespace, so their children carry <c>xmlns=""</c>.
-    /// </summary>
-    private static readonly Dictionary<string, HashSet<string>> _emptyNamespaceMembers = new(StringComparer.Ordinal)
-    {
-        ["AxWorkflowApproval"] = new(StringComparer.Ordinal) { "Approve", "Deny", "Reject", "RequestChange" },
-    };
+    private static readonly XNamespace Xsi = "http://www.w3.org/2001/XMLSchema-instance";
 
     /// <summary>
     /// Applies the registry's contract namespace for <paramref name="doc"/>'s root type.
@@ -48,43 +42,79 @@ public static class ContractNamespaceApplier
     {
         var root = doc?.Root;
         if (root is null) return;
+
+        DeclareXsiOnRoot(root);
+
         if (!string.IsNullOrEmpty(root.Name.NamespaceName)) return;
 
         var type = ObjectTypeRegistry.Find(root.Name.LocalName);
         if (type is null || string.IsNullOrEmpty(type.ContractNamespace)) return;
 
-        XNamespace ns = type.ContractNamespace;
-        var resetMembers = _emptyNamespaceMembers.TryGetValue(root.Name.LocalName, out var members)
-            ? members
-            : null;
-
-        Move(root, ns, resetMembers);
+        Move(root, type.ContractNamespace);
     }
 
-    private static void Move(XElement element, XNamespace ns, HashSet<string>? resetMembers)
+    /// <summary>
+    /// Hoists the schema-instance namespace to the root under the prefix shipped files use.
+    /// </summary>
+    /// <remarks>
+    /// Purely cosmetic to the serializer, which reads by namespace and ignores prefixes — but
+    /// left alone, a subtype discriminator deep in the tree gets an auto-generated prefix
+    /// (<c>p3:type</c>) declared at the point of use, and the file stops looking like AOT to
+    /// anyone diffing it against the real thing. Every shipped file declares <c>xmlns:i</c> once,
+    /// on the root.
+    /// </remarks>
+    private static void DeclareXsiOnRoot(XElement root)
     {
-        element.Name = ns + element.Name.LocalName;
+        XNamespace xsi = "http://www.w3.org/2001/XMLSchema-instance";
 
-        foreach (var child in element.Elements())
+        var used = root.DescendantsAndSelf()
+            .Any(e => e.Attributes().Any(a => a.Name.Namespace == xsi));
+        if (!used) return;
+
+        if (root.Attributes().Any(a => a.IsNamespaceDeclaration && a.Value == xsi.NamespaceName)) return;
+
+        root.SetAttributeValue(XNamespace.Xmlns + "i", xsi.NamespaceName);
+    }
+
+    /// <summary>
+    /// Puts <paramref name="element"/> into <paramref name="ns"/> and each of its members'
+    /// contents into whichever namespace that member's contract declares.
+    /// </summary>
+    private static void Move(XElement element, string ns)
+    {
+        XNamespace own = ns;
+        element.Name = own + element.Name.LocalName;
+
+        var children = element.Elements().ToList();
+        if (children.Count == 0) return;
+
+        var contract = MetadataContracts.ForElement(
+            element.Name.LocalName,
+            element.Attribute(Xsi + "type")?.Value);
+
+        foreach (var child in children)
         {
-            // A nested contract object starts a subtree that contracts into the empty
-            // namespace; so does a member whose value type does, even when its own element
-            // name is not Ax-prefixed.
-            var resets = child.Name.LocalName.StartsWith("Ax", StringComparison.Ordinal)
-                         || (resetMembers is not null && resetMembers.Contains(child.Name.LocalName));
+            var local = child.Name.LocalName;
 
-            if (resets)
+            // The member element itself belongs to its declaring type's namespace; only what it
+            // contains moves — matching <DefaultParameterGroup><Name xmlns="">…</Name></…>.
+            var contentNs = MetadataContracts.MemberContract(contract, local)?.Namespace
+                // Without a contract to consult, fall back to the shape that is always true of
+                // AOT: an element named after a type carries that type, and every nested type
+                // in this catalog contracts into the empty namespace.
+                ?? (local.StartsWith("Ax", StringComparison.Ordinal) ? string.Empty : ns);
+
+            if (local.StartsWith("Ax", StringComparison.Ordinal))
             {
-                // The member element itself stays in the parent's namespace; only what it
-                // contains resets — matching <Approve><Name xmlns="">…</Name></Approve>.
-                if (child.Name.LocalName.StartsWith("Ax", StringComparison.Ordinal))
-                    continue;
-
-                child.Name = ns + child.Name.LocalName;
+                // A collection item is the contract object itself, not a member holding one, so
+                // its own name moves too.
+                Move(child, contentNs);
                 continue;
             }
 
-            Move(child, ns, resetMembers);
+            child.Name = own + local;
+            foreach (var grandchild in child.Elements().ToList())
+                Move(grandchild, contentNs);
         }
     }
 }

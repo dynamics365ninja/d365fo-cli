@@ -362,7 +362,8 @@ public static class FormPatternTemplates
         sb.Append(pad).Append("  <PatternVersion>1.1</PatternVersion>\n");
         sb.Append(pad).Append("  <Type>TabPage</Type>\n");
         sb.Append(pad).Append("  <Caption>").Append(s.Caption).Append("</Caption>\n");
-        sb.Append(pad).Append("  <FrameType>None</FrameType>\n");
+        // No FrameType: it belongs to Group / ButtonGroup / RadioButton / ReferenceGroup, not
+        // to a tab page, and on one it is discarded on read.
         sb.Append(pad).Append("  <FormControlExtension i:nil=\"true\" />\n");
         if (fields.Count == 0)
         {
@@ -445,7 +446,7 @@ public static class FormPatternTemplates
         sb.Append(pad).Append("      <Style>Tabular</Style>\n");
         sb.Append(pad).Append("    </AxFormControl>\n");
         sb.Append(pad).Append("  </Controls>\n");
-        sb.Append(pad).Append("  <FrameType>None</FrameType>\n");
+        // The enclosing control is a tab page, which has no FrameType (see RenderTocTabPage).
         sb.Append(pad).Append("</AxFormControl>\n");
         return sb.ToString();
     }
