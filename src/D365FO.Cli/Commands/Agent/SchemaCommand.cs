@@ -223,7 +223,7 @@ public sealed class SchemaCommand : Command<SchemaCommand.Settings>
         C("review diff", "Inspect AOT changes vs. a git revision.", [], ["--base", "--head", "--repo", "--output"], []),
         C("build", "Invoke MSBuild on a D365FO project.", [], ["--msbuild", "--project", "--config", "--output"], []),
         C("sync", "Run DB sync.", [], ["--tool", "--full", "--output"], []),
-        C("test run", "Invoke SysTestRunner.", [], ["--runner", "--suite", "--output"], []),
+        C("test run", "Invoke the platform SysTest console runner (SysTestConsole.exe).", [], ["--runner", "--test", "--suite", "--granularity", "--results", "--parallel", "--output"], []),
         C("bp check", "Invoke xppbp best-practice checks.", [], ["--tool", "--model", "--packages", "--metadata", "--output"], []),
         C("daemon start", "Start warm JSON-RPC daemon.", [], ["--db", "--packages", "--foreground", "--no-watch", "--watch-debounce"], []),
         C("daemon stop", "Stop daemon.", [], [], []),
