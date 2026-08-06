@@ -153,6 +153,13 @@ public class GoldenQualityGateTests : IDisposable
         var doc = XppScaffolder.Table("GoldenTable", "@MyModel:TableLabel",
             new[] { new TableFieldSpec("AccountNum", "CustAccount", null, Mandatory: true) },
             pattern: TablePattern.Main);
+
+        // Contract order is applied on the way out — by GenerateInstaller.Emit for the bridge
+        // and by ScaffoldFileWriter for the disk path — so validate the shape that actually
+        // ships. Without it XML006 fires here: the raw scaffold lists Fields before
+        // FieldGroups, and a shipped AxTable puts FieldGroups first.
+        ContractOrderCanonicalizer.Apply(doc);
+
         var violations = XppValidator.Validate(doc.ToString(), XppValidator.CodeTypeXmlTable)
             .Where(v => v.Severity == "error")
             .ToList();

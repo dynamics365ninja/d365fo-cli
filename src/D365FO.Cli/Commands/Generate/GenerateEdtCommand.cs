@@ -2,6 +2,8 @@ using D365FO.Core;
 using D365FO.Core.Scaffolding;
 using Spectre.Console.Cli;
 
+using static D365FO.Core.ObjectTypes.ObjectTypeRegistry;
+
 namespace D365FO.Cli.Commands.Generate;
 
 /// <summary>Scaffolds an <c>AxEdt</c> Extended Data Type.</summary>
@@ -52,7 +54,7 @@ public sealed class GenerateEdtCommand : Command<GenerateEdtCommand.Settings>
 
         var doc = XppScaffolder.Edt(settings.Name, settings.Extends, settings.BaseType, settings.Size, settings.Label, effectiveEnumType);
         return GenerateInstaller.Emit(
-            kind, "edt", "AxEdt", settings.Name,
+            kind, "edt", Folders.Edt, settings.Name,
             settings.InstallTo, settings.Out, settings.Overwrite, doc,
             r => new
             {

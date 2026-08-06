@@ -1,4 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
+
 <AxForm xmlns:i="http://www.w3.org/2001/XMLSchema-instance" xmlns="Microsoft.Dynamics.AX.Metadata.V6">
   <Name>ConFmVehicleParametersForm</Name>
   <SourceCode>
@@ -48,14 +49,15 @@ public class ConFmVehicleParametersForm extends FormRun
         <FormControlExtension i:nil="true" />
         <Controls>
         <AxFormControl xmlns="" i:type="AxFormTabPageControl">
-          <Name>TabPageGeneral</Name>
-          <Pattern>FieldsFieldGroups</Pattern>
-          <PatternVersion>1.1</PatternVersion>
-          <Type>TabPage</Type>
-          <Caption>General</Caption>
-          <FrameType>None</FrameType>
-          <FormControlExtension i:nil="true" />
-          <Controls>
+          
+          
+          
+          
+          
+          
+          
+          
+        <Name>TabPageGeneral</Name><Pattern>FieldsFieldGroups</Pattern><PatternVersion>1.1</PatternVersion><Type>TabPage</Type><FormControlExtension i:nil="true" /><Controls>
             <AxFormControl xmlns="" i:type="AxFormStringControl">
               <Name>VIN</Name>
               <Type>String</Type>
@@ -70,20 +72,18 @@ public class ConFmVehicleParametersForm extends FormRun
               <DataField>Make</DataField>
               <DataSource>FmVehicle</DataSource>
             </AxFormControl>
-          </Controls>
-        </AxFormControl>
+          </Controls><Caption>General</Caption><FrameType>None</FrameType></AxFormControl>
         <AxFormControl xmlns="" i:type="AxFormTabPageControl">
-          <Name>TabPageSetup</Name>
-          <Pattern>FieldsFieldGroups</Pattern>
-          <PatternVersion>1.1</PatternVersion>
-          <Type>TabPage</Type>
-          <Caption>Setup</Caption>
-          <FrameType>None</FrameType>
-          <FormControlExtension i:nil="true" />
-          <Controls />
-        </AxFormControl>
+          
+          
+          
+          
+          
+          
+          
+          
+        <Name>TabPageSetup</Name><Pattern>FieldsFieldGroups</Pattern><PatternVersion>1.1</PatternVersion><Type>TabPage</Type><FormControlExtension i:nil="true" /><Controls /><Caption>Setup</Caption><FrameType>None</FrameType></AxFormControl>
         </Controls>
-        <Style>TOCList</Style>
       </AxFormControl>
     </Controls>
   </Design>

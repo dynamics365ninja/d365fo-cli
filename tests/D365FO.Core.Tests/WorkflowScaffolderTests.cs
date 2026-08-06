@@ -153,7 +153,9 @@ public class WorkflowScaffolderTests
         var root = doc.Root!;
 
         Assert.Equal("AxClass", root.Name.LocalName);
-        Assert.Equal("WorkflowDocument", Child(root, "Extends")!.Value);
+        // AxClass has no Extends member; the base class is in the declaration.
+        Assert.Null(Child(root, "Extends"));
+        Assert.Contains("extends WorkflowDocument", root.ToString());
         Assert.Contains("queryStr(ConVehicleReviewQuery)", root.ToString());
     }
 

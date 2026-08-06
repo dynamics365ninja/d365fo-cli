@@ -120,6 +120,8 @@ namespace D365FO.Bridge
                     return Ok(idNode, handlers.FindReferences(paramsNode as JsonObject));
                 case "getModelFolder":
                     return Ok(idNode, handlers.GetModelFolder(paramsNode as JsonObject));
+                case "validateArtifact":
+                    return Ok(idNode, handlers.ValidateArtifact(paramsNode as JsonObject));
                 default:
                     return Error(idNode, -32601, "Method not found: " + method);
             }

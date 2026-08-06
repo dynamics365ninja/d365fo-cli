@@ -76,7 +76,6 @@ public static class MigrationScriptScaffolder
         return new XDocument(
             new XElement("AxClass",
                 new XElement("Name", className),
-                new XElement("Extends", "SysRunnable"),
                 new XElement("SourceCode",
                     new XElement("Declaration", declaration),
                     new XElement("Methods",

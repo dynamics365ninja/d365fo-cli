@@ -48,7 +48,6 @@ public static class BusinessEventScaffolder
         return new XDocument(
             new XElement("AxClass",
                 new XElement("Name", className),
-                new XElement("Extends", "BusinessEventsBase"),
                 new XElement("SourceCode",
                     new XElement("Declaration", declaration),
                     new XElement("Methods",

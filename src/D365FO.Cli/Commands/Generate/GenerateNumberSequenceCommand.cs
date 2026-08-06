@@ -2,6 +2,8 @@ using D365FO.Core;
 using D365FO.Core.Scaffolding;
 using Spectre.Console.Cli;
 
+using static D365FO.Core.ObjectTypes.ObjectTypeRegistry;
+
 namespace D365FO.Cli.Commands.Generate;
 
 /// <summary>
@@ -71,14 +73,14 @@ public sealed class GenerateNumberSequenceCommand : Command<GenerateNumberSequen
         string? modulePath, edtPath, handlerPath;
         if (hasInstall && !hasOut)
         {
-            modulePath = GenerateInstaller.ResolveInstallPath(kind, "AxClass", extensionName, settings.InstallTo!, out var f1);
+            modulePath = GenerateInstaller.ResolveInstallPath(kind, Folders.Class, extensionName, settings.InstallTo!, out var f1);
             if (f1.HasValue) return f1.Value;
             edtPath = string.IsNullOrWhiteSpace(settings.OutEdt)
-                ? GenerateInstaller.ResolveInstallPath(kind, "AxEdt", edtName, settings.InstallTo!, out _)
+                ? GenerateInstaller.ResolveInstallPath(kind, Folders.Edt, edtName, settings.InstallTo!, out _)
                 : settings.OutEdt;
             handlerPath = handlerClass is null ? null
                 : string.IsNullOrWhiteSpace(settings.OutHandler)
-                    ? GenerateInstaller.ResolveInstallPath(kind, "AxClass", handlerClass, settings.InstallTo!, out _)
+                    ? GenerateInstaller.ResolveInstallPath(kind, Folders.Class, handlerClass, settings.InstallTo!, out _)
                     : settings.OutHandler;
         }
         else

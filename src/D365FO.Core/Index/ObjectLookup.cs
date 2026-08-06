@@ -11,9 +11,13 @@ public static class ObjectLookup
     public const string SupportedKindsHint =
         "Use class, table, edt, enum, form, menu-item, query, view, entity, report, service, service-group, role, duty, or privilege.";
 
-    /// <summary>Lower-case the kind and strip separators: "menu-item" → "menuitem".</summary>
+    /// <summary>
+    /// Lower-case the kind and strip separators: "menu-item" → "menuitem". Shares
+    /// <see cref="D365FO.Core.ObjectTypes.ObjectTypeRegistry.NormalizeKind"/> so a kind
+    /// string means the same thing to the reader, the writer and the bridge.
+    /// </summary>
     public static string NormalizeKind(string value)
-        => new(value.Where(char.IsLetterOrDigit).Select(char.ToLowerInvariant).ToArray());
+        => D365FO.Core.ObjectTypes.ObjectTypeRegistry.NormalizeKind(value);
 
     public static (object? Data, string? Code, string? Message) Fetch(MetadataRepository repo, string kind, string name)
     {

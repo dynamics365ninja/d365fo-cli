@@ -22,29 +22,71 @@ to `index build` over a fixture containing it.
 
 ## Phase 1 — Single type registry + provable validity (the core)
 
-1.1 **Unified object-type registry.** One table in `D365FO.Core` (e.g.
-`Core/ObjectTypes/ObjectTypeRegistry.cs`): kind → Ax root element, concrete MetaModel type name,
-AOT subfolder, bridge collection name, abstract-root/i:type policy, MCP exposure flag, naming
-rule id. Consume it from `MetadataBootstrap.KindToCollection/KindToTypeName`,
-`GenerateInstaller` call sites (drop the ~30 subfolder literals), `ObjectLookup`,
-`MetadataExtractor` folder list, `ToolCatalog` objectType enum, `ObjectNamingRules`. Add a
-parity test asserting the registry covers every `generate` subcommand and every extractor
-folder (prevents the next G1). Mirrors the predecessor's dispatch-parity tests (R6).
+1.1 ✅ **Unified object-type registry** — `Core/ObjectTypes/ObjectTypeRegistry.cs`: kind → root
+element, AOT subfolder, MetaModel type, provider collection, abstract-root/`i:type` policy,
+generate subcommand, MCP objectType, naming kind, plus an `ExistsInStandardAot` flag. Consumed by
+`MetadataBootstrap.KindToCollection/KindToTypeName` (the net48 bridge shared-compiles the file
+rather than referencing net10 Core), the `GenerateInstaller` call sites (subfolder literals →
+`ObjectTypeRegistry.Folders.*` constants, so a typo is a build error), `ScaffoldFileWriter`'s
+xsi/abstract-root guards, `MetadataExtractor` + `index refresh` folder lists, and
+`ObjectLookup.NormalizeKind`. Parity tests cover kind/root uniqueness, the folder constants, the
+bridge's 16 kinds, and — when `D365FO_PACKAGES_PATH` points at an AOS — every folder name against
+a live census. `ToolCatalog`'s objectType enum stays with 2.4, which widens it.
+Fallout found and fixed: three phantom folders the extractor read (`AxWorkspace`,
+`AxReportSsrs`, `AxQuerySimple`), and `generate query` emitting a bare abstract `<AxQuery>` root
+without `i:type="AxQuerySimple"`.
 
-1.2 **Extend the bridge to all generated families.** Add registry-driven kinds for
-`AxReport`, `AxWorkflowTemplate`, `AxMenuItem{Display,Action,Output}`, `AxSecurity{Role,Duty,
-Privilege,Policy}`, `AxService`, `AxServiceGroup`, `AxDataEntityView` extensions, so
-`generate --install-to/--verify` round-trips them through `IMetadataProvider`. Port bridge
-workarounds from R4 as they become relevant: abstract-type mapping table
-(`AxQuery→AxQuerySimple` style), `AxFormDataSourceRoot` rule, provider-side relation writes,
-never-retry-writes policy, read-back after every write (`bridgeValidateAfterWrite` equivalent —
-promote `BridgeGate.TryVerifyObject` from opt-in flag to default when the bridge is up).
+1.2 ✅ **Extend the bridge to all generated families.** Every kind `IMetadataProvider` exposes
+now carries its collection in the registry — read off the interface's own property list rather
+than guessed, which is how the bridge's `queryextension → QueryExtensions`/`AxQueryExtension`
+mapping was found to name two things that do not exist (it is `QuerySimpleExtensions` /
+`AxQuerySimpleExtension`).
 
-1.3 **Serializer-order knowledge (R2).** Port `axTablePropertyOrder` + non-existent-property
-catalog as `XML006` (misordered property will be silently dropped) and `XML007`
-(plausible-but-nonexistent property) in `XppValidator`; apply canonical ordering in
-`XppScaffolder.Table` and `TablePattern`. Extend the same treatment to other families where
-goldens reveal order sensitivity.
+The bigger half is **proof**: the bridge gained a `validateArtifact` RPC (deserialize →
+re-serialize → diff, no model touched) behind `d365fo validate metadata <file|dir>`, so
+"valid" stops meaning "looks right to us". Two corrections to this plan's assumptions came out
+of it — the on-disk format is **DataContract**, not `XmlSerializer` (hence per-type namespaces
+and member order), and validation therefore needs no write access, so it works against a live
+installation without touching it.
+
+Ten unreadable families fell out immediately and are fixed: missing contract namespace on menu
+items (V1), reports (V2), workflow types (V2) and form extensions (V6); `TabStyle` value
+`TOCList`, which is not in the enum; `AxSecurityPolicy` putting the table name in the `NoYes`
+flag `ConstrainedTable` rather than `PrimaryTable`; and `AxEdtExtension` pinned to the
+nonexistent `AxEdtStringExtension` (a discriminator the write guard *required*). All 51 goldens
+now deserialize.
+
+Deferred to 1.3 and Phase 2: routing the XML-only `generate` commands through the provider on
+`--install-to` (they write to disk today, which the fixes above finally make readable), and the
+remaining R4 workarounds — `AxFormDataSourceRoot`, provider-side relation writes,
+never-retry-writes, read-back-after-write by default.
+
+1.3 ✅ **Serializer-order knowledge (R2)** — and generalised: instead of porting a hand-captured
+`axTablePropertyOrder`, `scripts/emit-metadata-contracts.ps1` derives the whole catalog from
+`Microsoft.Dynamics.AX.Metadata.dll` (564 types, 8,820 members, namespace + order + base type)
+and commits it as an embedded resource, so the knowledge covers every family and CI needs no
+D365FO install. `ContractOrderCanonicalizer` applies that order on every write path — the
+XDocument writer, the pre-rendered form templates, and the bridge install path, which hands XML
+straight to the provider.
+
+`XML007` (a member the type does not declare, silently dropped on read) ships as an error.
+**`XML006` deliberately does not.** The strict rule "any member out of contract order is
+dropped" is not supported by evidence: shipped Microsoft files deviate from contract order in
+places and the provider reads them back with zero loss. Ordering is therefore enforced where it
+demonstrably helps — on output — rather than asserted as a defect in files we did not write.
+Getting this wrong the other way would have shipped a validator that flags Microsoft's own AOT.
+
+Measured against the live provider, the golden catalog went from 19/51 readable-and-lossless to
+**43/51**. Fixed on the way: tables lost every field group (`Fields` written before
+`FieldGroups`); `AxSecurityDuty` used `PrivilegeReferences` instead of `Privileges`, discarding
+every privilege; menu items emitted an invented `<Image><ImageType>` block; and every generated
+class carried an `<Extends>` element that AxClass has no member for (the base class lives in the
+X++ declaration, which the extractor now reads).
+
+Remaining 8, with exact causes recorded for Phase 2: report `Datasets`→`DataSets` plus the
+`AxReportDesign` subtype shape (2.1), `AxDataEntityView` data sources and field mappings (2.2),
+`AxSecurityEntryPointReference.AccessLevel` → the `Grant` sub-element (2.2), and four form
+details (`DataSourceLinks`, `AllowDelete`, `FrameType` on a tab page).
 
 1.4 **Deserialization self-check without Windows.** Add an eval/CI-side structural check per
 family: root element + `xsi:type` policy + property-order lint driven by the registry, so

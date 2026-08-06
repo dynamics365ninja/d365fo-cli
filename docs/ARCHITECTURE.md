@@ -45,6 +45,16 @@ Single file at `$D365FO_INDEX_DB` (default `%LOCALAPPDATA%\d365fo-cli\d365fo-ind
 
 ### AOT object type coverage
 
+Type facts live in one table — [`src/D365FO.Core/ObjectTypes/ObjectTypeRegistry.cs`](../src/D365FO.Core/ObjectTypes/ObjectTypeRegistry.cs):
+root element, AOT folder, MetaModel type, `IMetadataProvider` collection, `i:type`/abstract-root
+policy, and which `generate` subcommand and MCP objectType expose it. The extractor, the index
+model-detection heuristic, the scaffold writer's write guards, the generate commands' install
+paths and the net48 bridge's kind tables all read it (the bridge shared-compiles the same file,
+since it cannot reference the net10 Core). Folder names are ground-truthed against a full
+`PackagesLocalDirectory` census, and `ObjectTypeRegistryAotTests` re-checks them whenever
+`D365FO_PACKAGES_PATH` points at a real AOS — the check that would have caught the
+`AxWorkflowType` folder that never existed.
+
 | AOT Type | Directory | Notes |
 |----------|-----------|-------|
 | Table | `AxTable` | Fields, indexes, relations, delete actions, CacheLookup, OCC, ValidTimeState |

@@ -145,15 +145,15 @@ public sealed class MetadataExtractor
         List<ExtractedWorkspace>         workspaces       = null!;
 
         Parallel.Invoke(
-            () => tables       = ReadAll(Path.Combine(modelRoot, "AxTable"), ParseTable),
-            () => classes      = ReadAll(Path.Combine(modelRoot, "AxClass"), ParseClass),
-            () => edts         = ReadAll(Path.Combine(modelRoot, "AxEdt"), ParseEdt),
-            () => enums        = ReadAll(Path.Combine(modelRoot, "AxEnum"), ParseEnum),
-            () => forms        = ReadAll(Path.Combine(modelRoot, "AxForm"), ParseForm),
+            () => tables       = ReadAll(Path.Combine(modelRoot, Folder("table")), ParseTable),
+            () => classes      = ReadAll(Path.Combine(modelRoot, Folder("class")), ParseClass),
+            () => edts         = ReadAll(Path.Combine(modelRoot, Folder("edt")),   ParseEdt),
+            () => enums        = ReadAll(Path.Combine(modelRoot, Folder("enum")),  ParseEnum),
+            () => forms        = ReadAll(Path.Combine(modelRoot, Folder("form")),  ParseForm),
             () =>
             {
                 var mi = new List<ExtractedMenuItem>();
-                foreach (var kind in new[] { "AxMenuItemDisplay", "AxMenuItemAction", "AxMenuItemOutput" })
+                foreach (var kind in new[] { Folder("menuitemdisplay"), Folder("menuitemaction"), Folder("menuitemoutput") })
                     mi.AddRange(ReadAll(Path.Combine(modelRoot, kind), (doc, path) => ParseMenuItem(doc, path, kind)));
                 menuItems = mi;
             },
@@ -163,12 +163,12 @@ public sealed class MetadataExtractor
                 // whose root element name is e.g. "CustTable.FleetExtension" (Name element).
                 var exts = new List<ExtractedObjectExtension>();
                 foreach (var (dir, kind) in new[] {
-                    ("AxTableExtension", "Table"),
-                    ("AxFormExtension",  "Form"),
-                    ("AxEdtExtension",   "Edt"),
-                    ("AxEnumExtension",  "Enum"),
-                    ("AxViewExtension",  "View"),
-                    ("AxMapExtension",   "Map"),
+                    (Folder("tableextension"), "Table"),
+                    (Folder("formextension"),  "Form"),
+                    (Folder("edtextension"),   "Edt"),
+                    (Folder("enumextension"),  "Enum"),
+                    (Folder("viewextension"),  "View"),
+                    (Folder("mapextension"),   "Map"),
                 })
                 {
                     var extDir = Path.Combine(modelRoot, dir);
@@ -186,7 +186,7 @@ public sealed class MetadataExtractor
                 // Label files: parallelize across individual *.label.txt files since
                 // each can be several MB and the files are fully independent.
                 var lbls = new List<ExtractedLabel>();
-                var labelsDir = Path.Combine(modelRoot, "AxLabelFile");
+                var labelsDir = Path.Combine(modelRoot, Folder("labelfile"));
                 if (Directory.Exists(labelsDir))
                 {
                     // Modern D365 layout: AxLabelFile/LabelResources/<lang>/<Name>.<lang>.label.txt
@@ -209,31 +209,30 @@ public sealed class MetadataExtractor
                 }
                 labels = lbls;
             },
-            () => roles        = ReadAll(Path.Combine(modelRoot, "AxSecurityRole"),     ParseSecurityRole),
-            () => duties       = ReadAll(Path.Combine(modelRoot, "AxSecurityDuty"),     ParseSecurityDuty),
-            () => privileges   = ReadAll(Path.Combine(modelRoot, "AxSecurityPrivilege"),ParseSecurityPrivilege),
-            () =>
-            {
-                queries = ReadAll(Path.Combine(modelRoot, "AxQuery"), ParseQuery);
-                var sq  = ReadAll(Path.Combine(modelRoot, "AxQuerySimple"), ParseQuery);
-                if (sq.Count > 0) queries = queries.Concat(sq).ToList();
-            },
-            () => views        = ReadAll(Path.Combine(modelRoot, "AxView"),           ParseView),
-            () => dataEntities = ReadAll(Path.Combine(modelRoot, "AxDataEntityView"), ParseDataEntity),
-            () =>
-            {
-                reports = new List<ExtractedReport>();
-                reports.AddRange(ReadAll(Path.Combine(modelRoot, "AxReport"),     (d, f) => ParseReport(d, f, "Rdl")));
-                reports.AddRange(ReadAll(Path.Combine(modelRoot, "AxReportSsrs"), (d, f) => ParseReport(d, f, "Ssrs")));
-            },
-            () => services     = ReadAll(Path.Combine(modelRoot, "AxService"),      ParseService),
-            () => serviceGroups = ReadAll(Path.Combine(modelRoot, "AxServiceGroup"), ParseServiceGroup),
-            () => workflowTypes    = ReadAll(Path.Combine(modelRoot, "AxWorkflowTemplate"),ParseWorkflowType),
-            () => maps             = ReadAll(Path.Combine(modelRoot, "AxMap"),             ParseMap),
-            () => securityPolicies = ReadAll(Path.Combine(modelRoot, "AxSecurityPolicy"),  ParseSecurityPolicy),
-            () => configKeys       = ReadAll(Path.Combine(modelRoot, "AxConfigurationKey"),ParseConfigurationKey),
-            () => tiles            = ReadAll(Path.Combine(modelRoot, "AxTile"),            ParseTile),
-            () => workspaces       = ReadAll(Path.Combine(modelRoot, "AxWorkspace"),       ParseWorkspace)
+            () => roles        = ReadAll(Path.Combine(modelRoot, Folder("securityrole")),      ParseSecurityRole),
+            () => duties       = ReadAll(Path.Combine(modelRoot, Folder("securityduty")),      ParseSecurityDuty),
+            () => privileges   = ReadAll(Path.Combine(modelRoot, Folder("securityprivilege")), ParseSecurityPrivilege),
+            // Queries all live in AxQuery — the concrete AxQuerySimple appears as the root's
+            // i:type, never as a folder (registry: query, ground-truthed against a full AOS
+            // folder census).
+            () => queries      = ReadAll(Path.Combine(modelRoot, Folder("query")), ParseQuery),
+            () => views        = ReadAll(Path.Combine(modelRoot, Folder("view")),           ParseView),
+            () => dataEntities = ReadAll(Path.Combine(modelRoot, Folder("dataentityview")), ParseDataEntity),
+            // AxReportSsrs was read here too; no such folder exists on any AOS (census 2026-08-05)
+            // — SSRS reports are AxReport files whose design is RDL.
+            () => reports      = ReadAll(Path.Combine(modelRoot, Folder("report")), (d, f) => ParseReport(d, f, "Rdl")),
+            () => services         = ReadAll(Path.Combine(modelRoot, Folder("service")),          ParseService),
+            () => serviceGroups    = ReadAll(Path.Combine(modelRoot, Folder("servicegroup")),     ParseServiceGroup),
+            () => workflowTypes    = ReadAll(Path.Combine(modelRoot, Folder("workflowtemplate")), ParseWorkflowType),
+            () => maps             = ReadAll(Path.Combine(modelRoot, Folder("map")),              ParseMap),
+            () => securityPolicies = ReadAll(Path.Combine(modelRoot, Folder("securitypolicy")),   ParseSecurityPolicy),
+            () => configKeys       = ReadAll(Path.Combine(modelRoot, Folder("configurationkey")), ParseConfigurationKey),
+            () => tiles            = ReadAll(Path.Combine(modelRoot, Folder("tile")),             ParseTile),
+            // Workspaces were read from AxWorkspace, a folder that exists on no AOS (census
+            // 2026-08-05) — so this has always yielded zero rows. A D365FO workspace is an
+            // AxForm whose design Pattern is Workspace; indexing them properly means walking
+            // forms, not a folder. Left empty rather than pretending to read something.
+            () => workspaces       = new List<ExtractedWorkspace>()
         );
 
         var coc = classes.SelectMany(DetectCoc).ToList();
@@ -294,17 +293,23 @@ public sealed class MetadataExtractor
         (name.EndsWith("FormAdaptor", StringComparison.OrdinalIgnoreCase) ||
          name.EndsWith("_FormAdaptor", StringComparison.OrdinalIgnoreCase));
 
+    /// <summary>
+    /// AOT subfolder for a registry kind. Every folder this extractor reads comes through
+    /// here, so a folder name can only be wrong in one place — and
+    /// <c>ObjectTypeRegistryTests</c> asserts each one exists on a real AOS.
+    /// </summary>
+    private static string Folder(string kind)
+        => D365FO.Core.ObjectTypes.ObjectTypeRegistry.Subfolder(kind);
+
+    /// <summary>
+    /// Folder names that identify <paramref name="dir"/> as a model root. Driven by
+    /// <see cref="D365FO.Core.ObjectTypes.ObjectTypeRegistry"/> so this list cannot drift
+    /// from the folders the extractor actually reads, and so names that exist on no AOS
+    /// (the <c>AxWorkflowType</c> class of bug) cannot creep back in.
+    /// </summary>
     private static bool HasAnyAotSubfolder(string dir)
     {
-        foreach (var s in new[] {
-            "AxTable", "AxClass", "AxEdt", "AxEnum", "AxLabelFile", "AxForm",
-            "AxTableExtension", "AxFormExtension", "AxEdtExtension", "AxEnumExtension",
-            "AxSecurityRole", "AxSecurityDuty", "AxSecurityPrivilege",
-            "AxMenuItemDisplay", "AxMenuItemAction", "AxMenuItemOutput",
-            "AxQuery", "AxQuerySimple", "AxView", "AxDataEntityView",
-            "AxReport", "AxReportSsrs", "AxService", "AxServiceGroup", "AxWorkflowTemplate",
-            "AxMap", "AxSecurityPolicy", "AxConfigurationKey", "AxTile", "AxWorkspace",
-        })
+        foreach (var s in D365FO.Core.ObjectTypes.ObjectTypeRegistry.ModelMarkerFolders())
             if (Directory.Exists(Path.Combine(dir, s))) return true;
         return false;
     }
@@ -478,9 +483,21 @@ public sealed class MetadataExtractor
         var root = doc.Root;
         if (root is null) return null;
         var name = Local(root, "Name") ?? Path.GetFileNameWithoutExtension(file);
-        var extends = Local(root, "Extends");
         var decl = root.Descendants().FirstOrDefault(x => x.Name.LocalName == "SourceCode")
                     ?.Elements().FirstOrDefault(x => x.Name.LocalName == "Declaration")?.Value ?? string.Empty;
+
+        // AxClass has no Extends property — the contract is Name/SourceCode/IsObsolete/Tags/
+        // Visibility, and no shipped class file carries one. The base class lives in the X++
+        // declaration, so read it from there; the element is still honoured when present so
+        // older generated files keep working.
+        var extends = Local(root, "Extends");
+        if (string.IsNullOrWhiteSpace(extends))
+        {
+            var m = System.Text.RegularExpressions.Regex.Match(
+                decl, @"\bclass\s+[\w]+\s+extends\s+([\w]+)",
+                System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+            if (m.Success) extends = m.Groups[1].Value;
+        }
         // Use word-boundary patterns so that "public abstract\nclass" (newline) or
         // "public abstract\tclass" (tab) are correctly detected. The previous " abstract "
         // space-delimited check silently missed those variants.

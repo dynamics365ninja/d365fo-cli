@@ -3,6 +3,8 @@ using D365FO.Core;
 using D365FO.Core.Scaffolding;
 using Spectre.Console.Cli;
 
+using static D365FO.Core.ObjectTypes.ObjectTypeRegistry;
+
 namespace D365FO.Cli.Commands.Generate;
 
 /// <summary>Scaffolds an <c>AxQuery</c> with data sources and optional joins.</summary>
@@ -40,7 +42,7 @@ public sealed class GenerateQueryCommand : Command<GenerateQueryCommand.Settings
         var outPath = settings.Out;
         if (hasInstall && !hasOut)
         {
-            outPath = GenerateInstaller.ResolveInstallPath(kind, "AxQuery", settings.Name, settings.InstallTo!, out var fail);
+            outPath = GenerateInstaller.ResolveInstallPath(kind, Folders.Query, settings.Name, settings.InstallTo!, out var fail);
             if (fail.HasValue) return fail.Value;
         }
 

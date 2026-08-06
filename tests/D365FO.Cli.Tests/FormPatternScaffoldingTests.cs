@@ -101,7 +101,11 @@ public class FormPatternScaffoldingTests
         var xml = XppScaffolder.Form("FmParameters", dataSourceTable: null, FormPattern.TableOfContents);
         Assert.Contains("<Name>TabPageGeneral</Name>", xml);
         Assert.Contains("<Name>TabPageSetup</Name>", xml);
-        Assert.Contains("<Style>TOCList</Style>", xml);
+        // The Design carries the table-of-contents look; the Tab control must NOT, because a
+        // Tab's Style is the TabStyle enum and "TOCList" is not one of its members — a form
+        // carrying it fails to deserialize entirely.
+        Assert.Contains("<Style xmlns=\"\">TableOfContents</Style>", xml);
+        Assert.DoesNotContain("TOCList", xml);
     }
 
     [Fact]

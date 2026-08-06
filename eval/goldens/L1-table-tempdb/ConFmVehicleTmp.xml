@@ -3,19 +3,8 @@
   <Name>ConFmVehicleTmp</Name>
   <Label>Vehicle scratch table</Label>
   <TableGroup>Miscellaneous</TableGroup>
-  <TableType>TempDB</TableType>
   <ClusteredIndex>PrimaryIdx</ClusteredIndex>
-  <Fields>
-    <AxTableField i:type="AxTableFieldString">
-      <Name>VIN</Name>
-      <ExtendedDataType>VinEdt</ExtendedDataType>
-      <Mandatory>Yes</Mandatory>
-    </AxTableField>
-    <AxTableField i:type="AxTableFieldString">
-      <Name>ServiceNote</Name>
-      <ExtendedDataType>Notes</ExtendedDataType>
-    </AxTableField>
-  </Fields>
+  <TableType>TempDB</TableType>
   <FieldGroups>
     <AxTableFieldGroup>
       <Name>AutoReport</Name>
@@ -61,11 +50,22 @@
       </Fields>
     </AxTableFieldGroup>
   </FieldGroups>
+  <Fields>
+    <AxTableField i:type="AxTableFieldString">
+      <Name>VIN</Name>
+      <ExtendedDataType>VinEdt</ExtendedDataType>
+      <Mandatory>Yes</Mandatory>
+    </AxTableField>
+    <AxTableField i:type="AxTableFieldString">
+      <Name>ServiceNote</Name>
+      <ExtendedDataType>Notes</ExtendedDataType>
+    </AxTableField>
+  </Fields>
   <Indexes>
     <AxTableIndex>
       <Name>PrimaryIdx</Name>
-      <AlternateKey>Yes</AlternateKey>
       <AllowDuplicates>No</AllowDuplicates>
+      <AlternateKey>Yes</AlternateKey>
       <Fields>
         <AxTableIndexField>
           <DataField>VIN</DataField>

@@ -1,7 +1,6 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
 <AxClass>
   <Name>ConFmVehicleServiceTest</Name>
-  <Extends>SysTestCase</Extends>
   <SourceCode>
     <Declaration>public class ConFmVehicleServiceTest extends SysTestCase
 {

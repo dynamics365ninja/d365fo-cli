@@ -1,7 +1,6 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
 <AxClass>
   <Name>ConFmVehicleNoteAdded</Name>
-  <Extends>BusinessEventsBase</Extends>
   <SourceCode>
     <Declaration>[BusinessEvents(classStr(ConFmVehicleNoteAdded), classStr(ConFmVehicleNoteAddedContract), "Custom", "Custom")]
 public final class ConFmVehicleNoteAdded extends BusinessEventsBase

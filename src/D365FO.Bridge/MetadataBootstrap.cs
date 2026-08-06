@@ -372,52 +372,21 @@ namespace D365FO.Bridge
         /// not expose degrades to a <c>"&lt;collection&gt; provider not exposed"</c> error
         /// rather than a crash (see <see cref="SaveArtifact"/>).
         /// </remarks>
+        /// <remarks>
+        /// Both tables come from <see cref="D365FO.Core.ObjectTypes.ObjectTypeRegistry"/>
+        /// (shared-compiled into this net48 process): every kind whose registry entry names a
+        /// provider collection. Abstract roots — <c>AxEdt</c>, <c>AxEdtExtension</c> — resolve
+        /// here to the abstract base on purpose; the concrete subtype
+        /// (<c>AxEdtStringExtension</c>, …) comes from the input XML's root element or
+        /// <c>xsi:type</c>, which <see cref="Handlers.WriteArtifact"/> already handles.
+        /// </remarks>
         internal static readonly System.Collections.Generic.Dictionary<string, string> KindToCollection =
-            new System.Collections.Generic.Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
-            {
-                { "class", "Classes" },
-                { "table", "Tables" },
-                { "edt",   "Edts"    },
-                { "enum",  "Enums"   },
-                { "form",  "Forms"   },
-                { "view",  "Views"   },
-                { "map",   "Maps"    },
-                { "query", "Queries" },
-                { "dataentityview", "DataEntityViews" },
-                { "tableextension", "TableExtensions" },
-                { "formextension", "FormExtensions" },
-                { "edtextension",  "EdtExtensions"  },
-                { "enumextension", "EnumExtensions" },
-                { "viewextension", "ViewExtensions" },
-                { "queryextension", "QueryExtensions" },
-                { "dataentityviewextension", "DataEntityViewExtensions" },
-            };
+            D365FO.Core.ObjectTypes.ObjectTypeRegistry.BridgeCollections();
 
         private const string MetaModelNs = "Microsoft.Dynamics.AX.Metadata.MetaModel.";
 
         private static readonly System.Collections.Generic.Dictionary<string, string> KindToTypeName =
-            new System.Collections.Generic.Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
-            {
-                { "class", MetaModelNs + "AxClass" },
-                { "table", MetaModelNs + "AxTable" },
-                { "edt",   MetaModelNs + "AxEdt"   },
-                { "enum",  MetaModelNs + "AxEnum"  },
-                { "form",  MetaModelNs + "AxForm"  },
-                { "view",  MetaModelNs + "AxView"  },
-                { "map",   MetaModelNs + "AxMap"   },
-                { "query", MetaModelNs + "AxQuery" },
-                { "dataentityview", MetaModelNs + "AxDataEntityView" },
-                { "tableextension", MetaModelNs + "AxTableExtension" },
-                { "formextension", MetaModelNs + "AxFormExtension" },
-                // AxEdtExtension is abstract — the concrete subtype (AxEdtStringExtension,
-                // …) must come from the input XML's root element or xsi:type, exactly as
-                // for AxEdt itself. WriteArtifact already handles that.
-                { "edtextension",  MetaModelNs + "AxEdtExtension"  },
-                { "enumextension", MetaModelNs + "AxEnumExtension" },
-                { "viewextension", MetaModelNs + "AxViewExtension" },
-                { "queryextension", MetaModelNs + "AxQueryExtension" },
-                { "dataentityviewextension", MetaModelNs + "AxDataEntityViewExtension" },
-            };
+            D365FO.Core.ObjectTypes.ObjectTypeRegistry.BridgeMetaModelTypes(MetaModelNs);
 
         /// <summary>
         /// Look up the <c>AxClass</c>/<c>AxTable</c>/... Type from the loaded

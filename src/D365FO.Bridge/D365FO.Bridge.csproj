@@ -23,4 +23,15 @@
     <PackageReference Include="System.Text.Json" Version="8.0.5" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!--
+      Shared source, not a project reference: D365FO.Core targets net10 and this
+      process must stay net48. The registry file is deliberately written to compile
+      under both (no records, no init accessors, no nullable annotations), so the
+      bridge's kind → collection / kind → MetaModel type tables and the CLI's folder
+      names cannot drift apart again (audit finding G2).
+    -->
+    <Compile Include="..\D365FO.Core\ObjectTypes\ObjectTypeRegistry.cs" Link="Shared\ObjectTypeRegistry.cs" />
+  </ItemGroup>
+
 </Project>

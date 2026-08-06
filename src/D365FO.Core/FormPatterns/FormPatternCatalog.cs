@@ -412,7 +412,12 @@ public static class FormPatternCatalog
                     Id = "TOCTabs",
                     ControlTypes = new[] { "Tab" },
                     Occurrence = Occurrence.Required,
-                    Properties = new Dictionary<string, string> { ["Style"] = "TOCList" },
+                    // No Style: a Tab control's Style is the TabStyle enum
+                    // (Auto|Tabs|FastTabs|VerticalTabs|IndexTabs|Panorama|DropList), and
+                    // "TOCList" is not a member — a form carrying it cannot be deserialized at
+                    // all. The table-of-contents look comes from the Design's own
+                    // Style=TableOfContents above; shipped TOC forms (CustParameters) leave the
+                    // Tab control's Style unset.
                     Children = new NodeSpec[]
                     {
                         new()

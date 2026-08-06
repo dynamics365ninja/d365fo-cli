@@ -201,7 +201,6 @@ public static class XppScaffolder
         return new XDocument(
             new XElement("AxClass",
                 new XElement("Name", name),
-                extends is null ? null : new XElement("Extends", extends),
                 new XElement("SourceCode",
                     new XElement("Declaration",
                         $"{decl} {name}{extendsClause}\n{{\n}}"))));
@@ -354,14 +353,14 @@ public static class XppScaffolder
     /// Scaffolds a Table/Form/Edt/Enum extension. Name follows the D365FO
     /// convention <c>&lt;Target&gt;.&lt;Suffix&gt;</c> (dot-separated).
     ///
-    /// <para><c>AxEdtExtension</c> is an abstract base in the metadata model, exactly like
-    /// <c>AxEdt</c>: the concrete subtype (<c>AxEdtStringExtension</c>, …) has to be
-    /// pinned via <c>i:type</c> or Visual Studio's reader throws "Cannot create an
-    /// abstract class" — and <see cref="ScaffoldFileWriter"/> refuses the write outright.
-    /// Emitting the bare abstract root made <c>generate extension edt</c> fail
-    /// unconditionally at write time, so the subtype is resolved here from the target
-    /// EDT's base type via <paramref name="edtBaseTypeResolver"/> (the same index-backed
-    /// resolver <c>generate table</c> uses for field subtypes).</para>
+    /// <para>Unlike <c>AxEdt</c>, <c>AxEdtExtension</c> is <em>not</em> polymorphic: the
+    /// metadata assembly declares exactly one concrete <c>AxEdtExtension</c> type and no
+    /// per-base-type subtypes at all. This code used to pin
+    /// <c>i:type="AxEdtStringExtension"</c> (and <see cref="ScaffoldFileWriter"/> refused the
+    /// write without one) — a type that exists in no D365FO build, so every EDT extension it
+    /// produced was unreadable. Shipped extensions carry no discriminator; they express their
+    /// changes as <c>PropertyModifications</c>, which is why an EDT extension can retype
+    /// nothing and only override properties.</para>
     /// </summary>
     public static XDocument Extension(
         string kind, string targetName, string suffix, Func<string, string?>? edtBaseTypeResolver = null)
@@ -380,9 +379,11 @@ public static class XppScaffolder
         if (elementName == "AxEdtExtension")
         {
             XNamespace xsi = "http://www.w3.org/2001/XMLSchema-instance";
-            var concrete = $"AxEdt{ConcreteFieldSuffix(targetName, edtBaseTypeResolver)}Extension";
             root.SetAttributeValue(XNamespace.Xmlns + "i", xsi.NamespaceName);
-            root.SetAttributeValue(xsi + "type", concrete);
+            // Shape of every shipped AxEdtExtension: the array-elements collection, then the
+            // property overrides this extension applies.
+            root.Add(new XElement("ArrayElements"));
+            root.Add(new XElement("PropertyModifications"));
         }
 
         return new XDocument(root);
@@ -526,7 +527,10 @@ public static class XppScaffolder
             new XElement("AxSecurityDuty",
                 new XElement("Name", name),
                 string.IsNullOrEmpty(label) ? null : new XElement("Label", label),
-                new XElement("PrivilegeReferences",
+                // AxSecurityDuty's collection is Privileges; "PrivilegeReferences" (the item
+                // type's name, near enough to look right) is not a member, so every privilege
+                // listed here was discarded when the AOT read the duty back.
+                new XElement("Privileges",
                     privileges.Select(p =>
                         new XElement("AxSecurityPrivilegeReference",
                             new XElement("Name", p))))));
@@ -789,7 +793,6 @@ public static class XppScaffolder
         return new XDocument(
             new XElement("AxClass",
                 new XElement("Name",    dp),
-                new XElement("Extends", "SrsReportDataProviderBase"),
                 new XElement("SourceCode",
                     new XElement("Declaration", declaration),
                     new XElement("Methods", getterMethods))));
@@ -847,7 +850,6 @@ public static class XppScaffolder
         return new XDocument(
             new XElement("AxClass",
                 new XElement("Name",    contractName),
-                new XElement("Extends", "SrsReportDataContractBase"),
                 new XElement("SourceCode",
                     new XElement("Declaration", declaration),
                     new XElement("Methods", parmMethods))));
@@ -1157,30 +1159,26 @@ public static class ScaffoldFileWriter
     // AOT root elements that are abstract bases in Microsoft.Dynamics.AX.Metadata.MetaModel.
     // Writing one of these as the document root makes VS metadata reader throw
     // "Cannot create an abstract class" when the file is opened — callers must use the
-    // concrete subtype (AxEdtString, AxEdtInt, AxEdtStringExtension, …).
-    private static readonly HashSet<string> _abstractAxRoots = new(StringComparer.Ordinal)
-    {
-        "AxEdtExtension",
-    };
+    // concrete subtype (AxEdtString, AxEdtInt, AxEdtStringExtension, AxQuerySimple, …).
+    // AxEdt itself is handled separately by EnsureValidEdtRoot, which explains the
+    // concrete subtypes on offer.
+    private static readonly HashSet<string> _abstractAxRoots =
+        D365FO.Core.ObjectTypes.ObjectTypeRegistry.AbstractRoots();
 
     private const string XsiNamespace = "http://www.w3.org/2001/XMLSchema-instance";
 
     // AOT roots whose files are unreadable without the XMLSchema-instance namespace
-    // declared on the root element. AxEdt* carries i:type on the root itself, while
-    // AxTable / AxView / AxMap carry it on every field (AxTableField, AxViewField,
+    // declared on the root element. AxEdt* and AxQuery carry i:type on the root itself,
+    // while AxTable / AxView / AxMap carry it on every field (AxTableField, AxViewField,
     // AxMapBaseField are all polymorphic, abstract-based types — see issue #91);
     // AxEnum needs it because Visual Studio's metadata reader rejects the file
-    // outright when the declaration is absent (issue #70). Every entry here is
-    // ground-truthed against shipped standard-model files on a real AOS.
-    // Deliberately NOT a blanket rule for every AxXxx root: AxClass/AxMenuItem/AxQuery/…
+    // outright when the declaration is absent (issue #70). Every entry is
+    // ground-truthed against shipped standard-model files on a real AOS and lives in
+    // ObjectTypeRegistry, not here.
+    // Deliberately NOT a blanket rule for every AxXxx root: AxClass/AxMenuItem/…
     // are written without it today and are read back fine.
-    private static readonly HashSet<string> _xsiRequiredAxRoots = new(StringComparer.Ordinal)
-    {
-        "AxEnum",
-        "AxTable",
-        "AxView",
-        "AxMap",
-    };
+    private static readonly HashSet<string> _xsiRequiredAxRoots =
+        D365FO.Core.ObjectTypes.ObjectTypeRegistry.XsiRequiredRoots();
 
     // AOT elements that deserialize into a CLR bool, not a NoYes-style enum. The
     // DataContractSerializer reads these with XmlConvert.ToBoolean, so the NoYes
@@ -1202,6 +1200,12 @@ public static class ScaffoldFileWriter
     public static WriteResult Write(XDocument doc, string path, bool overwrite = false)
     {
         ArgumentNullException.ThrowIfNull(doc);
+        // Before any shape check: put the document in the namespace its DataContract
+        // declares, and in the member order that contract expects. Neither is formatting —
+        // the wrong namespace makes the file unreadable, and a misordered element is
+        // silently dropped on read, which is worse because nothing complains.
+        ContractNamespaceApplier.Apply(doc);
+        ContractOrderCanonicalizer.Apply(doc);
         EnsureConcreteAxRoot(doc.Root);
         EnsureValidEdtRoot(doc.Root);
         EnsureValueShapes(doc.Root);
@@ -1210,17 +1214,44 @@ public static class ScaffoldFileWriter
 
     /// <summary>
     /// Writes a pre-rendered XML string atomically. Used by
-    /// <see cref="FormPatternTemplates"/> which produces formatted AOT XML
-    /// directly (preserving exact element ordering required by D365FO).
+    /// <see cref="FormPatternTemplates"/>, which renders AOT XML from formatted templates.
     /// </summary>
+    /// <remarks>
+    /// The templates were written to preserve element order by hand, which is exactly the
+    /// kind of invariant that drifts: a member out of contract order is silently dropped on
+    /// read, so a template edit could delete a control with nothing to show for it. The
+    /// document is therefore canonicalised here too, and only re-rendered when that actually
+    /// changed something — a template already in order keeps its byte-for-byte formatting.
+    /// </remarks>
     public static WriteResult Write(string xml, string path, bool overwrite = false)
     {
         ArgumentException.ThrowIfNullOrEmpty(xml);
-        var root = ParseRootElement(xml);
+        var effective = CanonicalizeIfNeeded(xml);
+        var root = ParseRootElement(effective);
         EnsureConcreteAxRoot(root);
         EnsureValidEdtRoot(root);
         EnsureValueShapes(root);
-        return WriteCore(xml, path, overwrite, declarationOnSaveFromXDoc: false, null);
+        return WriteCore(effective, path, overwrite, declarationOnSaveFromXDoc: false, null);
+    }
+
+    private static string CanonicalizeIfNeeded(string xml)
+    {
+        XDocument doc;
+        try
+        {
+            doc = XDocument.Parse(xml, LoadOptions.PreserveWhitespace);
+        }
+        catch (XmlException)
+        {
+            return xml; // Not well-formed: let the downstream guards produce the real error.
+        }
+
+        var before = doc.ToString(SaveOptions.DisableFormatting);
+        ContractOrderCanonicalizer.Apply(doc);
+        if (doc.ToString(SaveOptions.DisableFormatting) == before) return xml;
+
+        var declaration = doc.Declaration?.ToString() ?? "<?xml version=\"1.0\" encoding=\"utf-8\"?>";
+        return declaration + Environment.NewLine + doc.ToString(SaveOptions.None);
     }
 
     public sealed record DeleteResult(string Path, string PreImage);
@@ -1293,6 +1324,9 @@ public static class ScaffoldFileWriter
     {
         var rootLocalName = root?.Name.LocalName;
         if (rootLocalName is null || !_abstractAxRoots.Contains(rootLocalName)) return;
+        // The AxEdt family gets the more specific diagnostic from EnsureValidEdtRoot,
+        // which can name the concrete subtypes on offer.
+        if (rootLocalName is "AxEdt" or "AxEdtExtension") return;
         if (HasConcreteXsiType(root!, rootLocalName)) return;
 
         throw new InvalidOperationException(
@@ -1302,18 +1336,24 @@ public static class ScaffoldFileWriter
             "metadata reader throws \"Cannot create an abstract class\" otherwise.");
     }
 
+    /// <summary>
+    /// <c>AxEdt</c> is an abstract base and must name its concrete subtype. <c>AxEdtExtension</c>
+    /// is not: the metadata assembly declares one concrete type and no <c>AxEdt*Extension</c>
+    /// subtypes, so a discriminator here would name a type that does not exist — which is
+    /// exactly what this guard used to demand.
+    /// </summary>
     private static void EnsureValidEdtRoot(XElement? root)
     {
         var rootLocalName = root?.Name.LocalName;
-        if (rootLocalName is not "AxEdt" and not "AxEdtExtension") return;
+        if (rootLocalName is not "AxEdt") return;
         if (HasConcreteXsiType(root!, rootLocalName!)) return;
 
         throw new InvalidOperationException(
-            $"Refusing to write <{rootLocalName}> without a concrete XMLSchema-instance type. " +
+            "Refusing to write <AxEdt> without a concrete XMLSchema-instance type. " +
             "Set i:type to a concrete subtype (e.g. AxEdtString, AxEdtInt, AxEdtReal, " +
-            "AxEdtDate, AxEdtUtcDateTime, AxEdtTime, AxEdtGuid, AxEdtContainer, AxEdtEnum — " +
-            "suffixed with 'Extension' for an EDT extension). Visual Studio's metadata reader " +
-            "throws \"Cannot create an abstract class\" when type metadata is missing.");
+            "AxEdtDate, AxEdtUtcDateTime, AxEdtTime, AxEdtGuid, AxEdtContainer, AxEdtEnum). " +
+            "Visual Studio's metadata reader throws \"Cannot create an abstract class\" when " +
+            "type metadata is missing.");
     }
 
     /// <summary>True when the root pins a concrete <c>Ax*</c> subtype that is not the abstract base itself.</summary>

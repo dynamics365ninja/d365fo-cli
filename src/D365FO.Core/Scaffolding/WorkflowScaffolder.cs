@@ -20,13 +20,13 @@ namespace D365FO.Core.Scaffolding;
 public static class WorkflowScaffolder
 {
     /// <summary>AOT subfolder / root element for a workflow type.</summary>
-    public const string TemplateRoot = "AxWorkflowTemplate";
+    public const string TemplateRoot = ObjectTypes.ObjectTypeRegistry.Folders.WorkflowTemplate;
 
     /// <summary>AOT subfolder / root element for a workflow approval element.</summary>
-    public const string ApprovalRoot = "AxWorkflowApproval";
+    public const string ApprovalRoot = ObjectTypes.ObjectTypeRegistry.Folders.WorkflowApproval;
 
     /// <summary>AOT subfolder / root element for a workflow task element.</summary>
-    public const string TaskRoot = "AxWorkflowTask";
+    public const string TaskRoot = ObjectTypes.ObjectTypeRegistry.Folders.WorkflowTask;
 
     /// <summary>
     /// Scaffolds an <c>AxClass</c> extending <c>WorkflowDocument</c>.
@@ -50,7 +50,6 @@ public static class WorkflowScaffolder
         return new XDocument(
             new XElement("AxClass",
                 new XElement("Name", documentClassName),
-                new XElement("Extends", "WorkflowDocument"),
                 new XElement("SourceCode",
                     new XElement("Declaration", declaration),
                     new XElement("Methods",

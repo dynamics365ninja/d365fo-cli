@@ -2,6 +2,8 @@ using D365FO.Core;
 using D365FO.Core.Scaffolding;
 using Spectre.Console.Cli;
 
+using static D365FO.Core.ObjectTypes.ObjectTypeRegistry;
+
 namespace D365FO.Cli.Commands.Generate;
 
 /// <summary>
@@ -58,10 +60,10 @@ public sealed class GenerateBusinessEventCommand : Command<GenerateBusinessEvent
         string? eventPath, contractPath;
         if (hasInstall && !hasOut)
         {
-            eventPath = GenerateInstaller.ResolveInstallPath(kind, "AxClass", settings.Name, settings.InstallTo!, out var f1);
+            eventPath = GenerateInstaller.ResolveInstallPath(kind, Folders.Class, settings.Name, settings.InstallTo!, out var f1);
             if (f1.HasValue) return f1.Value;
             contractPath = string.IsNullOrWhiteSpace(settings.OutContract)
-                ? GenerateInstaller.ResolveInstallPath(kind, "AxClass", contractName, settings.InstallTo!, out _)
+                ? GenerateInstaller.ResolveInstallPath(kind, Folders.Class, contractName, settings.InstallTo!, out _)
                 : settings.OutContract;
         }
         else

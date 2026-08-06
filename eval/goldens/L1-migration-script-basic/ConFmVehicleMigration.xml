@@ -1,7 +1,6 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
 <AxClass>
   <Name>ConFmVehicleMigration</Name>
-  <Extends>SysRunnable</Extends>
   <SourceCode>
     <Declaration>/// &lt;summary&gt;
 /// Data migration: FmVehicle → FmVehicle.

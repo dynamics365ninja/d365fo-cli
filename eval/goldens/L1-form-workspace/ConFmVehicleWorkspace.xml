@@ -1,4 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
+
 <AxForm xmlns:i="http://www.w3.org/2001/XMLSchema-instance" xmlns="Microsoft.Dynamics.AX.Metadata.V6">
   <Name>ConFmVehicleWorkspace</Name>
   <SourceCode>
@@ -65,20 +66,26 @@ public class ConFmVehicleWorkspace extends FormRun
         <ArrangeMethod>Vertical</ArrangeMethod>
       </AxFormControl>
       <AxFormControl xmlns="" i:type="AxFormTabControl">
-        <Name>PanoramaBody</Name>
-        <ElementPosition>268435455</ElementPosition>
-        <Type>Tab</Type>
-        <WidthMode>SizeToAvailable</WidthMode>
-        <HeightMode>SizeToAvailable</HeightMode>
-        <FormControlExtension i:nil="true" />
-        <Controls>
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+      <Name>PanoramaBody</Name><ElementPosition>268435455</ElementPosition><HeightMode>SizeToAvailable</HeightMode><Type>Tab</Type><WidthMode>SizeToAvailable</WidthMode><FormControlExtension i:nil="true" /><Controls>
           <AxFormControl xmlns="" i:type="AxFormTabPageControl">
-            <Name>SummarySection</Name>
-            <Caption>Summary</Caption>
-            <ElementPosition>536870911</ElementPosition>
-            <Type>TabPage</Type>
-            <FormControlExtension i:nil="true" />
-            <Controls>
+            
+            
+            
+            
+            
+            
+            
+          <Name>SummarySection</Name><ElementPosition>536870911</ElementPosition><Type>TabPage</Type><FormControlExtension i:nil="true" /><Controls>
               <AxFormControl xmlns="" i:type="AxFormGroupControl">
                 <Name>TileSection</Name>
                 <Pattern>Workspace_SummaryNumbers_UnboundFields</Pattern>
@@ -104,16 +111,16 @@ public class ConFmVehicleWorkspace extends FormRun
                 <ArrangeMethod>HorizontalLeft</ArrangeMethod>
                 <FrameType>None</FrameType>
               </AxFormControl>
-            </Controls>
-            <FrameType>None</FrameType>
-          </AxFormControl>
+            </Controls><FrameType>None</FrameType><Caption>Summary</Caption></AxFormControl>
           <AxFormControl xmlns="" i:type="AxFormTabPageControl">
-            <Name>FmVehicleSection</Name>
-            <Caption>FmVehicle</Caption>
-            <ElementPosition>1073741824</ElementPosition>
-            <Type>TabPage</Type>
-            <FormControlExtension i:nil="true" />
-            <Controls>
+            
+            
+            
+            
+            
+            
+            
+          <Name>FmVehicleSection</Name><ElementPosition>1073741824</ElementPosition><Type>TabPage</Type><FormControlExtension i:nil="true" /><Controls>
               <AxFormControl xmlns="" i:type="AxFormGroupControl">
                 <Name>FmVehicleCustomFilterGroup</Name>
                 <Pattern>CustomAndQuickFilters</Pattern>
@@ -166,14 +173,8 @@ public class ConFmVehicleWorkspace extends FormRun
                 <ShowRowLabels>No</ShowRowLabels>
                 <Style>Tabular</Style>
               </AxFormControl>
-            </Controls>
-            <FrameType>None</FrameType>
-          </AxFormControl>
-        </Controls>
-        <AlignChild>No</AlignChild>
-        <ShowTabs>No</ShowTabs>
-        <Style>Panorama</Style>
-      </AxFormControl>
+            </Controls><FrameType>None</FrameType><Caption>FmVehicle</Caption></AxFormControl>
+        </Controls><AlignChild>No</AlignChild><ShowTabs>No</ShowTabs><Style>Panorama</Style></AxFormControl>
     </Controls>
   </Design>
   <Parts />

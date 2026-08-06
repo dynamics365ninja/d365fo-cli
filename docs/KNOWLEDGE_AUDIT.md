@@ -118,6 +118,12 @@ to `generate extension`), `AxLabelFile` manifest.
   `XmlSerializer(Ax*Type).Deserialize(xml)` + provider `Create/Update`, plus
   `BridgeGate.TryVerifyObject` read-back after `generate --verify`.
 - The bridge has **no `validate*` RPC** — Microsoft's own validation surface is never invoked.
+  *Closed 2026-08-05 in Phase 1.2: the bridge gained `validateArtifact` (deserialize +
+  re-serialize + diff, no model touched) behind `d365fo validate metadata`. It also corrected a
+  wrong assumption in this audit — the on-disk format is **DataContract**, not `XmlSerializer`:
+  each type declares its own namespace (`AxTable` none, `AxForm` V6, `AxMenuItem*` V1,
+  `AxWorkflow*`/`AxReport` V2) and its own member order, and the serializer silently drops
+  elements that are unknown or out of order.*
 - Off-bridge (macOS/Linux/CI), "validity" degrades to `ScaffoldFileWriter` guards
   (abstract-root, `xmlns:i`, CLR-bool) + per-family offline validators where they exist.
 
@@ -135,8 +141,23 @@ to `generate extension`), `AxLabelFile` manifest.
 - **G2 — Four divergent type registries.** Bridge `KindToCollection`/`KindToTypeName` (16),
   ~30 hard-coded subfolder literals in `Commands/Generate/*`, `ObjectLookup` (15 read kinds),
   `MetadataExtractor` (30 folders). No single source of truth; G1 is the first visible casualty.
+  Fixed 2026-08-05 in Phase 1.1: `Core/ObjectTypes/ObjectTypeRegistry.cs` is the single table,
+  shared-compiled into the net48 bridge. Consolidating it surfaced three more phantom folders
+  (`AxWorkspace`, `AxReportSsrs`, `AxQuerySimple` — read by the extractor, present on no AOS)
+  and one shipping defect: `generate query` emitted a bare `<AxQuery>`, but `AxQuery` is an
+  abstract MetaModel base and every shipped file is `<AxQuery i:type="AxQuerySimple">`, so the
+  metadata reader would reject every generated query.
 - **G3 — Bridge kind set ⊂ generate set.** Report, workflow, menu item, security*, service,
   label manifest never reach the provider, so their XML is never proven deserializable.
+  Fixed 2026-08-05 in Phase 1.2: every family the provider exposes now has its collection in
+  the registry (read off `IMetadataProvider`'s own property list), and `validate metadata`
+  proves deserializability for all of them. Proving it immediately found **ten unreadable
+  families**: menu items, reports and workflow types written without their contract namespace;
+  `AxFormExtension` likewise; a `TableOfContents` form carrying `TabStyle` value `TOCList`,
+  which is not in the enum; `AxSecurityPolicy` putting a table name into the `NoYes` flag
+  `ConstrainedTable` instead of `PrimaryTable`; and `AxEdtExtension` pinned to
+  `i:type="AxEdtStringExtension"` — a type that exists in no D365FO build, which the write
+  guard *required*. All fixed; all 51 goldens now read back.
 - **G4 — Grounding gate applied to only 3 of 29 generate commands** (coc, extension,
   event-handler). The anti-hallucination token from `prepare` is optional everywhere else.
 - **G5 — Form pattern silent fallback.** `FormPatternNormalizer.Normalize` mapped any unknown
@@ -210,7 +231,14 @@ assets, in value order:
   `exampleValidation.test.ts` prove that symbols named in entries exist and examples pass the BP
   validator — and its own `eval/README.md:179` explicitly flags that this repo's skill files
   have never had that treatment.
-- **R2 — AOT XML serializer-quirk knowledge.** `src/utils/axTablePropertyOrder.ts`: the AxTable
+- **R2 — AOT XML serializer-quirk knowledge.** *Absorbed 2026-08-05 in Phase 1.3, and
+  generalised: rather than porting the predecessor's hand-captured `axTablePropertyOrder`, the
+  whole contract catalog is derived from `Microsoft.Dynamics.AX.Metadata.dll` (564 types,
+  namespace + member order + base type) and committed as an embedded resource, so it covers
+  every family and needs no D365FO install to use. `XML007` (member the type does not declare)
+  ships; a strict order rule does not — shipped Microsoft files deviate from contract order and
+  the provider still reads them losslessly, so order is enforced on output instead of asserted
+  as a defect elsewhere.* `src/utils/axTablePropertyOrder.ts`: the AxTable
   deserializer **silently drops misordered property elements** (file looks right, validators
   pass, xppbp later fails with `BPErrorTableTitleField1NotDeclared`). Canonical property order
   captured from a VM-built golden, plus `AX_TABLE_NON_EXISTENT_PROPERTIES` (plausible-but-fake

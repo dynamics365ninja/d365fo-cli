@@ -4,6 +4,8 @@ using D365FO.Core.Scaffolding;
 using Spectre.Console.Cli;
 using D365FO.Cli.Commands.Get;
 
+using static D365FO.Core.ObjectTypes.ObjectTypeRegistry;
+
 namespace D365FO.Cli.Commands.Generate;
 
 public abstract class GenerateSettings : D365OutputSettings
@@ -165,8 +167,17 @@ internal static class GenerateInstaller
         Func<EmitResult, object> buildPayload,
         List<string>? warnings = null,
         bool verify = false)
-        => EmitCore(kind, axKind, axSubfolder, name, installTo, outPath, doc.ToString(),
+    {
+        // Canonicalise here, not only in ScaffoldFileWriter: the bridge path hands the XML
+        // string straight to IMetadataProvider, so a document left in the wrong namespace or
+        // member order would be silently stripped of properties on the way in — with no file
+        // on disk to inspect afterwards.
+        ContractNamespaceApplier.Apply(doc);
+        ContractOrderCanonicalizer.Apply(doc);
+
+        return EmitCore(kind, axKind, axSubfolder, name, installTo, outPath, doc.ToString(),
             path => ScaffoldFileWriter.Write(doc, path, overwrite), buildPayload, warnings, verify);
+    }
 
     /// <summary>String-rendered counterpart of <see cref="Emit"/> (used for forms).</summary>
     internal static int EmitString(
@@ -354,7 +365,7 @@ public sealed class GenerateTableCommand : Command<GenerateTableCommand.Settings
         // Prefer the live metadata provider for --install-to (canonical output,
         // consistent with VS / d365fo-mcp-server); fall back to the scaffold.
         return GenerateInstaller.Emit(
-            kind, "table", "AxTable", settings.Name,
+            kind, "table", Folders.Table, settings.Name,
             settings.InstallTo, settings.Out, settings.Overwrite, doc,
             r => new
             {
@@ -408,7 +419,7 @@ public sealed class GenerateClassCommand : Command<GenerateClassCommand.Settings
 
         var doc = XppScaffolder.Class(settings.Name, settings.Extends, !settings.NonFinal);
         return GenerateInstaller.Emit(
-            kind, "class", "AxClass", settings.Name,
+            kind, "class", Folders.Class, settings.Name,
             settings.InstallTo, settings.Out, settings.Overwrite, doc,
             r => new
             {
@@ -469,7 +480,7 @@ public sealed class GenerateCocCommand : Command<GenerateCocCommand.Settings>
         warnings.AddRange(gate.Warnings);
 
         return GenerateInstaller.Emit(
-            kind, "class", "AxClass", settings.Target + "_Extension",
+            kind, "class", Folders.Class, settings.Target + "_Extension",
             settings.InstallTo, settings.Out, settings.Overwrite, doc,
             r => new
             {
@@ -690,7 +701,7 @@ internal static class GenerateFormImpl
         }
 
         return GenerateInstaller.EmitString(
-            kind, "form", "AxForm", formName,
+            kind, "form", Folders.Form, formName,
             installTo, outPath, overwrite, xml,
             r => new
             {

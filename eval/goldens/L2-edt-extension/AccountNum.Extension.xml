@@ -1,4 +1,6 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
-<AxEdtExtension xmlns:i="http://www.w3.org/2001/XMLSchema-instance" i:type="AxEdtStringExtension">
+<AxEdtExtension xmlns:i="http://www.w3.org/2001/XMLSchema-instance">
   <Name>AccountNum.Extension</Name>
+  <ArrayElements />
+  <PropertyModifications />
 </AxEdtExtension>

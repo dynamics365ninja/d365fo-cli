@@ -1,8 +1,8 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
-<AxReport>
+<AxReport xmlns="Microsoft.Dynamics.AX.Metadata.V2">
   <Name>ConFmVehicleParamReport</Name>
   <ReportParameters>
-    <AxReportParameter>
+    <AxReportParameter xmlns="">
       <Name>FromDate</Name>
       <AllowBlank>Yes</AllowBlank>
       <DataType>DateTime</DataType>
@@ -10,13 +10,13 @@
     </AxReportParameter>
   </ReportParameters>
   <Datasets>
-    <AxReportDataset>
+    <AxReportDataset xmlns="">
       <Name>ConFmVehicleParamReportDS</Name>
       <DataProvider>ConFmVehicleParamReportDP</DataProvider>
       <QueryType>DataProvider</QueryType>
       <DynamicFilters>Yes</DynamicFilters>
     </AxReportDataset>
-    <AxReportDataset>
+    <AxReportDataset xmlns="">
       <Name>ConFmVehicleSummaryDS</Name>
       <DataProvider>ConFmVehicleSummaryDP</DataProvider>
       <QueryType>DataProvider</QueryType>
@@ -24,7 +24,7 @@
     </AxReportDataset>
   </Datasets>
   <Designs>
-    <AxReportDesign>
+    <AxReportDesign xmlns="">
       <Name>Report</Name>
       <Caption>Fleet vehicle parameter report</Caption>
       <AutoDesignSpecs>

@@ -1,7 +1,6 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
 <AxClass>
   <Name>ConFmVehicleImportController</Name>
-  <Extends>SysOperationServiceController</Extends>
   <SourceCode>
     <Declaration>class ConFmVehicleImportController extends SysOperationServiceController
 {
