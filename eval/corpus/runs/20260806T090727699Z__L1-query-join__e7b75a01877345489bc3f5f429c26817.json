@@ -1,0 +1,20 @@
+{
+  "runId": "20260806T090727699Z__L1-query-join__e7b75a01877345489bc3f5f429c26817",
+  "caseId": "L1-query-join",
+  "tier": 1,
+  "timestampUtc": "2026-08-06T09:07:27.6995526+00:00",
+  "source": "build-oracle",
+  "score": {
+    "xppErrors": 0,
+    "referenceErrors": 0,
+    "goldenMatch": true,
+    "goldenDiff": {
+      "missing": [],
+      "extra": [],
+      "changed": [],
+      "isMatch": true
+    },
+    "buildClean": true,
+    "buildErrors": 0
+  }
+}

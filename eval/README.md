@@ -86,8 +86,18 @@ must never be recorded as a broken golden. `EvalScoreCard.BuildClean` is `null`
 wherever no compiler ran; it is never `false` by default.
 
 Current baseline: **48 of 51 goldens compile clean**. The three that do not are
-real defects in `generate query` and `generate event-handler`, ranked as
-`TOOL_DEFECT` clusters — see `d365fo eval clusters --actionable`.
+all tagged `known-reference-gap` — their X++ names a sibling artifact the case's
+single golden does not include, or a standard object the fixture cannot contain —
+so the compiler rejects them for exactly the reason `validate references` does.
+Those are recorded but never classified as `TOOL_DEFECT`: three permanent false
+clusters at the top of the improver's queue would be worse than no queue at all.
+
+The first three runs of this oracle found three real defects, all now fixed:
+`generate query` produced queries the metadata reader could not read at all,
+`generate event-handler` wrote its handler where the provider could not find the
+method name, and `generate migration-script` named a variable `count`, an X++
+keyword. None of the three was visible to a golden diff or to any offline
+validator — that is the whole argument for this tier.
 
 ## Improver toolchain
 

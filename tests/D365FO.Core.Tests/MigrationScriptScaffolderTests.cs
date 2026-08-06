@@ -47,7 +47,23 @@ public class MigrationScriptScaffolderTests
 
         Assert.Contains("private static int BatchSize = 1000;", declaration);
         Assert.Contains("ttsbegin;", run);
-        Assert.Contains("if (count mod BatchSize == 0)", run);
+        Assert.Contains("if (migratedCount mod BatchSize == 0)", run);
         Assert.Contains("ttscommit;", run);
+    }
+
+    /// <summary>
+    /// The counter used to be called <c>count</c>, which is an X++ keyword: the
+    /// compiler rejects the declaration and then mis-parses the rest of the method
+    /// ("'}' expected", "Invalid token 'count'"). The XML was structurally perfect
+    /// throughout, so only `eval verify-build` could see it — case
+    /// <c>L1-migration-script-basic</c>.
+    /// </summary>
+    [Fact]
+    public void Counter_is_not_named_after_an_Xpp_keyword()
+    {
+        var (_, run, _) = Sources();
+
+        Assert.DoesNotContain("int count", run, StringComparison.Ordinal);
+        Assert.Contains("int migratedCount = 0;", run, StringComparison.Ordinal);
     }
 }

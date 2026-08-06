@@ -19,7 +19,7 @@ public class ConFmVehicleMigration
 {
     FmVehicle source;
     FmVehicle target;
-    int count = 0;
+    int migratedCount = 0;
 
     ttsbegin;
     while select source
@@ -28,16 +28,16 @@ public class ConFmVehicleMigration
         target.clear();
         // target.Field = source.Field;
         if (target.RecId) target.doUpdate(); else target.doInsert();
-        count++;
-        if (count mod BatchSize == 0)
+        migratedCount++;
+        if (migratedCount mod BatchSize == 0)
         {
             ttscommit;
-            info(strFmt("Migrated %1 records", count));
+            info(strFmt("Migrated %1 records", migratedCount));
             ttsbegin;
         }
     }
     ttscommit;
-    info(strFmt("Migration complete. Total: %1", count));
+    info(strFmt("Migration complete. Total: %1", migratedCount));
 }
 </Source>
       </Method>

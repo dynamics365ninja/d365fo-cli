@@ -274,6 +274,15 @@ public sealed class EvalVerifyBuildCommand : Command<EvalVerifyBuildCommand.Sett
             if (!byId.TryGetValue(v.CaseId, out var @case)) continue;
 
             var clean = v.Verdict == BuildVerdict.Clean;
+
+            // A `known-reference-gap` case generates an artifact whose body names a
+            // sibling artifact (the case's own golden is one file) or a standard
+            // object the fixture cannot contain. The compiler rejects those names for
+            // the same documented reason `validate references` does, so filing them as
+            // TOOL_DEFECT would put three permanent false clusters at the top of the
+            // improver's queue.
+            var expectedGap = @case.Tags.Contains(EvalTriage.KnownReferenceGapTag, StringComparer.OrdinalIgnoreCase);
+
             var score = new EvalScoreCard(
                 XppClean: null, XppErrors: 0,
                 ReferencesClean: null, ReferenceErrors: 0,
@@ -290,11 +299,13 @@ public sealed class EvalVerifyBuildCommand : Command<EvalVerifyBuildCommand.Sett
                 Source: "build-oracle",
                 Score: score,
                 // The golden was reviewed and the replay matches it, so code that does not
-                // compile is the scaffolder emitting uncompilable X++ — a tool defect.
-                Classification: clean ? null : EvalTriage.ToolDefect,
+                // compile is the scaffolder emitting uncompilable X++ — a tool defect,
+                // unless the case documents that it names objects nothing provisions.
+                Classification: clean || expectedGap ? null : EvalTriage.ToolDefect,
                 Note: clean
                     ? null
-                    : $"xppc reported {v.Errors} error(s) against this golden: {string.Join("; ", v.Messages.Take(3))}"));
+                    : (expectedGap ? $"expected for a {EvalTriage.KnownReferenceGapTag} case — " : "")
+                      + $"xppc reported {v.Errors} error(s) against this golden: {string.Join("; ", v.Messages.Take(3))}"));
         }
     }
 

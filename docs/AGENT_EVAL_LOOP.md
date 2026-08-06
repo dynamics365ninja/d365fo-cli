@@ -245,9 +245,17 @@ report a verdict nobody collected*:
 - a diagnostic naming an object no case provisioned is reported as *unattributed*
   rather than spread across every case.
 
-Its first real run found two shipping defects the offline loop had no way to see:
-every generated `AxQuery` crashes the metadata reader, and a generated event
-handler puts its method where the provider cannot find the name.
+Its first runs found three shipping defects the offline loop had no way to see —
+every generated `AxQuery` crashed the metadata reader, a generated event handler
+put its method where the provider could not find the name, and a generated
+migration script named its counter `count`, an X++ keyword. All three are fixed;
+the third only became visible once the first two stopped aborting the compile
+before IL generation, which is the usual shape of a compiler-backed oracle.
+
+Cases tagged `known-reference-gap` are exempt from this dimension too: their X++
+names a sibling artifact the case's single golden does not include, or a standard
+object the fixture cannot contain, and the compiler rejects those names for exactly
+the reason `validate references` does.
 
 ---
 

@@ -78,7 +78,9 @@ public static class EvalCluster
         if (!r.Score.GoldenMatch) dims.Add("golden");
         if (r.Score.XppClean == false) dims.Add("xpp");
         if (r.Score.ReferencesClean == false && !exempt.Contains(r.CaseId)) dims.Add("references");
-        if (r.Score.BuildClean == false) dims.Add("build");
+        // Same exemption for the compiler: it rejects an unprovisioned sibling or
+        // standard object for exactly the reason `validate references` does.
+        if (r.Score.BuildClean == false && !exempt.Contains(r.CaseId)) dims.Add("build");
         return dims;
     }
 }

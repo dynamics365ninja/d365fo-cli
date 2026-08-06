@@ -490,6 +490,17 @@ public static class XppScaffolder
     /// delegate). Body is a <c>next</c>-free stub; handlers intentionally
     /// don't chain like CoC.
     /// </summary>
+    /// <remarks>
+    /// The handler method is an XML <c>&lt;Method&gt;</c> with its own
+    /// <c>&lt;Name&gt;</c>, and <c>&lt;Declaration&gt;</c> carries only the class
+    /// shell — the same shape <see cref="CocExtension"/> and every other class
+    /// scaffolder here already emit, and the one shipped classes use. Writing the
+    /// method inline in the declaration instead looks fine to a golden diff and to
+    /// every offline validator, and the compiler rejects it: <c>"The method name in
+    /// the source code, 'run', does not match the name in the XML file, ''"</c>.
+    /// Found by <c>eval verify-build</c> (the L3 oracle), case
+    /// <c>L2-event-handler-basic</c>.
+    /// </remarks>
     public static XDocument EventHandler(
         string className,
         string sourceKind,
@@ -506,17 +517,19 @@ public static class XppScaffolder
             _ => $"SubscribesTo({sourceKind}, {sourceObject}, {eventName})",
         };
 
-        var src =
-            $"public static class {className}\n{{\n" +
-            $"    [{attr}]\n" +
-            $"    public static void {handlerMethod}(XppPrePostArgs args)\n" +
-            "    {\n        // handler logic here\n    }\n}\n";
-
         return new XDocument(
             new XElement("AxClass",
                 new XElement("Name", className),
                 new XElement("SourceCode",
-                    new XElement("Declaration", src))));
+                    new XElement("Declaration",
+                        $"public static class {className}\n{{\n}}\n"),
+                    new XElement("Methods",
+                        new XElement("Method",
+                            new XElement("Name", handlerMethod),
+                            new XElement("Source",
+                                $"    [{attr}]\n" +
+                                $"    public static void {handlerMethod}(XppPrePostArgs args)\n" +
+                                "    {\n        // handler logic here\n    }\n"))))));
     }
 
     /// <summary>

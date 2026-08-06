@@ -250,19 +250,28 @@ Four things this could only be learned by running it, and all four were wrong fi
   Information` are now parsed, as are the two line shapes without a `dynamics://` URL or without a
   source location. TODO markers are `information` and count as neither error nor warning.
 
-**Result: 48 of 51 goldens compile clean**, and the three that do not are real shipping defects
-the offline loop could never see, now recorded as `TOOL_DEFECT` clusters with corpus provenance:
-- `generate query` (2 cases) — the reader throws `KeyNotFoundException` on every generated query.
-  Ground-truthed against shipped queries: `<SourceCode><Methods><Method><Name>classDeclaration`
-  is mandatory, and each data source needs `<DynamicFields>Yes</DynamicFields>` in contract
-  position (after `ConcurrencyModel`) or the compiler rejects the empty field list.
-- `generate event-handler` (1 case) — the subscriber method is written inside `<Declaration>`;
-  the provider needs it as an XML `<Method>` with a `<Name>`.
+**The first run found three shipping defects the offline loop could never see, all now fixed:**
+- `generate query` (2 cases) — the reader threw `KeyNotFoundException` on every generated query.
+  Ground-truthed against shipped queries (300/300 carry it):
+  `<SourceCode><Methods><Method><Name>classDeclaration` is mandatory, and each data source needs
+  `<DynamicFields>Yes</DynamicFields>` in contract position (after `ConcurrencyModel`) or the
+  compiler rejects the empty field list.
+- `generate event-handler` (1 case) — the subscriber method was written inside `<Declaration>`;
+  the provider needs it as an XML `<Method>` with a `<Name>`, which is what every other class
+  scaffolder here already emitted.
+- `generate migration-script` — surfaced only after the first two were fixed, because the
+  metadata-level crashes had been aborting the compile before IL generation: the loop counter was
+  named `count`, an X++ keyword, so the declaration was rejected and the rest of the method
+  mis-parsed.
 
-Fixing them is scaffolder work, so it belongs to the improver's next PR rather than to this
-phase — which is the loop behaving as designed. For the same reason the mini-AOT fixture gained
-an EDT and an enum but *not* a query: a generated query would make the fixture module itself
-uncompilable and block the oracle.
+**Baseline after the fixes: 48 of 51 goldens compile clean.** The three that remain are all
+tagged `known-reference-gap` — their X++ names a sibling artifact the case's single golden does
+not include, or a standard object the fixture cannot contain — so the compiler rejects them for
+the same documented reason `validate references` does. They are recorded but never classified as
+`TOOL_DEFECT`: three permanent false clusters at the top of the improver's queue would be worse
+than no queue. The mini-AOT fixture gained a query (once `generate query` could produce a
+readable one) and an `OnInitialized` delegate on `FmVehicleService`, without which the
+event-handler case could not compile however correct the scaffolder was.
 
 4.3 ❌ **L4 runtime oracle — not built.** It needs a live AOS, a `SysTestRunner` result parser
 (none exists; `test run` returns a raw output tail) and per-run fixture provisioning inside a real
@@ -287,7 +296,9 @@ a new `GenerateSurface` (capabilities), the case catalog (E) and the embedded co
 gated in both directions — `generate <name> --help` must succeed for every entry, and every
 subcommand `CliApp` registers must have a leaf — so it cannot become the fifth drifting registry.
 Fixture growth: `VinEdt` (closing a reference `FmVehicle.VIN` had dangled on since the fixture was
-written) and `FmVehicleStatus`, both produced by the CLI's own generators.
+written), `FmVehicleStatus` and `FmVehicleQuery`, all produced by the CLI's own generators, plus
+an `OnInitialized` delegate on `FmVehicleService`. The whole fixture module compiles clean, which
+is what makes it usable as the L3 oracle's reference material.
 
 **Gate:** ✅ CI red on any eval regression (`eval` job); ✅ coverage report shows per-family K/E/T
 status and gates on drift; ✅ `eval clusters --actionable` returns three ranked, classified,

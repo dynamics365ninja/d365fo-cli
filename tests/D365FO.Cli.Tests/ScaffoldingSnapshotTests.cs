@@ -527,6 +527,44 @@ public class ScaffoldingSnapshotTests
         Assert.Equal("CustTrans", embedded.Element("Table")!.Value);
     }
 
+    /// <summary>
+    /// Both of these were missing until <c>eval verify-build</c> compiled the query
+    /// goldens on a real installation: without the <c>classDeclaration</c> method the
+    /// metadata reader dies with a bare <c>KeyNotFoundException</c> before compiling
+    /// anything, and a data source with no fields and <c>DynamicFields</c> unset is
+    /// rejected outright. Neither is visible to a golden diff or to any offline
+    /// validator — the XML looks perfectly reasonable.
+    /// </summary>
+    [Fact]
+    public void Query_carries_the_classDeclaration_method_the_metadata_reader_requires()
+    {
+        var doc = QueryScaffolder.Query("CustQuery", new[] { new QueryDataSourceSpec("CustTable") });
+
+        var method = doc.Root!.Element("SourceCode")!.Element("Methods")!.Elements("Method").Single();
+        Assert.Equal("classDeclaration", method.Element("Name")!.Value);
+
+        var source = method.Element("Source")!.Value;
+        Assert.Contains("[Query]", source, StringComparison.Ordinal);
+        Assert.Contains("public class CustQuery extends QueryRun", source, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Query_data_sources_select_dynamic_fields_because_they_list_none()
+    {
+        var doc = QueryScaffolder.Query("CustJoinQuery", new[]
+        {
+            new QueryDataSourceSpec("CustTable"),
+            new QueryDataSourceSpec("CustTrans", ParentDs: "CustTable"),
+        });
+
+        var dataSources = doc.Descendants()
+            .Where(e => e.Name.LocalName.StartsWith("AxQuerySimple", StringComparison.Ordinal))
+            .ToList();
+
+        Assert.Equal(2, dataSources.Count);
+        Assert.All(dataSources, ds => Assert.Equal("Yes", ds.Element("DynamicFields")!.Value));
+    }
+
     // ---- BusinessEvent (Phase 6) ----
 
     [Fact]
