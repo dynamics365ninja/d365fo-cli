@@ -1,13 +1,13 @@
 {
-  "capturedUtc": "2026-08-06T11:15:33.7730268+00:00",
+  "capturedUtc": "2026-08-06T11:36:48.7103369+00:00",
   "host": "D365ASLDEV2-1",
   "packagesRoot": "K:\\AosService\\PackagesLocalDirectory",
   "compiler": "K:\\AosService\\PackagesLocalDirectory\\Bin\\xppc.exe",
-  "compilerArgs": "-metadata=C:\\Users\\Admin7e00859cee\\AppData\\Local\\Temp\\2\\claude\\K--repos-d365fo-cli\\ac58616d-375a-4381-b289-fca2d371276f\\scratchpad\\l3sl -modelmodule=D365FoCliEvalGoldens -output=C:\\Users\\Admin7e00859cee\\AppData\\Local\\Temp\\2\\claude\\K--repos-d365fo-cli\\ac58616d-375a-4381-b289-fca2d371276f\\scratchpad\\l3sl\\bin -referencefolder=K:\\AosService\\PackagesLocalDirectory -refPath=C:\\Users\\Admin7e00859cee\\AppData\\Local\\Temp\\2\\claude\\K--repos-d365fo-cli\\ac58616d-375a-4381-b289-fca2d371276f\\scratchpad\\l3sl\\bin -log=C:\\Users\\Admin7e00859cee\\AppData\\Local\\Temp\\2\\claude\\K--repos-d365fo-cli\\ac58616d-375a-4381-b289-fca2d371276f\\scratchpad\\l3sl\\Dynamics.AX.D365FoCliEvalGoldens.xppc.log",
+  "compilerArgs": "-metadata=C:\\Users\\Admin7e00859cee\\AppData\\Local\\Temp\\2\\claude\\K--repos-d365fo-cli\\ac58616d-375a-4381-b289-fca2d371276f\\scratchpad\\l3toc -modelmodule=D365FoCliEvalGoldens -output=C:\\Users\\Admin7e00859cee\\AppData\\Local\\Temp\\2\\claude\\K--repos-d365fo-cli\\ac58616d-375a-4381-b289-fca2d371276f\\scratchpad\\l3toc\\bin -referencefolder=K:\\AosService\\PackagesLocalDirectory -refPath=C:\\Users\\Admin7e00859cee\\AppData\\Local\\Temp\\2\\claude\\K--repos-d365fo-cli\\ac58616d-375a-4381-b289-fca2d371276f\\scratchpad\\l3toc\\bin -log=C:\\Users\\Admin7e00859cee\\AppData\\Local\\Temp\\2\\claude\\K--repos-d365fo-cli\\ac58616d-375a-4381-b289-fca2d371276f\\scratchpad\\l3toc\\Dynamics.AX.D365FoCliEvalGoldens.xppc.log",
   "modelName": "D365FoCliEvalGoldens",
   "total": 51,
-  "clean": 36,
-  "failed": 15,
+  "clean": 37,
+  "failed": 14,
   "skipped": 0,
   "cases": [
     {
@@ -157,16 +157,11 @@
     },
     {
       "caseId": "L1-form-table-of-contents",
-      "verdict": "errors",
-      "errors": 4,
+      "verdict": "clean",
+      "errors": 0,
       "warnings": 0,
       "ruleIds": [],
-      "messages": [
-        "Control \u0027AxForm/ConFmVehicleParametersForm/Design\u0027 is missing child \u0027TOC Tabs\u0027 required by pattern \u0027Table of Contents\u0027.",
-        "Control \u0027AxForm/ConFmVehicleParametersForm/Design/Controls\u0027 has child \u0027ActionPane\u0027 which is not allowed at its current location by pattern \u0027Table of Contents\u0027.",
-        "Property \u0027ColumnsMode\u0027 on control AxForm/ConFmVehicleParametersForm/Design/Controls/Tab/TabPageGeneral must have value \u0027Fill\u0027 per pattern \u0027Fields and Field Groups\u0027.",
-        "Property \u0027ColumnsMode\u0027 on control AxForm/ConFmVehicleParametersForm/Design/Controls/Tab/TabPageSetup must have value \u0027Fill\u0027 per pattern \u0027Fields and Field Groups\u0027."
-      ]
+      "messages": []
     },
     {
       "caseId": "L1-form-workspace",
@@ -420,8 +415,8 @@
         "XPPC-METHOD-MISSING"
       ],
       "messages": [
-        "The ExtendsOfAttribute specification is invalid. Please specify an existing element to extend.",
         "The \u0027NumberSeqApplicationModule_ConDemo\u0027 argument of the \u0027classStr\u0027 compile-time function does not specify a known class.",
+        "The ExtendsOfAttribute specification is invalid. Please specify an existing element to extend.",
         "The next method cannot be invoked in method \u0027loadModule\u0027 because it\u0027s not a Chain Of Command Method.",
         "The \u0027ConDemoNum\u0027 argument of the \u0027extendedTypeNum\u0027 compile-time function does not specify a known extended data type.",
         "ClassDoesNotContainMethod: Class \u0027NumberSeqApplicationModule_ConDemo\u0027 does not contain a definition for method \u0027create\u0027 and no extension method \u0027create\u0027 accepting a first argument of type \u0027NumberSeqApplicationModule_ConDemo\u0027 is found on any extension class."

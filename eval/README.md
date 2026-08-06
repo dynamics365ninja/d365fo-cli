@@ -85,7 +85,7 @@ returns `EVAL_BUILD_INVOCATION` and writes **no** verdicts — an argument mista
 must never be recorded as a broken golden. `EvalScoreCard.BuildClean` is `null`
 wherever no compiler ran; it is never `false` by default.
 
-Current baseline: **36 of 51 goldens compile clean**, with **zero unattributed
+Current baseline: **37 of 51 goldens compile clean**, with **zero unattributed
 diagnostics** — every complaint the compiler makes is blamed on the case that
 produced the object it names.
 
@@ -120,7 +120,7 @@ golden diff or to any offline validator, which is the whole argument for the tie
 | `generate entity` | "There must be a key defined for a public data entity" — `IsPublic` was hard-coded `Yes` while `Keys` stayed optional |
 | `generate form` | `<DataGroup>` emitted without its sibling `<DataSource>` and before `<Controls>` instead of after, so "Field group 'Overview' does not exist" even once the table declared it; and an `AxFormActionPaneTabControl` placed directly under a tab page, which the reader forbids |
 
-**Open: AOT form-pattern compliance.** Six form cases still fail
+**Open: AOT form-pattern compliance.** Five form cases still fail
 `FormPatternValidation` — a different validator from this repo's own FP001–FP010,
 run by the AOS against its own pattern registry.
 
@@ -137,10 +137,17 @@ registry** for everything on its `RegistryDerived` list — versions, design
 properties, the required control tree, and what else may sit at the design root.
 Editorial content (purpose, when to use it, reference forms, lifecycle guidance,
 sub-pattern hints) stays hand-written, because the registry does not know it.
-`SimpleList` is migrated: its spec is derived, its template carries the layout
-properties the AOS requires, and its goldens compile clean. Migrating one pattern
-changes what FP003/FP004 accept, so the rest move one at a time with their template
-and goldens.
+`SimpleList` and `TableOfContents` are migrated: their specs are derived, their
+templates carry the parts and layout properties the AOS requires, and their goldens
+compile clean. Migrating one pattern changes what FP003/FP004 accept, so the rest
+move one at a time with their template and goldens.
+
+What Table of Contents cost, as a sense of the per-pattern work: drop the ActionPane
+(the design has exactly one part, the vertical tab, and nothing beside it), give each
+page the title group with its `MainInstruction` static text, put the fields in a
+sibling content group rather than in the title, emit that content group even when
+empty, and stop stamping `FieldsFieldGroups` on the page — the TOC pattern already
+governs it, and that sub-pattern forbids the very title the TOC pattern requires.
 
 `FormTemplatePatternRegistryTests` pins every template's design pattern against the
 registry, so *naming a pattern that does not exist* is an offline test failure

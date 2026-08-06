@@ -289,7 +289,7 @@ Four things this could only be learned by running it, and all four were wrong fi
   `generate table` produces for exactly this reason — the fixture was hand-written without them,
   which is the contract `generate form`'s preflight check already warns about.
 
-**Baseline: 36 of 51 goldens compile clean, with zero unattributed diagnostics.** The count moves
+**Baseline: 37 of 51 goldens compile clean, with zero unattributed diagnostics.** The count moves
 in both directions and only one of them is about the tool — it drops whenever the parser learns a
 severity prefix it had been discarding, and rises when a scaffolder is fixed. The signal to watch
 is the unattributed count, not the clean count. It first dipped from a flattering 48 because the
@@ -305,8 +305,8 @@ cannot contain. The mini-AOT fixture gained a query (once `generate query` could
 readable one) and an `OnInitialized` delegate on `FmVehicleService`, without which the
 event-handler case could not compile however correct the scaffolder was.
 
-**The 15 remaining reds are the honest work queue**, and the largest slice is one project:
-**AOT form-pattern compliance**. Six form cases fail `FormPatternValidation` — a different
+**The 14 remaining reds are the honest work queue**, and the largest slice is one project:
+**AOT form-pattern compliance**. Five form cases fail `FormPatternValidation` — a different
 validator from this repo's own FP001–FP010, run by the AOS against its pattern registry.
 
 That registry is now derived rather than guessed: `scripts/emit-form-patterns.ps1` extracts all
@@ -324,9 +324,15 @@ templates sit on its `KnownWrong` list with the real pattern named — `DetailsM
 pattern — versions, design properties, required control tree, what else may sit at the root — from
 the registry for everything on its `RegistryDerived` list, keeping the editorial half (purpose,
 when to use it, reference forms, lifecycle guidance, sub-pattern hints) hand-written because the
-registry does not know it. `SimpleList` is migrated end to end: derived spec, template carrying
-the layout properties the AOS requires, goldens re-captured, and its form plus the two form-method
-cases compile clean.
+registry does not know it. `SimpleList` and `TableOfContents` are migrated end to end: derived
+specs, templates carrying the parts and layout properties the AOS requires, goldens re-captured,
+and their forms (plus the two form-method cases built on SimpleList) compile clean.
+
+Table of Contents is a fair measure of the per-pattern cost: drop the ActionPane (its design has
+exactly one part, the vertical tab, and allows nothing beside it), give every page the title group
+with its `MainInstruction` static text, move the fields into a sibling content group, emit that
+group even when empty, and stop stamping `FieldsFieldGroups` on the page — the TOC pattern already
+governs it, and that sub-pattern forbids the very title the TOC pattern requires.
 
 Two corrections came out of that first migration, both now encoded in `RegistrySpecFactory`:
 a registry part that declares no children of its own **delegates** its contents to whatever

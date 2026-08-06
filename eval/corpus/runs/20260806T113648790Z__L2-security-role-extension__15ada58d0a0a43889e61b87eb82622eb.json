@@ -1,0 +1,20 @@
+{
+  "runId": "20260806T113648790Z__L2-security-role-extension__15ada58d0a0a43889e61b87eb82622eb",
+  "caseId": "L2-security-role-extension",
+  "tier": 2,
+  "timestampUtc": "2026-08-06T11:36:48.7900414+00:00",
+  "source": "build-oracle",
+  "score": {
+    "xppErrors": 0,
+    "referenceErrors": 0,
+    "goldenMatch": true,
+    "goldenDiff": {
+      "missing": [],
+      "extra": [],
+      "changed": [],
+      "isMatch": true
+    },
+    "buildClean": true,
+    "buildErrors": 0
+  }
+}

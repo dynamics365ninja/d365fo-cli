@@ -358,23 +358,84 @@ public static class FormPatternTemplates
         var sb = new StringBuilder();
         sb.Append(pad).Append("<AxFormControl xmlns=\"\" i:type=\"AxFormTabPageControl\">\n");
         sb.Append(pad).Append("  <Name>").Append(s.Name).Append("</Name>\n");
-        sb.Append(pad).Append("  <Pattern>FieldsFieldGroups</Pattern>\n");
-        sb.Append(pad).Append("  <PatternVersion>1.1</PatternVersion>\n");
+        // No sub-pattern on a TOC page: the Table of Contents pattern already defines
+        // what a page contains (a title group, then whatever the page is for). Stamping
+        // FieldsFieldGroups here made the AOS apply that sub-pattern's rules instead —
+        // "ColumnsMode must have value 'Fill' per pattern 'Fields and Field Groups'" —
+        // and it forbids the title text the TOC pattern requires.
         sb.Append(pad).Append("  <Type>TabPage</Type>\n");
         sb.Append(pad).Append("  <Caption>").Append(s.Caption).Append("</Caption>\n");
         // No FrameType: it belongs to Group / ButtonGroup / RadioButton / ReferenceGroup, not
         // to a tab page, and on one it is discarded on read.
         sb.Append(pad).Append("  <FormControlExtension i:nil=\"true\" />\n");
+
+        // Every TOC page carries a title group (registry part 'TOCPageTitleGroup')
+        // holding the page's main title. It is a title container, not the field host —
+        // Style=TOCTitleContainer, Skip=Yes — so the fields go in a sibling group.
+        sb.Append(pad).Append("  <Controls>\n");
+        sb.Append(pad).Append("    <AxFormControl xmlns=\"\" i:type=\"AxFormGroupControl\">\n");
+        sb.Append(pad).Append("      <Name>").Append(s.Name).Append("TitleGroup</Name>\n");
+        sb.Append(pad).Append("      <Height>-1</Height>\n");
+        sb.Append(pad).Append("      <HeightMode>SizeToContent</HeightMode>\n");
+        sb.Append(pad).Append("      <Skip>Yes</Skip>\n");
+        sb.Append(pad).Append("      <Type>Group</Type>\n");
+        sb.Append(pad).Append("      <Visible>Yes</Visible>\n");
+        sb.Append(pad).Append("      <Width>-1</Width>\n");
+        sb.Append(pad).Append("      <WidthMode>SizeToAvailable</WidthMode>\n");
+        sb.Append(pad).Append("      <FormControlExtension i:nil=\"true\" />\n");
+        sb.Append(pad).Append("      <Controls>\n");
+        sb.Append(pad).Append("        <AxFormControl xmlns=\"\" i:type=\"AxFormStaticTextControl\">\n");
+        sb.Append(pad).Append("          <Name>").Append(s.Name).Append("MainTitle</Name>\n");
+        sb.Append(pad).Append("          <Skip>Yes</Skip>\n");
+        sb.Append(pad).Append("          <Type>StaticText</Type>\n");
+        sb.Append(pad).Append("          <Width>-1</Width>\n");
+        sb.Append(pad).Append("          <WidthMode>SizeToAvailable</WidthMode>\n");
+        sb.Append(pad).Append("          <FormControlExtension i:nil=\"true\" />\n");
+        sb.Append(pad).Append("          <Text>").Append(s.Caption).Append("</Text>\n");
+        sb.Append(pad).Append("          <Style>MainInstruction</Style>\n");
+        sb.Append(pad).Append("        </AxFormControl>\n");
+        sb.Append(pad).Append("      </Controls>\n");
+        sb.Append(pad).Append("      <AllowUserSetup>No</AllowUserSetup>\n");
+        sb.Append(pad).Append("      <ArrangeMethod>Vertical</ArrangeMethod>\n");
+        sb.Append(pad).Append("      <Columns>1</Columns>\n");
+        sb.Append(pad).Append("      <ColumnsMode>Fixed</ColumnsMode>\n");
+        sb.Append(pad).Append("      <FrameType>None</FrameType>\n");
+        sb.Append(pad).Append("      <Style>TOCTitleContainer</Style>\n");
+        sb.Append(pad).Append("    </AxFormControl>\n");
+
+        // Always emitted, empty or not: a TOC page carrying only its title group is
+        // rejected ("is missing a child required by pattern 'Table of Contents'"), and
+        // an empty content group is what a freshly-added page looks like in the designer.
+        sb.Append(pad).Append("    <AxFormControl xmlns=\"\" i:type=\"AxFormGroupControl\">\n");
+        sb.Append(pad).Append("      <Name>").Append(s.Name).Append("FieldsGroup</Name>\n");
+        sb.Append(pad).Append("      <Height>-1</Height>\n");
+        sb.Append(pad).Append("      <HeightMode>SizeToAvailable</HeightMode>\n");
+        sb.Append(pad).Append("      <Type>Group</Type>\n");
+        sb.Append(pad).Append("      <Width>-1</Width>\n");
+        sb.Append(pad).Append("      <WidthMode>SizeToAvailable</WidthMode>\n");
+        sb.Append(pad).Append("      <FormControlExtension i:nil=\"true\" />\n");
         if (fields.Count == 0)
         {
-            sb.Append(pad).Append("  <Controls />\n");
+            sb.Append(pad).Append("      <Controls />\n");
         }
         else
         {
-            sb.Append(pad).Append("  <Controls>\n");
-            foreach (var f in fields) sb.Append(RenderDialogField(f, ds, indent + 4));
-            sb.Append(pad).Append("  </Controls>\n");
+            sb.Append(pad).Append("      <Controls>\n");
+            foreach (var f in fields) sb.Append(RenderDialogField(f, ds, indent + 8));
+            sb.Append(pad).Append("      </Controls>\n");
         }
+        sb.Append(pad).Append("      <FrameType>None</FrameType>\n");
+        sb.Append(pad).Append("    </AxFormControl>\n");
+
+        sb.Append(pad).Append("  </Controls>\n");
+
+        // Contract order after <Controls>: AllowUserSetup, ArrangeMethod, Columns,
+        // ColumnsMode, … PanelStyle.
+        sb.Append(pad).Append("  <AllowUserSetup>Yes</AllowUserSetup>\n");
+        sb.Append(pad).Append("  <ArrangeMethod>Vertical</ArrangeMethod>\n");
+        sb.Append(pad).Append("  <Columns>1</Columns>\n");
+        sb.Append(pad).Append("  <ColumnsMode>Fixed</ColumnsMode>\n");
+        sb.Append(pad).Append("  <PanelStyle>Auto</PanelStyle>\n");
         sb.Append(pad).Append("</AxFormControl>\n");
         return sb.ToString();
     }

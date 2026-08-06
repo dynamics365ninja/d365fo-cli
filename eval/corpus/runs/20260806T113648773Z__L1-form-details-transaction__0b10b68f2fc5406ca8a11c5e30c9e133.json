@@ -1,0 +1,22 @@
+{
+  "runId": "20260806T113648773Z__L1-form-details-transaction__0b10b68f2fc5406ca8a11c5e30c9e133",
+  "caseId": "L1-form-details-transaction",
+  "tier": 1,
+  "timestampUtc": "2026-08-06T11:36:48.7733547+00:00",
+  "source": "build-oracle",
+  "score": {
+    "xppErrors": 0,
+    "referenceErrors": 0,
+    "goldenMatch": true,
+    "goldenDiff": {
+      "missing": [],
+      "extra": [],
+      "changed": [],
+      "isMatch": true
+    },
+    "buildClean": false,
+    "buildErrors": 2
+  },
+  "classification": "TOOL_DEFECT",
+  "note": "xppc reported 2 error(s) against this golden: Unable to validate pattern \u0027DetailsTransaction 1.1\u0027. Message: Pattern \u0027DetailsTransaction 1.1\u0027 not found.; Property \u0027ColumnsMode\u0027 on control AxForm/ConFmVehicleServiceOrder/Design/Controls/Tab/TabPageHeader must have value \u0027Fill\u0027 per pattern \u0027Fields and Field Groups\u0027."
+}

@@ -1,0 +1,21 @@
+{
+  "runId": "20260806T113648788Z__L2-numberseq-basic__4f2b3a238a244c7aa03e293f7613053f",
+  "caseId": "L2-numberseq-basic",
+  "tier": 2,
+  "timestampUtc": "2026-08-06T11:36:48.788742+00:00",
+  "source": "build-oracle",
+  "score": {
+    "xppErrors": 0,
+    "referenceErrors": 0,
+    "goldenMatch": true,
+    "goldenDiff": {
+      "missing": [],
+      "extra": [],
+      "changed": [],
+      "isMatch": true
+    },
+    "buildClean": false,
+    "buildErrors": 5
+  },
+  "note": "expected for a known-reference-gap case \u2014 xppc reported 5 error(s) against this golden: The \u0027NumberSeqApplicationModule_ConDemo\u0027 argument of the \u0027classStr\u0027 compile-time function does not specify a known class.; The ExtendsOfAttribute specification is invalid. Please specify an existing element to extend.; The next method cannot be invoked in method \u0027loadModule\u0027 because it\u0027s not a Chain Of Command Method."
+}

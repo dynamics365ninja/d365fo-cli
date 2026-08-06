@@ -83,25 +83,23 @@ public static class RegistrySpecFactory
         // Leaving order unchecked keeps FP005 from inventing violations the AOS does
         // not report; missing and disallowed children (FP003/FP004) still fire.
         ChildrenOrdered = false,
-        // A part that declares no children of its own does not mean "nothing may go
-        // inside": the registry delegates those contents to whatever sub-pattern the
-        // container declares. Reading the absence as "empty" made the validator reject
-        // a quick filter inside a CustomFilterGroup, which is the one thing that
-        // belongs there.
-        Extra = part.ExtraChildrenAllowed || part.Children.Count == 0
-            ? ExtraChildren.Any
-            : ExtraChildren.None,
+        // Always permissive inside a part, and that is not a hedge — it is what the AOS
+        // does. TableOfContents never writes Children="*" anywhere, yet it accepts field
+        // controls on a TOC page while rejecting an ActionPane at the design root. So
+        // the closed set is the design root (see ExtraRoot); inside a part, the declared
+        // children are the ones that must be present, not the only ones that may be.
+        Extra = ExtraChildren.Any,
     };
 
     private static string NormalizeType(string type) =>
         TypeAliases.TryGetValue(type, out var mapped) ? mapped : type;
 
-    /// <summary><c>1</c> | <c>0..1</c> | <c>1..*</c> | <c>0..*</c> as the registry writes it.</summary>
+    /// <summary><c>1</c> | <c>0..1</c> | <c>1..*</c> | <c>0..*</c> | <c>*</c> as the registry writes it.</summary>
     private static Occurrence ToOccurrence(string count) => count switch
     {
         "0..1" => Occurrence.Optional,
         "1..*" => Occurrence.OneOrMore,
-        "0..*" => Occurrence.ZeroOrMore,
+        "0..*" or "*" => Occurrence.ZeroOrMore,
         _ => Occurrence.Required,
     };
 }

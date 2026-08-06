@@ -91,6 +91,7 @@ public static class FormPatternCatalog
     private static readonly HashSet<string> RegistryDerived = new(StringComparer.Ordinal)
     {
         "SimpleList",
+        "TableOfContents",
 
     };
 
