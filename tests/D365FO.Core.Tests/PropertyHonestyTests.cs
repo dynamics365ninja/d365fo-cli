@@ -69,6 +69,27 @@ public class PropertyHonestyTests
         Assert.Empty(PropertyHonesty.Reconcile([("--flagish", value)], Table));
     }
 
+    [Theory]
+    [InlineData(@"K:\AosService\PackagesLocalDirectory\ApplicationSuite\Foundation\AxForm\CustGroup.xml")]
+    [InlineData("/var/models/ConFleet/AxForm/ConVehicle.xml")]
+    [InlineData(@"out\companions\ConVehicleContract.xml")]
+    public void A_value_that_names_a_file_is_not_a_property_of_the_object(string path)
+    {
+        // --from, --add-to, --into-role and the --out-* family name documents, not properties.
+        // Reconciling them reports one gap per path segment and buries everything that matters.
+        Assert.Empty(PropertyHonesty.Reconcile([("--from", path)], Table));
+    }
+
+    [Fact]
+    public void A_nested_spec_that_merely_uses_a_slash_is_still_reconciled()
+    {
+        // --constrained Header/Line nests a policy's constrained-table tree; every segment has
+        // to reach the document, so this must not be mistaken for a path.
+        var gaps = PropertyHonesty.Reconcile([("--constrained", "ConHeader/ConLine")], Table);
+
+        Assert.Equal(["ConHeader", "ConLine"], gaps.Select(g => g.Missing).Order().ToArray());
+    }
+
     [Fact]
     public void An_empty_request_says_nothing()
     {

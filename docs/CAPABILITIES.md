@@ -228,6 +228,7 @@ All scaffolders write atomically (`.tmp` + move, `.bak` on overwrite). Pass `--i
 | `generate security-policy` | `AxSecurityPolicy` (XDS row-level security), including the nested `--constrained` table tree |
 | `generate systest` | `SysTestCase` skeleton — `[SysTestMethod]` Arrange/Act/Assert stub, optional `[SysTestCaseDataDependency]` and `--atl` `AtlDataRootNode` wiring (ATL-ready MVP, no test-logic generation) |
 | `generate migration-script` | Data-fix `Runnable` class with `ttsbegin`/`ttscommit` batching |
+| `generate form-clone` | Copy of an existing `AxForm` under a new name, datasources optionally re-bound |
 | `generate simple-list` | Alias for `generate form --pattern SimpleList` |
 | `modify method` | Replace an existing method's body on a live class/table/edt/form via D365FO.Bridge (`IMetadataProvider`, structured `XDocument` replace — no CDATA string surgery, no on-disk fallback). Reference/BP validation always blocks on error-severity findings. |
 | `modify property` | Set a property (`Label`, `ConfigurationKey`, `TableGroup`, …) on a live object. |
@@ -249,6 +250,32 @@ same object already uses, so a model does not accumulate `CustTable.Fleet` next 
 
 Every `modify` write (including `modify method`) records its exact pre-image in the
 modification journal — revert with `d365fo undo`.
+
+#### Cloning a reference form
+
+A Microsoft form that already has the pattern, the control tree and the wiring right is a better
+starting point than any template, and cloning one is what a developer does by hand anyway.
+
+```sh
+d365fo generate form-clone ConVehicleGroup --from CustGroup     --rebind CustGroup=ConVehicleGroupTable --out ConVehicleGroup.xml
+```
+
+`--from` takes a form name (resolved through the index) or a path to the AxForm XML. `--rebind`
+moves a datasource onto another table, renames the datasource when it was named after the old
+table, and follows that rename into every control that referenced it — including the datasource
+entry under `<SourceCode>`, where override methods live.
+
+The edits are string-level and narrow. An `AxForm` is a V6 contract whose Design subtree is
+written in the empty namespace with `i:type` on every control, so loading it into an `XDocument`
+and writing it back rewrites namespace declarations nobody asked to change — which is also why
+`FormPatternTemplates` renders forms as strings. Verified against a shipped 16 KB `CustGroup`
+form: the clone differs on exactly the intended lines and is byte-identical everywhere else.
+
+What it deliberately does *not* do is a blind replace of the old form name. Form names are short
+and appear inside unrelated identifiers (`CustGroup` inside `Grid_CustGroupId`), so only the root
+`<Name>`, the class declaration and `formStr()` self-references move. Everything it cannot reach —
+menu items, privileges, extensions, callers elsewhere in the AOT — comes back as a warning, as
+does the fact that a rebind does not check the new table actually has the bound fields.
 
 #### The grounding gate
 
