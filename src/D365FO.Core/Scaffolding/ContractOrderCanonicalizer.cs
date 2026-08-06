@@ -37,13 +37,17 @@ public static class ContractOrderCanonicalizer
         foreach (var child in element.Elements().ToList())
             Apply(child);
 
-        var contract = MetadataContracts.ForElement(
-            element.Name.LocalName,
-            element.Attribute(Xsi + "type")?.Value);
-        if (contract is null) return;
-
         var children = element.Elements().ToList();
         if (children.Count < 2) return;
+
+        // Resolved from the members actually present, not from the element name alone: a
+        // collection item is written under its declared base type's name and carries a
+        // subtype's members, so the base's order cannot rank them (see EffectiveContract).
+        var contract = MetadataContracts.EffectiveContract(
+            element.Name.LocalName,
+            element.Attribute(Xsi + "type")?.Value,
+            children.Select(c => c.Name.LocalName));
+        if (contract is null) return;
 
         // Members the contract does not know keep their position relative to the member they
         // follow, so a document with an unknown element is not scrambled on top of being
