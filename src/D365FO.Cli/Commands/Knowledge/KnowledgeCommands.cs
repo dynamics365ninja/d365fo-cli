@@ -1,4 +1,6 @@
 using D365FO.Core;
+using D365FO.Core.Eval;
+using D365FO.Core.Index;
 using D365FO.Core.Knowledge;
 using D365FO.Core.Validation;
 using Spectre.Console.Cli;
@@ -159,6 +161,145 @@ public sealed class KnowledgeSearchCommand : Command<KnowledgeSearchCommand.Sett
             hits.Count == 0
                 ? new[] { "No section matched. Try `d365fo knowledge list` and fetch a topic directly." }
                 : null));
+    }
+}
+
+/// <summary>
+/// <c>d365fo knowledge audit</c> — prove the corpus itself, rather than only the code it
+/// helps generate. Two halves, both ported from upstream <c>d365fo-mcp-server</c>:
+/// <list type="number">
+/// <item><description>every named AOT type/API in <c>skills/_source</c> resolves against the
+/// symbol index (live when a full standard index is present, otherwise against the committed
+/// snapshot, so CI can refuse un-audited knowledge edits), and</description></item>
+/// <item><description>every X++/AOT-XML example passes the same offline BP validator
+/// <c>validate xpp</c> runs.</description></item>
+/// </list>
+/// Exit codes: 0 = clean, 1 = command failure, 2 = defects found.
+/// </summary>
+public sealed class KnowledgeAuditCommand : Command<KnowledgeAuditCommand.Settings>
+{
+    public sealed class Settings : D365OutputSettings
+    {
+        [CommandOption("--capture")]
+        [System.ComponentModel.Description("Re-capture eval/knowledge-audit.snapshot.json from a live full standard index.")]
+        public bool Capture { get; init; }
+
+        [CommandOption("--verify")]
+        [System.ComponentModel.Description("Force the snapshot gate even when a live index is available (what CI runs).")]
+        public bool Verify { get; init; }
+    }
+
+    public override int Execute(CommandContext ctx, Settings settings)
+    {
+        var kind = OutputMode.Resolve(settings.Output);
+
+        var repoRoot = EvalPaths.FindRepoRoot();
+        if (repoRoot is null)
+        {
+            return RenderHelpers.Render(kind, ToolResult<object>.Fail(
+                D365FoErrorCodes.SourceUnreadable,
+                "knowledge audit needs a checkout of this repo (eval/knowledge-audit.*.json live there).",
+                "Run it from within the d365fo-cli source tree."));
+        }
+
+        var allow = KnowledgeAuditStore.LoadAllow(EvalPaths.KnowledgeAllowPath(repoRoot));
+        var snapshotPath = EvalPaths.KnowledgeSnapshotPath(repoRoot);
+        var refs = KnowledgeRefExtractor.ExtractAll();
+
+        // Half 2 runs unconditionally — it needs no index at all.
+        var examples = KnowledgeExamples.Collect();
+        var (exampleViolations, deadPins) = KnowledgeExamples.Gate(examples, allow.Examples);
+
+        MetadataRepository? repo = null;
+        try { repo = RepoFactory.Create(); } catch { /* no index — snapshot gate below */ }
+        var live = repo is not null && !settings.Verify && KnowledgeAudit.IsFullStandardIndex(repo);
+
+        if (settings.Capture && !live)
+        {
+            return RenderHelpers.Render(kind, ToolResult<object>.Fail(
+                D365FoErrorCodes.NoIndex,
+                "--capture needs a full standard symbol index; this machine has none.",
+                $"Run `d365fo index extract` against a real PackagesLocalDirectory first (sentinels: {string.Join(", ", KnowledgeAudit.Sentinels)})."));
+        }
+
+        object symbols;
+        int symbolDefects;
+        if (live)
+        {
+            var result = KnowledgeAudit.Audit(refs, repo!, allow.Symbols);
+            symbolDefects = result.Findings.Count;
+            if (settings.Capture)
+            {
+                var indexedAt = repo!.GetNewestExtractTimestampUtc()?.ToString("o") ?? "unknown";
+                KnowledgeAuditStore.SaveSnapshot(
+                    snapshotPath, KnowledgeAudit.BuildSnapshot(refs, result, indexedAt, DateTimeOffset.UtcNow));
+            }
+            symbols = new
+            {
+                mode = settings.Capture ? "capture" : "live",
+                checkedCount = result.Checked,
+                resolved = result.Resolved,
+                allowlisted = result.Allowed,
+                defects = result.Findings.Select(f => new
+                {
+                    topic = f.Ref.TopicId,
+                    field = f.Ref.Field,
+                    refKind = f.Ref.Kind,
+                    status = f.Status,
+                    detail = f.Detail,
+                }).ToList(),
+                snapshot = settings.Capture ? snapshotPath : null,
+            };
+        }
+        else
+        {
+            var snapshot = KnowledgeAuditStore.LoadSnapshot(snapshotPath);
+            if (snapshot is null)
+            {
+                return RenderHelpers.Render(kind, ToolResult<object>.Fail(
+                    D365FoErrorCodes.NoIndex,
+                    "No full standard index and no committed snapshot — the audit has nothing to prove against.",
+                    "Run `d365fo knowledge audit --capture` on a machine with a real index and commit the snapshot."));
+            }
+
+            var uncovered = KnowledgeAudit.VerifyAgainstSnapshot(refs, snapshot, allow.Symbols);
+            var stale = KnowledgeAudit.StaleSnapshotKeys(refs, snapshot);
+            symbolDefects = uncovered.Count;
+            symbols = new
+            {
+                mode = "snapshot",
+                checkedCount = refs.Count,
+                capturedAt = snapshot.CapturedAt,
+                indexedAt = snapshot.IndexedAt,
+                uncovered = uncovered.Select(r => new { topic = r.TopicId, field = r.Field, refKind = r.Kind, name = r.Name, member = r.Member }).ToList(),
+                staleSnapshotKeys = stale,
+            };
+        }
+
+        var defects = symbolDefects + exampleViolations.Count + deadPins.Count;
+        var envelope = ToolResult<object>.Success(new
+        {
+            topics = KnowledgeBase.Topics.Count,
+            symbols,
+            examples = new
+            {
+                count = examples.Count,
+                defects = exampleViolations.Select(v => new
+                {
+                    topic = v.Example.TopicId,
+                    field = v.Example.Field,
+                    rule = v.Rule,
+                    fix = v.Fix,
+                }).ToList(),
+                deadPins,
+            },
+            verdict = defects == 0
+                ? "Knowledge corpus audited clean."
+                : $"{defects} knowledge defect(s) — fix the topic, or add a reviewed entry to eval/knowledge-audit.allow.json.",
+        });
+
+        var rc = RenderHelpers.Render(kind, envelope);
+        return rc != 0 ? rc : defects > 0 ? 2 : 0;
     }
 }
 

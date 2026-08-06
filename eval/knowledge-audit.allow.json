@@ -1,0 +1,15 @@
+{
+  "symbols": {
+    "DateTimeUtil": "Kernel class. Kernel types live in the AOS binaries, not in PackagesLocalDirectory metadata XML, so the index cannot carry them (same reason ReferenceResolver allow-lists them).",
+    "Exception": "Kernel enum (Exception::Error / ::CLRError). Not an AxEnum on disk.",
+    "JoinMode": "Kernel enum used by the Query object model (JoinMode::InnerJoin).",
+    "QueryRun": "Kernel class of the Query object model.",
+    "QueryBuildDataSource": "Kernel class of the Query object model.",
+    "StreamReader": "System.IO.StreamReader, written unqualified after a `using System.IO;` in the example. .NET BCL types are matched by namespace prefix when qualified; this one is not.",
+    "ServiceAttribute": "Named by custom-service-authoring only in order to state that no such class-level decorator exists in X++. The corpus is right precisely because this does not resolve."
+  },
+  "examples": {
+    "coc-extension-authoring::§🚨 NEVER copy default parameter values into the wrapper · ```xpp::COC001": "Intentional wrong-vs-right demonstration — the forbidden wrapper signature is shown next to the correct one.",
+    "xpp-database-queries::§`crossCompany` belongs on the OUTER buffer · ```xpp::SEL003": "Intentional wrong-vs-right demonstration — crossCompany on a joined buffer is shown as the counter-example."
+  }
+}

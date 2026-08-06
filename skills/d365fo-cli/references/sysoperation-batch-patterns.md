@@ -84,7 +84,7 @@ d365fo generate runbase FmLegacyBatch \
 
 ---
 
-## 3. Data migration scripts — `SysRunnable`
+## 3. Data migration scripts — runnable classes
 
 Use for one-time data migration during upgrades or post-deployment data fixes.
 
@@ -108,6 +108,7 @@ d365fo generate migration-script FmVehicleMigration \
 
 - Always run migration scripts in a test environment before production.
 - Use `--batch-size` to avoid long-running transactions. Default is 1000.
-- The scaffolded class extends `SysRunnable` and exposes a static `main(Args _args)` entry point that constructs the class and calls the instance `run()` method — invoke via **Right-click → Open** in Visual Studio (or wrap the call in a batch/RunBase wrapper). There is no static `SysRunnable::run()` call.
+- **A runnable class extends nothing.** In D365FO "runnable" is not a base class — it is any plain class with a static `main(Args _args)` entry point, run via **right-click the class → Set as startup object** in Visual Studio (or wrapped in a batch job). Verified against the AOT: no `SysRunnable` type exists, so deriving from it will not compile.
+- The scaffolded class follows exactly that shape: `main(Args _args)` constructs the class and calls the instance `run()` method.
 - Never delete source data in the same script — use a separate cleanup script after validation.
 - After migration, validate row counts: `select count(*) from FmVehicle`.

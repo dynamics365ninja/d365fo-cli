@@ -1,6 +1,6 @@
 {
   "id": "L1-migration-script-basic",
-  "title": "SysRunnable data-migration script over an existing table",
+  "title": "Runnable data-migration script over an existing table",
   "tier": 1,
   "instruction": "Create a data-migration script class named ConFmVehicleMigration that upserts records from FmVehicle to FmVehicle (a self-migration, e.g. a re-key pass). Use `d365fo get table FmVehicle` first to confirm the table exists before generating. Use only the d365fo CLI (search/get/generate/validate) — do not hand-write XML.",
   "canonical_args": ["generate", "migration-script", "ConFmVehicleMigration", "--source-table", "FmVehicle", "--target-table", "FmVehicle", "--mode", "Upsert"],

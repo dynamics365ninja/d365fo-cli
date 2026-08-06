@@ -41,6 +41,20 @@ jobs:
           name: test-results-${{ matrix.os }}
           path: "**/TestResults/**"
 
+  # The knowledge corpus is gated the same fail-closed way generated code is: every named
+  # AOT type/API must be covered by the snapshot captured against a real standard index, and
+  # every X++/XML example must pass the offline BP validator. CI has no index, so this is the
+  # snapshot half — `d365fo knowledge audit --capture` re-captures it on a machine that has one.
+  knowledge-audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+      - name: Audit the knowledge corpus
+        run: dotnet run --project src/D365FO.Cli -c Release -- knowledge audit --verify --output json
+
   skills:
     runs-on: ubuntu-latest
     steps:

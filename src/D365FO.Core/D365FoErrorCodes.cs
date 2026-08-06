@@ -18,6 +18,7 @@ public static class D365FoErrorCodes
     public const string SourceUnreadable = "SOURCE_UNREADABLE";
 
     // Index / metadata not found
+    public const string NoIndex = "NO_INDEX";
     public const string TableNotFound = "TABLE_NOT_FOUND";
     public const string EdtNotFound = "EDT_NOT_FOUND";
     public const string ClassNotFound = "CLASS_NOT_FOUND";
