@@ -94,12 +94,16 @@ public class FormPatternValidatorTests
 """;
     }
 
+    // SimpleList's spec is derived from the AOT pattern registry, which makes the
+    // custom-filter group a required part (Count="1") where the hand-written catalog
+    // had it optional. A fixture without one is not a valid SimpleList form.
     private const string SimpleListDesign = """
     <Pattern>SimpleList</Pattern>
     <PatternVersion>1.1</PatternVersion>
     <Style>SimpleList</Style>
     <Controls>
       <AxFormControl xmlns="" i:type="AxFormActionPaneControl"><Name>ActionPane</Name></AxFormControl>
+      <AxFormControl xmlns="" i:type="AxFormGroupControl"><Name>CustomFilterGroup</Name><Style>CustomFilter</Style></AxFormControl>
       <AxFormControl xmlns="" i:type="AxFormGridControl"><Name>Grid</Name></AxFormControl>
     </Controls>
 """;

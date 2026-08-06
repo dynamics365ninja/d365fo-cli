@@ -73,7 +73,53 @@ public static class FormPatternCatalog
 
     // ── Top-level patterns ───────────────────────────────────────────────────
 
-    public static readonly IReadOnlyList<FormPatternSpec> Patterns = new[]
+    /// <summary>
+    /// Patterns whose <em>structure</em> is taken from the AOT registry
+    /// (<see cref="RegistrySpecFactory"/>) instead of the hand-written entry below:
+    /// versions, design properties, the required control tree and what else may sit
+    /// at the design root.
+    /// </summary>
+    /// <remarks>
+    /// The hand-written model drifted from the AOS — five of the nine generated
+    /// patterns named a version that exists on no installation, and the structures
+    /// disagreed too. Deriving them removes the drift, but each migration changes
+    /// what FP003/FP004 accept, so patterns move onto this list one at a time with
+    /// their template and goldens. Everything the registry does not know (purpose,
+    /// when to use it, reference forms, lifecycle guidance, sub-pattern hints) stays
+    /// hand-written in the entry.
+    /// </remarks>
+    private static readonly HashSet<string> RegistryDerived = new(StringComparer.Ordinal)
+    {
+        "SimpleList",
+
+    };
+
+    // Lazy, not a static readonly field: static initialisers run in textual order, and
+    // HandWrittenPatterns is declared below this point.
+    private static readonly Lazy<IReadOnlyList<FormPatternSpec>> PatternsLazy =
+        new(() => DeriveFromRegistry(HandWrittenPatterns));
+
+    public static IReadOnlyList<FormPatternSpec> Patterns => PatternsLazy.Value;
+
+    /// <summary>Replaces the structural half of every <see cref="RegistryDerived"/> entry with the registry's.</summary>
+    private static IReadOnlyList<FormPatternSpec> DeriveFromRegistry(IReadOnlyList<FormPatternSpec> specs) =>
+        specs.Select(spec =>
+        {
+            if (!RegistryDerived.Contains(spec.Id)) return spec;
+
+            var root = RegistrySpecFactory.Root(spec.XmlName);
+            if (root is null) return spec; // registry has no such pattern — the gate test reports it
+
+            return spec with
+            {
+                Versions = RegistrySpecFactory.Versions(spec.XmlName),
+                DesignProperties = RegistrySpecFactory.DesignProperties(spec.XmlName) ?? spec.DesignProperties,
+                Root = root,
+                ExtraRoot = RegistrySpecFactory.ExtraRoot(spec.XmlName),
+            };
+        }).ToList();
+
+    private static readonly IReadOnlyList<FormPatternSpec> HandWrittenPatterns = new[]
     {
         new FormPatternSpec
         {

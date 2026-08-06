@@ -42,7 +42,16 @@ public class ConFmVehicleList extends FormRun
     </AxFormDataSource>
   </DataSources>
   <Design>
+    <!--
+      Layout properties the AOT pattern registry requires on a SimpleList design.
+      They are not decoration: the AOS validates them and the repairer would
+      otherwise rewrite every generated form. In contract order — ArrangeMethod
+      before Caption, Columns/ColumnsMode before DataSource.
+    -->
+    <ArrangeMethod xmlns="">Vertical</ArrangeMethod>
     <Caption xmlns="">@Fleet:Vehicle</Caption>
+    <Columns xmlns="">1</Columns>
+    <ColumnsMode xmlns="">Fixed</ColumnsMode>
     <DataSource xmlns="">FmVehicle</DataSource>
     <HideIfEmpty xmlns="">No</HideIfEmpty>
     <Pattern xmlns="">SimpleList</Pattern>
@@ -54,8 +63,13 @@ public class ConFmVehicleList extends FormRun
         <Name>ActionPane</Name>
         <ElementPosition>134217727</ElementPosition>
         <FilterExpression>%1</FilterExpression>
+        <!-- Registry part 'ApplicationBar': the sizing and style it requires. -->
+        <Height>-1</Height>
+        <HeightMode>SizeToContent</HeightMode>
         <Type>ActionPane</Type>
         <VerticalSpacing>-1</VerticalSpacing>
+        <Width>-1</Width>
+        <WidthMode>SizeToAvailable</WidthMode>
         <FormControlExtension i:nil="true" />
         <Controls>
           <AxFormControl xmlns="" i:type="AxFormButtonGroupControl">
@@ -69,6 +83,7 @@ public class ConFmVehicleList extends FormRun
         <AlignChild>No</AlignChild>
         <AlignChildren>No</AlignChildren>
         <ArrangeMethod>Vertical</ArrangeMethod>
+        <Style>Standard</Style>
       </AxFormControl>
       <AxFormControl xmlns="" i:type="AxFormGroupControl">
         <Name>CustomFilterGroup</Name>
@@ -111,8 +126,13 @@ public class ConFmVehicleList extends FormRun
         <Name>Grid</Name>
         <ElementPosition>1431655764</ElementPosition>
         <FilterExpression>%1</FilterExpression>
+        <!-- Registry part 'SimpleListGrid'. -->
+        <Height>-1</Height>
+        <HeightMode>SizeToAvailable</HeightMode>
         <Type>Grid</Type>
         <VerticalSpacing>-1</VerticalSpacing>
+        <Width>-1</Width>
+        <WidthMode>SizeToAvailable</WidthMode>
         <FormControlExtension i:nil="true" />
         <Controls>
           <AxFormControl xmlns="" i:type="AxFormStringControl">

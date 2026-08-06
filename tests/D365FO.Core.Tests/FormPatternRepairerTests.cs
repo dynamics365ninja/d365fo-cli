@@ -165,12 +165,16 @@ public class FormPatternRepairerTests
     {
         var doc = XDocument.Parse(Scaffold());
         var controls = doc.Root!.Element(Ax + "Design")!.Element("Controls")!;
-        controls.Add(FormControlFactory.Create("Group", "HandWrittenGroup"));
+
+        // A Tab, not a Group: SimpleList's spec comes from the AOT registry, whose
+        // root parts are ActionPane / filter Group / Grid / optional Footer group — so
+        // an extra Group is legitimately the Footer slot, while a Tab belongs to no part.
+        controls.Add(FormControlFactory.Create("Tab", "HandWrittenTab"));
 
         var result = FormPatternRepairer.Repair(doc.ToString());
 
         Assert.Contains(result.Skipped, s => s.Rule == "FP004");
-        Assert.Contains("HandWrittenGroup", result.Xml);
+        Assert.Contains("HandWrittenTab", result.Xml);
     }
 
     [Theory]

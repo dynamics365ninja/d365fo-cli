@@ -124,27 +124,41 @@ golden diff or to any offline validator, which is the whole argument for the tie
 `FormPatternValidation` — a different validator from this repo's own FP001–FP010,
 run by the AOS against its own pattern registry.
 
-That registry is no longer a mystery: `scripts/emit-form-patterns.ps1` derives all
-102 pattern definitions from `Microsoft.Dynamics.AX.Metadata.Patterns.dll` into
+That registry is no longer a mystery, and the catalog has started moving onto it.
+`scripts/emit-form-patterns.ps1` derives all 102 pattern definitions — versions,
+required parts with cardinality, and the property values each part must carry — from
+`Microsoft.Dynamics.AX.Metadata.Patterns.dll` into
 `src/D365FO.Core/FormPatterns/form-patterns.json` (same approach as
 `emit-metadata-contracts.ps1`), and `FormPatternRegistry` serves them with no
-installation present. `FormTemplatePatternRegistryTests` now pins every template's
-design pattern against it, so *naming a pattern that does not exist* is an offline
-test failure instead of a VM-only surprise. Five templates are on its
-`KnownWrong` list with the real pattern named — shrinking that list is the work item:
+installation present.
 
-| Template says | Registry has |
+**`FormPatternCatalog` now derives the structural half of a pattern from that
+registry** for everything on its `RegistryDerived` list — versions, design
+properties, the required control tree, and what else may sit at the design root.
+Editorial content (purpose, when to use it, reference forms, lifecycle guidance,
+sub-pattern hints) stays hand-written, because the registry does not know it.
+`SimpleList` is migrated: its spec is derived, its template carries the layout
+properties the AOS requires, and its goldens compile clean. Migrating one pattern
+changes what FP003/FP004 accept, so the rest move one at a time with their template
+and goldens.
+
+`FormTemplatePatternRegistryTests` pins every template's design pattern against the
+registry, so *naming a pattern that does not exist* is an offline test failure
+instead of a VM-only surprise. Five templates are on its `KnownWrong` list:
+
+| Template says | What the registry actually has |
 |---|---|
-| `DetailsMaster 1.1` | `DetailsMaster 1.4` — needs a `SidePanel` navigation list and Details/Overview tab pages |
-| `DetailsTransaction 1.1` | `DetailsTransaction 1.4` |
-| `ListPage 1.1` | `ListPage UX7 1.0` |
-| `Lookup 1.2` | `LookupGridOnly 1.1` / `LookupTab 1.0` — there is no plain `Lookup` |
-| `Workspace 1.0` | `WorkspaceOperational 1.1` / `TabbedWorkspace 1.0` |
+| `DetailsMaster 1.1` | `DetailsMaster` exists; `1.1` does not. Newest is `1.4`, which wants a `SidePanel` navigation list and Details/Overview tab pages |
+| `DetailsTransaction 1.1` | `DetailsTransaction` exists; `1.1` does not. Newest is `1.4` |
+| `ListPage 1.1` | `ListPage` has exactly one version, the string `UX7 1.0` — only the version is wrong |
+| `Lookup 1.2` | there is no pattern named `Lookup` at all: `LookupGridOnly`, `LookupTab`, `LookupPreview` |
+| `Workspace 1.0` | `Workspace` exists only as an inactive `2.0`; the active one is `WorkspaceOperational 1.1` |
 
-Each fix is a template restructure against that pattern's required parts, and
-`FormPatternCatalog` + FP001–FP010 have to move with it — this repo's model of the
-patterns disagrees with the registry, which is why a template rewritten to satisfy
-the AOS is currently rejected by our own FP003 before it can even be written.
+Two things the first migration taught, both encoded in `RegistrySpecFactory`: a part
+that declares no children delegates its contents to the sub-pattern rather than
+forbidding everything, and a pattern's versions come in two lineages — plain numbers
+and an older series whose version string is literally `UX7 1.0`, which sorts above
+`1.4` unless you rank the lineages.
 
 ## Improver toolchain
 

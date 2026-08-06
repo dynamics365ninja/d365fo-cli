@@ -32,11 +32,11 @@ public class FormTemplatePatternRegistryTests
     /// </summary>
     private static readonly Dictionary<string, string> KnownWrong = new(StringComparer.Ordinal)
     {
-        ["DetailsMaster 1.1"] = "registry has DetailsMaster 1.4; needs NavigationList(SidePanel) + Details/Overview tab pages",
-        ["DetailsTransaction 1.1"] = "registry has DetailsTransaction 1.4",
-        ["ListPage 1.1"] = "registry has 'ListPage UX7' 1.0",
-        ["Lookup 1.2"] = "registry has LookupGridOnly 1.1 / LookupTab 1.0; there is no plain 'Lookup'",
-        ["Workspace 1.0"] = "registry has WorkspaceOperational 1.1 / TabbedWorkspace 1.0",
+        ["DetailsMaster 1.1"] = "DetailsMaster exists; 1.1 does not. Newest is 1.4, which wants NavigationList(SidePanel) + Details/Overview tab pages",
+        ["DetailsTransaction 1.1"] = "DetailsTransaction exists; 1.1 does not. Newest is 1.4",
+        ["ListPage 1.1"] = "ListPage exists with exactly one version, the string 'UX7 1.0' — only the version is wrong",
+        ["Lookup 1.2"] = "there is no pattern named 'Lookup' at all: LookupGridOnly 1.1, LookupTab 1.0, LookupPreview 1.0",
+        ["Workspace 1.0"] = "Workspace exists only as an inactive 2.0; the active pattern is WorkspaceOperational 1.1",
     };
 
     public static IEnumerable<object[]> Templates =>
@@ -87,6 +87,42 @@ public class FormTemplatePatternRegistryTests
 
         // And the alias is what the AOS puts in its error messages.
         Assert.Equal("Details Master", FormPatternRegistry.Find("DetailsMaster", "1.4")!.Alias);
+    }
+
+    /// <summary>
+    /// A pattern carries two version lineages — plain numbers and an older series
+    /// whose version string is literally "UX7 1.0". Sorting the strings would make
+    /// UX7 1.2 look newer than 1.4 and pin every migrated template to the legacy
+    /// lineage.
+    /// </summary>
+    [Fact]
+    public void Numeric_versions_rank_above_the_UX7_lineage()
+    {
+        Assert.Equal("1.4", FormPatternRegistry.VersionsOf("DetailsMaster")[0]);
+        Assert.Equal("1.1", FormPatternRegistry.VersionsOf("SimpleList")[0]);
+
+        // ListPage has only the legacy lineage, so that is legitimately its newest.
+        Assert.Equal(["UX7 1.0"], FormPatternRegistry.VersionsOf("ListPage"));
+    }
+
+    /// <summary>
+    /// The structural half of a migrated pattern comes from the registry, not from the
+    /// hand-written entry — the thing that had drifted.
+    /// </summary>
+    [Fact]
+    public void A_migrated_pattern_takes_its_structure_from_the_registry()
+    {
+        var simpleList = FormPatternCatalog.Patterns.Single(p => p.Id == "SimpleList");
+
+        Assert.Equal(FormPatternRegistry.VersionsOf("SimpleList"), simpleList.Versions);
+        Assert.Equal(
+            RegistrySpecFactory.Root("SimpleList")!.Select(n => n.Id),
+            simpleList.Root.Select(n => n.Id));
+
+        // …including the parts the hand-written entry did not have: the AOS declares an
+        // optional Footer group, and makes the custom-filter group required.
+        Assert.Contains(simpleList.Root, n => n.Id == "Footer" && n.Occurrence == Occurrence.Optional);
+        Assert.Contains(simpleList.Root, n => n.Id == "CustomFilterGroup" && n.Occurrence == Occurrence.Required);
     }
 
     private static (string? Pattern, string? Version) DesignPattern(string templateName)

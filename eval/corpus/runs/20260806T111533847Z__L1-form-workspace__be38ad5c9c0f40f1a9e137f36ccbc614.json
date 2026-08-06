@@ -1,0 +1,22 @@
+{
+  "runId": "20260806T111533847Z__L1-form-workspace__be38ad5c9c0f40f1a9e137f36ccbc614",
+  "caseId": "L1-form-workspace",
+  "tier": 1,
+  "timestampUtc": "2026-08-06T11:15:33.8476318+00:00",
+  "source": "build-oracle",
+  "score": {
+    "xppErrors": 0,
+    "referenceErrors": 0,
+    "goldenMatch": true,
+    "goldenDiff": {
+      "missing": [],
+      "extra": [],
+      "changed": [],
+      "isMatch": true
+    },
+    "buildClean": false,
+    "buildErrors": 3
+  },
+  "classification": "TOOL_DEFECT",
+  "note": "xppc reported 3 error(s) against this golden: Unable to validate pattern \u0027Workspace 1.0\u0027. Message: Pattern \u0027Workspace 1.0\u0027 not found.; Control \u0027AxForm/ConFmVehicleWorkspace/Design/Controls/PanoramaBody/SummarySection\u0027 has child \u0027ChartSection\u0027 which is not allowed at its current location by pattern \u0027Section Tiles\u0027.; Property \u0027ViewEditMode\u0027 on control AxForm/ConFmVehicleWorkspace/Design/Controls/PanoramaBody/FmVehicleSection/FmVehicleCustomFilterGroup must have value \u0027Edit\u0027 per pattern \u0027Custom and Quick Filters\u0027."
+}

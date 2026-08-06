@@ -1,0 +1,20 @@
+{
+  "runId": "20260806T111533870Z__L2-event-handler-basic__1a1260b47e9148b78912f233d467626d",
+  "caseId": "L2-event-handler-basic",
+  "tier": 2,
+  "timestampUtc": "2026-08-06T11:15:33.8705562+00:00",
+  "source": "build-oracle",
+  "score": {
+    "xppErrors": 0,
+    "referenceErrors": 0,
+    "goldenMatch": true,
+    "goldenDiff": {
+      "missing": [],
+      "extra": [],
+      "changed": [],
+      "isMatch": true
+    },
+    "buildClean": true,
+    "buildErrors": 0
+  }
+}

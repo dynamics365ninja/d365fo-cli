@@ -83,7 +83,7 @@ public sealed class NodeSpec
 }
 
 /// <summary>Spec of a top-level form pattern (declared on Design).</summary>
-public sealed class FormPatternSpec
+public sealed record FormPatternSpec
 {
     /// <summary>Catalog id (PascalCase, unique).</summary>
     public required string Id { get; init; }

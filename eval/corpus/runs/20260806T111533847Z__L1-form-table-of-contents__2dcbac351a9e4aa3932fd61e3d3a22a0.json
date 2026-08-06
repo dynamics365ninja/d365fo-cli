@@ -1,0 +1,22 @@
+{
+  "runId": "20260806T111533847Z__L1-form-table-of-contents__2dcbac351a9e4aa3932fd61e3d3a22a0",
+  "caseId": "L1-form-table-of-contents",
+  "tier": 1,
+  "timestampUtc": "2026-08-06T11:15:33.8470598+00:00",
+  "source": "build-oracle",
+  "score": {
+    "xppErrors": 0,
+    "referenceErrors": 0,
+    "goldenMatch": true,
+    "goldenDiff": {
+      "missing": [],
+      "extra": [],
+      "changed": [],
+      "isMatch": true
+    },
+    "buildClean": false,
+    "buildErrors": 4
+  },
+  "classification": "TOOL_DEFECT",
+  "note": "xppc reported 4 error(s) against this golden: Control \u0027AxForm/ConFmVehicleParametersForm/Design\u0027 is missing child \u0027TOC Tabs\u0027 required by pattern \u0027Table of Contents\u0027.; Control \u0027AxForm/ConFmVehicleParametersForm/Design/Controls\u0027 has child \u0027ActionPane\u0027 which is not allowed at its current location by pattern \u0027Table of Contents\u0027.; Property \u0027ColumnsMode\u0027 on control AxForm/ConFmVehicleParametersForm/Design/Controls/Tab/TabPageGeneral must have value \u0027Fill\u0027 per pattern \u0027Fields and Field Groups\u0027."
+}

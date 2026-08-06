@@ -320,13 +320,28 @@ templates sit on its `KnownWrong` list with the real pattern named — `DetailsM
 `DetailsTransaction 1.1` → 1.4, `ListPage 1.1` → `ListPage UX7 1.0`, `Lookup 1.2` →
 `LookupGridOnly 1.1`, `Workspace 1.0` → `WorkspaceOperational 1.1`.
 
-Shrinking that list is the remaining work, and it is a two-sided migration rather than a set of
-edits: **`FormPatternCatalog`'s model of the patterns disagrees with the registry**, so a template
-rewritten to satisfy the AOS is rejected by our own FP003 before it can be written. Verified by
-doing it — restructuring DetailsMaster to the shipped 1.4 shape (SidePanel navigation list,
-Details page with a nested FastTabs tab, Overview page with the main grid) satisfied the AOS and
-failed FP003 on the quick-filter sub-pattern. The catalog, the templates, the validator, the nine
-form goldens and ~90 form-pattern tests move together or not at all.
+**The catalog migration has started.** `FormPatternCatalog` now derives the structural half of a
+pattern — versions, design properties, required control tree, what else may sit at the root — from
+the registry for everything on its `RegistryDerived` list, keeping the editorial half (purpose,
+when to use it, reference forms, lifecycle guidance, sub-pattern hints) hand-written because the
+registry does not know it. `SimpleList` is migrated end to end: derived spec, template carrying
+the layout properties the AOS requires, goldens re-captured, and its form plus the two form-method
+cases compile clean.
+
+Two corrections came out of that first migration, both now encoded in `RegistrySpecFactory`:
+a registry part that declares no children of its own **delegates** its contents to whatever
+sub-pattern the container declares rather than forbidding everything (reading it strictly rejected
+a quick filter inside a `CustomFilterGroup`, the one thing that belongs there), and a pattern's
+versions come in two lineages — plain numbers and an older series whose version string is
+literally `UX7 1.0`, which sorts above `1.4` unless the lineages are ranked. It also corrected
+this plan's earlier reading of the registry: `ListPage` is a real pattern name whose only version
+is the string `UX7 1.0`, so that template needs a version change, not a rename.
+
+The remaining eight patterns move one at a time, because each migration changes what FP003/FP004
+accept: derive the spec, restructure the template to the registry's required parts and properties,
+re-capture the goldens, fix the fixtures that assumed the old model. The blocking discovery still
+stands for the structural ones — a template rewritten to satisfy the AOS can be rejected by our
+own FP003 until its spec is derived too, which is exactly why the two move together per pattern.
 
 The rest: a workflow and two security objects with an empty mandatory property; a custom service
 naming a class the command does not generate; `L2-enum-extension` extending `NoYes`, which is not
