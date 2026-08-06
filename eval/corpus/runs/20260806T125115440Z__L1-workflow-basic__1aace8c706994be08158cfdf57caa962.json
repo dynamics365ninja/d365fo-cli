@@ -1,0 +1,22 @@
+{
+  "runId": "20260806T125115440Z__L1-workflow-basic__1aace8c706994be08158cfdf57caa962",
+  "caseId": "L1-workflow-basic",
+  "tier": 1,
+  "timestampUtc": "2026-08-06T12:51:15.4402086+00:00",
+  "source": "build-oracle",
+  "score": {
+    "xppErrors": 0,
+    "referenceErrors": 0,
+    "goldenMatch": true,
+    "goldenDiff": {
+      "missing": [],
+      "extra": [],
+      "changed": [],
+      "isMatch": true
+    },
+    "buildClean": false,
+    "buildErrors": 1
+  },
+  "classification": "TOOL_DEFECT",
+  "note": "xppc reported 1 error(s) against this golden: Property cannot be empty."
+}

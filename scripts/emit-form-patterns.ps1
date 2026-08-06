@@ -46,7 +46,12 @@ if (-not (Test-Path $dll)) {
 }
 
 $asm = [System.Reflection.Assembly]::LoadFrom($dll)
-$resourceNames = $asm.GetManifestResourceNames() | Where-Object { $_ -like '*FormPatterns*' -and $_.EndsWith('.xml') }
+# Both halves of the registry: the top-level form patterns and the container
+# sub-patterns (SectionTiles, CustomAndQuickFilters, …), which live in their own
+# resource namespace and carry their own versions — a form declaring a sub-pattern
+# version the registry does not have fails the same way a design pattern does.
+$resourceNames = $asm.GetManifestResourceNames() |
+    Where-Object { ($_ -like '*FormPatterns*' -or $_ -like '*SubPatterns*') -and $_.EndsWith('.xml') }
 
 # One <Control> node -> its part id, cardinality and the property values the AOS
 # requires on it. Recursion mirrors the registry's own nesting, which is what the

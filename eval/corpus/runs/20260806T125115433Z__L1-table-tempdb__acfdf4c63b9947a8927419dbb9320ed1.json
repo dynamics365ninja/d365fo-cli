@@ -1,0 +1,20 @@
+{
+  "runId": "20260806T125115433Z__L1-table-tempdb__acfdf4c63b9947a8927419dbb9320ed1",
+  "caseId": "L1-table-tempdb",
+  "tier": 1,
+  "timestampUtc": "2026-08-06T12:51:15.4337476+00:00",
+  "source": "build-oracle",
+  "score": {
+    "xppErrors": 0,
+    "referenceErrors": 0,
+    "goldenMatch": true,
+    "goldenDiff": {
+      "missing": [],
+      "extra": [],
+      "changed": [],
+      "isMatch": true
+    },
+    "buildClean": true,
+    "buildErrors": 0
+  }
+}

@@ -34,10 +34,21 @@ public class ConFmVehicleWorkspace extends FormRun
     <Name>FmVehicle</Name><Table>FmVehicle</Table><Fields /><ReferencedDataSources /><AllowCreate>No</AllowCreate><AllowDelete>No</AllowDelete><AllowEdit>No</AllowEdit><InsertIfEmpty>No</InsertIfEmpty><DataSourceLinks /><DerivedDataSources /></AxFormDataSource>
   </DataSources>
   <Design>
+    <ArrangeMethod xmlns="">Vertical</ArrangeMethod>
     <Caption xmlns="">Fleet management</Caption>
-    <Pattern xmlns="">Workspace</Pattern>
-    <PatternVersion xmlns="">1.0</PatternVersion>
+    <Columns xmlns="">1</Columns>
+    <ColumnsMode xmlns="">Fixed</ColumnsMode>
+    <!--
+      "Workspace" exists in the AOT registry only as an inactive 2.0; the active
+      pattern for an operational workspace is WorkspaceOperational 1.1, whose sections
+      live on a FastTabs tab rather than a Panorama.
+    -->
+    <Pattern xmlns="">WorkspaceOperational</Pattern>
+    <PatternVersion xmlns="">1.1</PatternVersion>
+    <ShowDeleteButton xmlns="">No</ShowDeleteButton>
+    <ShowNewButton xmlns="">No</ShowNewButton>
     <Style xmlns="">Workspace</Style>
+    <ViewEditMode xmlns="">View</ViewEditMode>
     <Controls xmlns="">
       <AxFormControl xmlns="" i:type="AxFormActionPaneControl">
         <Name>ActionPane</Name>
@@ -65,23 +76,41 @@ public class ConFmVehicleWorkspace extends FormRun
         <AlignChildren>No</AlignChildren>
         <ArrangeMethod>Vertical</ArrangeMethod>
       </AxFormControl>
+      <!--
+        WorkspaceOperational's sections are FastTab pages, each declaring the
+        sub-pattern that says what kind of section it is. Summary tiles, a tabbed
+        list and related links are required; charts and Power BI are optional.
+        The previous shape was a Panorama tab whose Summary page nested a ChartSection
+        group — "has child 'ChartSection' which is not allowed at its current location".
+      -->
       <AxFormControl xmlns="" i:type="AxFormTabControl">
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-      <Name>PanoramaBody</Name><ElementPosition>268435455</ElementPosition><HeightMode>SizeToAvailable</HeightMode><Type>Tab</Type><WidthMode>SizeToAvailable</WidthMode><FormControlExtension i:nil="true" /><Controls>
-          <!-- The tile strip is the tab page itself under the SectionTiles pattern, which is
-               how every shipped workspace expresses it. This used to be a nested group with
-               Style=TileSection and Pattern=Workspace_SummaryNumbers_UnboundFields: neither
-               exists — the style is not a value of GroupStyle, so the serializer threw and the
-               entire form was unreadable, not merely misshapen. -->
+        <Name>WorkspaceSections</Name>
+        <ElementPosition>268435455</ElementPosition>
+        <Enabled>Yes</Enabled>
+        <ExtendedStyle>tab_simpleFastTab</ExtendedStyle>
+        <Height>-1</Height>
+        <HeightMode>SizeToAvailable</HeightMode>
+        <Type>Tab</Type>
+        <Width>-1</Width>
+        <WidthMode>SizeToAvailable</WidthMode>
+        <FormControlExtension i:nil="true" />
+        <Controls>
+          <AxFormControl xmlns="" i:type="AxFormTabPageControl">
+            <!-- 1.1, not 1.0: the section sub-patterns' 1.0 versions are inactive. -->
+            
+            
+            
+            
+            
+            
+            
+            
+            <!-- Add AxFormControl i:type="AxFormButtonControl" tiles here -->
+            
+            
+            
+            
+          <Name>SectionSummaryTiles</Name><ElementPosition>536870911</ElementPosition><ExtendedStyle>workspace_tileLayout</ExtendedStyle><Pattern>SectionTiles</Pattern><PatternVersion>1.1</PatternVersion><Type>TabPage</Type><FormControlExtension i:nil="true" /><Controls /><ArrangeMethod>HorizontalLeft</ArrangeMethod><ColumnsMode>Fixed</ColumnsMode><Caption>Summary</Caption><FastTabExpanded>Yes</FastTabExpanded></AxFormControl>
           <AxFormControl xmlns="" i:type="AxFormTabPageControl">
             
             
@@ -91,22 +120,32 @@ public class ConFmVehicleWorkspace extends FormRun
             
             
             
-            
-            
-          <Name>SummarySection</Name><ElementPosition>536870911</ElementPosition><Pattern>SectionTiles</Pattern><PatternVersion>1.1</PatternVersion><Type>TabPage</Type><WidthMode>SizeToAvailable</WidthMode><FormControlExtension i:nil="true" /><Controls>
-              <!-- Add AxFormControl i:type="AxFormButtonControl" tiles here -->
-              <AxFormControl xmlns="" i:type="AxFormGroupControl">
-                <Name>ChartSection</Name>
-                <Type>Group</Type>
+          <Name>SectionTabbedList</Name><Pattern>SectionTabbedList</Pattern><PatternVersion>1.1</PatternVersion><Type>TabPage</Type><FormControlExtension i:nil="true" /><Controls>
+              <!--
+                The sub-pattern's 'Tabbed List' part: the section holds a vertical tab,
+                and the lists are its pages. A tab page cannot contain a tab page
+                directly, which is what the flat shape tried.
+              -->
+              <AxFormControl xmlns="" i:type="AxFormTabControl">
+                <Name>TabbedList</Name>
+                <Height>500</Height>
+                <HeightMode>Manual</HeightMode>
+                <Skip>No</Skip>
+                <Type>Tab</Type>
+                <Visible>Yes</Visible>
+                <Width>-1</Width>
                 <WidthMode>SizeToAvailable</WidthMode>
                 <FormControlExtension i:nil="true" />
                 <Controls>
-                  <!-- Add FormPart references for charts/KPIs here -->
                 </Controls>
-                <ArrangeMethod>HorizontalLeft</ArrangeMethod>
-                <FrameType>None</FrameType>
+                <AllowUserSetup>Yes</AllowUserSetup>
+                <ArrangeMethod>Vertical</ArrangeMethod>
+                <Columns>1</Columns>
+                <ColumnsMode>Fixed</ColumnsMode>
+                <ShowTabs>Yes</ShowTabs>
+                <Style>VerticalTabs</Style>
               </AxFormControl>
-            </Controls><ArrangeMethod>HorizontalLeft</ArrangeMethod><Caption>Summary</Caption></AxFormControl>
+            </Controls><Caption>Lists</Caption><FastTabExpanded>Yes</FastTabExpanded></AxFormControl>
           <AxFormControl xmlns="" i:type="AxFormTabPageControl">
             
             
@@ -114,61 +153,15 @@ public class ConFmVehicleWorkspace extends FormRun
             
             
             
-          <Name>FmVehicleSection</Name><ElementPosition>1073741824</ElementPosition><Type>TabPage</Type><FormControlExtension i:nil="true" /><Controls>
-              <AxFormControl xmlns="" i:type="AxFormGroupControl">
-                <Name>FmVehicleCustomFilterGroup</Name>
-                <Pattern>CustomAndQuickFilters</Pattern>
-                <PatternVersion>1.1</PatternVersion>
-                <Type>Group</Type>
-                <WidthMode>SizeToAvailable</WidthMode>
-                <FormControlExtension i:nil="true" />
-                <Controls>
-                  <AxFormControl xmlns="">
-                    <Name>FmVehicleQuickFilter</Name>
-                    <FormControlExtension>
-                      <Name>QuickFilterControl</Name>
-                      <ExtensionComponents />
-                      <ExtensionProperties>
-                        <AxFormControlExtensionProperty>
-                          <Name>targetControlName</Name>
-                          <Type>String</Type>
-                          <Value>FmVehicleGrid</Value>
-                        </AxFormControlExtensionProperty>
-                      </ExtensionProperties>
-                    </FormControlExtension>
-                  </AxFormControl>
-                </Controls>
-                <ArrangeMethod>HorizontalLeft</ArrangeMethod>
-                <FrameType>None</FrameType>
-                <Style>CustomFilter</Style>
-              </AxFormControl>
-              <AxFormControl xmlns="" i:type="AxFormGridControl">
-                <Name>FmVehicleGrid</Name>
-                <Type>Grid</Type>
-                <WidthMode>SizeToAvailable</WidthMode>
-                <FormControlExtension i:nil="true" />
-                <Controls>
-                  <AxFormControl xmlns="" i:type="AxFormStringControl">
-                    <Name>FmVehicleGrid_VIN</Name>
-                    <Type>String</Type>
-                    <FormControlExtension i:nil="true" />
-                    <DataField>VIN</DataField>
-                    <DataSource>FmVehicle</DataSource>
-                  </AxFormControl>
-                  <AxFormControl xmlns="" i:type="AxFormStringControl">
-                    <Name>FmVehicleGrid_Make</Name>
-                    <Type>String</Type>
-                    <FormControlExtension i:nil="true" />
-                    <DataField>Make</DataField>
-                    <DataSource>FmVehicle</DataSource>
-                  </AxFormControl>
-                </Controls>
-                <DataSource>FmVehicle</DataSource>
-                <ShowRowLabels>No</ShowRowLabels>
-                <Style>Tabular</Style>
-              </AxFormControl>
-            </Controls><Caption>FmVehicle</Caption></AxFormControl>
-        </Controls><AlignChild>No</AlignChild><ShowTabs>No</ShowTabs><Style>Panorama</Style></AxFormControl>
+            <!-- Add AxFormControl i:type="AxFormMenuButtonControl" links here -->
+            
+            
+            
+          <Name>SectionRelatedLinks</Name><Pattern>SectionRelatedLinks</Pattern><PatternVersion>1.1</PatternVersion><Type>TabPage</Type><FormControlExtension i:nil="true" /><Controls /><ColumnsMode>Fill</ColumnsMode><Caption>Related links</Caption><FastTabExpanded>Yes</FastTabExpanded></AxFormControl>
+        </Controls>
+        <ShowTabs>Yes</ShowTabs>
+        <Style>FastTabs</Style>
+      </AxFormControl>
     </Controls>
   </Design>
   <Parts />

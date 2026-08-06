@@ -612,6 +612,21 @@ internal static class GenerateFormImpl
         if (dsRequired && string.IsNullOrWhiteSpace(table))
             return RenderHelpers.Render(kind, ToolResult<object>.Fail("BAD_INPUT", $"--table <TABLE> required for pattern {pattern}."));
 
+        // An operational workspace's list sections are not inline: a tabbed-list page
+        // must hold a FormPartControl pointing at a *separate* form whose own pattern is
+        // FormPartSectionList. Placing fields there produces a form the AOS rejects, and
+        // pointing a FormPart at a menu item that does not exist is a dangling
+        // reference — so this asks rather than emitting either.
+        if (pattern == FormPattern.Workspace && (fields.Count > 0 || sections.Count > 0))
+        {
+            return RenderHelpers.Render(kind, ToolResult<object>.Fail(
+                "BAD_INPUT",
+                "--field / --section cannot be placed on a Workspace form.",
+                "An operational workspace's lists live in separate FormPartSectionList forms referenced by a "
+                + "FormPart control. Generate the workspace shell first (no --field/--section), then create each "
+                + "list form with `generate form --pattern SimpleList` and add a FormPart pointing at its menu item."));
+        }
+
         var hasInstall = !string.IsNullOrWhiteSpace(installTo);
         var hasOut     = !string.IsNullOrWhiteSpace(outPath);
         if (!hasInstall && !hasOut)

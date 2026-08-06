@@ -1,0 +1,21 @@
+{
+  "runId": "20260806T125115401Z__L1-business-event-basic__aabda9562b5e42d380188318d646af39",
+  "caseId": "L1-business-event-basic",
+  "tier": 1,
+  "timestampUtc": "2026-08-06T12:51:15.4018674+00:00",
+  "source": "build-oracle",
+  "score": {
+    "xppErrors": 0,
+    "referenceErrors": 0,
+    "goldenMatch": true,
+    "goldenDiff": {
+      "missing": [],
+      "extra": [],
+      "changed": [],
+      "isMatch": true
+    },
+    "buildClean": false,
+    "buildErrors": 2
+  },
+  "note": "expected for a known-reference-gap case \u2014 xppc reported 2 error(s) against this golden: The \u0027ConFmVehicleNoteAddedContract\u0027 argument of the \u0027classStr\u0027 compile-time function does not specify a known class.; Class \u0027ConFmVehicleNoteAddedContract\u0027 was not found. Are you missing a module reference?"
+}

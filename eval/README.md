@@ -85,7 +85,7 @@ returns `EVAL_BUILD_INVOCATION` and writes **no** verdicts — an argument mista
 must never be recorded as a broken golden. `EvalScoreCard.BuildClean` is `null`
 wherever no compiler ran; it is never `false` by default.
 
-Current baseline: **40 of 51 goldens compile clean**, with **zero unattributed
+Current baseline: **43 of 51 goldens compile clean**, with **zero unattributed
 diagnostics** — every complaint the compiler makes is blamed on the case that
 produced the object it names.
 
@@ -120,49 +120,58 @@ golden diff or to any offline validator, which is the whole argument for the tie
 | `generate entity` | "There must be a key defined for a public data entity" — `IsPublic` was hard-coded `Yes` while `Keys` stayed optional |
 | `generate form` | `<DataGroup>` emitted without its sibling `<DataSource>` and before `<Controls>` instead of after, so "Field group 'Overview' does not exist" even once the table declared it; and an `AxFormActionPaneTabControl` placed directly under a tab page, which the reader forbids |
 
-**Open: AOT form-pattern compliance.** Three form cases still fail
-`FormPatternValidation` — a different validator from this repo's own FP001–FP010,
-run by the AOS against its own pattern registry.
 
-That registry is no longer a mystery, and the catalog has started moving onto it.
-`scripts/emit-form-patterns.ps1` derives all 102 pattern definitions — versions,
-required parts with cardinality, and the property values each part must carry — from
+## AOT form-pattern compliance — done
+
+All nine form patterns now name a pattern the AOS has, and every form eval case
+compiles clean against it.
+
+`scripts/emit-form-patterns.ps1` derives the whole registry — 162 definitions across
+top-level patterns *and* container sub-patterns: versions, required parts with
+cardinality, choice slots, and the property values each part must carry — from
 `Microsoft.Dynamics.AX.Metadata.Patterns.dll` into
-`src/D365FO.Core/FormPatterns/form-patterns.json` (same approach as
-`emit-metadata-contracts.ps1`), and `FormPatternRegistry` serves them with no
-installation present.
+`src/D365FO.Core/FormPatterns/form-patterns.json`, the same way
+`emit-metadata-contracts.ps1` derives the DataContract catalog. `FormPatternRegistry`
+serves it with no installation present.
 
-**`FormPatternCatalog` now derives the structural half of a pattern from that
-registry** for everything on its `RegistryDerived` list — versions, design
-properties, the required control tree, and what else may sit at the design root.
-Editorial content (purpose, when to use it, reference forms, lifecycle guidance,
-sub-pattern hints) stays hand-written, because the registry does not know it.
-`SimpleList`, `TableOfContents`, `ListPage`, `DetailsMaster` and `DetailsTransaction` are migrated: their specs are derived,
-their templates carry the parts and layout properties the AOS requires, and their
-goldens compile clean. Migrating one pattern changes what FP003/FP004 accept, so the rest
-move one at a time with their template and goldens.
-
-What Table of Contents cost, as a sense of the per-pattern work: drop the ActionPane
-(the design has exactly one part, the vertical tab, and nothing beside it), give each
-page the title group with its `MainInstruction` static text, put the fields in a
-sibling content group rather than in the title, emit that content group even when
-empty, and stop stamping `FieldsFieldGroups` on the page — the TOC pattern already
-governs it, and that sub-pattern forbids the very title the TOC pattern requires.
-
+**`FormPatternCatalog` takes the structural half of a pattern from that registry** —
+versions, design properties, the required control tree, and what may sit at the design
+root. Editorial content (purpose, when to use it, reference forms, lifecycle guidance)
+stays hand-written, because the registry does not know it.
 `FormTemplatePatternRegistryTests` pins every template's design pattern against the
-registry, so *naming a pattern that does not exist* is an offline test failure
-instead of a VM-only surprise. Two templates are still on its `KnownWrong` list:
+registry, so naming a pattern that does not exist is an offline test failure rather
+than a VM-only surprise. Its `KnownWrong` list is empty.
 
-| Template says | What the registry actually has |
+What the migration corrected, beyond five wrong version numbers:
+
+| Was | Is |
 |---|---|
-| `Lookup 1.2` | there is no pattern named `Lookup` at all: `LookupGridOnly`, `LookupTab`, `LookupPreview` |
-| `Workspace 1.0` | `Workspace` exists only as an inactive `2.0`; the active one is `WorkspaceOperational 1.1` |
+| `Lookup 1.2` | `LookupGridOnly 1.1` — there is no pattern named `Lookup` at all |
+| `Workspace 1.0` | `WorkspaceOperational 1.1` — `Workspace` exists only as an inactive `2.0` |
+| `ListPage 1.1` | `ListPage` with its single version, the string `UX7 1.0` |
+| `SidePanel` declared as a sub-pattern | a `Style`, not a pattern |
+| `Workspace_Tiles`, `Workspace_Links`, `ToolbarAndList`, … | `SectionTiles`, `SectionRelatedLinks`, `ToolbarList`, … — the catalog's own note said these names were "to be confirmed by mining"; the registry confirmed the alias was the real one |
 
-Two things the first migration taught, both encoded in `RegistrySpecFactory`: a part
-that declares no children delegates its contents to the sub-pattern rather than
-forbidding everything, and a pattern's versions come in two lineages — plain numbers
-and an older series whose version string is literally `UX7 1.0`, which sorts above
-`1.4` unless you rank the lineages.
+Five things only the compiler could have told us, each now in a template:
+
+- a Details Master title group requires a `HeaderTitle`, and `MainGrid.DefaultAction`
+  cannot be empty;
+- a form may not repeat a control name, but the *extension's* name is what identifies
+  a control's type — so two quick filters differ in the outer name only;
+- a Table of Contents page needs a title group *and* a content group, even an empty
+  one, and must not declare `FieldsFieldGroups` (the TOC pattern already governs it,
+  and that sub-pattern forbids the title the TOC pattern requires);
+- an operational workspace's lists are **not inline**: a tabbed-list page must hold a
+  `FormPartControl` pointing at a separate `FormPartSectionList` form. `generate form
+  --pattern Workspace` now refuses `--field`/`--section` and says so, rather than
+  emitting a dangling FormPart or a form the AOS rejects;
+- the section sub-patterns' `1.0` versions are inactive — `1.1` is current.
+
+Two derivation corrections came out of doing it, both in `RegistrySpecFactory`: a
+part's declared children are the ones that must be present, not the only ones that
+may be (the closed set is the design root); and versions come in two lineages — plain
+numbers and an older series whose version string is literally `UX7 1.0`, which sorts
+above `1.4` unless the lineages are ranked.
 
 ## Improver toolchain
 

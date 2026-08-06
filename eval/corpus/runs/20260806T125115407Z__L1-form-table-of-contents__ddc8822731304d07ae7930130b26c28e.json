@@ -1,0 +1,20 @@
+{
+  "runId": "20260806T125115407Z__L1-form-table-of-contents__ddc8822731304d07ae7930130b26c28e",
+  "caseId": "L1-form-table-of-contents",
+  "tier": 1,
+  "timestampUtc": "2026-08-06T12:51:15.4075959+00:00",
+  "source": "build-oracle",
+  "score": {
+    "xppErrors": 0,
+    "referenceErrors": 0,
+    "goldenMatch": true,
+    "goldenDiff": {
+      "missing": [],
+      "extra": [],
+      "changed": [],
+      "isMatch": true
+    },
+    "buildClean": true,
+    "buildErrors": 0
+  }
+}

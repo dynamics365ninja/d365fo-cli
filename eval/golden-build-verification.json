@@ -1,13 +1,13 @@
 {
-  "capturedUtc": "2026-08-06T12:20:19.7973092+00:00",
+  "capturedUtc": "2026-08-06T12:51:15.3519432+00:00",
   "host": "D365ASLDEV2-1",
   "packagesRoot": "K:\\AosService\\PackagesLocalDirectory",
   "compiler": "K:\\AosService\\PackagesLocalDirectory\\Bin\\xppc.exe",
-  "compilerArgs": "-metadata=C:\\Users\\Admin7e00859cee\\AppData\\Local\\Temp\\2\\claude\\K--repos-d365fo-cli\\ac58616d-375a-4381-b289-fca2d371276f\\scratchpad\\l3dm -modelmodule=D365FoCliEvalGoldens -output=C:\\Users\\Admin7e00859cee\\AppData\\Local\\Temp\\2\\claude\\K--repos-d365fo-cli\\ac58616d-375a-4381-b289-fca2d371276f\\scratchpad\\l3dm\\bin -referencefolder=K:\\AosService\\PackagesLocalDirectory -refPath=C:\\Users\\Admin7e00859cee\\AppData\\Local\\Temp\\2\\claude\\K--repos-d365fo-cli\\ac58616d-375a-4381-b289-fca2d371276f\\scratchpad\\l3dm\\bin -log=C:\\Users\\Admin7e00859cee\\AppData\\Local\\Temp\\2\\claude\\K--repos-d365fo-cli\\ac58616d-375a-4381-b289-fca2d371276f\\scratchpad\\l3dm\\Dynamics.AX.D365FoCliEvalGoldens.xppc.log",
+  "compilerArgs": "-metadata=C:\\Users\\Admin7e00859cee\\AppData\\Local\\Temp\\2\\claude\\K--repos-d365fo-cli\\ac58616d-375a-4381-b289-fca2d371276f\\scratchpad\\l3fin2 -modelmodule=D365FoCliEvalGoldens -output=C:\\Users\\Admin7e00859cee\\AppData\\Local\\Temp\\2\\claude\\K--repos-d365fo-cli\\ac58616d-375a-4381-b289-fca2d371276f\\scratchpad\\l3fin2\\bin -referencefolder=K:\\AosService\\PackagesLocalDirectory -refPath=C:\\Users\\Admin7e00859cee\\AppData\\Local\\Temp\\2\\claude\\K--repos-d365fo-cli\\ac58616d-375a-4381-b289-fca2d371276f\\scratchpad\\l3fin2\\bin -log=C:\\Users\\Admin7e00859cee\\AppData\\Local\\Temp\\2\\claude\\K--repos-d365fo-cli\\ac58616d-375a-4381-b289-fca2d371276f\\scratchpad\\l3fin2\\Dynamics.AX.D365FoCliEvalGoldens.xppc.log",
   "modelName": "D365FoCliEvalGoldens",
   "total": 51,
-  "clean": 40,
-  "failed": 11,
+  "clean": 43,
+  "failed": 8,
   "skipped": 0,
   "cases": [
     {
@@ -124,27 +124,19 @@
     },
     {
       "caseId": "L1-form-lookup",
-      "verdict": "errors",
-      "errors": 2,
+      "verdict": "clean",
+      "errors": 0,
       "warnings": 0,
       "ruleIds": [],
-      "messages": [
-        "Unable to validate pattern \u0027Lookup 1.2\u0027. Message: Pattern \u0027Lookup 1.2\u0027 not found.",
-        "Property \u0027ViewEditMode\u0027 on control AxForm/ConFmVehicleLookupForm/Design/Controls/CustomFilterGroup must have value \u0027Edit\u0027 per pattern \u0027Custom and Quick Filters\u0027."
-      ]
+      "messages": []
     },
     {
       "caseId": "L1-form-simplelist-details",
-      "verdict": "errors",
-      "errors": 4,
+      "verdict": "clean",
+      "errors": 0,
       "warnings": 0,
       "ruleIds": [],
-      "messages": [
-        "Control \u0027AxForm/ConFmVehicleListDetails/Design\u0027 is missing child \u0027Details Tabs\u0027 required by pattern \u0027Simple List and Details - List Grid\u0027.",
-        "Unable to validate pattern \u0027SidePanel 1.0\u0027. Message: Pattern \u0027SidePanel 1.0\u0027 not found.",
-        "Property \u0027ColumnsMode\u0027 on control AxForm/ConFmVehicleListDetails/Design/Controls/DetailsGroup/Tab/TabPageOverview must have value \u0027Fill\u0027 per pattern \u0027Fields and Field Groups\u0027.",
-        "Property \u0027ColumnsMode\u0027 on control AxForm/ConFmVehicleListDetails/Design/Controls/DetailsGroup/Tab/TabPageGeneral must have value \u0027Fill\u0027 per pattern \u0027Fields and Field Groups\u0027."
-      ]
+      "messages": []
     },
     {
       "caseId": "L1-form-table-of-contents",
@@ -156,15 +148,11 @@
     },
     {
       "caseId": "L1-form-workspace",
-      "verdict": "errors",
-      "errors": 3,
+      "verdict": "clean",
+      "errors": 0,
       "warnings": 0,
       "ruleIds": [],
-      "messages": [
-        "Unable to validate pattern \u0027Workspace 1.0\u0027. Message: Pattern \u0027Workspace 1.0\u0027 not found.",
-        "Control \u0027AxForm/ConFmVehicleWorkspace/Design/Controls/PanoramaBody/SummarySection\u0027 has child \u0027ChartSection\u0027 which is not allowed at its current location by pattern \u0027Section Tiles\u0027.",
-        "Property \u0027ViewEditMode\u0027 on control AxForm/ConFmVehicleWorkspace/Design/Controls/PanoramaBody/FmVehicleSection/FmVehicleCustomFilterGroup must have value \u0027Edit\u0027 per pattern \u0027Custom and Quick Filters\u0027."
-      ]
+      "messages": []
     },
     {
       "caseId": "L1-map-basic",

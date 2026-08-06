@@ -256,18 +256,14 @@ public static class FormPatternTemplates
     {
         var (dsName, dsTable) = ResolveDs(opt);
 
-        // A workspace with requested fields but no --section used to render the
-        // Summary tiles only, silently dropping every --field. Give those fields
-        // a home: one implicit list section named after the datasource, matching
-        // what a real panorama workspace does (Summary + one list per subject).
-        var specs = opt.Sections.Count > 0
-            ? opt.Sections
-            : opt.GridFields.Count > 0
-                ? new[] { new FormSectionSpec(dsName, dsName) }
-                : Array.Empty<FormSectionSpec>();
-
-        var sections = string.Concat(specs.Select((s, i) =>
-            RenderWorkspaceListSection(s, i, dsName, opt.GridFields, indent: 10)));
+        // No inline list sections. A WorkspaceOperational tabbed-list page must contain
+        // a FormPartControl pointing at a *separate* form whose own design pattern is
+        // FormPartSectionList — the AOS rejects anything else there, and a FormPart
+        // naming a menu item that does not exist is the dangling reference this repo
+        // refuses to emit. The tab is generated empty (its pages are Count="*"), and
+        // GenerateFormCommand refuses --field/--section for this pattern rather than
+        // dropping them silently or writing a form no AOS would load.
+        var sections = string.Empty;
         return Fill("Workspace.template.xml", new()
         {
             ["FormName"]      = opt.FormName,

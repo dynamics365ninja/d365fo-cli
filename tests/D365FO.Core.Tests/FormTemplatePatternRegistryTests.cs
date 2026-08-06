@@ -18,23 +18,19 @@ namespace D365FO.Core.Tests;
 /// doing exactly that.
 /// </para>
 /// <para>
-/// The ones still wrong are listed in <see cref="KnownWrong"/> rather than silently
-/// tolerated: each needs its template restructured to satisfy the real pattern's
-/// required parts, and its entry removed here when that lands. Shrinking this list is
-/// the work item; adding to it is a regression.
+/// <see cref="KnownWrong"/> is empty: all five have been migrated. It stays as the
+/// mechanism — an entry may be added when a new template lands ahead of its pattern
+/// work — but an empty list is the state to keep. Adding to it is a regression.
 /// </para>
 /// </remarks>
 public class FormTemplatePatternRegistryTests
 {
     /// <summary>
-    /// Templates whose design pattern is not in the registry. Every entry is a known
-    /// defect with the real pattern named — not an exemption.
+    /// Templates whose design pattern is not in the registry, each with the real
+    /// pattern named. Empty, and meant to stay that way: an entry is a known defect
+    /// being tracked, never an exemption.
     /// </summary>
-    private static readonly Dictionary<string, string> KnownWrong = new(StringComparer.Ordinal)
-    {
-        ["Lookup 1.2"] = "there is no pattern named 'Lookup' at all: LookupGridOnly 1.1, LookupTab 1.0, LookupPreview 1.0",
-        ["Workspace 1.0"] = "Workspace exists only as an inactive 2.0; the active pattern is WorkspaceOperational 1.1",
-    };
+    private static readonly Dictionary<string, string> KnownWrong = new(StringComparer.Ordinal);
 
     public static IEnumerable<object[]> Templates =>
         FormTemplateResources.Names.Select(n => new object[] { n });

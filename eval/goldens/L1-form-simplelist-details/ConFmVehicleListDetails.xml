@@ -31,7 +31,10 @@ public class ConFmVehicleListDetails extends FormRun
     </AxFormDataSource>
   </DataSources>
   <Design>
+    <ArrangeMethod xmlns="">Vertical</ArrangeMethod>
     <Caption xmlns="">Fleet vehicles</Caption>
+    <Columns xmlns="">1</Columns>
+    <ColumnsMode xmlns="">Fixed</ColumnsMode>
     <DataSource xmlns="">FmVehicle</DataSource>
     <Pattern xmlns="">SimpleListDetails</Pattern>
     <PatternVersion xmlns="">1.3</PatternVersion>
@@ -57,16 +60,25 @@ public class ConFmVehicleListDetails extends FormRun
         <AlignChild>No</AlignChild>
         <AlignChildren>No</AlignChildren>
         <ArrangeMethod>Vertical</ArrangeMethod>
+        <Style>Standard</Style>
       </AxFormControl>
+      <!--
+        The navigation list is a SidePanel-*styled* group. "SidePanel" is a Style, not a
+        sub-pattern; declaring it as one sent the AOS looking for a pattern it has no
+        record of ("Pattern 'SidePanel 1.0' not found").
+      -->
       <AxFormControl xmlns="" i:type="AxFormGroupControl">
-        <Name>GridContainer</Name>
-        <Pattern>SidePanel</Pattern>
-        <PatternVersion>1.0</PatternVersion>
+        <Name>NavigationListGroup</Name>
+        <Height>-1</Height>
+        <HeightMode>SizeToAvailable</HeightMode>
         <Type>Group</Type>
+        <Width>-1</Width>
+        <WidthMode>SizeToContent</WidthMode>
         <FormControlExtension i:nil="true" />
         <Controls>
           <AxFormControl>
             <Name>QuickFilterControl</Name>
+            <WidthMode>SizeToAvailable</WidthMode>
             <FormControlExtension>
               <Name>QuickFilterControl</Name>
               <ExtensionComponents />
@@ -89,8 +101,13 @@ public class ConFmVehicleListDetails extends FormRun
             </FormControlExtension>
           </AxFormControl>
           <AxFormControl xmlns="" i:type="AxFormGridControl">
-            <Name>Grid</Name>
+            <Name>NavigationListGrid</Name>
+            <AllowEdit>No</AllowEdit>
+            <Height>-1</Height>
+            <HeightMode>SizeToAvailable</HeightMode>
             <Type>Grid</Type>
+            <Width>-1</Width>
+            <WidthMode>SizeToContent</WidthMode>
             <FormControlExtension i:nil="true" />
             <Controls>
               <AxFormControl xmlns="" i:type="AxFormStringControl">
@@ -110,22 +127,44 @@ public class ConFmVehicleListDetails extends FormRun
             </Controls>
             <DataSource>FmVehicle</DataSource>
             <GridLinesStyle>Vertical</GridLinesStyle>
+            <MultiSelect>No</MultiSelect>
+            <ShowRowLabels>No</ShowRowLabels>
             <Style>List</Style>
           </AxFormControl>
         </Controls>
+        <ArrangeMethod>Vertical</ArrangeMethod>
+        <Columns>1</Columns>
+        <ColumnsMode>Fixed</ColumnsMode>
+        <FrameType>None</FrameType>
         <Style>SidePanel</Style>
       </AxFormControl>
+      <!-- The pattern's DetailsHeader part, then the FastTabs tab. -->
       <AxFormControl xmlns="" i:type="AxFormGroupControl">
-        <Name>DetailsGroup</Name>
+        <Name>DetailsHeader</Name>
+        <Height>-1</Height>
+        <HeightMode>SizeToContent</HeightMode>
+        <Pattern>FieldsFieldGroups</Pattern>
+        <PatternVersion>1.1</PatternVersion>
         <Type>Group</Type>
+        <Width>-1</Width>
+        <WidthMode>SizeToAvailable</WidthMode>
         <FormControlExtension i:nil="true" />
-        <Controls>
-          <AxFormControl xmlns="" i:type="AxFormTabControl">
-            <Name>Tab</Name>
+        <Controls />
+        <ColumnsMode>Fill</ColumnsMode>
+        <DataSource>FmVehicle</DataSource>
+        <FrameType>None</FrameType>
+      </AxFormControl>
+      <AxFormControl xmlns="" i:type="AxFormTabControl">
+            <Name>DetailsTabs</Name>
+            <Height>-1</Height>
+            <HeightMode>SizeToAvailable</HeightMode>
             <Type>Tab</Type>
+            <Width>-1</Width>
+            <WidthMode>SizeToAvailable</WidthMode>
             <FormControlExtension i:nil="true" />
             <Controls>
               <AxFormControl xmlns="" i:type="AxFormTabPageControl">
+                
                 
                 
                 
@@ -158,8 +197,9 @@ public class ConFmVehicleListDetails extends FormRun
                     <DataGroup>Overview</DataGroup>
                     <DataSource>FmVehicle</DataSource>
                   </AxFormControl>
-                </Controls><Caption>Overview</Caption></AxFormControl>
+                </Controls><ColumnsMode>Fill</ColumnsMode><Caption>Overview</Caption></AxFormControl>
               <AxFormControl xmlns="" i:type="AxFormTabPageControl">
+                
                 
                 
                 
@@ -176,10 +216,9 @@ public class ConFmVehicleListDetails extends FormRun
                     <DataGroup>General</DataGroup>
                     <DataSource>FmVehicle</DataSource>
                   </AxFormControl>
-                </Controls><Caption>General</Caption></AxFormControl>
+                </Controls><ColumnsMode>Fill</ColumnsMode><Caption>General</Caption></AxFormControl>
             </Controls>
-          </AxFormControl>
-        </Controls>
+            <Style>FastTabs</Style>
       </AxFormControl>
     </Controls>
   </Design>
