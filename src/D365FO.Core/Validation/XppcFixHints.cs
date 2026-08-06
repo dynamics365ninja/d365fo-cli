@@ -54,6 +54,74 @@ public static class XppcFixHints
     /// </summary>
     internal static readonly Rule[] Rules =
     [
+        // --- named diagnostics: the message identifies the defect itself ----------
+        new("XPPC-COC-MISSING-NEXT",
+            AllOf: [], AnyOf: [@"\bSYS10028\b", @"must call next", @"missing next", @"call to next"],
+            NoneOf: [], Weight: 10,
+            Hint: "A CoC wrapper must call `next <method>(...)` unconditionally, at first-level scope. Omit it only for a [Replaceable] method, and say why in a comment.",
+            Knowledge: "coc-extension-authoring"),
+
+        new("XPPC-OVERLAYERING",
+            AllOf: [], AnyOf: [@"overlayer", @"cannot overlay", @"modification (is )?not allowed", @"overlayering"],
+            NoneOf: [], Weight: 10,
+            Hint: "Overlayering is blocked in D365FO. Extend instead: CoC ([ExtensionOf]), an event handler, or an object extension — `d365fo generate extension <Kind> <Target>`.",
+            Knowledge: "object-extension-authoring"),
+
+        new("XPPC-METADATA-DESERIALIZE",
+            AllOf: [], AnyOf: [@"cannot be deserialized", @"no knowledge of any type that maps to this name", @"not (a )?valid metadata element", @"invalid metadata"],
+            NoneOf: [], Weight: 10,
+            Hint: "The AOT XML names an element type the metadata provider does not know — xppc does not catch this, only metadata generation does. Check it offline with `d365fo validate metadata <file>`, and never hand-author AOT XML.",
+            Knowledge: "forms-and-navigation"),
+
+        new("XPPC-BP-TODAY",
+            AllOf: [], AnyOf: [@"BPUpgradeCodeToday", @"BPUpgradeCodeSystemDate", @"\btoday\(\)"],
+            NoneOf: [], Weight: 10,
+            Hint: "today() reads the AOS clock and ignores the session date and user time zone. Use DateTimeUtil::getSystemDate(DateTimeUtil::getUserPreferredTimeZone()), assigned to a local before any where clause.",
+            Knowledge: "xpp-runtime-types"),
+
+        new("XPPC-NESTED-LOOP",
+            AllOf: [], AnyOf: [@"BPCheckNestedLoop", @"nested while", @"nested loop"],
+            NoneOf: [], Weight: 10,
+            Hint: "Nested `while select` is an N×M round-trip. Flatten to one statement with `join` / `exists join`, or batch-load the inner set into a Map first.",
+            Knowledge: "xpp-database-queries"),
+
+        new("XPPC-TTS-UNBALANCED",
+            AllOf: [], AnyOf: [@"tts level", @"unbalanced tts", @"transaction level", @"ttsbegin", @"ttscommit"],
+            NoneOf: [@"updateconflict", @"update conflict"], Weight: 10,
+            Hint: "Unbalanced transaction scope. Every ttsbegin needs exactly one ttscommit, and try/catch belongs OUTSIDE the block — inside it the transaction is already rolled back when the handler runs.",
+            Knowledge: "transactions-and-concurrency"),
+
+        new("XPPC-UPDATE-CONFLICT",
+            AllOf: [], AnyOf: [@"updateconflict", @"update conflict", @"optimistic concurrency"],
+            NoneOf: [], Weight: 10,
+            Hint: "Two sessions updated the same record. Retry the whole tts block (reread, re-apply), and throw Exception::UpdateConflictNotRecovered once the retries are exhausted.",
+            Knowledge: "transactions-and-concurrency"),
+
+        new("XPPC-FORUPDATE-MISSING",
+            AllOf: [], AnyOf: [@"not selected for update", @"record (is )?not selected", @"\bforupdate\b"],
+            NoneOf: [], Weight: 9,
+            Hint: "The buffer was not selected with `forUpdate`, so it cannot be updated. Add `forUpdate` (with `optimisticlock`) to the select, inside the tts block.",
+            Knowledge: "transactions-and-concurrency"),
+
+        new("XPPC-CLR-ERROR",
+            AllOf: [], AnyOf: [@"CLRError", @"CLR exception", @"\.NET exception", @"System\.[A-Za-z]+Exception"],
+            NoneOf: [], Weight: 9,
+            Hint: "A .NET call threw. Catch `Exception::CLRError` (a bare Exception::Error will not catch it) and read the detail from CLRInterop::getLastException().",
+            Knowledge: "xpp-runtime-types"),
+
+        new("XPPC-NUMBER-SEQUENCE",
+            AllOf: [@"number sequence"], AnyOf: [@"not (set up|configured|found)", @"could not be found", @"does not exist", @"\bmissing\b"],
+            NoneOf: [], Weight: 9,
+            Hint: "The number-sequence reference is not registered or not set up for this company. Check loadModule() on the NumberSeqApplicationModule subclass, then Organization administration > Number sequences.",
+            Knowledge: "number-sequence-patterns"),
+
+        new("XPPC-FIELD-MISSING",
+            AllOf: [@"\bfield\b"],
+            AnyOf: [@"does not exist", @"not found", @"\bunknown\b", @"is not a( valid)? field"],
+            NoneOf: [@"\blabel\b"], Weight: 7,
+            Hint: "The field is not on that table. List the real fields with `d365fo get table <Name> --output json`, and reference them through fieldNum()/fieldStr() so a rename becomes a compile error.",
+            Knowledge: "table-scaffolding"),
+
         // --- highly specific: a named subsystem is unambiguously identified -------
         new("XPPC-EXTENSIONOF-INTRINSIC",
             AllOf: [@"does not denote a class"], AnyOf: [], NoneOf: [], Weight: 10,
@@ -105,7 +173,9 @@ public static class XppcFixHints
             Hint: "The identifier does not exist in metadata. Verify it with `d365fo search any <name>` / `d365fo validate references` — never guess names."),
 
         new("XPPC-TYPE-MISMATCH",
-            AllOf: [], AnyOf: [@"cannot (be )?convert", @"type mismatch", @"is not compatible with"], NoneOf: [], Weight: 6,
+            AllOf: [],
+            AnyOf: [@"cannot (be )?convert", @"type mismatch", @"is not compatible with", @"\bCSUV1\b", @"cannot be assigned", @"illegal assignment"],
+            NoneOf: [], Weight: 6,
             Hint: "Type mismatch — check the field/EDT type with `d365fo get table <name>` or `d365fo get edt <name>` rather than assuming str/int."),
 
         // --- low: syntax catch-alls, deliberately last-resort ---------------------

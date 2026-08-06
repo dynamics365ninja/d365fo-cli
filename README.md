@@ -198,10 +198,13 @@ The legacy `skills/copilot/*.instructions.md` output is still emitted by `emit-s
 
 ### Claude Code / Claude Desktop
 
-```sh
-python3 scripts/emit-skills.py                                   # emit Anthropic SKILL.md files
-cp -r skills/anthropic/ /your-repo/.claude/skills/
+```powershell
+.\scripts\Install-D365FoClaudeSkills.ps1 -XppRepo "K:\D365FO\MyProject"
 ```
+
+Installs one `.claude/skills/<topic>/SKILL.md` per knowledge topic, and prunes topics
+retired upstream. Manual equivalent: `python3 scripts/emit-skills.py` then
+`cp -r skills/anthropic/. /your-repo/.claude/skills/`.
 
 ### Codex CLI / Gemini CLI / Cursor
 

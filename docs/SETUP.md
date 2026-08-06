@@ -217,9 +217,21 @@ flowchart LR
 
 ### Claude Code (CLI or VS Code extension)
 
+```powershell
+.\scripts\Install-D365FoClaudeSkills.ps1 -XppRepo "K:\D365FO\MyProject"
+```
+
+The Anthropic-format sibling of `Install-D365FoCopilotSkills.ps1`: it installs one
+`.claude/skills/<topic>/SKILL.md` per knowledge topic, regenerating them first if the
+emitted folder is empty, and prunes topics that were renamed or retired upstream. Both
+scripts emit from the same `skills/_source`, so the two ecosystems cannot disagree about
+a rule.
+
+Manual equivalent, if you would rather not run the script:
+
 ```sh
 python3 scripts/emit-skills.py                            # emits skills/anthropic/*/SKILL.md
-cp -r skills/anthropic /your-repo/.claude/skills
+cp -r skills/anthropic/. /your-repo/.claude/skills/
 ```
 
 Anthropic SKILL.md files load on demand — Claude reads the YAML frontmatter first and only pulls the full instruction when relevant.

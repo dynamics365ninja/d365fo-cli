@@ -32,4 +32,12 @@ public static class EvalPaths
 
     /// <summary>The checked-in mini-AOT fixture also used by MiniAotEndToEndTests / GoldenQualityGateTests.</summary>
     public static string FixtureDir(string repoRoot) => Path.Combine(repoRoot, "tests", "Samples", "MiniAot");
+
+    /// <summary>Reviewed exceptions for the knowledge audit — names that resolve in no index.</summary>
+    public static string KnowledgeAllowPath(string repoRoot) =>
+        Path.Combine(repoRoot, "eval", "knowledge-audit.allow.json");
+
+    /// <summary>The committed knowledge-audit snapshot, captured against a full standard index.</summary>
+    public static string KnowledgeSnapshotPath(string repoRoot) =>
+        Path.Combine(repoRoot, "eval", "knowledge-audit.snapshot.json");
 }

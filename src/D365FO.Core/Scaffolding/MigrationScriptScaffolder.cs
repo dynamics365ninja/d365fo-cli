@@ -5,16 +5,23 @@ namespace D365FO.Core.Scaffolding;
 public enum MigrationMode { Insert, Update, Upsert }
 
 /// <summary>
-/// Scaffolds a data-migration <c>SysRunnable</c> class for D365FO.
+/// Scaffolds a data-migration runnable class for D365FO.
 /// Uses <c>doInsert</c> / <c>doUpdate</c> (the documented exception to the
 /// &quot;never bypass ORM&quot; rule) with configurable batch-commit intervals
 /// and progress logging.
 /// </summary>
+/// <remarks>
+/// A D365FO runnable class is a plain <c>AxClass</c> with a static
+/// <c>main(Args)</c> entry point — there is no base class to extend. This
+/// scaffolder used to emit <c>extends SysRunnable</c>, a type that exists in no
+/// AOT; the knowledge audit (<c>d365fo knowledge audit</c>) found it by resolving
+/// the corpus that taught it against the real symbol index.
+/// </remarks>
 public static class MigrationScriptScaffolder
 {
     /// <summary>
-    /// Scaffolds one <c>AxClass</c> extending <c>SysRunnable</c> with the
-    /// batch-safe migration pattern.
+    /// Scaffolds one <c>AxClass</c> carrying the batch-safe migration pattern
+    /// behind a static <c>main(Args)</c> entry point.
     /// </summary>
     public static XDocument MigrationClass(
         string className,
@@ -33,9 +40,10 @@ public static class MigrationScriptScaffolder
         var declaration =
             $"/// <summary>\n" +
             $"/// Data migration: {sourceTable} → {targetTable}.\n" +
-            $"/// Run once via Batch or SysRunnable; uses doInsert/doUpdate (permitted exception).\n" +
+            $"/// Run once as a runnable class (right-click the class, Set as startup object) or\n" +
+            $"/// from a batch job; uses doInsert/doUpdate (permitted exception).\n" +
             $"/// </summary>\n" +
-            $"public class {className} extends SysRunnable\n" +
+            $"public class {className}\n" +
             "{\n" +
             $"    private static int BatchSize = {batchSize};\n" +
             "}\n";

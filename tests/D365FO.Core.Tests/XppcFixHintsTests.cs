@@ -39,6 +39,19 @@ public class XppcFixHintsTests
     [InlineData("Cannot extend final class 'CustTable'.", "XPPC-FINAL-NOT-WRAPPABLE")]
     [InlineData("Object 'MyClass' is not referenced by this model.", "XPPC-MODEL-REFERENCE")]
     [InlineData("Cannot convert from 'str' to 'int'.", "XPPC-TYPE-MISMATCH")]
+    // Ported from upstream d365fo-mcp-server's d365foErrorHelp.ts error catalog.
+    [InlineData("SYS10028: you must call next salute() in the extension method.", "XPPC-COC-MISSING-NEXT")]
+    [InlineData("Overlayering is not allowed for element 'CustTable'.", "XPPC-OVERLAYERING")]
+    [InlineData("Element MyMenu cannot be deserialized as AxMenu.", "XPPC-METADATA-DESERIALIZE")]
+    [InlineData("BPUpgradeCodeToday: today() must not be used.", "XPPC-BP-TODAY")]
+    [InlineData("BPCheckNestedLoopInCode: nested while select detected.", "XPPC-NESTED-LOOP")]
+    [InlineData("TTS level is not 0 at the end of the operation.", "XPPC-TTS-UNBALANCED")]
+    [InlineData("Exception::UpdateConflict was thrown while updating CustTable.", "XPPC-UPDATE-CONFLICT")]
+    [InlineData("The record is not selected for update.", "XPPC-FORUPDATE-MISSING")]
+    [InlineData("CLRError: System.NullReferenceException in the interop call.", "XPPC-CLR-ERROR")]
+    [InlineData("The number sequence for MyId is not set up for company USMF.", "XPPC-NUMBER-SEQUENCE")]
+    [InlineData("The field 'CreditMaxx' does not exist on table CustTable.", "XPPC-FIELD-MISSING")]
+    [InlineData("CSUV1: the value cannot be assigned to a variable of this type.", "XPPC-TYPE-MISMATCH")]
     public void Maps_known_messages_to_their_rule(string message, string expectedRule)
     {
         var best = XppcFixHints.Best(message);
@@ -91,5 +104,35 @@ public class XppcFixHintsTests
     {
         var ids = XppcFixHints.Rules.Select(r => r.Id).ToList();
         Assert.Equal(ids.Count, ids.Distinct().Count());
+    }
+
+    [Fact]
+    public void Every_knowledge_pointer_resolves_to_a_real_topic()
+    {
+        // A hint that points at a renamed or deleted topic sends the agent to a
+        // `knowledge get` that fails — worse than no pointer at all.
+        foreach (var rule in XppcFixHints.Rules.Where(r => r.Knowledge is not null))
+        {
+            Assert.True(
+                D365FO.Core.Knowledge.KnowledgeBase.Get(rule.Knowledge) is not null,
+                $"{rule.Id} points at knowledge topic '{rule.Knowledge}', which does not exist");
+        }
+    }
+
+    [Fact]
+    public void Update_conflict_outranks_the_generic_tts_rule()
+    {
+        // "UpdateConflict" messages mention the transaction too; the recoverable-retry
+        // advice must win over the generic unbalanced-tts advice.
+        var best = XppcFixHints.Best("ttscommit failed: Exception::UpdateConflict on CustTable.");
+        Assert.NotNull(best);
+        Assert.Equal("XPPC-UPDATE-CONFLICT", best!.RuleId);
+    }
+
+    [Fact]
+    public void Field_rule_outranks_the_generic_identifier_rule()
+    {
+        var matches = XppcFixHints.Match("The field 'Foo' does not exist on table CustTable.");
+        Assert.Equal("XPPC-FIELD-MISSING", matches[0].RuleId);
     }
 }

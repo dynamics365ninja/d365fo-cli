@@ -1,6 +1,7 @@
 ---
 id: data-entity-scaffolding
 description: Scaffold an AxDataEntityView (data entity) in D365 Finance & Operations for OData / DMF (Data Management Framework) integration. Use when the user asks to "create a data entity", "expose a table to OData", or "scaffold an entity for DMF".
+covers: Data entity (`AxDataEntityView`) patterns, OData exposure
 applyTo:
   - "**/AxDataEntityView/**"
   - "**/*Entity.xml"

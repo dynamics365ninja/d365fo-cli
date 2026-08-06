@@ -1,6 +1,7 @@
 ---
 id: model-dependency-and-coupling
 description: Inspect indexed D365FO models, their declared dependencies, and architectural coupling metrics (fan-in, fan-out, instability, cycles). Use when the user asks "what models depend on X", "is there a cycle", "what's the layer of model Y", or "show coupling".
+covers: Model reference chains, ISV/customer boundary rules
 applyTo:
   - "**/Descriptor/*.xml"
   - "**/AxModel/**"

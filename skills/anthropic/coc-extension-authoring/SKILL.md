@@ -117,3 +117,28 @@ d365fo bp check --output json    # only on user request
 - Never remove `next` on a non-`[Replaceable]` method.
 - Never wrap a constructor.
 - Never hardcode labels — `d365fo labels search` first.
+
+
+## Rule canon — Chain of Command
+
+<!-- canon:coc -->
+**NEVER copy default parameter values into the wrapper signature.** The base
+method's defaults are already in effect when `next` runs.
+
+- Wrapper must call `next` unconditionally (exception: `[Replaceable]`).
+- `next` at first-level scope — NOT in `if`/`while`/`for`/`do-while`/boolean
+  expressions/after `return`. PU21+: `try`/`catch`/`finally` allowed.
+- Signature otherwise matches base EXACTLY.
+- Static methods: repeat `static`. Forms cannot be wrapped statically.
+- Cannot wrap constructors.
+- Class shape: `[ExtensionOf(...)] final class <Target>_<Suffix>`.
+- `[Hookable(false)]` blocks all CoC + handlers.
+- `[Wrappable(false)]` blocks wrapping; allows handlers.
+- Form-nested wrapping (`formdatasourcestr`, `formdatafieldstr`,
+  `formControlStr`) cannot ADD new methods.
+- Wrappers can read `protected` (PU9+); not `private`.
+- Reuse existing target/model extension and handler classes before creating new
+  ones. If no existing suffix can be derived and the user did not provide one,
+  ask; do not create parallel feature-named artifacts unless the user explicitly
+  requests that separation.
+<!-- /canon -->

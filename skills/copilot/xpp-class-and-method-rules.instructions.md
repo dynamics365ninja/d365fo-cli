@@ -84,3 +84,22 @@ d365fo get class <Class> --output json                 # methods, attributes, si
 d365fo read class <Class> --method <m> --declaration   # exact return type & params
 d365fo find usages <method> --output json              # caller risk
 ```
+
+
+## Rule canon — classes and methods
+
+<!-- canon:classes -->
+- Default class access = `public`. `internal`/`final`/`abstract` as needed.
+- Instance fields default = `protected`. **NEVER `public`.**
+- Constructors: `protected new()` + `public static construct()` + `protected init()`.
+- Modifier order: `[edit|display] [public|protected|private|internal] [static|abstract|final]`.
+- Override visibility ≥ base.
+- Optional params last; no skipping; `prmIsDefault(_x)` in `parmX`.
+- All parameters pass-by-value.
+- `this`: required for instance calls; never on member vars / static methods;
+  not in static methods.
+- Extension methods: `static class _Extension`; methods `public static`;
+  first param is target type (caller omits).
+- `public const str FOO = 'bar';` over `#define.FOO('bar')`.
+- `var` for type-inferred locals when RHS is obvious.
+<!-- /canon -->

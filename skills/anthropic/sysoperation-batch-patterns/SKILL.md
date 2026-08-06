@@ -1,7 +1,7 @@
 ---
 name: sysoperation-batch-patterns
 description: Scaffold batch jobs, SysOperation triplets (DataContract + Service + Controller), RunBase/RunBaseBatch classes, or data migration scripts in D365 Finance & Operations. Invoke when the user asks to "create a batch job", "scaffold a SysOperation", "create a RunBase class", "build a batch class", "generate a migration script", "migrate data between tables", or "create a scheduled batch".
-applies_when: User intent mentions batch job, SysOperation, RunBase, RunBaseBatch, scheduled batch, data migration script, DataContract class, batch controller, or SysRunnable.
+applies_when: User intent mentions batch job, SysOperation, RunBase, RunBaseBatch, scheduled batch, data migration script, DataContract class, batch controller, or runnable class.
 ---
 > ⛔ **NEVER write X++ AOT XML files directly** via PowerShell, terminal file commands (`Set-Content`, `Out-File`, `New-Item`), editor write tools, or any raw text approach. The XML schema is proprietary. **ALWAYS use `d365fo generate …` commands** to produce correct AOT XML. If `d365fo` is unavailable in PATH, stop and ask the user to install it.
 
@@ -89,7 +89,7 @@ d365fo generate runbase FmLegacyBatch \
 
 ---
 
-## 3. Data migration scripts — `SysRunnable`
+## 3. Data migration scripts — runnable classes
 
 Use for one-time data migration during upgrades or post-deployment data fixes.
 
@@ -109,10 +109,54 @@ d365fo generate migration-script FmVehicleMigration \
 
 **Modes:** `Insert` (default, fails on duplicate) | `Update` (updates existing records) | `Upsert` (insert or update).
 
+---
+
+## 4. Retryable and asynchronous batch
+
+A batch task can opt into automatic retry on transient faults (deadlock, SQL
+timeout) by implementing `BatchRetryable` and returning `true` from
+`isRetryable()`.
+
+```xpp
+/// <summary>
+/// Reconciles fleet service charges; safe to re-run, so the batch engine may retry it.
+/// </summary>
+class FmReconciliationService extends SysOperationServiceBase implements BatchRetryable
+{
+    public boolean isRetryable()
+    {
+        return true;
+    }
+
+    public void run(FmReconciliationContract _contract)
+    {
+        ttsbegin;
+        this.reconcile(_contract.parmFromDate());
+        ttscommit;
+    }
+}
+```
+
+**Hard rules:**
+
+- `isRetryable()` only **opts in**; the framework decides how many times to re-run.
+  The task must therefore be **idempotent** — guard with a completed-marker record
+  or a RecId watermark if it is not naturally so.
+- **Never swallow the transient exception yourself.** Catching it defeats the
+  retry you just asked for; let it propagate.
+- Run work off the caller's thread by setting
+  `controller.parmExecutionMode(SysOperationExecutionMode::ScheduledBatch)` and
+  calling `startOperation()` — a form button must not block on a long operation.
+- **Never hold an open transaction across an async boundary.** `ttsbegin` /
+  `ttscommit` go *inside* the asynchronous unit, not around the scheduling call.
+- For genuine parallelism, partition the work and fan it out —
+  `d365fo knowledge get performance-and-caching`.
+
 **Hard rules:**
 
 - Always run migration scripts in a test environment before production.
 - Use `--batch-size` to avoid long-running transactions. Default is 1000.
-- The scaffolded class extends `SysRunnable` and exposes a static `main(Args _args)` entry point that constructs the class and calls the instance `run()` method — invoke via **Right-click → Open** in Visual Studio (or wrap the call in a batch/RunBase wrapper). There is no static `SysRunnable::run()` call.
+- **A runnable class extends nothing.** In D365FO "runnable" is not a base class — it is any plain class with a static `main(Args _args)` entry point, run via **right-click the class → Set as startup object** in Visual Studio (or wrapped in a batch job). Verified against the AOT: no `SysRunnable` type exists, so deriving from it will not compile.
+- The scaffolded class follows exactly that shape: `main(Args _args)` constructs the class and calls the instance `run()` method.
 - Never delete source data in the same script — use a separate cleanup script after validation.
 - After migration, validate row counts: `select count(*) from FmVehicle`.

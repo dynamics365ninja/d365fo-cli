@@ -1,6 +1,7 @@
 ---
 id: event-handler-authoring
 description: Subscribe to a D365FO event (data event on a table, form / form-data-source / form-data-field event, custom delegate on a class) by scaffolding an event-handler class. Use when the user asks to "subscribe to an event", "react to inserted/deleted/updated", or "hook a delegate".
+covers: `[DataEventHandler]`, `[SubscribesTo]`, pre/post handlers
 applyTo:
   - "**/AxClass/**EventHandler*.xml"
   - "**/AxClass/**Handler*.xml"

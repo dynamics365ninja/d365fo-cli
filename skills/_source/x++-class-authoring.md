@@ -1,6 +1,7 @@
 ---
 id: x++-class-authoring
 description: Guidance for authoring or extending X++ classes in D365 Finance & Operations. Invoke whenever the user asks to "create a class", "extend a class", "add a method", or write any X++ that touches CoC.
+covers: Class hierarchy, CoC, access modifiers, constructor patterns
 applyTo:
   - "**/*.xpp"
   - "**/AxClass/**"
@@ -129,9 +130,10 @@ Concrete per-module classes are named `NumberSeqModule<Module>` (e.g.
 **Manual consumption** — the `numRef<Edt>()` accessor is a `static
 NumberSequenceReference` method on the module's own parameter table (e.g.
 `CustParameters::numRefCustAccount()` calling
-`NumberSeqReference::findReference(extendedTypeNum(CustAccount))`), not on `CompanyInfo`:
+`NumberSeqReference::findReference(extendedTypeNum(CustAccount))`), not on `CompanyInfo`.
+`MyModuleParameters` below stands in for your module's parameter table:
 ```xpp
-NumberSeq numSeq = NumberSeq::newGetNum(FmParameters::numRefMySequence());
+NumberSeq numSeq = NumberSeq::newGetNum(MyModuleParameters::numRefMyNumberId());
 str nextNum = numSeq.num();
 // ... use nextNum ...
 numSeq.used();   // or numSeq.abort() to roll back

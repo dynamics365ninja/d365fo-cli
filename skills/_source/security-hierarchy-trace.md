@@ -1,6 +1,7 @@
 ---
 id: security-hierarchy-trace
 description: Trace D365FO security from a Role all the way down to Entry Points, discover which roles reach a given object, or scaffold new security objects (privilege, duty, role, XDS policy). Use when the user asks about permissions, security coverage, roles, duties, privileges, "create a security privilege", "scaffold a security role", "generate a duty", or "create a security policy".
+covers: Role to duty to privilege to entry-point tracing
 applyTo:
   - "**/AxSecurityRole/**"
   - "**/AxSecurityDuty/**"
