@@ -44,6 +44,7 @@ public static class GenerateSurface
         new("form", "AxForm in one of nine patterns", [Root.Form]),
         new("datasource-method", "Method override on a form datasource", [Root.Form]),
         new("control-method", "Method override on a form control", [Root.Form]),
+        new("form-clone", "Copy of an existing AxForm under a new name, datasources optionally re-bound", [Root.Form]),
         new("simple-list", "Alias for `form --pattern SimpleList`", [Root.Form], Deprecated: true),
         new("entity", "AxDataEntityView over a table", [Root.DataEntityView]),
         new("extension", "Table/Form/Edt/Enum/View/Query/Entity/Duty/Role extension",

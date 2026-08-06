@@ -66,6 +66,7 @@ public static class PropertyHonesty
         foreach (var (option, value) in requested)
         {
             if (string.IsNullOrWhiteSpace(value)) continue;
+            if (LooksLikeAPath(value)) continue;
 
             foreach (var part in Parts(value))
             {
@@ -113,6 +114,36 @@ public static class PropertyHonesty
     /// splitting them is what made <c>--constrained Header/Line</c> report a gap for a policy
     /// that had both tables, because no single element holds the path as written.
     /// </remarks>
+    /// <summary>
+    /// Whether a requested value names a file rather than a property of the generated object.
+    /// </summary>
+    /// <remarks>
+    /// Not every option a command declares describes the object it produces. <c>--from</c> names
+    /// a reference form to clone, <c>--add-to</c> and <c>--into-role</c> name documents to merge
+    /// into, and the <c>--out-*</c> family names where companion artefacts go. None of those
+    /// values can appear inside the AOT XML, so reconciling them reports one gap per path
+    /// segment — <c>AosService</c>, <c>PackagesLocalDirectory</c>, <c>CustGroup.xml</c> — and
+    /// buries the findings that mean something.
+    /// <para>
+    /// Rooted-or-has-an-extension rather than "contains a separator", because <c>/</c> is a
+    /// meaningful separator in real option values: <c>--constrained Header/Line</c> nests a
+    /// policy's constrained-table tree and every segment of it genuinely has to reach the
+    /// document.
+    /// </para>
+    /// </remarks>
+    private static bool LooksLikeAPath(string value)
+    {
+        var trimmed = value.Trim();
+        try
+        {
+            if (Path.IsPathRooted(trimmed)) return true;
+        }
+        catch (ArgumentException) { return false; }
+
+        return Path.GetExtension(trimmed).Length > 1
+               && (trimmed.Contains('/') || trimmed.Contains('\\'));
+    }
+
     private static IEnumerable<string> Parts(string value)
     {
         foreach (var raw in value.Split(CompositeSeparators, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))

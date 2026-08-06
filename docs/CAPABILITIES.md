@@ -24,8 +24,33 @@ By default the index stores object/method *metadata* only — method bodies (the
 | `index history` | Show per-model extraction run history |
 | `index export` | Dump the index to a portable archive |
 | `index import` | Restore from an archive |
+| `index cross-check` | Report where this tool's catalogs are narrower than the installation |
 | `index optimize` | Run `VACUUM` + `ANALYZE` to compact and re-plan |
 | `doctor` | End-to-end health check: paths, schema version, object counts |
+
+### `index cross-check`
+
+Every catalog this tool answers from — the form-pattern registry, the object-type registry, the
+DataContract catalog — is generated from one platform version and then committed. That makes it
+right when it was made and silent about drift afterwards. This asks the installation instead.
+
+```sh
+d365fo index cross-check                       # gaps only
+d365fo index cross-check --show-uncovered      # plus families the tool does not cover
+```
+
+Two findings, deliberately kept apart:
+
+- **Gaps** are where the tool will be *wrong* — something the installation uses that a catalog
+  claims to cover and does not. A form pattern in the wild that the registry has never heard of
+  means `generate form`, `form-pattern validate` and `form-pattern repair` cannot judge those
+  forms, and will say so in the confident voice of a tool that has a catalog. Exit code 2.
+- **Uncovered** families are where the tool is merely *narrow* — an AOT folder it was never built
+  to handle. On a real installation that is dozens of entries (40 of 83 on the box this was
+  written against), so it is off by default and never fails the command.
+
+The fix for a gap is to regenerate the named catalog on the installation that produced it
+(`scripts/emit-form-patterns.ps1`, `scripts/emit-metadata-contracts.ps1`), not to hand-add an entry.
 
 ---
 
@@ -203,6 +228,7 @@ All scaffolders write atomically (`.tmp` + move, `.bak` on overwrite). Pass `--i
 | `generate security-policy` | `AxSecurityPolicy` (XDS row-level security), including the nested `--constrained` table tree |
 | `generate systest` | `SysTestCase` skeleton — `[SysTestMethod]` Arrange/Act/Assert stub, optional `[SysTestCaseDataDependency]` and `--atl` `AtlDataRootNode` wiring (ATL-ready MVP, no test-logic generation) |
 | `generate migration-script` | Data-fix `Runnable` class with `ttsbegin`/`ttscommit` batching |
+| `generate form-clone` | Copy of an existing `AxForm` under a new name, datasources optionally re-bound |
 | `generate simple-list` | Alias for `generate form --pattern SimpleList` |
 | `modify method` | Replace an existing method's body on a live class/table/edt/form via D365FO.Bridge (`IMetadataProvider`, structured `XDocument` replace — no CDATA string surgery, no on-disk fallback). Reference/BP validation always blocks on error-severity findings. |
 | `modify property` | Set a property (`Label`, `ConfigurationKey`, `TableGroup`, …) on a live object. |
@@ -224,6 +250,32 @@ same object already uses, so a model does not accumulate `CustTable.Fleet` next 
 
 Every `modify` write (including `modify method`) records its exact pre-image in the
 modification journal — revert with `d365fo undo`.
+
+#### Cloning a reference form
+
+A Microsoft form that already has the pattern, the control tree and the wiring right is a better
+starting point than any template, and cloning one is what a developer does by hand anyway.
+
+```sh
+d365fo generate form-clone ConVehicleGroup --from CustGroup     --rebind CustGroup=ConVehicleGroupTable --out ConVehicleGroup.xml
+```
+
+`--from` takes a form name (resolved through the index) or a path to the AxForm XML. `--rebind`
+moves a datasource onto another table, renames the datasource when it was named after the old
+table, and follows that rename into every control that referenced it — including the datasource
+entry under `<SourceCode>`, where override methods live.
+
+The edits are string-level and narrow. An `AxForm` is a V6 contract whose Design subtree is
+written in the empty namespace with `i:type` on every control, so loading it into an `XDocument`
+and writing it back rewrites namespace declarations nobody asked to change — which is also why
+`FormPatternTemplates` renders forms as strings. Verified against a shipped 16 KB `CustGroup`
+form: the clone differs on exactly the intended lines and is byte-identical everywhere else.
+
+What it deliberately does *not* do is a blind replace of the old form name. Form names are short
+and appear inside unrelated identifiers (`CustGroup` inside `Grid_CustGroupId`), so only the root
+`<Name>`, the class declaration and `formStr()` self-references move. Everything it cannot reach —
+menu items, privileges, extensions, callers elsewhere in the AOT — comes back as a warning, as
+does the fact that a rebind does not check the new table actually has the bound fields.
 
 #### The grounding gate
 
