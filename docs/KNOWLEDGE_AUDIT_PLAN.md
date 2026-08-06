@@ -223,27 +223,75 @@ the widened `skills` job.
 
 ## Phase 4 — Eval loop to predecessor parity (R7)
 
-4.1 **CI gate:** add `eval` job running replay cases (`requires_fixture_index` subset) on every
-PR; fail on golden mismatch or validator regressions.
+4.1 ✅ **CI gate** — an `eval` job replays the whole catalog (`eval run --all`, 51/51 green) and
+runs `eval coverage --check` on every PR. The replay subset is not restricted to
+`requires_fixture_index` as planned: every case carries `canonical_args` and passes, so
+narrowing it would only reduce cover.
 
-4.2 **L3 build oracle:** VM-side `verify-goldens-build` equivalent — recompile every golden via
-`xppc` one case at a time, persist `eval/golden-build-verification.json`; wire
-`XppcDiagnostics` results back into corpus records.
+4.2 ✅ **L3 build oracle** — `d365fo eval verify-build` provisions every reviewed golden into a
+throwaway model, compiles it with `xppc.exe`, attributes each diagnostic back to the case whose
+golden produced the named object, and persists `eval/golden-build-verification.json`.
+`EvalScoreCard` gained `BuildClean`/`BuildErrors`, null everywhere a compiler did not actually
+run. `--provision-only` exercises the whole provisioning half on any OS.
 
-4.3 **L4 runtime oracle:** SysTest-backed cases via existing `test run` shell-out, fixtures
-provisioned per run in a throwaway model.
+Four things this could only be learned by running it, and all four were wrong first:
+- A four-element model descriptor (name/publisher/layer/module refs) is enough for this repo's
+  extractor and kills the compiler before it compiles anything — `ModelKey..ctor` throws on the
+  missing `<ModelModule>`, `Layer` is an ordinal (`usr` = 14), and the string collections live in
+  the DataContract arrays namespace.
+- Referencing `ApplicationSuite` alone leaves the standard `Name` EDT and the `ModuleAxapta` enum
+  unresolvable; ApplicationPlatform and ApplicationFoundation are needed too.
+- Provisioning the fixture as its own module and referencing it does **not** make its tables
+  visible — five goldens were reported as referencing "a nonexistent table or view named
+  'FmVehicle'". The fixture now goes into the same module as the goldens.
+- `XppcDiagnostics` recognised five severity prefixes and the compiler emits more: the first real
+  run produced `Errors: 8` while the parser returned zero diagnostics and the harness called
+  every golden clean. `MetadataProvider Error`, `Unspecified Fatal Error` and `TaskListItem
+  Information` are now parsed, as are the two line shapes without a `dynamics://` URL or without a
+  source location. TODO markers are `information` and count as neither error nor warning.
 
-4.4 **Classification & clusters:** populate `classification`
-(TOOL_DEFECT/VALIDATOR_GAP/KNOWLEDGE_GAP/MODEL_ERROR) on new runs, make `eval clusters` rank
-them, and implement the MODEL_ERROR → `skills/_source` feedback path (K4) so knowledge gaps
-found in evals become topic edits with provenance.
+**Result: 48 of 51 goldens compile clean**, and the three that do not are real shipping defects
+the offline loop could never see, now recorded as `TOOL_DEFECT` clusters with corpus provenance:
+- `generate query` (2 cases) — the reader throws `KeyNotFoundException` on every generated query.
+  Ground-truthed against shipped queries: `<SourceCode><Methods><Method><Name>classDeclaration`
+  is mandatory, and each data source needs `<DynamicFields>Yes</DynamicFields>` in contract
+  position (after `ConcurrencyModel`) or the compiler rejects the empty field list.
+- `generate event-handler` (1 case) — the subscriber method is written inside `<Declaration>`;
+  the provider needs it as an XML `<Method>` with a `<Name>`.
 
-4.5 **Coverage taxonomy:** port the K ∧ E ∧ T model (knowledge teaches ∧ eval proves ∧ tool
-builds) into a generated `eval/COVERAGE.md` with a `--check` CI mode; grow the fixture AOT
-beyond one table + one class so reference resolution in evals is realistic.
+Fixing them is scaffolder work, so it belongs to the improver's next PR rather than to this
+phase — which is the loop behaving as designed. For the same reason the mini-AOT fixture gained
+an EDT and an enum but *not* a query: a generated query would make the fixture module itself
+uncompilable and block the oracle.
 
-**Gate:** CI red on any eval regression; coverage report shows per-family K/E/T status;
-clusters command returns ranked, classified clusters.
+4.3 ❌ **L4 runtime oracle — not built.** It needs a live AOS, a `SysTestRunner` result parser
+(none exists; `test run` returns a raw output tail) and per-run fixture provisioning inside a real
+model. One prerequisite defect was fixed on the way: `test run --suite X` passed `"--suite X"` as a
+single argv element, so the flag could never have worked.
+
+4.4 ✅ **Classification & clusters** — `EvalTriage` derives a hypothesis for replay runs, where no
+model is in the loop: a golden mismatch can only be the scaffolder changing, and a validator
+complaining about output that *matches* a reviewed golden can only be the validator. Agent runs
+stay unclassified unless the runner passes `--hypothesis`, because there the same scorecard is
+equally consistent with a tool defect and with the agent's own mistake. `eval clusters` gained
+`--actionable`/`--top`, carries run ids as provenance and the failing dimensions, and exempts
+`known-reference-gap` cases so real clusters are not buried under documented noise.
+`d365fo eval knowledge` turns `KNOWLEDGE_GAP`/`MODEL_ERROR` runs into `skills/_source` proposals
+(K4), naming candidate topics *and the literal that links them* — a case no topic names yields no
+candidates, which is itself the finding.
+
+4.5 ✅ **Coverage taxonomy** — `eval/COVERAGE.md` is generated from `ObjectTypeRegistry` (families),
+a new `GenerateSurface` (capabilities), the case catalog (E) and the embedded corpus (K):
+**42 of 70 leaves complete**. Matching is word-bounded, so the table topic does not silently mark
+`AxTableExtension` as taught, and a `golden_pending` case proves nothing. `GenerateSurface` is
+gated in both directions — `generate <name> --help` must succeed for every entry, and every
+subcommand `CliApp` registers must have a leaf — so it cannot become the fifth drifting registry.
+Fixture growth: `VinEdt` (closing a reference `FmVehicle.VIN` had dangled on since the fixture was
+written) and `FmVehicleStatus`, both produced by the CLI's own generators.
+
+**Gate:** ✅ CI red on any eval regression (`eval` job); ✅ coverage report shows per-family K/E/T
+status and gates on drift; ✅ `eval clusters --actionable` returns three ranked, classified,
+evidence-carrying clusters. ❌ No runtime dimension — 4.3 is open.
 
 ---
 

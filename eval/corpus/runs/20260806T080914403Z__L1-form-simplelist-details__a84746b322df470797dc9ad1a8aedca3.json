@@ -1,0 +1,20 @@
+{
+  "runId": "20260806T080914403Z__L1-form-simplelist-details__a84746b322df470797dc9ad1a8aedca3",
+  "caseId": "L1-form-simplelist-details",
+  "tier": 1,
+  "timestampUtc": "2026-08-06T08:09:14.4030907+00:00",
+  "source": "build-oracle",
+  "score": {
+    "xppErrors": 0,
+    "referenceErrors": 0,
+    "goldenMatch": true,
+    "goldenDiff": {
+      "missing": [],
+      "extra": [],
+      "changed": [],
+      "isMatch": true
+    },
+    "buildClean": true,
+    "buildErrors": 0
+  }
+}

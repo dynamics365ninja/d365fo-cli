@@ -1,0 +1,428 @@
+{
+  "capturedUtc": "2026-08-06T08:09:14.3137176+00:00",
+  "host": "D365ASLDEV2-1",
+  "packagesRoot": "K:\\AosService\\PackagesLocalDirectory",
+  "compiler": "K:\\AosService\\PackagesLocalDirectory\\Bin\\xppc.exe",
+  "compilerArgs": "-metadata=C:\\Users\\Admin7e00859cee\\AppData\\Local\\Temp\\2\\claude\\K--repos-d365fo-cli\\ac58616d-375a-4381-b289-fca2d371276f\\scratchpad\\l3g -modelmodule=D365FoCliEvalGoldens -output=C:\\Users\\Admin7e00859cee\\AppData\\Local\\Temp\\2\\claude\\K--repos-d365fo-cli\\ac58616d-375a-4381-b289-fca2d371276f\\scratchpad\\l3g\\bin -referencefolder=K:\\AosService\\PackagesLocalDirectory -refPath=C:\\Users\\Admin7e00859cee\\AppData\\Local\\Temp\\2\\claude\\K--repos-d365fo-cli\\ac58616d-375a-4381-b289-fca2d371276f\\scratchpad\\l3g\\bin -log=C:\\Users\\Admin7e00859cee\\AppData\\Local\\Temp\\2\\claude\\K--repos-d365fo-cli\\ac58616d-375a-4381-b289-fca2d371276f\\scratchpad\\l3g\\Dynamics.AX.D365FoCliEvalGoldens.xppc.log",
+  "modelName": "D365FoCliEvalGoldens",
+  "total": 51,
+  "clean": 48,
+  "failed": 3,
+  "skipped": 0,
+  "cases": [
+    {
+      "caseId": "L0-edt-basic",
+      "verdict": "clean",
+      "errors": 0,
+      "warnings": 0,
+      "ruleIds": [],
+      "messages": []
+    },
+    {
+      "caseId": "L0-edt-extends",
+      "verdict": "clean",
+      "errors": 0,
+      "warnings": 0,
+      "ruleIds": [],
+      "messages": []
+    },
+    {
+      "caseId": "L0-enum-basic",
+      "verdict": "clean",
+      "errors": 0,
+      "warnings": 0,
+      "ruleIds": [],
+      "messages": []
+    },
+    {
+      "caseId": "L0-enum-non-extensible",
+      "verdict": "clean",
+      "errors": 0,
+      "warnings": 0,
+      "ruleIds": [],
+      "messages": []
+    },
+    {
+      "caseId": "L1-business-event-basic",
+      "verdict": "clean",
+      "errors": 0,
+      "warnings": 0,
+      "ruleIds": [],
+      "messages": []
+    },
+    {
+      "caseId": "L1-class-basic",
+      "verdict": "clean",
+      "errors": 0,
+      "warnings": 0,
+      "ruleIds": [],
+      "messages": []
+    },
+    {
+      "caseId": "L1-custom-service-basic",
+      "verdict": "clean",
+      "errors": 0,
+      "warnings": 0,
+      "ruleIds": [],
+      "messages": []
+    },
+    {
+      "caseId": "L1-duty-basic",
+      "verdict": "clean",
+      "errors": 0,
+      "warnings": 0,
+      "ruleIds": [],
+      "messages": []
+    },
+    {
+      "caseId": "L1-form-basic",
+      "verdict": "clean",
+      "errors": 0,
+      "warnings": 0,
+      "ruleIds": [],
+      "messages": []
+    },
+    {
+      "caseId": "L1-form-details-master",
+      "verdict": "clean",
+      "errors": 0,
+      "warnings": 0,
+      "ruleIds": [],
+      "messages": []
+    },
+    {
+      "caseId": "L1-form-details-transaction",
+      "verdict": "clean",
+      "errors": 0,
+      "warnings": 0,
+      "ruleIds": [],
+      "messages": []
+    },
+    {
+      "caseId": "L1-form-dialog",
+      "verdict": "clean",
+      "errors": 0,
+      "warnings": 0,
+      "ruleIds": [],
+      "messages": []
+    },
+    {
+      "caseId": "L1-form-list-page",
+      "verdict": "clean",
+      "errors": 0,
+      "warnings": 0,
+      "ruleIds": [],
+      "messages": []
+    },
+    {
+      "caseId": "L1-form-lookup",
+      "verdict": "clean",
+      "errors": 0,
+      "warnings": 0,
+      "ruleIds": [],
+      "messages": []
+    },
+    {
+      "caseId": "L1-form-simplelist-details",
+      "verdict": "clean",
+      "errors": 0,
+      "warnings": 0,
+      "ruleIds": [],
+      "messages": []
+    },
+    {
+      "caseId": "L1-form-table-of-contents",
+      "verdict": "clean",
+      "errors": 0,
+      "warnings": 0,
+      "ruleIds": [],
+      "messages": []
+    },
+    {
+      "caseId": "L1-form-workspace",
+      "verdict": "clean",
+      "errors": 0,
+      "warnings": 0,
+      "ruleIds": [],
+      "messages": []
+    },
+    {
+      "caseId": "L1-map-basic",
+      "verdict": "clean",
+      "errors": 0,
+      "warnings": 0,
+      "ruleIds": [],
+      "messages": []
+    },
+    {
+      "caseId": "L1-map-multi-table",
+      "verdict": "clean",
+      "errors": 0,
+      "warnings": 0,
+      "ruleIds": [],
+      "messages": []
+    },
+    {
+      "caseId": "L1-menu-item-action",
+      "verdict": "clean",
+      "errors": 0,
+      "warnings": 0,
+      "ruleIds": [],
+      "messages": []
+    },
+    {
+      "caseId": "L1-menu-item-basic",
+      "verdict": "clean",
+      "errors": 0,
+      "warnings": 0,
+      "ruleIds": [],
+      "messages": []
+    },
+    {
+      "caseId": "L1-menu-item-output",
+      "verdict": "clean",
+      "errors": 0,
+      "warnings": 0,
+      "ruleIds": [],
+      "messages": []
+    },
+    {
+      "caseId": "L1-migration-script-basic",
+      "verdict": "clean",
+      "errors": 0,
+      "warnings": 0,
+      "ruleIds": [],
+      "messages": []
+    },
+    {
+      "caseId": "L1-privilege-basic",
+      "verdict": "clean",
+      "errors": 0,
+      "warnings": 0,
+      "ruleIds": [],
+      "messages": []
+    },
+    {
+      "caseId": "L1-privilege-data-entity",
+      "verdict": "clean",
+      "errors": 0,
+      "warnings": 0,
+      "ruleIds": [],
+      "messages": []
+    },
+    {
+      "caseId": "L1-query-basic",
+      "verdict": "errors",
+      "errors": 1,
+      "warnings": 0,
+      "ruleIds": [],
+      "messages": [
+        "Unspecified Fatal Error while reading /Query/ConFmVehicleQuery"
+      ]
+    },
+    {
+      "caseId": "L1-query-join",
+      "verdict": "errors",
+      "errors": 1,
+      "warnings": 0,
+      "ruleIds": [],
+      "messages": [
+        "Unspecified Fatal Error while reading /Query/ConFmVehicleLineQuery"
+      ]
+    },
+    {
+      "caseId": "L1-report-basic",
+      "verdict": "clean",
+      "errors": 0,
+      "warnings": 0,
+      "ruleIds": [],
+      "messages": []
+    },
+    {
+      "caseId": "L1-report-parameters",
+      "verdict": "clean",
+      "errors": 0,
+      "warnings": 0,
+      "ruleIds": [],
+      "messages": []
+    },
+    {
+      "caseId": "L1-role-basic",
+      "verdict": "clean",
+      "errors": 0,
+      "warnings": 0,
+      "ruleIds": [],
+      "messages": []
+    },
+    {
+      "caseId": "L1-runbase-basic",
+      "verdict": "clean",
+      "errors": 0,
+      "warnings": 0,
+      "ruleIds": [],
+      "messages": []
+    },
+    {
+      "caseId": "L1-sysoperation-basic",
+      "verdict": "clean",
+      "errors": 0,
+      "warnings": 0,
+      "ruleIds": [],
+      "messages": []
+    },
+    {
+      "caseId": "L1-systest-basic",
+      "verdict": "clean",
+      "errors": 0,
+      "warnings": 0,
+      "ruleIds": [],
+      "messages": []
+    },
+    {
+      "caseId": "L1-table-basic",
+      "verdict": "clean",
+      "errors": 0,
+      "warnings": 0,
+      "ruleIds": [],
+      "messages": []
+    },
+    {
+      "caseId": "L1-table-tempdb",
+      "verdict": "clean",
+      "errors": 0,
+      "warnings": 0,
+      "ruleIds": [],
+      "messages": []
+    },
+    {
+      "caseId": "L1-view-basic",
+      "verdict": "clean",
+      "errors": 0,
+      "warnings": 0,
+      "ruleIds": [],
+      "messages": []
+    },
+    {
+      "caseId": "L1-view-computed",
+      "verdict": "clean",
+      "errors": 0,
+      "warnings": 0,
+      "ruleIds": [],
+      "messages": []
+    },
+    {
+      "caseId": "L1-workflow-basic",
+      "verdict": "clean",
+      "errors": 0,
+      "warnings": 0,
+      "ruleIds": [],
+      "messages": []
+    },
+    {
+      "caseId": "L2-coc-extension",
+      "verdict": "clean",
+      "errors": 0,
+      "warnings": 0,
+      "ruleIds": [],
+      "messages": []
+    },
+    {
+      "caseId": "L2-control-method-basic",
+      "verdict": "clean",
+      "errors": 0,
+      "warnings": 0,
+      "ruleIds": [],
+      "messages": []
+    },
+    {
+      "caseId": "L2-datasource-method-basic",
+      "verdict": "clean",
+      "errors": 0,
+      "warnings": 0,
+      "ruleIds": [],
+      "messages": []
+    },
+    {
+      "caseId": "L2-edt-extension",
+      "verdict": "clean",
+      "errors": 0,
+      "warnings": 0,
+      "ruleIds": [],
+      "messages": []
+    },
+    {
+      "caseId": "L2-enum-extension",
+      "verdict": "clean",
+      "errors": 0,
+      "warnings": 0,
+      "ruleIds": [],
+      "messages": []
+    },
+    {
+      "caseId": "L2-event-handler-basic",
+      "verdict": "errors",
+      "errors": 1,
+      "warnings": 0,
+      "ruleIds": [],
+      "messages": [
+        "The method name in the source code, \u0027run\u0027, does not match the name in the XML file, \u0027\u0027. Open and save the file in Visual Studio to fix the problem."
+      ]
+    },
+    {
+      "caseId": "L2-form-extension-basic",
+      "verdict": "clean",
+      "errors": 0,
+      "warnings": 0,
+      "ruleIds": [],
+      "messages": []
+    },
+    {
+      "caseId": "L2-numberseq-basic",
+      "verdict": "clean",
+      "errors": 0,
+      "warnings": 0,
+      "ruleIds": [],
+      "messages": []
+    },
+    {
+      "caseId": "L2-security-duty-extension",
+      "verdict": "clean",
+      "errors": 0,
+      "warnings": 0,
+      "ruleIds": [],
+      "messages": []
+    },
+    {
+      "caseId": "L2-security-policy-basic",
+      "verdict": "clean",
+      "errors": 0,
+      "warnings": 0,
+      "ruleIds": [],
+      "messages": []
+    },
+    {
+      "caseId": "L2-security-role-extension",
+      "verdict": "clean",
+      "errors": 0,
+      "warnings": 0,
+      "ruleIds": [],
+      "messages": []
+    },
+    {
+      "caseId": "L2-table-extension",
+      "verdict": "clean",
+      "errors": 0,
+      "warnings": 0,
+      "ruleIds": [],
+      "messages": []
+    },
+    {
+      "caseId": "L2-virtual-entity-basic",
+      "verdict": "clean",
+      "errors": 0,
+      "warnings": 0,
+      "ruleIds": [],
+      "messages": []
+    }
+  ]
+}

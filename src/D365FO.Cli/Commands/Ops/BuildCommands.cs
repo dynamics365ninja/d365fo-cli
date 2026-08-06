@@ -179,7 +179,15 @@ public sealed class TestRunCommand : Command<TestRunCommand.Settings>
 
         var runner = settings.RunnerPath ?? "SysTestRunner.exe";
         var args = new List<string>();
-        if (!string.IsNullOrEmpty(settings.Suite)) args.Add($"--suite {settings.Suite}");
+        if (!string.IsNullOrEmpty(settings.Suite))
+        {
+            // Two argv elements, not one. ProcessRunner passes each element through
+            // ArgumentList, so `args.Add($"--suite {suite}")` reaches the runner as the
+            // single literal argument "--suite MySuite" and is rejected. Nothing exercised
+            // --suite until the L4 oracle came to depend on it.
+            args.Add("--suite");
+            args.Add(settings.Suite!);
+        }
         var (exit, stdout, stderr, elapsed) = ProcessRunner.Run(runner, args);
         return RenderHelpers.Render(kind, exit == 0
             ? ToolResult<object>.Success(new { exitCode = exit, elapsedMs = (long)elapsed.TotalMilliseconds, tail = stdout.Split('\n').TakeLast(40).ToArray() })

@@ -60,12 +60,50 @@ dotnet run --project src/D365FO.Cli -- eval score L0-edt-basic \
 Both paths score through the same `D365FO.Core.Eval.EvalScorer`, so a golden
 mismatch means the same thing regardless of who drove the CLI.
 
+## The L3 build oracle (Windows + a D365FO installation)
+
+Replay proves a golden is structurally what was reviewed. It cannot prove the X++
+inside it compiles — `validate xpp` is a regex BP linter, not a compiler. That is
+what `eval verify-build` is for:
+
+```
+dotnet run --project src/D365FO.Cli -- eval verify-build --write      # compile every golden, persist verdicts
+dotnet run --project src/D365FO.Cli -- eval verify-build --case L1-query-basic
+dotnet run --project src/D365FO.Cli -- eval verify-build --provision-only --work-dir ./out   # any OS, no compiler
+```
+
+It provisions every reviewed golden — plus the mini-AOT fixture, into the *same*
+module — as a throwaway model under a temp directory, runs `xppc.exe` against it,
+attributes each diagnostic to the case whose golden produced the named object, and
+writes `eval/golden-build-verification.json`. `--write` also appends corpus records
+carrying only the build dimension; the offline dimensions stay null there rather
+than being copied from an earlier, possibly stale replay.
+
+Nothing here degrades quietly: off Windows it returns `UNSUPPORTED_PLATFORM`, with
+no installation `XPPC_NOT_FOUND`, and if the compiler rejects the argument list it
+returns `EVAL_BUILD_INVOCATION` and writes **no** verdicts — an argument mistake
+must never be recorded as a broken golden. `EvalScoreCard.BuildClean` is `null`
+wherever no compiler ran; it is never `false` by default.
+
+Current baseline: **48 of 51 goldens compile clean**. The three that do not are
+real defects in `generate query` and `generate event-handler`, ranked as
+`TOOL_DEFECT` clusters — see `d365fo eval clusters --actionable`.
+
 ## Improver toolchain
 
 ```
-dotnet run --project src/D365FO.Cli -- eval report     # pass-rates by tier + classification counts
-dotnet run --project src/D365FO.Cli -- eval clusters   # failing runs grouped by (classification, case), ranked by frequency
+dotnet run --project src/D365FO.Cli -- eval report                  # pass-rates by tier + classification counts
+dotnet run --project src/D365FO.Cli -- eval clusters --actionable   # ranked TOOL_DEFECT/VALIDATOR_GAP/KNOWLEDGE_GAP clusters with run ids
+dotnet run --project src/D365FO.Cli -- eval knowledge --out brief.md   # KNOWLEDGE_GAP/MODEL_ERROR -> skills/_source proposals
+dotnet run --project src/D365FO.Cli -- eval coverage --write        # regenerate eval/COVERAGE.md (K and E and T)
 ```
+
+Replay runs record a **classification hypothesis** automatically: replay is
+agent-free, so a golden mismatch can only be the scaffolder changing, and a
+validator rejecting output that matches a reviewed golden can only be the
+validator. Agent runs stay unclassified unless the runner passes `--hypothesis` —
+there the same scorecard is equally consistent with a tool defect and with the
+agent's own mistake, and guessing would send the improver at innocent code.
 
 The **eval-improver** agent (`.claude/agents/eval-improver.md`, or
 `/eval-improve [cluster]`) reads these, picks the top actionable cluster,
@@ -100,13 +138,10 @@ lie in place while a deeper fix waits.
 
 ## Explicitly out of scope (for now)
 
-- **CI wiring.** `eval run --all` exists and exits non-zero on any golden
-  mismatch, but it is not yet wired into `.github/workflows/ci.yml`
-  (Phase 4.1 of `docs/KNOWLEDGE_AUDIT_PLAN.md`). `--all` gates on
-  `goldenMatch` only; the `known-reference-gap` cases below keep reporting
-  their reference violations as data.
-- **No runtime/SysTest oracle.** No `SysTestRunner` integration exists in
-  this offline loop — only the golden-diff and static-validator dimensions.
+- **No runtime/SysTest oracle** (Phase 4.3). `test run` shells out to
+  `SysTestRunner.exe` and returns a raw output tail — there is no result parser to
+  build a scorecard dimension from, and no per-run fixture provisioning inside a
+  live model. The build oracle above is the L3 tier; L4 is still missing.
   A handful of cases (tagged `known-reference-gap`) generate a class or
   extension whose body legitimately references a *sibling* artifact or a
   standard system object that a minimal offline index can't contain (e.g.
@@ -114,10 +149,6 @@ lie in place while a deeper fix waits.
   standard `NumberSeqApplicationModule_*` class, or a computed view's
   `SysComputedColumn` call) — `referencesClean: false` there is the expected,
   honest result of scoring one artifact in isolation, not a defect.
-- **`MODEL_ERROR` → knowledge-base feedback tooling.** The sibling repo has
-  an automated "cluster MODEL_ERROR runs into `skills/_source` proposals"
-  step (`knowledgeFeedback.ts`); not built here yet. The rubric and agent
-  roles already support adding it.
 - **Catalog breadth.** 51 cases across L0–L2. Every `generate` subcommand
   except the bridge-only `modify`/`test`/`bp` branches has a case, and so does
   every *option axis that selects a different code path* inside one: all nine
@@ -128,8 +159,15 @@ lie in place while a deeper fix waits.
   `map --map-to` over two tables. Option axes that only vary a literal
   (a different `--label`, another `--field`) are deliberately *not* separate
   cases — they exercise no new branch.
-  L3/L4 (batch, workflow *runtime* submission, posting, DMF, ER, SSRS
-  rendering, …) need a live build/BP-check/SysTest oracle this offline loop
-  doesn't have — the natural next slice is adding that oracle. See
-  `d365fo-mcp-server`'s `eval/cases/` for the fuller L3/L4 catalog shape to
-  port once a VM-backed oracle exists here.
+  L4 cases (batch, workflow *runtime* submission, posting, DMF, ER, SSRS
+  rendering, …) still need the runtime oracle above. See `d365fo-mcp-server`'s
+  `eval/cases/` for the fuller catalog shape to port once one exists here.
+
+## Coverage — K ∧ E ∧ T
+
+[`COVERAGE.md`](COVERAGE.md) is generated, never hand-maintained: a leaf counts as
+done only when the knowledge corpus **teaches** it, an eval case with a reviewed
+golden **proves** it, and a `generate` subcommand **builds** it. Families come from
+`ObjectTypeRegistry`, capabilities from `GenerateSurface`, so the report cannot
+claim coverage that no longer exists. Regenerate with `eval coverage --write`; CI
+runs `--check`.

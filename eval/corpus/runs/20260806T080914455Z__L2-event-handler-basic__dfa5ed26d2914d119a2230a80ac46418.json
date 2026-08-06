@@ -1,0 +1,22 @@
+{
+  "runId": "20260806T080914455Z__L2-event-handler-basic__dfa5ed26d2914d119a2230a80ac46418",
+  "caseId": "L2-event-handler-basic",
+  "tier": 2,
+  "timestampUtc": "2026-08-06T08:09:14.4555454+00:00",
+  "source": "build-oracle",
+  "score": {
+    "xppErrors": 0,
+    "referenceErrors": 0,
+    "goldenMatch": true,
+    "goldenDiff": {
+      "missing": [],
+      "extra": [],
+      "changed": [],
+      "isMatch": true
+    },
+    "buildClean": false,
+    "buildErrors": 1
+  },
+  "classification": "TOOL_DEFECT",
+  "note": "xppc reported 1 error(s) against this golden: The method name in the source code, \u0027run\u0027, does not match the name in the XML file, \u0027\u0027. Open and save the file in Visual Studio to fix the problem."
+}

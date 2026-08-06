@@ -1,8 +1,9 @@
 # Self-improving agent eval loop — design spec
 
-**Status:** implemented — a 31-case catalog (L0–L2) runs end-to-end. See
-[eval/README.md](../eval/README.md) for day-to-day mechanics and the open
-work queue.
+**Status:** implemented — a 51-case catalog (L0–L2) replays in CI, and an L3 build
+oracle compiles every reviewed golden where a D365FO installation exists. L4
+(runtime/SysTest) is still missing. See [eval/README.md](../eval/README.md) for
+day-to-day mechanics and the open work queue.
 
 **Adapted from:** the sibling repo `d365fo-mcp-server` runs the same pattern
 against a live D365FO VM + compiler. This spec keeps that repo's vocabulary
@@ -168,7 +169,8 @@ across machines and CI runs — shape documented in
     "goldenMatch": true,
     "goldenDiff": { "missing": [], "extra": [], "changed": [] }
   },
-  "classification": null,                // set by the runner as a hypothesis; see §9
+  "classification": "TOOL_DEFECT",       // the runner's hypothesis; see §9
+  "buildClean": null,                    // L3 only; null = no compiler ran
   "note": null
 }
 ```
@@ -217,12 +219,35 @@ Never hand-authored. Run the case for real (`d365fo generate ... --out
 | `xppClean` | `validate xpp` (BP lint, `D365FO.Core.Validation.XppValidator`) found zero errors |
 | `referencesClean` | `validate references` (anti-hallucination gate, `ReferenceResolver`) found zero errors |
 | `goldenMatch` | normalized actual XML == normalized golden XML — **primary correctness signal** |
+| `buildClean` | `xppc` compiled this case's golden with zero errors — **`null` unless `eval verify-build` actually ran a compiler**, never `false` by default |
 
-Smaller than the source repo's scorecard by design: there is no
-`build`/`bp_clean` dimension (nothing to compile offline) and no `systest`
-dimension (no runtime harness here) — only what the offline grounding chain
-can actually check. `d365fo eval report` aggregates pass rates per tier plus
-a classification-count breakdown across the whole corpus.
+The first three are what the fully offline chain can check anywhere. `buildClean`
+is the L3 dimension and exists only where a real D365FO installation does (§7a).
+There is still no `systest` dimension — no runtime oracle exists. `d365fo eval
+report` aggregates pass rates per tier plus a classification-count breakdown
+across the whole corpus.
+
+### 7a. The L3 build oracle
+
+`d365fo eval verify-build` provisions every reviewed golden into a throwaway model
+(descriptor in the shape the metadata provider's own reader requires; the mini-AOT
+fixture copied into the *same* module, so the goldens' bindings resolve), compiles
+it with `xppc.exe`, and attributes each diagnostic back to the case whose golden
+produced the object the compiler named. Verdicts land in
+`eval/golden-build-verification.json` and, with `--write`, in the corpus.
+
+Three refusals keep it honest — all the same rule in different clothes, *never
+report a verdict nobody collected*:
+
+- off Windows, or with no installation, it fails with a code instead of scoring;
+- if the compiler rejects the argument list it returns `EVAL_BUILD_INVOCATION`
+  and writes **no** verdicts, so a bad command line can never look like broken code;
+- a diagnostic naming an object no case provisioned is reported as *unattributed*
+  rather than spread across every case.
+
+Its first real run found two shipping defects the offline loop had no way to see:
+every generated `AxQuery` crashes the metadata reader, and a generated event
+handler puts its method where the provider cannot find the name.
 
 ---
 
@@ -300,6 +325,26 @@ The runner (replay or agent) records a **hypothesis** (`classification` +
 it must reproduce `TOOL_DEFECT`/`VALIDATOR_GAP` deterministically as a new
 repo test, with no external dependency, before touching any source.
 
+`D365FO.Core.Eval.EvalTriage` derives that hypothesis for **replay** runs, and only
+for them. Replay drives canonical args with no model in the loop, so `MODEL_ERROR`
+is impossible by construction: a golden mismatch can only be the scaffolder
+changing, and a validator rejecting output that *matches* a reviewed golden can
+only be the validator being wrong about reviewed-correct code. For an **agent** run
+the identical scorecard is equally consistent with a tool defect and with the agent
+misusing a correct tool, so the record stays unclassified unless the runner passes
+`--hypothesis` — an untriaged record is honest, an invented one sends the improver
+at innocent code. Cases tagged `known-reference-gap` are exempt from the reference
+dimension: there the unresolved reference is the documented consequence of scoring
+one artifact in isolation.
+
+`d365fo eval knowledge` closes the other half (§12's open item): it turns
+`KNOWLEDGE_GAP`/`MODEL_ERROR` runs into `skills/_source` edit proposals, each
+naming the candidate topics *and the literal that links them to the case*. It stops
+at a proposal deliberately — the corpus can show that a case keeps failing for a
+knowledge reason, but what the topic should say instead is an editorial judgement.
+A case no topic names yields no candidates, which is itself the finding: the gap is
+a missing topic, not a wrong one.
+
 **Triage bias, carried over from the source repo's hard-won lesson:** an
 honest failure beats a confident lie. The most damaging class of defect is a
 tool *asserting something false* rather than failing — reporting a clean
@@ -350,8 +395,11 @@ is a real fix, not a placeholder for one.
   source repo: start with deterministic tiers, capture-then-review.
 - **No runtime oracle.** Cases whose correctness is behavioral, not
   structural (method bodies beyond a wrapper), are under-covered by a golden
-  diff alone — this loop has no SysTest-equivalent layer yet.
-- **CI wiring is not yet built.** `eval run --all` replays the full catalog
-  and exits non-zero on any golden mismatch, but it is not a gate in
-  `.github/workflows/ci.yml` today — see
-  [eval/README.md](../eval/README.md) for what's explicitly deferred.
+  diff plus a compile alone — this loop still has no SysTest-equivalent layer.
+  Building one needs a `SysTestRunner` result parser (`test run` returns a raw
+  output tail today) and per-run fixture provisioning inside a live model.
+- ~~**CI wiring is not yet built.**~~ Closed: `.github/workflows/ci.yml` runs
+  `eval run --all` and `eval coverage --check` on every PR.
+- **The L3 oracle is not in CI**, and cannot be: it needs a Windows host with a
+  D365FO installation. `eval/golden-build-verification.json` is committed so the
+  last verdicts are visible from a machine that has neither.

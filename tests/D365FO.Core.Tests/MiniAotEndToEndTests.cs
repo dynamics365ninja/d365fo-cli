@@ -122,6 +122,37 @@ public class MiniAotEndToEndTests : IDisposable
         Assert.Equal(1, counts.Classes);
     }
 
+    /// <summary>
+    /// The fixture grew past "one table and one class" (plan item 4.5) so that
+    /// reference resolution in evals has something real to resolve against: before
+    /// this, <c>FmVehicle.VIN</c> named an EDT the index did not contain, so every
+    /// generated artifact touching it scored a reference violation that said
+    /// nothing about the artifact. Both files were produced by the CLI's own
+    /// generators, not hand-written — the same rule the corpus gives agents.
+    /// </summary>
+    /// <remarks>
+    /// A generated <c>AxQuery</c> was the obvious third addition and is deliberately
+    /// absent: <c>eval verify-build</c> proved on a real installation that a query
+    /// from <c>generate query</c> crashes the metadata reader, so adding one would
+    /// make the fixture module itself uncompilable and block the whole L3 oracle.
+    /// It goes back in with the scaffolder fix.
+    /// </remarks>
+    [Fact]
+    public void ExtractAll_indexes_the_edt_and_enum_the_fixture_tables_reference()
+    {
+        var ex = new MetadataExtractor();
+        var batch = ex.ExtractAll(SamplesDir).Single();
+
+        var edt = Assert.Single(batch.Edts);
+        Assert.Equal("VinEdt", edt.Name);
+        Assert.Equal(
+            edt.Name,
+            batch.Tables.Single(t => t.Name == "FmVehicle").Fields.Single(f => f.Name == "VIN").EdtName);
+
+        var @enum = Assert.Single(batch.Enums);
+        Assert.Equal("FmVehicleStatus", @enum.Name);
+    }
+
     [Fact]
     public void ExtractAll_parses_FmVehicleLine_relation_to_FmVehicle()
     {

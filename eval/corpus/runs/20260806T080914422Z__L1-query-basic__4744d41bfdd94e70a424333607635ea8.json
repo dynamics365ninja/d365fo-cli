@@ -1,0 +1,22 @@
+{
+  "runId": "20260806T080914422Z__L1-query-basic__4744d41bfdd94e70a424333607635ea8",
+  "caseId": "L1-query-basic",
+  "tier": 1,
+  "timestampUtc": "2026-08-06T08:09:14.42263+00:00",
+  "source": "build-oracle",
+  "score": {
+    "xppErrors": 0,
+    "referenceErrors": 0,
+    "goldenMatch": true,
+    "goldenDiff": {
+      "missing": [],
+      "extra": [],
+      "changed": [],
+      "isMatch": true
+    },
+    "buildClean": false,
+    "buildErrors": 1
+  },
+  "classification": "TOOL_DEFECT",
+  "note": "xppc reported 1 error(s) against this golden: Unspecified Fatal Error while reading /Query/ConFmVehicleQuery"
+}
