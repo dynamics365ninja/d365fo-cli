@@ -245,12 +245,20 @@ report a verdict nobody collected*:
 - a diagnostic naming an object no case provisioned is reported as *unattributed*
   rather than spread across every case.
 
-Its first runs found three shipping defects the offline loop had no way to see —
-every generated `AxQuery` crashed the metadata reader, a generated event handler
-put its method where the provider could not find the name, and a generated
-migration script named its counter `count`, an X++ keyword. All three are fixed;
-the third only became visible once the first two stopped aborting the compile
-before IL generation, which is the usual shape of a compiler-backed oracle.
+Its first runs found four shipping defects the offline loop had no way to see —
+every generated `AxQuery` crashed the metadata reader; a generated event handler
+put its method where the provider could not find the name; a generated migration
+script named its counter `count`, an X++ keyword; and a generated business event's
+`[BusinessEvents]` attribute named the wrong class and passed a string where the
+`ModuleAxapta` enum belongs. All four are fixed. Each became visible only once the
+one before it stopped aborting the compile earlier, which is the usual shape of a
+compiler-backed oracle: the queue deepens as it clears.
+
+**Attribution is the load-bearing part.** Every diagnostic must land on the case
+whose golden produced the object it names, and the parser must recognise the shapes
+the toolchain actually emits — otherwise the oracle under-reports while looking
+green, which is worse than not running it. The baseline is reported with an
+unattributed count for exactly that reason; it is currently zero.
 
 Cases tagged `known-reference-gap` are exempt from this dimension too: their X++
 names a sibling artifact the case's single golden does not include, or a standard

@@ -76,6 +76,19 @@ public static class XppcDiagnostics
         @"^(" + Severities + @"):\s*file\s+/([^/\s]+)/(\S+)\s*$",
         RegexOptions.Compiled);
 
+    /// <summary>
+    /// <c>Metadata Error: AxDataEntityView/ConFmVehicleEntity/PrimaryKey: …</c> — the
+    /// metadata validator's own shape: MetaModel type, object, then a path to the
+    /// offending member, which for a form runs the whole control tree
+    /// (<c>Design/Controls/Tab/Controls/…/DataGroup</c>). The type segment must start
+    /// with <c>Ax</c>, which is what keeps this from swallowing any message that
+    /// happens to contain a slash. Object names may contain dots (an extension object
+    /// is <c>Target.Suffix</c>).
+    /// </summary>
+    private static readonly Regex MetadataMemberLine = new(
+        @"^(" + Severities + @"):\s*(Ax[A-Za-z0-9_]*)/([A-Za-z_][A-Za-z0-9_.]*)(?:/([A-Za-z_][A-Za-z0-9_./]*))?\s*:\s*(.*)$",
+        RegexOptions.Compiled);
+
     private static readonly Regex SimpleLine = new(
         @"^(" + Severities + @"):\s*(.+)$",
         RegexOptions.Compiled);
@@ -157,6 +170,20 @@ public static class XppcDiagnostics
                     Object: fatalFile.Groups[3].Value,
                     Member: null, Line: null, Column: null,
                     Message: $"{fatalFile.Groups[1].Value} while reading /{fatalFile.Groups[2].Value}/{fatalFile.Groups[3].Value}"));
+                continue;
+            }
+
+            var metadata = MetadataMemberLine.Match(line);
+            if (metadata.Success)
+            {
+                diagnostics.Add(new XppcDiagnostic(
+                    Severity: Normalize(metadata.Groups[1].Value),
+                    Kind: metadata.Groups[2].Value,
+                    Model: null,
+                    Object: metadata.Groups[3].Value,
+                    Member: metadata.Groups[4].Success && metadata.Groups[4].Value.Length > 0 ? metadata.Groups[4].Value : null,
+                    Line: null, Column: null,
+                    Message: metadata.Groups[5].Value.Trim()));
                 continue;
             }
 

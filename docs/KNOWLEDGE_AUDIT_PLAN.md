@@ -250,7 +250,7 @@ Four things this could only be learned by running it, and all four were wrong fi
   Information` are now parsed, as are the two line shapes without a `dynamics://` URL or without a
   source location. TODO markers are `information` and count as neither error nor warning.
 
-**The first run found three shipping defects the offline loop could never see, all now fixed:**
+**Four shipping defects the offline loop could never see, all now fixed:**
 - `generate query` (2 cases) — the reader threw `KeyNotFoundException` on every generated query.
   Ground-truthed against shipped queries (300/300 carry it):
   `<SourceCode><Methods><Method><Name>classDeclaration` is mandatory, and each data source needs
@@ -263,15 +263,32 @@ Four things this could only be learned by running it, and all four were wrong fi
   metadata-level crashes had been aborting the compile before IL generation: the loop counter was
   named `count`, an X++ keyword, so the declaration was rejected and the rest of the method
   mis-parsed.
+- `generate business-event` — the `[BusinessEvents]` attribute named the event class where the
+  contract belongs, passed a second `classStr` where the display name belongs, and a plain string
+  where `ModuleAxapta::<module>` belongs. `--category` is now validated against the 40 real enum
+  values. The generated factory also called `parmId()`, which exists on no business event
+  (`BusinessEventsBase` declares only `parmUserId`); it now keeps the source record the way
+  shipped events do, in a private member behind a generated parm method.
 
-**Baseline after the fixes: 48 of 51 goldens compile clean.** The three that remain are all
-tagged `known-reference-gap` — their X++ names a sibling artifact the case's single golden does
-not include, or a standard object the fixture cannot contain — so the compiler rejects them for
-the same documented reason `validate references` does. They are recorded but never classified as
-`TOOL_DEFECT`: three permanent false clusters at the top of the improver's queue would be worse
-than no queue. The mini-AOT fixture gained a query (once `generate query` could produce a
+**Baseline: 36 of 51 goldens compile clean, with zero unattributed diagnostics.** That number went
+*down* from 48 as the oracle got more honest, not as the tool got worse: the metadata validator
+reports in its own shape (`Metadata Error: AxForm/<object>/Design/Controls/…/DataGroup: …`), which
+the parser did not recognise, and the attribution key was the golden's file stem, which truncates
+`NoYes.Extension` at the dot. Both dropped real findings on the floor while the scoreboard looked
+good — the same failure mode as a validator that passes because it never ran.
+
+`known-reference-gap` cases are recorded but never classified as `TOOL_DEFECT`: their X++ names a
+sibling artifact the case's single golden does not include, or a standard object the fixture
+cannot contain. The mini-AOT fixture gained a query (once `generate query` could produce a
 readable one) and an `OnInitialized` delegate on `FmVehicleService`, without which the
 event-handler case could not compile however correct the scaffolder was.
+
+**The 15 red cases are now the honest work queue** — reports missing every mandatory `AX_*`
+framework parameter and a page size; public data entities with no key; form patterns binding
+`DataGroup` to field groups the table does not declare, and one putting an
+`AxFormActionPaneTabControl` under a tab page, which the metadata validator forbids; a workflow
+and a security policy with an empty mandatory property. That is Phase 2-shaped generation-depth
+work, not eval-loop work, and it is what the improver picks up next.
 
 4.3 ❌ **L4 runtime oracle — not built.** It needs a live AOS, a `SysTestRunner` result parser
 (none exists; `test run` returns a raw output tail) and per-run fixture provisioning inside a real

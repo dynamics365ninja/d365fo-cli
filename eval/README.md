@@ -85,19 +85,30 @@ returns `EVAL_BUILD_INVOCATION` and writes **no** verdicts — an argument mista
 must never be recorded as a broken golden. `EvalScoreCard.BuildClean` is `null`
 wherever no compiler ran; it is never `false` by default.
 
-Current baseline: **48 of 51 goldens compile clean**. The three that do not are
-all tagged `known-reference-gap` — their X++ names a sibling artifact the case's
-single golden does not include, or a standard object the fixture cannot contain —
-so the compiler rejects them for exactly the reason `validate references` does.
-Those are recorded but never classified as `TOOL_DEFECT`: three permanent false
-clusters at the top of the improver's queue would be worse than no queue at all.
+Current baseline: **36 of 51 goldens compile clean**, with **zero unattributed
+diagnostics** — every complaint the compiler makes is blamed on the case that
+produced the object it names.
 
-The first three runs of this oracle found three real defects, all now fixed:
-`generate query` produced queries the metadata reader could not read at all,
+That number went *down* from 48 as the oracle got more honest, not as the tool got
+worse. The metadata validator reports in its own shape
+(`Metadata Error: AxForm/<object>/Design/Controls/…/DataGroup: …`), which the
+parser did not recognise, and the attribution key was the golden's file stem —
+which truncates `NoYes.Extension` at the dot. Both meant real findings were being
+dropped on the floor while the scoreboard looked good.
+
+Cases tagged `known-reference-gap` are recorded but never classified as
+`TOOL_DEFECT`: their X++ names a sibling artifact the case's single golden does not
+include, or a standard object the fixture cannot contain, and the compiler rejects
+those for exactly the reason `validate references` does.
+
+Four defects this oracle has found and that are now fixed — none of them visible to
+a golden diff or to any offline validator, which is the whole argument for the
+tier: `generate query` produced queries the metadata reader could not read at all;
 `generate event-handler` wrote its handler where the provider could not find the
-method name, and `generate migration-script` named a variable `count`, an X++
-keyword. None of the three was visible to a golden diff or to any offline
-validator — that is the whole argument for this tier.
+method name; `generate migration-script` named a variable `count`, an X++ keyword;
+and `generate business-event` built a `[BusinessEvents]` attribute with the wrong
+first argument and a string where the `ModuleAxapta` enum belongs, then called a
+`parmId()` that exists on no business event.
 
 ## Improver toolchain
 

@@ -161,6 +161,26 @@ public class L3BuildOracleTests : IDisposable
         Assert.Single(unattributed);
     }
 
+    /// <summary>
+    /// The attribution key is the object's declared <c>&lt;Name&gt;</c>, not the file
+    /// stem. An extension object is named <c>Target.Suffix</c>, so the stem stops at
+    /// the dot and every diagnostic about it used to land as unattributed — the
+    /// oracle under-reporting while looking green.
+    /// </summary>
+    [Fact]
+    public void Attribution_survives_an_object_name_containing_a_dot()
+    {
+        Golden("L2-enum-extension", "AxEnumExtension", "NoYes.Extension");
+        var cases = new[] { Case("L2-enum-extension") };
+        var model = L3ModelProvisioner.Provision(cases, Path.Combine(_dir, "goldens"), Path.Combine(_dir, "work"), "EvalModel");
+
+        var log = "Metadata Error: AxEnumExtension/NoYes.Extension: Base enum 'NoYes' cannot be extended.";
+        var (verdicts, unattributed) = BuildVerdictAttribution.Attribute(model, cases, XppcDiagnostics.Parse(log));
+
+        Assert.Equal(BuildVerdict.Errors, Assert.Single(verdicts).Verdict);
+        Assert.Empty(unattributed);
+    }
+
     [Fact]
     public void A_case_with_nothing_provisioned_is_skipped_not_clean()
     {

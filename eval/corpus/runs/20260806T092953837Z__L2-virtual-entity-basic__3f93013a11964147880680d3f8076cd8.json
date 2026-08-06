@@ -1,0 +1,22 @@
+{
+  "runId": "20260806T092953837Z__L2-virtual-entity-basic__3f93013a11964147880680d3f8076cd8",
+  "caseId": "L2-virtual-entity-basic",
+  "tier": 2,
+  "timestampUtc": "2026-08-06T09:29:53.8371936+00:00",
+  "source": "build-oracle",
+  "score": {
+    "xppErrors": 0,
+    "referenceErrors": 0,
+    "goldenMatch": true,
+    "goldenDiff": {
+      "missing": [],
+      "extra": [],
+      "changed": [],
+      "isMatch": true
+    },
+    "buildClean": false,
+    "buildErrors": 3
+  },
+  "classification": "TOOL_DEFECT",
+  "note": "xppc reported 3 error(s) against this golden: The Primary Key property must be set, when the Is Public property is set to \u0027Yes\u0027.; The Primary Key property must be set to an existing EntityKey name, when the Is Public property is set to \u0027Yes\u0027.; There must be a key defined for a public data entity."
+}

@@ -570,14 +570,60 @@ public class ScaffoldingSnapshotTests
     [Fact]
     public void BusinessEvent_class_extends_BusinessEventsBase()
     {
-        var doc = BusinessEventScaffolder.EventClass("MyEvent", "MyEventContract", "Payments");
+        var doc = BusinessEventScaffolder.EventClass("MyEvent", "MyEventContract", "Ledger");
         var root = doc.Root!;
         Assert.Equal("AxClass", root.Name.LocalName);
         AssertExtends(doc, "BusinessEventsBase");
         var decl = root.Element("SourceCode")!.Element("Declaration")!.Value;
         Assert.Contains("[BusinessEvents(", decl);
-        Assert.Contains("classStr(MyEvent)", decl);
         Assert.Contains("classStr(MyEventContract)", decl);
+    }
+
+    /// <summary>
+    /// The attribute takes the <em>contract</em> class, a name, a description and a
+    /// <c>ModuleAxapta</c> value — read off shipped events. It used to pass the event
+    /// class first, a second <c>classStr</c> where the name belongs, and a plain
+    /// string where the enum belongs, which the compiler rejects with "Cannot
+    /// implicitly convert from type 'str' to type 'Extensible
+    /// Enumeration(ModuleAxapta)'". Found by `eval verify-build`.
+    /// </summary>
+    [Fact]
+    public void BusinessEvent_attribute_names_the_contract_and_a_real_ModuleAxapta_value()
+    {
+        var decl = BusinessEventScaffolder.EventClass("MyEvent", "MyEventContract", "FleetManagement")
+            .Root!.Element("SourceCode")!.Element("Declaration")!.Value;
+
+        Assert.Contains("[BusinessEvents(classStr(MyEventContract), 'MyEvent', 'MyEvent', ModuleAxapta::FleetManagement)]", decl, StringComparison.Ordinal);
+        Assert.DoesNotContain("classStr(MyEvent),", decl, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void BusinessEvent_rejects_a_module_that_is_not_in_the_enum()
+    {
+        var ex = Assert.Throws<ArgumentException>(
+            () => BusinessEventScaffolder.EventClass("MyEvent", "MyEventContract", "Payments"));
+
+        Assert.Contains("ModuleAxapta", ex.Message, StringComparison.Ordinal);
+        Assert.Contains("FleetManagement", ex.Message, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// <c>parmId</c> exists on no business event — the only parm method
+    /// <c>BusinessEventsBase</c> declares is <c>parmUserId</c>. The factory now keeps
+    /// the source record the way shipped events do: a private member set through a
+    /// generated parm method.
+    /// </summary>
+    [Fact]
+    public void BusinessEvent_factory_does_not_call_a_parmId_that_does_not_exist()
+    {
+        var doc = BusinessEventScaffolder.EventClass("MyEvent", "MyEventContract", "Ledger", primaryTable: "FmVehicle");
+
+        var methods = doc.Descendants("Method").ToDictionary(
+            m => m.Element("Name")!.Value, m => m.Element("Source")!.Value);
+
+        Assert.DoesNotContain("parmId(", string.Concat(methods.Values), StringComparison.Ordinal);
+        Assert.Contains("parmFmVehicle", methods.Keys);
+        Assert.Contains("businessEvent.parmFmVehicle(_fmVehicle);", methods["newFromFmVehicle"], StringComparison.Ordinal);
     }
 
     [Fact]

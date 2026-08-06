@@ -4,7 +4,13 @@ using D365FO.Core.ObjectTypes;
 namespace D365FO.Core.Eval;
 
 /// <summary>One golden file placed into the throwaway model, and where it landed.</summary>
-public sealed record ProvisionedArtifact(string CaseId, string SourcePath, string RelativePath, string RootElement);
+/// <param name="Name">
+/// The object's declared AOT name — the key the compiler blames diagnostics on.
+/// Carried explicitly rather than derived from the file name: an extension object is
+/// named <c>Target.Suffix</c>, and taking the file's stem would silently truncate it
+/// at the dot, so every diagnostic about it would land as unattributed.
+/// </param>
+public sealed record ProvisionedArtifact(string CaseId, string SourcePath, string RelativePath, string RootElement, string Name);
 
 /// <summary>
 /// A throwaway model on disk holding every golden the L3 oracle will compile.
@@ -106,7 +112,7 @@ public static class L3ModelProvisioner
                 var destination = Path.Combine(contentRoot, relative);
                 Directory.CreateDirectory(Path.GetDirectoryName(destination)!);
                 File.Copy(file, destination, overwrite: true);
-                artifacts.Add(new ProvisionedArtifact(@case.Id, file, relative, root!));
+                artifacts.Add(new ProvisionedArtifact(@case.Id, file, relative, root!, name!));
             }
         }
 

@@ -13,23 +13,88 @@ public sealed record PayloadSpec(string Name, string Type);
 public static class BusinessEventScaffolder
 {
     /// <summary>
+    /// Values of the <c>ModuleAxapta</c> enum — the fourth argument of
+    /// <c>[BusinessEvents]</c>. Ground-truthed against
+    /// <c>ApplicationPlatform/AxEnum/ModuleAxapta.xml</c> on a real installation
+    /// (40 values). A value outside this set is a compile error, so the caller is
+    /// told which ones exist rather than being let through to find out on the AOS.
+    /// </summary>
+    public static readonly IReadOnlyList<string> ModuleAxaptaValues =
+    [
+        "Ledger", "Bank", "SalesOrder", "Customer", "PurchaseOrder", "Vendor", "Inventory",
+        "BOM", "Route", "WorkCenter", "Production", "MasterPlanning", "HumanResource", "Project",
+        "Location", "General", "Costing", "Expense", "CRM", "Activities", "Contacts",
+        "BusinessRelations", "Opportunities", "Leads", "Campaigns", "Basic", "TimeAndAttendance",
+        "Budget", "FixedAssets", "RetailTerminal", "RCash", "FleetManagement", "TAM",
+        "ProcurementAndSourcing", "NotApplicable", "Obsolete", "SalesAndMarketing",
+        "SystemAdministration", "Tax", "ProductInformationManagement",
+    ];
+
+    /// <summary>The honest default for a skeleton: the scaffolder does not know the business module.</summary>
+    public const string DefaultModule = "NotApplicable";
+
+    /// <summary>Resolves a caller-supplied module name case-insensitively, or null when it is not a real value.</summary>
+    public static string? NormalizeModule(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value)) return DefaultModule;
+        return ModuleAxaptaValues.FirstOrDefault(v => string.Equals(v, value.Trim(), StringComparison.OrdinalIgnoreCase));
+    }
+
+    /// <summary>
     /// Scaffolds the <c>AxClass</c> for the business event itself.
     /// </summary>
+    /// <param name="module">
+    /// <c>ModuleAxapta</c> value for the attribute's fourth argument. Must be one of
+    /// <see cref="ModuleAxaptaValues"/>; anything else throws rather than emitting
+    /// code the compiler will reject.
+    /// </param>
+    /// <remarks>
+    /// The attribute shape is read off shipped events
+    /// (<c>BenefitAnnualSalaryChangeBusinessEvent</c>,
+    /// <c>BackgroundOperationCancelledBusinessEvent</c>): the first argument is the
+    /// <em>contract</em> class, then a name and a description, then
+    /// <c>ModuleAxapta::&lt;module&gt;</c>. This used to emit the event class as the
+    /// first argument, a second <c>classStr</c> where the name belongs, and a plain
+    /// string where the enum belongs — <c>"Cannot implicitly convert from type 'str'
+    /// to type 'Extensible Enumeration(ModuleAxapta)'"</c>. The factory method also
+    /// called <c>parmId()</c>, which exists on no business event: the only parm
+    /// method <c>BusinessEventsBase</c> declares is <c>parmUserId</c>. Both found by
+    /// <c>eval verify-build</c> on <c>L1-business-event-basic</c>.
+    /// </remarks>
     public static XDocument EventClass(
         string className,
         string contractName,
-        string category,
+        string module,
         string? primaryTable = null)
     {
-        var tableParam   = string.IsNullOrWhiteSpace(primaryTable) ? "table" : LowerFirst(primaryTable);
-        var tableType    = string.IsNullOrWhiteSpace(primaryTable) ? "Common" : primaryTable;
+        var resolvedModule = NormalizeModule(module)
+            ?? throw new ArgumentException(
+                $"'{module}' is not a ModuleAxapta value. Valid values: {string.Join(", ", ModuleAxaptaValues)}.",
+                nameof(module));
 
-        var newFromTableSrc =
-            $"public static {className} newFromTable({tableType} _{tableParam})\n" +
+        var hasTable   = !string.IsNullOrWhiteSpace(primaryTable);
+        var tableType  = hasTable ? primaryTable! : "Common";
+        var member     = LowerFirst(tableType);
+        var factory    = hasTable ? $"newFrom{tableType}" : "newFromTable";
+
+        // Shipped events keep the source record in a private member, set through a
+        // parm method, and let buildContract() read it — the factory has nothing else
+        // to hand the base class.
+        var factorySrc =
+            $"public static {className} {factory}({tableType} _{member})\n" +
             "{\n" +
-            $"    {className} event = new {className}();\n" +
-            $"    event.parmId(classStr({className}));\n" +
-            "    return event;\n" +
+            $"    {className} businessEvent = new {className}();\n" +
+            $"    businessEvent.parm{tableType}(_{member});\n" +
+            "\n" +
+            "    return businessEvent;\n" +
+            "}\n";
+
+        var parmSrc =
+            $"private {tableType} parm{tableType}({tableType} _{member} = {member})\n" +
+            "{\n" +
+            $"    {member} = _{member};\n" +
+            "\n" +
+            $"    return {member};\n" +
             "}\n";
 
         var buildContractSrc =
@@ -40,9 +105,10 @@ public static class BusinessEventScaffolder
             "}\n";
 
         var declaration =
-            $"[BusinessEvents(classStr({className}), classStr({contractName}), \"{category}\", \"{category}\")]\n" +
+            $"[BusinessEvents(classStr({contractName}), '{className}', '{className}', ModuleAxapta::{resolvedModule})]\n" +
             $"public final class {className} extends BusinessEventsBase\n" +
             "{\n" +
+            $"    private {tableType} {member};\n" +
             "}\n";
 
         return new XDocument(
@@ -52,8 +118,11 @@ public static class BusinessEventScaffolder
                     new XElement("Declaration", declaration),
                     new XElement("Methods",
                         new XElement("Method",
-                            new XElement("Name", "newFromTable"),
-                            new XElement("Source", newFromTableSrc)),
+                            new XElement("Name", factory),
+                            new XElement("Source", factorySrc)),
+                        new XElement("Method",
+                            new XElement("Name", $"parm{tableType}"),
+                            new XElement("Source", parmSrc)),
                         new XElement("Method",
                             new XElement("Name", "buildContract"),
                             new XElement("Source", buildContractSrc))))));

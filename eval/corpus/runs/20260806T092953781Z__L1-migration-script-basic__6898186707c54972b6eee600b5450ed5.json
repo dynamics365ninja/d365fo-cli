@@ -1,0 +1,20 @@
+{
+  "runId": "20260806T092953781Z__L1-migration-script-basic__6898186707c54972b6eee600b5450ed5",
+  "caseId": "L1-migration-script-basic",
+  "tier": 1,
+  "timestampUtc": "2026-08-06T09:29:53.7814842+00:00",
+  "source": "build-oracle",
+  "score": {
+    "xppErrors": 0,
+    "referenceErrors": 0,
+    "goldenMatch": true,
+    "goldenDiff": {
+      "missing": [],
+      "extra": [],
+      "changed": [],
+      "isMatch": true
+    },
+    "buildClean": true,
+    "buildErrors": 0
+  }
+}

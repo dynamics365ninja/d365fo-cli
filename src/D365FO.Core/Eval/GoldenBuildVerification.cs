@@ -101,11 +101,7 @@ public static class BuildVerdictAttribution
     {
         // AOT object name → the case that provisioned it.
         var owner = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-        foreach (var a in model.Artifacts)
-        {
-            var name = Path.GetFileNameWithoutExtension(a.RelativePath);
-            owner[name] = a.CaseId;
-        }
+        foreach (var a in model.Artifacts) owner[a.Name] = a.CaseId;
 
         var byCase = model.Artifacts
             .Select(a => a.CaseId)

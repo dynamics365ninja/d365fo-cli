@@ -78,6 +78,18 @@ public class XppcDiagnosticsTests
     [InlineData(
         "TaskListItem Information: Class Method dynamics://Class/ConFmVehicleRun/Method/run: [(34,5),(34,23)]: TODO: implement",
         "information", "ConFmVehicleRun")]
+    // The metadata validator's own shape: MetaModel type / object / member.
+    [InlineData(
+        "Metadata Error: AxDataEntityView/ConFmVehicleEntity/PrimaryKey: The Primary Key property must be set, when the Is Public property is set to 'Yes'.",
+        "error", "ConFmVehicleEntity")]
+    // …where the member path can be a whole form control tree.
+    [InlineData(
+        "Metadata Error: AxForm/ConFmVehicleList/Design/Controls/Grid/DataGroup: Field group 'Overview' does not exist.",
+        "error", "ConFmVehicleList")]
+    // …and the object name can contain a dot: an extension object is Target.Suffix.
+    [InlineData(
+        "Metadata Error: AxEnumExtension/NoYes.Extension: Base enum 'NoYes' cannot be extended.",
+        "error", "NoYes.Extension")]
     public void Parses_the_forms_a_real_compiler_emits(string line, string severity, string obj)
     {
         var d = Assert.Single(XppcDiagnostics.Parse(line));
