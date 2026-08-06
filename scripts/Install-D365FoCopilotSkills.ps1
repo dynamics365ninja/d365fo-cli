@@ -5,7 +5,7 @@
 .DESCRIPTION
     Copies the bundled `d365fo-cli` Copilot skill folder:
       - skills/d365fo-cli/SKILL.md            (main rule canon + tool mapping)
-      - skills/d365fo-cli/references/*.md      (19 lazily-loaded X++ topic files)
+      - skills/d365fo-cli/references/*.md      (lazily-loaded X++ topic files, one per knowledge topic)
     into <XppRepo>/.github/skills/d365fo-cli/ so that GitHub Copilot in
     Visual Studio 2022 / 2026 (and VS Code) automatically picks up the skill.
 
@@ -18,6 +18,10 @@
     this version of the skill has dropped.
 
     Re-run after pulling updates to d365fo-cli to keep the skill current.
+
+    For Claude Code / Claude Desktop use the sibling script
+    Install-D365FoClaudeSkills.ps1, which installs the Anthropic-format variant
+    of the same corpus into .claude/skills/.
 
     Legacy note: previous versions deployed .github/copilot-instructions.md and
     .github/instructions/*.instructions.md. Those files are no longer needed. If
