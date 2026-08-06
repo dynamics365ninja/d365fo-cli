@@ -266,6 +266,21 @@ public static class ToolCatalog
             Schema(("name", "string", true), ("model", "string", false), ("limit", "integer", false)),
             (h, p) => h.FindTablesByField(Str(p, "name"), StrOrNull(p, "model"), Int(p, "limit", 200))),
 
+        new Descriptor("validate",
+            "Check an artifact before it is written. `mode`:\n" +
+            "• xpp — the offline X++/XML best-practice validator (XML001-XML008, BP rules). `codeType` " +
+            "xpp | xml-table | xml-any, auto-detected when omitted.\n" +
+            "• references — every identifier in the code must exist in the index; the anti-hallucination gate. " +
+            "Requires an index.\n" +
+            "• form-pattern — structural AxForm pattern rules FP001-FP010, the same gate generate_object(form) enforces.\n" +
+            "• metadata-shape — judges AOT XML against the serialization contract the AOT reader is generated from: " +
+            "XML007 (a member the type does not declare, silently dropped on read) and XML008 (a value outside its " +
+            "enum, which stops the read outright). Needs no bridge and no VM; this is the offline half of the CLI's " +
+            "`validate metadata`.",
+            Schema(("mode", "string", true), ("code", "string", true),
+                   ("context", "string", false), ("codeType", "string", false)),
+            (h, p) => h.Validate(Str(p, "mode"), Str(p, "code"), StrOrNull(p, "context"), StrOrNull(p, "codeType"))),
+
         new Descriptor("validate_object_naming",
             "Static naming-rule check (PascalCase, length, character set, extension suffix, optional publisher prefix). No index access required.",
             Schema(("kind", "string", true), ("name", "string", true), ("prefix", "string", false)),
@@ -336,7 +351,11 @@ public static class ToolCatalog
             "• XML-only, no file written (cloud/Linux friendly): edt (`extends`, `label`, `size`) · enum (`label`, " +
             "`values`) · query (`rootTable`, `label`) · sysoperation (`executionMode`; Contract+Service+Controller) · " +
             "business-event (`contractName`, `category`) · runbase (`batch`) · security-policy (`constrainedTable`, " +
-            "`policyQuery`).",
+            "`policyQuery`) · menu-item (`objectName`, `menuKind` Display|Action|Output, `objectTypeTarget` " +
+            "Form|Class|Report|Query, `neededPermission`) · privilege (`entryPoint` + `entryKind`, or `dataEntity`; " +
+            "`access` Read|Update|Create|Correct|Delete) · duty (`privileges`) · role (`duties`, `privileges`) · " +
+            "entity (`table`, `fields` \"<entityField>[:<tableField>]\", `entityCategory`) · extension " +
+            "(`extensionKind` table|form|edt|enum|view|query|dataEntityView, `target`, `suffix`).",
             Schema(("objectType", "string", true), ("name", "string", false), ("label", "string", false),
                    ("fields", "array", false), ("pattern", "string", false),
                    ("extends", "string", false), ("nonFinal", "boolean", false),
@@ -346,6 +365,11 @@ public static class ToolCatalog
                    ("rootTable", "string", false), ("executionMode", "string", false),
                    ("contractName", "string", false), ("category", "string", false), ("batch", "boolean", false),
                    ("constrainedTable", "string", false), ("policyQuery", "string", false),
+                   ("objectName", "string", false), ("menuKind", "string", false), ("objectTypeTarget", "string", false),
+                   ("neededPermission", "string", false), ("entryPoint", "string", false), ("entryKind", "string", false),
+                   ("access", "string", false), ("dataEntity", "string", false), ("privileges", "array", false),
+                   ("duties", "array", false), ("entityCategory", "string", false),
+                   ("extensionKind", "string", false), ("suffix", "string", false),
                    ("installTo", "string", false), ("out", "string", false), ("overwrite", "boolean", false)),
             (h, p) => StrOr(p, "objectType", "").ToLowerInvariant() switch
             {
@@ -367,9 +391,18 @@ public static class ToolCatalog
                 "business-event"  => h.GenerateBusinessEvent(Str(p, "name"), StrOrNull(p, "contractName"), StrOr(p, "category", "Custom")),
                 "runbase"         => h.GenerateRunBase(Str(p, "name"), Bool(p, "batch")),
                 "security-policy" => h.GenerateSecurityPolicy(Str(p, "name"), Str(p, "constrainedTable"), StrOrNull(p, "policyQuery")),
+                "menu-item"       => h.GenerateMenuItem(Str(p, "name"), Str(p, "objectName"), StrOr(p, "menuKind", "Display"),
+                                        StrOr(p, "objectTypeTarget", "Form"), StrOrNull(p, "label"), StrOrNull(p, "neededPermission")),
+                "privilege"       => h.GeneratePrivilege(Str(p, "name"), StrOrNull(p, "entryPoint"), StrOrNull(p, "entryKind"),
+                                        StrOrNull(p, "access"), StrOrNull(p, "label"), StrOrNull(p, "dataEntity")),
+                "duty"            => h.GenerateDuty(Str(p, "name"), StrArray(p, "privileges"), StrOrNull(p, "label")),
+                "role"            => h.GenerateRole(Str(p, "name"), StrArray(p, "duties"), StrArray(p, "privileges"), StrOrNull(p, "label")),
+                "entity"          => h.GenerateEntity(Str(p, "name"), Str(p, "table"), StrArray(p, "fields"), StrOrNull(p, "entityCategory")),
+                "extension"       => h.GenerateExtension(Str(p, "extensionKind"), Str(p, "target"), StrOrNull(p, "suffix")),
                 _ => D365FO.Core.ToolResult<object>.Fail("BAD_INPUT",
                         $"Unknown objectType '{Str(p, "objectType")}' for generate_object.",
-                        "Write: table, class, coc, form. XML-only: edt, enum, query, sysoperation, business-event, runbase, security-policy."),
+                        "Write: table, class, coc, form. XML-only: edt, enum, query, sysoperation, business-event, runbase, "
+                        + "security-policy, menu-item, privilege, duty, role, entity, extension."),
             }),
 
         new Descriptor("modify_method",

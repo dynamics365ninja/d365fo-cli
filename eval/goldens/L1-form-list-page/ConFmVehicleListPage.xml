@@ -1,4 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
+
 <AxForm xmlns:i="http://www.w3.org/2001/XMLSchema-instance" xmlns="Microsoft.Dynamics.AX.Metadata.V6">
   <Name>ConFmVehicleListPage</Name>
   <SourceCode>
@@ -20,17 +21,17 @@ public class ConFmVehicleListPage extends FormRun
   </SourceCode>
   <DataSources>
     <AxFormDataSource xmlns="">
-      <Name>FmVehicle</Name>
-      <Table>FmVehicle</Table>
-      <Fields />
-      <ReferencedDataSources />
-      <AllowCreate>No</AllowCreate>
-      <AllowEdit>No</AllowEdit>
-      <AllowDelete>No</AllowDelete>
-      <InsertIfEmpty>No</InsertIfEmpty>
-      <DataSourceLinks />
-      <DerivedDataSources />
-    </AxFormDataSource>
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+    <Name>FmVehicle</Name><Table>FmVehicle</Table><Fields /><ReferencedDataSources /><AllowCreate>No</AllowCreate><AllowDelete>No</AllowDelete><AllowEdit>No</AllowEdit><InsertIfEmpty>No</InsertIfEmpty><DataSourceLinks /><DerivedDataSources /></AxFormDataSource>
   </DataSources>
   <Design>
     <Caption xmlns="">Fleet vehicles</Caption>

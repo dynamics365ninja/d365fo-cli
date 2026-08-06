@@ -21,17 +21,17 @@ public class ConFmVehicleWorkspace extends FormRun
   </SourceCode>
   <DataSources>
     <AxFormDataSource xmlns="">
-      <Name>FmVehicle</Name>
-      <Table>FmVehicle</Table>
-      <Fields />
-      <ReferencedDataSources />
-      <AllowCreate>No</AllowCreate>
-      <AllowEdit>No</AllowEdit>
-      <AllowDelete>No</AllowDelete>
-      <InsertIfEmpty>No</InsertIfEmpty>
-      <DataSourceLinks />
-      <DerivedDataSources />
-    </AxFormDataSource>
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+    <Name>FmVehicle</Name><Table>FmVehicle</Table><Fields /><ReferencedDataSources /><AllowCreate>No</AllowCreate><AllowDelete>No</AllowDelete><AllowEdit>No</AllowEdit><InsertIfEmpty>No</InsertIfEmpty><DataSourceLinks /><DerivedDataSources /></AxFormDataSource>
   </DataSources>
   <Design>
     <Caption xmlns="">Fleet management</Caption>
@@ -77,6 +77,11 @@ public class ConFmVehicleWorkspace extends FormRun
         
         
       <Name>PanoramaBody</Name><ElementPosition>268435455</ElementPosition><HeightMode>SizeToAvailable</HeightMode><Type>Tab</Type><WidthMode>SizeToAvailable</WidthMode><FormControlExtension i:nil="true" /><Controls>
+          <!-- The tile strip is the tab page itself under the SectionTiles pattern, which is
+               how every shipped workspace expresses it. This used to be a nested group with
+               Style=TileSection and Pattern=Workspace_SummaryNumbers_UnboundFields: neither
+               exists — the style is not a value of GroupStyle, so the serializer threw and the
+               entire form was unreadable, not merely misshapen. -->
           <AxFormControl xmlns="" i:type="AxFormTabPageControl">
             
             
@@ -85,21 +90,11 @@ public class ConFmVehicleWorkspace extends FormRun
             
             
             
-          <Name>SummarySection</Name><ElementPosition>536870911</ElementPosition><Type>TabPage</Type><FormControlExtension i:nil="true" /><Controls>
-              <AxFormControl xmlns="" i:type="AxFormGroupControl">
-                <Name>TileSection</Name>
-                <Pattern>Workspace_SummaryNumbers_UnboundFields</Pattern>
-                <PatternVersion>1.0</PatternVersion>
-                <Type>Group</Type>
-                <WidthMode>SizeToAvailable</WidthMode>
-                <FormControlExtension i:nil="true" />
-                <Controls>
-                  <!-- Add AxFormControlButtonControl tiles here -->
-                </Controls>
-                <ArrangeMethod>HorizontalLeft</ArrangeMethod>
-                <FrameType>None</FrameType>
-                <Style>TileSection</Style>
-              </AxFormControl>
+            
+            
+            
+          <Name>SummarySection</Name><ElementPosition>536870911</ElementPosition><Pattern>SectionTiles</Pattern><PatternVersion>1.1</PatternVersion><Type>TabPage</Type><WidthMode>SizeToAvailable</WidthMode><FormControlExtension i:nil="true" /><Controls>
+              <!-- Add AxFormControl i:type="AxFormButtonControl" tiles here -->
               <AxFormControl xmlns="" i:type="AxFormGroupControl">
                 <Name>ChartSection</Name>
                 <Type>Group</Type>
@@ -111,9 +106,8 @@ public class ConFmVehicleWorkspace extends FormRun
                 <ArrangeMethod>HorizontalLeft</ArrangeMethod>
                 <FrameType>None</FrameType>
               </AxFormControl>
-            </Controls><FrameType>None</FrameType><Caption>Summary</Caption></AxFormControl>
+            </Controls><ArrangeMethod>HorizontalLeft</ArrangeMethod><Caption>Summary</Caption></AxFormControl>
           <AxFormControl xmlns="" i:type="AxFormTabPageControl">
-            
             
             
             
@@ -173,7 +167,7 @@ public class ConFmVehicleWorkspace extends FormRun
                 <ShowRowLabels>No</ShowRowLabels>
                 <Style>Tabular</Style>
               </AxFormControl>
-            </Controls><FrameType>None</FrameType><Caption>FmVehicle</Caption></AxFormControl>
+            </Controls><Caption>FmVehicle</Caption></AxFormControl>
         </Controls><AlignChild>No</AlignChild><ShowTabs>No</ShowTabs><Style>Panorama</Style></AxFormControl>
     </Controls>
   </Design>

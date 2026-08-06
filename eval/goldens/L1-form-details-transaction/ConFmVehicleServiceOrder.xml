@@ -36,10 +36,10 @@ public class ConFmVehicleServiceOrder extends FormRun
       <ReferencedDataSources />
       <InsertIfEmpty>No</InsertIfEmpty>
       <DataSourceLinks>
-        <AxFormDataSourceLink>
+        <AxFormDataSourceRootLink>
+          <Name>FmVehicle</Name>
           <LinkType>Active</LinkType>
-          <Table>FmVehicle</Table>
-        </AxFormDataSourceLink>
+        </AxFormDataSourceRootLink>
       </DataSourceLinks>
       <DerivedDataSources />
     </AxFormDataSource>

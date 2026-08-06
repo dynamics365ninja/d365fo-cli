@@ -61,12 +61,20 @@ public static class NumberSequenceScaffolder
     }
 
     /// <summary>
-    /// Scaffolds an EDT that is backed by a number sequence. Carries the same
-    /// <c>xmlns:i</c> / <c>i:type="AxEdtString"</c> root discriminator as
-    /// <see cref="XppScaffolder.Edt"/> — D365FO's metadata reader (and
-    /// <see cref="ScaffoldFileWriter"/>'s own write-time gate) reject an
-    /// <c>AxEdtString</c> root without it.
+    /// Scaffolds the EDT a number sequence issues values for: a plain <c>Num</c>-derived string.
     /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The element is <c>&lt;AxEdt&gt;</c> with the concrete type in <c>i:type</c>, which is what
+    /// every shipped EDT and <see cref="XppScaffolder.Edt"/> both write.
+    /// </para>
+    /// <para>
+    /// Nothing here names the module. An EDT has no <c>NumberSequenceModule</c> member — the
+    /// association is made in code, by the <c>NumberSeqApplicationModule</c> extension's
+    /// <c>loadModule()</c>, which this scaffolder also generates. The element written before was
+    /// discarded on read, so the EDT looked wired up and was not.
+    /// </para>
+    /// </remarks>
     public static XDocument Edt(
         string edtName,
         string moduleName,
@@ -75,13 +83,12 @@ public static class NumberSequenceScaffolder
     {
         XNamespace xsi = "http://www.w3.org/2001/XMLSchema-instance";
         return new XDocument(
-            new XElement("AxEdtString",
+            new XElement("AxEdt",
                 new XAttribute(XNamespace.Xmlns + "i", xsi.NamespaceName),
                 new XAttribute(XName.Get("type", xsi.NamespaceName), "AxEdtString"),
                 new XElement("Name", edtName),
-                new XElement("Extends", "Num"),
                 string.IsNullOrEmpty(label) ? null : new XElement("Label", label),
-                new XElement("NumberSequenceModule", moduleName)));
+                new XElement("Extends", "Num")));
     }
 
     /// <summary>

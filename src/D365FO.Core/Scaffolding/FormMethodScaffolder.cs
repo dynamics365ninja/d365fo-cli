@@ -16,7 +16,7 @@ namespace D365FO.Core.Scaffolding;
 ///       &lt;DataSource&gt;&lt;Name&gt;DS&lt;/Name&gt;&lt;Methods&gt;…&lt;/Methods&gt;&lt;Fields /&gt;&lt;/DataSource&gt;
 ///     &lt;/DataSources&gt;
 ///     &lt;DataControls xmlns=""&gt; &lt;!-- control override methods --&gt;
-///       &lt;DataControl&gt;&lt;Name&gt;Ctrl&lt;/Name&gt;&lt;Methods&gt;…&lt;/Methods&gt;&lt;/DataControl&gt;
+///       &lt;Control&gt;&lt;Name&gt;Ctrl&lt;/Name&gt;&lt;Methods&gt;…&lt;/Methods&gt;&lt;/Control&gt;
 ///     &lt;/DataControls&gt;
 ///   &lt;/SourceCode&gt;
 ///   &lt;DataSources&gt;…metadata only…&lt;/DataSources&gt;
@@ -113,9 +113,15 @@ public static class FormMethodScaffolder
         => Inject(formDoc, "DataSources", "DataSource", dataSource, sig, customBody, overwrite, includeFields: true);
 
     /// <summary>Inject (or overwrite) a method on a form control.</summary>
+    /// <remarks>
+    /// The item element is <c>&lt;Control&gt;</c>, not <c>&lt;DataControl&gt;</c> — that is the
+    /// contract name of <c>AxFormControlPropertyCollection</c>, and every shipped form uses it.
+    /// Under the wrong name the whole entry is dropped on read and the control keeps none of the
+    /// methods written for it, while the file still looks right.
+    /// </remarks>
     public static InjectResult InjectControlMethod(
         XDocument formDoc, string control, FormMethodSignature sig, string? customBody, bool overwrite)
-        => Inject(formDoc, "DataControls", "DataControl", control, sig, customBody, overwrite, includeFields: false);
+        => Inject(formDoc, "DataControls", "Control", control, sig, customBody, overwrite, includeFields: false);
 
     // ---- core injection ----------------------------------------------------
 
@@ -145,7 +151,7 @@ public static class FormMethodScaffolder
             InsertInOrder(sourceCode, container, SourceCodeOrder);
         }
 
-        // <DataSource>/<DataControl> matched by its <Name> child.
+        // <DataSource>/<Control> matched by its <Name> child.
         var item = container.Elements()
             .FirstOrDefault(e => e.Name.LocalName == itemLocal &&
                                  string.Equals(Local(e, "Name"), ownerName, StringComparison.OrdinalIgnoreCase));

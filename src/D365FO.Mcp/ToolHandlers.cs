@@ -829,12 +829,24 @@ public sealed class ToolHandlers
 
     // ---- scaffolding handlers (return XML as string) ----
 
+    /// <summary>
+    /// Renders a scaffolded document exactly as the CLI would write it to disk.
+    /// </summary>
+    /// <remarks>
+    /// These handlers return XML instead of a path, and used to return the raw scaffold — so
+    /// the contract namespace, the contract member order and the shape rules were all applied
+    /// on the CLI path and none of them here. The same request produced a correct file through
+    /// one surface and a document the reader would quietly strip through the other.
+    /// </remarks>
+    private static string Aot(System.Xml.Linq.XDocument doc)
+        => D365FO.Core.Scaffolding.ScaffoldFileWriter.ToAotXml(doc);
+
     public ToolResult<object> GenerateEdt(string name, string? extends, string? label, int size)
     {
         if (string.IsNullOrWhiteSpace(name))
             return ToolResult<object>.Fail("BAD_INPUT", "name is required.");
         var doc = D365FO.Core.Scaffolding.XppScaffolder.Edt(name, extends, null, size > 0 ? size : null, label);
-        return ToolResult<object>.Success(new { name, xml = doc.ToString() });
+        return ToolResult<object>.Success(new { name, xml = Aot(doc) });
     }
 
     public ToolResult<object> GenerateEnum(string name, string? label, string[]? values)
@@ -844,7 +856,7 @@ public sealed class ToolHandlers
         var vals = values?.Select((v, i) => new D365FO.Core.Scaffolding.EnumValueSpec(v, i, null)).ToList()
                    ?? new List<D365FO.Core.Scaffolding.EnumValueSpec>();
         var doc = D365FO.Core.Scaffolding.XppScaffolder.Enum(name, vals, label: label);
-        return ToolResult<object>.Success(new { name, xml = doc.ToString() });
+        return ToolResult<object>.Success(new { name, xml = Aot(doc) });
     }
 
     public ToolResult<object> GenerateQuery(string name, string rootTable, string? label)
@@ -855,7 +867,7 @@ public sealed class ToolHandlers
             return ToolResult<object>.Fail("BAD_INPUT", "rootTable is required.");
         var ds = new[] { new D365FO.Core.Scaffolding.QueryDataSourceSpec(rootTable) };
         var doc = D365FO.Core.Scaffolding.QueryScaffolder.Query(name, ds);
-        return ToolResult<object>.Success(new { name, xml = doc.ToString() });
+        return ToolResult<object>.Success(new { name, xml = Aot(doc) });
     }
 
     public ToolResult<object> GenerateSysOperation(string name, string executionMode)
@@ -874,9 +886,9 @@ public sealed class ToolHandlers
         return ToolResult<object>.Success(new
         {
             name,
-            contract   = new { name = contractName,   xml = contract.ToString() },
-            service    = new { name = serviceName,     xml = service.ToString() },
-            controller = new { name = controllerName,  xml = controller.ToString() },
+            contract   = new { name = contractName,   xml = Aot(contract) },
+            service    = new { name = serviceName,     xml = Aot(service) },
+            controller = new { name = controllerName,  xml = Aot(controller) },
         });
     }
 
@@ -890,8 +902,8 @@ public sealed class ToolHandlers
         return ToolResult<object>.Success(new
         {
             name,
-            @event   = new { name, xml = eventDoc.ToString() },
-            contract = new { name = cn, xml = contractDoc.ToString() },
+            @event   = new { name, xml = Aot(eventDoc) },
+            contract = new { name = cn, xml = Aot(contractDoc) },
         });
     }
 
@@ -900,7 +912,90 @@ public sealed class ToolHandlers
         if (string.IsNullOrWhiteSpace(name))
             return ToolResult<object>.Fail("BAD_INPUT", "name is required.");
         var doc = D365FO.Core.Scaffolding.RunBaseScaffolder.RunBaseClass(name, batch);
-        return ToolResult<object>.Success(new { name, isBatch = batch, xml = doc.ToString() });
+        return ToolResult<object>.Success(new { name, isBatch = batch, xml = Aot(doc) });
+    }
+
+    public ToolResult<object> GenerateMenuItem(
+        string name, string objectName, string menuKind, string objectType, string? label, string? neededPermission)
+    {
+        if (string.IsNullOrWhiteSpace(name))
+            return ToolResult<object>.Fail("BAD_INPUT", "name is required.");
+        if (string.IsNullOrWhiteSpace(objectName))
+            return ToolResult<object>.Fail("BAD_INPUT", "objectName is required: a menu item that opens nothing is not useful.");
+
+        var k = Enum.TryParse<D365FO.Core.Scaffolding.MenuItemKind>(menuKind, true, out var mk)
+            ? mk : D365FO.Core.Scaffolding.MenuItemKind.Display;
+        var ot = Enum.TryParse<D365FO.Core.Scaffolding.MenuItemObjectType>(objectType, true, out var mo)
+            ? mo : D365FO.Core.Scaffolding.MenuItemObjectType.Form;
+
+        var doc = D365FO.Core.Scaffolding.MenuItemScaffolder.MenuItem(
+            k, name, objectName, ot, label, neededPermission: neededPermission);
+        return ToolResult<object>.Success(new { name, kind = D365FO.Core.Scaffolding.MenuItemScaffolder.AxSubfolder(k), xml = Aot(doc) });
+    }
+
+    public ToolResult<object> GeneratePrivilege(
+        string name, string? entryPoint, string? entryKind, string? access, string? label, string? dataEntity)
+    {
+        if (string.IsNullOrWhiteSpace(name))
+            return ToolResult<object>.Fail("BAD_INPUT", "name is required.");
+        if (string.IsNullOrWhiteSpace(entryPoint) && string.IsNullOrWhiteSpace(dataEntity))
+            return ToolResult<object>.Fail("BAD_INPUT",
+                "A privilege needs something to grant access to: pass entryPoint or dataEntity.");
+
+        var doc = D365FO.Core.Scaffolding.XppScaffolder.Privilege(
+            name, entryPoint, entryKind, entryPointObject: null, access: access ?? "Read",
+            label: label, dataEntity: dataEntity);
+        return ToolResult<object>.Success(new { name, xml = Aot(doc) });
+    }
+
+    public ToolResult<object> GenerateDuty(string name, string[]? privileges, string? label)
+    {
+        if (string.IsNullOrWhiteSpace(name))
+            return ToolResult<object>.Fail("BAD_INPUT", "name is required.");
+        var doc = D365FO.Core.Scaffolding.XppScaffolder.Duty(name, privileges ?? [], label);
+        return ToolResult<object>.Success(new { name, xml = Aot(doc) });
+    }
+
+    public ToolResult<object> GenerateRole(string name, string[]? duties, string[]? privileges, string? label)
+    {
+        if (string.IsNullOrWhiteSpace(name))
+            return ToolResult<object>.Fail("BAD_INPUT", "name is required.");
+        var doc = D365FO.Core.Scaffolding.XppScaffolder.Role(name, duties, privileges, label);
+        return ToolResult<object>.Success(new { name, xml = Aot(doc) });
+    }
+
+    public ToolResult<object> GenerateEntity(string name, string table, string[]? fields, string? entityCategory)
+    {
+        if (string.IsNullOrWhiteSpace(name))
+            return ToolResult<object>.Fail("BAD_INPUT", "name is required.");
+        if (string.IsNullOrWhiteSpace(table))
+            return ToolResult<object>.Fail("BAD_INPUT", "table is required: an entity projects one.");
+
+        var specs = (fields ?? [])
+            .Select(f => f.Split(':', 2))
+            .Select(parts => new D365FO.Core.Scaffolding.EntityFieldSpec(
+                parts[0], parts.Length > 1 ? parts[1] : null, IsMandatory: false))
+            .ToList();
+
+        var doc = D365FO.Core.Scaffolding.XppScaffolder.DataEntity(
+            name, table, fields: specs, entityCategory: entityCategory);
+        return ToolResult<object>.Success(new { name, table, xml = Aot(doc) });
+    }
+
+    public ToolResult<object> GenerateExtension(string extensionKind, string target, string? suffix)
+    {
+        if (string.IsNullOrWhiteSpace(target))
+            return ToolResult<object>.Fail("BAD_INPUT", "target is required: the object being extended.");
+        try
+        {
+            var doc = D365FO.Core.Scaffolding.XppScaffolder.Extension(
+                extensionKind ?? string.Empty, target, string.IsNullOrWhiteSpace(suffix) ? "Extension" : suffix!);
+            return ToolResult<object>.Success(new { name = $"{target}.{suffix ?? "Extension"}", xml = Aot(doc) });
+        }
+        catch (ArgumentException ex)
+        {
+            return ToolResult<object>.Fail("BAD_INPUT", ex.Message);
+        }
     }
 
     public ToolResult<object> GenerateSecurityPolicy(string name, string constrainedTable, string? policyQuery)
@@ -911,7 +1006,7 @@ public sealed class ToolHandlers
             return ToolResult<object>.Fail("BAD_INPUT", "constrainedTable is required.");
         var pq = string.IsNullOrWhiteSpace(policyQuery) ? name + "Query" : policyQuery!;
         var doc = D365FO.Core.Scaffolding.SecurityPolicyScaffolder.Policy(name, constrainedTable, pq);
-        return ToolResult<object>.Success(new { name, xml = doc.ToString() });
+        return ToolResult<object>.Success(new { name, xml = Aot(doc) });
     }
 
     // ---- write-to-disk scaffolding handlers ----
@@ -1372,6 +1467,101 @@ public sealed class ToolHandlers
         return string.Join(' ', head.Split(['\r', '\n', '\t', ' '], StringSplitOptions.RemoveEmptyEntries));
     }
 
+    /// <summary>
+    /// One validation entry point over MCP, mirroring <c>d365fo validate</c>.
+    /// </summary>
+    /// <remarks>
+    /// Until now MCP exposed only naming and form patterns, so an agent could generate XML
+    /// through <c>generate_object</c> and had no way to ask whether it was sound — the checks
+    /// existed, on the other surface. <c>metadata-shape</c> is the offline half of
+    /// <c>validate metadata</c>: it needs no bridge and no VM, because it judges against the
+    /// contract catalog the AOT reader itself is generated from.
+    /// </remarks>
+    public ToolResult<object> Validate(string mode, string code, string? context, string? codeType)
+    {
+        if (string.IsNullOrWhiteSpace(code))
+            return ToolResult<object>.Fail("BAD_INPUT", "code is required: X++ source or AOT XML.");
+
+        switch ((mode ?? "xpp").Trim().ToLowerInvariant())
+        {
+            case "xpp":
+                return ValidateXppCode(code, context, codeType);
+            case "references":
+                return ValidateReferences(code, context);
+            case "form-pattern":
+                return ValidateFormPattern(code);
+            case "metadata-shape":
+                return ValidateMetadataShape(code, context);
+            default:
+                return ToolResult<object>.Fail("BAD_INPUT",
+                    $"Unknown validate mode '{mode}'.",
+                    "Modes: xpp | references | form-pattern | metadata-shape.");
+        }
+    }
+
+    private ToolResult<object> ValidateXppCode(string code, string? context, string? codeType)
+    {
+        var normalized = D365FO.Core.Validation.XppValidator.NormalizeCodeType(
+            codeType ?? (code.TrimStart().StartsWith('<') ? "xml-any" : "xpp"));
+
+        D365FO.Core.Validation.IPropertyStatsProvider? stats = null;
+        try { if (_repo.HasPropertyStats()) stats = _repo; }
+        catch { /* no index — the property rules fall back to static defaults */ }
+
+        var violations = D365FO.Core.Validation.XppValidator.Validate(code, normalized, stats);
+        return ValidationEnvelope(context, normalized, violations.Select(v =>
+            (object)new { rule = v.Rule, severity = v.Severity, line = v.Line, excerpt = v.Excerpt, fix = v.Fix }),
+            violations.Count(v => v.Severity == "error"),
+            violations.Count(v => v.Severity == "warning"));
+    }
+
+    private ToolResult<object> ValidateReferences(string code, string? context)
+    {
+        D365FO.Core.Validation.ResolveResult result;
+        try
+        {
+            result = D365FO.Core.Validation.ReferenceResolver.Resolve(code, _repo);
+        }
+        catch (Exception ex)
+        {
+            return ToolResult<object>.Fail("NO_INDEX",
+                $"Reference resolution requires the SQLite index: {ex.Message}",
+                "Run `d365fo index build` then `d365fo index extract` first.");
+        }
+
+        return ValidationEnvelope(context, "references", result.Violations.Select(v =>
+            (object)new { kind = v.Kind, severity = v.Severity, line = v.Line, identifier = v.Identifier, detail = v.Detail }),
+            result.Violations.Count(v => v.Severity == "error"),
+            result.Violations.Count(v => v.Severity == "warning"),
+            extra: new { verifiedCount = result.VerifiedCount });
+    }
+
+    private static ToolResult<object> ValidateMetadataShape(string xml, string? context)
+    {
+        var violations = new List<D365FO.Core.Validation.XppViolation>();
+        D365FO.Core.Validation.ContractShapeRules.Check(xml, violations);
+
+        return ValidationEnvelope(context, "metadata-shape", violations.Select(v =>
+            (object)new { rule = v.Rule, severity = v.Severity, line = v.Line, path = v.Excerpt, fix = v.Fix }),
+            violations.Count(v => v.Severity == "error"),
+            violations.Count(v => v.Severity == "warning"));
+    }
+
+    private static ToolResult<object> ValidationEnvelope(
+        string? context, string mode, IEnumerable<object> violations, int errors, int warnings, object? extra = null)
+        => ToolResult<object>.Success(new
+        {
+            context,
+            mode,
+            errors,
+            warnings,
+            violations,
+            extra,
+            verdict = errors > 0
+                ? "Fix every error before writing — the artifact is wrong as it stands."
+                : warnings > 0 ? "No errors; review the warnings." : "Clean.",
+        });
+
     public ToolResult<object> ValidateFormPattern(string xml)
     {
         if (string.IsNullOrWhiteSpace(xml))
@@ -1763,39 +1953,77 @@ public sealed class ToolHandlers
         return tokens.Count > 0 ? tokens[^1] : name;
     }
 
-    internal static IReadOnlyList<string> StrategiesFor(string? objectType) => objectType switch
+    /// <summary>
+    /// How to change an object of this kind without overlaying it, most specific first.
+    /// </summary>
+    /// <remarks>
+    /// The bespoke lists below say things the registry cannot — which attribute to use, which
+    /// method a CoC wraps. Everything else is derived: the registry knows whether a kind has an
+    /// extension type at all, so an unknown kind now gets its real extension named rather than
+    /// "check the object type for supported extension mechanisms", and a kind with no extension
+    /// form is told so plainly instead of being sent looking for one.
+    /// </remarks>
+    internal static IReadOnlyList<string> StrategiesFor(string? objectType)
     {
-        "table" => new[]
+        var kind = D365FO.Core.ObjectTypes.ObjectTypeRegistry.NormalizeKind(objectType ?? string.Empty);
+
+        var bespoke = kind switch
         {
-            "Table extension (AxTableExtension) — add fields, indexes, relations, field groups: generate extension table <Target> <Suffix>",
-            "Table extension class [ExtensionOf(tableStr(...))] — CoC on table methods: generate_object (objectType=coc)",
-            "Event handler [DataEventHandler(tableStr(X), DataEventType::...)] — subscribe to data events: generate event-handler",
-            "New standalone class — if no suitable extension point exists",
-        },
-        "class" => new[]
-        {
-            "Class extension [ExtensionOf(classStr(...))] — CoC on class methods: generate_object (objectType=coc)",
-            "Event handler [SubscribesTo(...)] — subscribe to delegate events: generate event-handler",
-            "New standalone class — if no suitable extension point exists",
-        },
-        "form" => new[]
-        {
-            "Form extension (AxFormExtension) — add controls, data sources, menu items: generate extension form <Target> <Suffix>",
-            "Form extension class [ExtensionOf(formStr(...))] — CoC on form methods",
-            "Form datasource extension [ExtensionOf(formDataSourceStr(...))] — CoC on DS methods",
-            "New standalone class — if no suitable extension point exists",
-        },
-        "map" => new[]
-        {
-            "Map extension class [ExtensionOf(mapStr(...))] — add/wrap map methods",
-            "New standalone class — if no suitable extension point exists",
-        },
-        _ => new[]
-        {
-            "Extension class via [ExtensionOf] — check the object type for supported extension mechanisms",
-            "New standalone class — if no suitable extension point exists",
-        },
-    };
+            "table" => new[]
+            {
+                "Table extension (AxTableExtension) — add fields, indexes, relations, field groups: generate extension table <Target> <Suffix>",
+                "Table extension class [ExtensionOf(tableStr(...))] — CoC on table methods: generate_object (objectType=coc)",
+                "Event handler [DataEventHandler(tableStr(X), DataEventType::...)] — subscribe to data events: generate event-handler",
+            },
+            "class" => new[]
+            {
+                "Class extension [ExtensionOf(classStr(...))] — CoC on class methods: generate_object (objectType=coc)",
+                "Event handler [SubscribesTo(...)] — subscribe to delegate events: generate event-handler",
+            },
+            "form" => new[]
+            {
+                "Form extension (AxFormExtension) — add controls, data sources, menu items: generate extension form <Target> <Suffix>",
+                "Form extension class [ExtensionOf(formStr(...))] — CoC on form methods",
+                "Form datasource extension [ExtensionOf(formDataSourceStr(...))] — CoC on DS methods",
+            },
+            "map" => new[]
+            {
+                "Map extension class [ExtensionOf(mapStr(...))] — add/wrap map methods",
+            },
+            "report" or "axreport" => new[]
+            {
+                "Extend the report's data provider class [ExtensionOf(classStr(<Report>DP))] — CoC on processReport to add or filter rows",
+                "Extend the DP's temp table (AxTableExtension on <DP>Tmp) — new columns flow into the dataset",
+                "New design on the existing report — an added AxReportAutoDesign leaves the shipped one intact",
+                "Print management, where the report participates in it — no metadata change needed",
+            },
+            "entity" or "dataentityview" => new[]
+            {
+                "Data entity extension (AxDataEntityViewExtension) — add mapped fields, relations, field groups: generate extension dataEntityView <Target> <Suffix>",
+                "Entity extension class [ExtensionOf(dataEntityViewStr(...))] — CoC on postLoad/insertEntityDataSource/etc.",
+                "Computed column via a static SQL-producing method — no row-level code runs",
+            },
+            "privilege" or "duty" or "role" or "securityduty" or "securityrole" => new[]
+            {
+                "Duty extension (AxSecurityDutyExtension) / role extension (AxSecurityRoleExtension) — add references to a Microsoft-owned duty or role without overlaying it",
+                "New privilege granting only the entry points you added, then reference it from a duty extension",
+                "Never edit a shipped duty or role in place: the overlay is lost on every update",
+            },
+            _ => null,
+        };
+
+        var strategies = new List<string>(bespoke ?? []);
+
+        // Registry-derived: does this kind have an extension object at all?
+        var extension = D365FO.Core.ObjectTypes.ObjectTypeRegistry.Find(kind + "extension");
+        if (extension is not null && bespoke is null)
+            strategies.Add($"{extension.AotSubfolder} — extend the object rather than overlaying it: generate extension {kind} <Target> <Suffix>");
+        else if (extension is null && bespoke is null)
+            strategies.Add($"No extension object exists for '{objectType}' — the change belongs in a new object, or in code that subscribes to it");
+
+        strategies.Add("New standalone class — if no suitable extension point exists");
+        return strategies;
+    }
 
     // ---- find_references (reverse references in indexed X++ source) ----
 

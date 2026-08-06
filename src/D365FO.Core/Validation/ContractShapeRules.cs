@@ -5,7 +5,8 @@ using D365FO.Core.Metadata;
 namespace D365FO.Core.Validation;
 
 /// <summary>
-/// XML007 — a member the AOT type does not declare, which the reader silently discards.
+/// XML007 — a member the AOT type does not declare, which the reader silently discards — and
+/// XML008, an enum value the AOT does not define, which stops the read outright.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -38,6 +39,9 @@ public static class ContractShapeRules
     /// <summary>A member the type does not declare — silently dropped on read.</summary>
     public const string RuleUnknownMember = "XML007";
 
+    /// <summary>A value outside its enum — the whole document fails to deserialize.</summary>
+    public const string RuleInvalidEnumValue = "XML008";
+
     /// <summary>Appends any contract-shape violations found in <paramref name="xml"/>.</summary>
     public static void Check(string xml, List<XppViolation> violations)
     {
@@ -51,37 +55,86 @@ public static class ContractShapeRules
             return; // Not well-formed — other rules and the parser report that.
         }
 
-        if (doc.Root is not null) CheckElement(doc.Root, doc.Root.Name.LocalName, violations);
+        if (doc.Root is not null)
+            CheckElement(
+                doc.Root,
+                doc.Root.Name.LocalName,
+                MetadataContracts.GoverningContract(doc.Root, parent: null),
+                violations);
     }
 
-    private static void CheckElement(XElement element, string path, List<XppViolation> violations)
+    private static void CheckElement(XElement element, string path, MetadataContract? contract, List<XppViolation> violations)
     {
-        var contract = MetadataContracts.ForElement(
-            element.Name.LocalName,
-            element.Attribute(Xsi + "type")?.Value);
-
-        if (contract is not null)
-        {
-            foreach (var child in element.Elements())
-            {
-                var name = child.Name.LocalName;
-                // Subtypes count: an element named after a base type routinely carries a
-                // derived type's members, with no i:type to announce it.
-                if (MetadataContracts.AcceptsMember(contract, name)) continue;
-
-                violations.Add(new XppViolation(
-                    RuleUnknownMember,
-                    "error",
-                    (child as IXmlLineInfo)?.LineNumber,
-                    $"{path}/{name}",
-                    $"<{name}> is not a member of {contract.Name}. The serializer ignores unknown " +
-                    $"elements, so this value is dropped on read while the file still looks correct. " +
-                    $"Closest members: {Closest(contract, name)}."));
-            }
-        }
-
         foreach (var child in element.Elements())
-            CheckElement(child, path + "/" + child.Name.LocalName, violations);
+        {
+            var name = child.Name.LocalName;
+            var childContract = MetadataContracts.GoverningContract(child, contract);
+
+            // An element named after a type is a collection item or a nested object, not a
+            // member of the enclosing one — judging <AxTableField> as a member of AxTableField
+            // would flag every collection in every file.
+            var isMember = MetadataContracts.Find(name) is null;
+
+            if (contract is not null && isMember)
+            {
+                // Subtypes count when the named contract is abstract: the element then stands in
+                // for a derived type, with no i:type to announce it.
+                if (!MetadataContracts.AcceptsMember(contract, name))
+                {
+                    violations.Add(new XppViolation(
+                        RuleUnknownMember,
+                        "error",
+                        (child as IXmlLineInfo)?.LineNumber,
+                        $"{path}/{name}",
+                        $"<{name}> is not a member of {contract.Name}. The serializer ignores unknown " +
+                        $"elements, so this value is dropped on read while the file still looks correct. " +
+                        $"Closest members: {Closest(contract, name)}."));
+                    continue;
+                }
+
+                CheckEnumValue(contract, child, path, violations);
+            }
+
+            CheckElement(child, path + "/" + name, childContract, violations);
+        }
+    }
+
+    /// <summary>
+    /// Flags a leaf whose text is outside the enum its member is typed as.
+    /// </summary>
+    /// <remarks>
+    /// Unlike an unknown member, this one is not silent: <c>DataContractSerializer</c> throws on
+    /// an unrecognised enum value and abandons the document, so a single bad word makes the whole
+    /// object unreadable. Both cases seen in this repo looked entirely plausible —
+    /// <c>Style=TileSection</c> on a workspace group and <c>TabStyle=TOCList</c> on a
+    /// table-of-contents form — which is exactly why they survived review.
+    /// </remarks>
+    private static void CheckEnumValue(MetadataContract contract, XElement child, string path, List<XppViolation> violations)
+    {
+        if (child.HasElements) return;
+
+        var value = child.Value.Trim();
+        if (value.Length == 0) return;
+
+        var name = child.Name.LocalName;
+        var enumName = MetadataContracts.EnumForMember(contract, name);
+        if (enumName is null) return;
+
+        var allowed = MetadataContracts.EnumValues(enumName);
+        if (allowed.Count == 0 || allowed.Contains(value, StringComparer.Ordinal)) return;
+
+        var suggestion = allowed.FirstOrDefault(v => string.Equals(v, value, StringComparison.OrdinalIgnoreCase))
+            ?? allowed.FirstOrDefault(v => v.StartsWith(value[..Math.Min(3, value.Length)], StringComparison.OrdinalIgnoreCase));
+
+        violations.Add(new XppViolation(
+            RuleInvalidEnumValue,
+            "error",
+            (child as IXmlLineInfo)?.LineNumber,
+            $"{path}/{name}",
+            $"'{value}' is not a value of {enumName}. The serializer throws on an unknown enum " +
+            $"value, so the whole object fails to load rather than losing one property. " +
+            (suggestion is not null ? $"Did you mean '{suggestion}'? " : string.Empty) +
+            $"Valid: {string.Join(", ", allowed.Take(12))}{(allowed.Count > 12 ? ", …" : string.Empty)}."));
     }
 
     /// <summary>

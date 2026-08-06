@@ -80,7 +80,7 @@ public class ObjectTypeRegistryAotTests
         var root = PackagesRoot();
         if (root is null) return;
 
-        var samples = SampleFiles(root, perFolder: 4).ToList();
+        var samples = SampleFiles(root, perFolder: 12).ToList();
         if (samples.Count == 0) return;
 
         var unknown = new List<string>();

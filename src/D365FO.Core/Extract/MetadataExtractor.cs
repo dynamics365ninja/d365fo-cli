@@ -1208,10 +1208,41 @@ public sealed class MetadataExtractor
                     obj!,
                     Local(ep, "ObjectType"),
                     Local(ep, "ObjectChildName"),
-                    Local(ep, "AccessLevel")));
+                    GrantedAccess(ep)));
             }
         }
         return new ExtractedSecurityPrivilege(name, label, eps);
+    }
+
+    /// <summary>
+    /// The strongest permission an entry point's <c>&lt;Grant&gt;</c> allows, as the access
+    /// level a reader expects to see.
+    /// </summary>
+    /// <remarks>
+    /// There is no <c>AccessLevel</c> element in the AOT — access is six independent Allow/Deny
+    /// permissions inside <c>&lt;Grant&gt;</c>. Reading a member that does not exist returned
+    /// null for every shipped privilege, so the index recorded no access level at all and
+    /// <c>get privilege</c> reported blanks across the board.
+    /// </remarks>
+    private static string? GrantedAccess(XElement entryPoint)
+    {
+        var grant = entryPoint.Elements().FirstOrDefault(x => x.Name.LocalName == "Grant");
+        if (grant is null) return null;
+
+        var allowed = grant.Elements()
+            .Where(p => string.Equals(p.Value.Trim(), "Allow", StringComparison.OrdinalIgnoreCase))
+            .Select(p => p.Name.LocalName)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        if (allowed.Count == 0) return null;
+
+        // Strongest first: a grant that allows Delete also allows everything below it.
+        if (allowed.Contains("Delete")) return "Delete";
+        if (allowed.Contains("Create")) return "Create";
+        if (allowed.Contains("Correct")) return "Correct";
+        if (allowed.Contains("Update")) return "Update";
+        if (allowed.Contains("Invoke")) return "Invoke";
+        return allowed.Contains("Read") ? "Read" : null;
     }
 
     private static List<string> CollectNames(XElement root, string containerName)

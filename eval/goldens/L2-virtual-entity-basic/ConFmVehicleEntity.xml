@@ -1,27 +1,31 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
-<AxDataEntityView>
+<AxDataEntityView xmlns:i="http://www.w3.org/2001/XMLSchema-instance">
   <Name>ConFmVehicleEntity</Name>
   <DataManagementEnabled>No</DataManagementEnabled>
   <DataManagementStagingTable />
   <IsPublic>Yes</IsPublic>
-  <DataSources>
-    <AxQuerySimpleRootDataSource>
-      <Name>FmVehicle</Name>
-      <Table>FmVehicle</Table>
-    </AxQuerySimpleRootDataSource>
-  </DataSources>
   <PublicCollectionName>ConFmVehicleEntities</PublicCollectionName>
   <PublicEntityName>ConFmVehicleEntity</PublicEntityName>
   <Fields>
-    <AxDataEntityViewField>
+    <AxDataEntityViewField i:type="AxDataEntityViewMappedField">
       <Name>VIN</Name>
       <DataField>VIN</DataField>
       <DataSource>FmVehicle</DataSource>
     </AxDataEntityViewField>
-    <AxDataEntityViewField>
+    <AxDataEntityViewField i:type="AxDataEntityViewMappedField">
       <Name>Make</Name>
       <DataField>Make</DataField>
       <DataSource>FmVehicle</DataSource>
     </AxDataEntityViewField>
   </Fields>
+  <ViewMetadata>
+    <Name>Metadata</Name>
+    <DataSources>
+      <AxQuerySimpleRootDataSource>
+        <Name>FmVehicle</Name>
+        <DynamicFields>Yes</DynamicFields>
+        <Table>FmVehicle</Table>
+      </AxQuerySimpleRootDataSource>
+    </DataSources>
+  </ViewMetadata>
 </AxDataEntityView>

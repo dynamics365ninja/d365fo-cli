@@ -31,6 +31,38 @@ public sealed class GenerateMenuItemCommand : Command<GenerateMenuItemCommand.Se
         [CommandOption("--label <TEXT>")]
         [System.ComponentModel.Description("Label text or @File:Key label reference.")]
         public string? Label { get; init; }
+
+        [CommandOption("--enum-type <ENUM>")]
+        [System.ComponentModel.Description("EnumTypeParameter: enum whose value is passed to the target.")]
+        public string? EnumTypeParameter { get; init; }
+
+        [CommandOption("--enum-value <VALUE>")]
+        [System.ComponentModel.Description("EnumParameter: the value passed. Requires --enum-type.")]
+        public string? EnumParameter { get; init; }
+
+        [CommandOption("--parameters <TEXT>")]
+        [System.ComponentModel.Description("Parameters string handed to the target object.")]
+        public string? Parameters { get; init; }
+
+        [CommandOption("--config-key <KEY>")]
+        [System.ComponentModel.Description("Configuration key gating this menu item.")]
+        public string? ConfigurationKey { get; init; }
+
+        [CommandOption("--query <NAME>")]
+        [System.ComponentModel.Description("Query the target is opened over.")]
+        public string? Query { get; init; }
+
+        [CommandOption("--needed-permission <LEVEL>")]
+        [System.ComponentModel.Description("Read (default when omitted: unset) | Update | Create | Correct | Delete. Expanded into the item's *Permissions flags.")]
+        public string? NeededPermission { get; init; }
+
+        [CommandOption("--linked-permission-object <NAME>")]
+        [System.ComponentModel.Description("Object whose permissions this item inherits.")]
+        public string? LinkedPermissionObject { get; init; }
+
+        [CommandOption("--linked-permission-type <TYPE>")]
+        [System.ComponentModel.Description("Kind of --linked-permission-object, e.g. MenuItemDisplay.")]
+        public string? LinkedPermissionType { get; init; }
     }
 
     public override int Execute(CommandContext ctx, Settings settings)
@@ -63,7 +95,15 @@ public sealed class GenerateMenuItemCommand : Command<GenerateMenuItemCommand.Se
             if (fail.HasValue) return fail.Value;
         }
 
-        var doc = MenuItemScaffolder.MenuItem(menuKind, settings.Name, settings.ObjectName!, objType, settings.Label);
+        if (!string.IsNullOrWhiteSpace(settings.EnumParameter) && string.IsNullOrWhiteSpace(settings.EnumTypeParameter))
+            return RenderHelpers.Render(kind, ToolResult<object>.Fail(D365FoErrorCodes.BadInput,
+                "--enum-value needs --enum-type: without the enum's name the value identifies nothing and is dropped."));
+
+        var doc = MenuItemScaffolder.MenuItem(
+            menuKind, settings.Name, settings.ObjectName!, objType, settings.Label,
+            settings.EnumTypeParameter, settings.EnumParameter, settings.Parameters,
+            settings.ConfigurationKey, settings.Query, settings.NeededPermission,
+            settings.LinkedPermissionObject, settings.LinkedPermissionType);
         try
         {
             var res = ScaffoldFileWriter.Write(doc, outPath!, settings.Overwrite);
@@ -75,6 +115,12 @@ public sealed class GenerateMenuItemCommand : Command<GenerateMenuItemCommand.Se
                 objectName  = settings.ObjectName,
                 objectType  = objType.ToString(),
                 label       = settings.Label,
+                enumType    = settings.EnumTypeParameter,
+                enumValue   = settings.EnumParameter,
+                parameters  = settings.Parameters,
+                query       = settings.Query,
+                configKey   = settings.ConfigurationKey,
+                permission  = settings.NeededPermission,
                 path        = res.Path,
                 bytes       = res.Bytes,
                 backup      = res.BackupPath,
