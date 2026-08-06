@@ -1,8 +1,8 @@
 {
   "id": "L1-form-workspace",
-  "title": "Workspace (panorama) form binding its fields into a list section",
+  "title": "Operational workspace shell with its three required sections",
   "tier": 1,
-  "instruction": "Create a Workspace form named ConFmVehicleWorkspace over the FmVehicle table, listing VIN and Make, captioned 'Fleet management'. Use `d365fo get table FmVehicle` first to confirm the field names before generating. Use only the d365fo CLI (search/get/generate/validate) — do not hand-write XML.",
+  "instruction": "Create a Workspace form named ConFmVehicleWorkspace over the FmVehicle table, captioned 'Fleet management'. Note that an operational workspace's lists are not inline: they live in separate FormPartSectionList forms referenced by a FormPart control, so the workspace itself is a shell of sections. Use only the d365fo CLI (search/get/generate/validate) — do not hand-write XML.",
   "canonical_args": [
     "generate",
     "form",
@@ -11,10 +11,6 @@
     "Workspace",
     "--table",
     "FmVehicle",
-    "--field",
-    "VIN",
-    "--field",
-    "Make",
     "--caption",
     "Fleet management"
   ],

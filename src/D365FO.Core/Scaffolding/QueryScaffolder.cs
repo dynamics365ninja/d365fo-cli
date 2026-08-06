@@ -23,6 +23,14 @@ public sealed record QueryDataSourceSpec(
 /// <summary>Scaffolds <c>AxQuery</c> objects with nested data-source joins.</summary>
 public static class QueryScaffolder
 {
+    /// <summary>
+    /// Every shipped query carries this method, and one without it takes the
+    /// metadata reader down with a bare <c>KeyNotFoundException</c> before the
+    /// query is ever compiled — not a diagnostic, a crash. Census on a real
+    /// installation: 300 of 300 <c>ApplicationSuite/Foundation</c> queries have it.
+    /// </summary>
+    private const string ClassDeclarationMethod = "classDeclaration";
+
     public static XDocument Query(string name, IEnumerable<QueryDataSourceSpec> dataSources)
     {
         var dsList = (dataSources ?? throw new ArgumentNullException(nameof(dataSources))).ToList();
@@ -50,6 +58,12 @@ public static class QueryScaffolder
                 new XAttribute(XNamespace.Xmlns + "i", xsi.NamespaceName),
                 new XAttribute(xsi + "type", "AxQuerySimple"),
                 new XElement("Name", name),
+                new XElement("SourceCode",
+                    new XElement("Methods",
+                        new XElement("Method",
+                            new XElement("Name", ClassDeclarationMethod),
+                            new XElement("Source",
+                                $"[Query]\npublic class {name} extends QueryRun\n{{\n}}\n")))),
                 new XElement("DataSources",
                     roots.Select(r => BuildRoot(r, joins)))));
     }
@@ -64,6 +78,7 @@ public static class QueryScaffolder
 
         var el = new XElement("AxQuerySimpleRootDataSource",
             new XElement("Name", dsName),
+            DynamicFields(),
             new XElement("Table", ds.Table));
 
         if (children.Count > 0)
@@ -82,13 +97,25 @@ public static class QueryScaffolder
 
         var el = new XElement("AxQuerySimpleEmbeddedDataSource",
             new XElement("Name", dsName),
-            new XElement("Table", ds.Table),
-            new XElement("JoinMode", ds.JoinMode),
-            new XElement("UseRelations", "Yes"));
+            DynamicFields(),
+            new XElement("Table", ds.Table));
 
         if (children.Count > 0)
             el.Add(new XElement("DataSources", children.Select(c => BuildJoin(c, allJoins))));
 
+        // Contract order puts both of these after DataSources; ContractOrderCanonicalizer
+        // would move them anyway, but emitting them here keeps the two agreeing.
+        el.Add(new XElement("JoinMode", ds.JoinMode));
+        el.Add(new XElement("UseRelations", "Yes"));
+
         return el;
     }
+
+    /// <summary>
+    /// A scaffolded data source selects no fields, and the compiler rejects that
+    /// combination outright: <c>"The field list of the data source '…' cannot be
+    /// empty if the dynamic field is set to false"</c>. <c>Yes</c> is also what a
+    /// generated skeleton means — take every field until the author narrows it.
+    /// </summary>
+    private static XElement DynamicFields() => new("DynamicFields", "Yes");
 }

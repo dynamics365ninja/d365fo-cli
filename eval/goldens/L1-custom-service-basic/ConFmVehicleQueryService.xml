@@ -2,6 +2,7 @@
 <AxService>
   <Name>ConFmVehicleQueryService</Name>
   <Class>ConFmVehicleQueryServiceService</Class>
+  <ExternalName>ConFmVehicleQueryService</ExternalName>
   <ServiceOperations>
     <AxServiceOperation>
       <Name>lookup</Name>

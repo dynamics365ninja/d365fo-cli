@@ -27,9 +27,11 @@ public sealed class GenerateBusinessEventCommand : Command<GenerateBusinessEvent
         [System.ComponentModel.Description("Repeatable: <name>:<type>. Adds a parmXxx() accessor on the contract. Example: --payload AccountNum:AccountNum")]
         public string[] Payload { get; init; } = Array.Empty<string>();
 
-        [CommandOption("--category <TEXT>")]
-        [System.ComponentModel.Description("Business event category string. Defaults to 'Custom'.")]
-        public string Category { get; init; } = "Custom";
+        [CommandOption("--category <MODULE>")]
+        // Literal brackets must be doubled — Spectre parses a bare '[' in a description
+        // as a style tag and `--help` throws instead of printing (GenerateHelpRenderTests).
+        [System.ComponentModel.Description("ModuleAxapta value for the [[BusinessEvents]] attribute (Ledger, SalesOrder, HumanResource, FleetManagement, …). Defaults to NotApplicable.")]
+        public string Category { get; init; } = BusinessEventScaffolder.DefaultModule;
 
         [CommandOption("--primary-table <TABLE>")]
         [System.ComponentModel.Description("Primary table used in newFromTable(). Optional.")]
@@ -50,6 +52,18 @@ public sealed class GenerateBusinessEventCommand : Command<GenerateBusinessEvent
         var contractName = string.IsNullOrWhiteSpace(settings.ContractName)
             ? settings.Name + "Contract"
             : settings.ContractName!;
+
+        // The attribute's fourth argument is a ModuleAxapta value, not free text. A
+        // name outside the enum is a compile error on the AOS, so it fails here
+        // instead — with the list, the way `generate form --pattern` does.
+        var module = BusinessEventScaffolder.NormalizeModule(settings.Category);
+        if (module is null)
+        {
+            return RenderHelpers.Render(kind, ToolResult<object>.Fail(
+                D365FoErrorCodes.BadInput,
+                $"--category '{settings.Category}' is not a ModuleAxapta value.",
+                "Valid values: " + string.Join(", ", BusinessEventScaffolder.ModuleAxaptaValues)));
+        }
 
         var hasInstall = !string.IsNullOrWhiteSpace(settings.InstallTo);
         var hasOut     = !string.IsNullOrWhiteSpace(settings.Out);
@@ -78,7 +92,7 @@ public sealed class GenerateBusinessEventCommand : Command<GenerateBusinessEvent
         try
         {
             var eventResult = ScaffoldFileWriter.Write(
-                BusinessEventScaffolder.EventClass(settings.Name, contractName, settings.Category, settings.PrimaryTable),
+                BusinessEventScaffolder.EventClass(settings.Name, contractName, module, settings.PrimaryTable),
                 eventPath!, settings.Overwrite);
 
             var contractResult = ScaffoldFileWriter.Write(
@@ -90,7 +104,7 @@ public sealed class GenerateBusinessEventCommand : Command<GenerateBusinessEvent
                 kind         = "BusinessEvent",
                 name         = settings.Name,
                 contractName,
-                category     = settings.Category,
+                category     = module,
                 primaryTable = settings.PrimaryTable,
                 payloadCount = payload.Count,
                 @event       = new { path = eventResult.Path,    bytes = eventResult.Bytes,    backup = eventResult.BackupPath },

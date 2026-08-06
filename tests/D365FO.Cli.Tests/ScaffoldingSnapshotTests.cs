@@ -527,19 +527,103 @@ public class ScaffoldingSnapshotTests
         Assert.Equal("CustTrans", embedded.Element("Table")!.Value);
     }
 
+    /// <summary>
+    /// Both of these were missing until <c>eval verify-build</c> compiled the query
+    /// goldens on a real installation: without the <c>classDeclaration</c> method the
+    /// metadata reader dies with a bare <c>KeyNotFoundException</c> before compiling
+    /// anything, and a data source with no fields and <c>DynamicFields</c> unset is
+    /// rejected outright. Neither is visible to a golden diff or to any offline
+    /// validator — the XML looks perfectly reasonable.
+    /// </summary>
+    [Fact]
+    public void Query_carries_the_classDeclaration_method_the_metadata_reader_requires()
+    {
+        var doc = QueryScaffolder.Query("CustQuery", new[] { new QueryDataSourceSpec("CustTable") });
+
+        var method = doc.Root!.Element("SourceCode")!.Element("Methods")!.Elements("Method").Single();
+        Assert.Equal("classDeclaration", method.Element("Name")!.Value);
+
+        var source = method.Element("Source")!.Value;
+        Assert.Contains("[Query]", source, StringComparison.Ordinal);
+        Assert.Contains("public class CustQuery extends QueryRun", source, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Query_data_sources_select_dynamic_fields_because_they_list_none()
+    {
+        var doc = QueryScaffolder.Query("CustJoinQuery", new[]
+        {
+            new QueryDataSourceSpec("CustTable"),
+            new QueryDataSourceSpec("CustTrans", ParentDs: "CustTable"),
+        });
+
+        var dataSources = doc.Descendants()
+            .Where(e => e.Name.LocalName.StartsWith("AxQuerySimple", StringComparison.Ordinal))
+            .ToList();
+
+        Assert.Equal(2, dataSources.Count);
+        Assert.All(dataSources, ds => Assert.Equal("Yes", ds.Element("DynamicFields")!.Value));
+    }
+
     // ---- BusinessEvent (Phase 6) ----
 
     [Fact]
     public void BusinessEvent_class_extends_BusinessEventsBase()
     {
-        var doc = BusinessEventScaffolder.EventClass("MyEvent", "MyEventContract", "Payments");
+        var doc = BusinessEventScaffolder.EventClass("MyEvent", "MyEventContract", "Ledger");
         var root = doc.Root!;
         Assert.Equal("AxClass", root.Name.LocalName);
         AssertExtends(doc, "BusinessEventsBase");
         var decl = root.Element("SourceCode")!.Element("Declaration")!.Value;
         Assert.Contains("[BusinessEvents(", decl);
-        Assert.Contains("classStr(MyEvent)", decl);
         Assert.Contains("classStr(MyEventContract)", decl);
+    }
+
+    /// <summary>
+    /// The attribute takes the <em>contract</em> class, a name, a description and a
+    /// <c>ModuleAxapta</c> value — read off shipped events. It used to pass the event
+    /// class first, a second <c>classStr</c> where the name belongs, and a plain
+    /// string where the enum belongs, which the compiler rejects with "Cannot
+    /// implicitly convert from type 'str' to type 'Extensible
+    /// Enumeration(ModuleAxapta)'". Found by `eval verify-build`.
+    /// </summary>
+    [Fact]
+    public void BusinessEvent_attribute_names_the_contract_and_a_real_ModuleAxapta_value()
+    {
+        var decl = BusinessEventScaffolder.EventClass("MyEvent", "MyEventContract", "FleetManagement")
+            .Root!.Element("SourceCode")!.Element("Declaration")!.Value;
+
+        Assert.Contains("[BusinessEvents(classStr(MyEventContract), 'MyEvent', 'MyEvent', ModuleAxapta::FleetManagement)]", decl, StringComparison.Ordinal);
+        Assert.DoesNotContain("classStr(MyEvent),", decl, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void BusinessEvent_rejects_a_module_that_is_not_in_the_enum()
+    {
+        var ex = Assert.Throws<ArgumentException>(
+            () => BusinessEventScaffolder.EventClass("MyEvent", "MyEventContract", "Payments"));
+
+        Assert.Contains("ModuleAxapta", ex.Message, StringComparison.Ordinal);
+        Assert.Contains("FleetManagement", ex.Message, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// <c>parmId</c> exists on no business event — the only parm method
+    /// <c>BusinessEventsBase</c> declares is <c>parmUserId</c>. The factory now keeps
+    /// the source record the way shipped events do: a private member set through a
+    /// generated parm method.
+    /// </summary>
+    [Fact]
+    public void BusinessEvent_factory_does_not_call_a_parmId_that_does_not_exist()
+    {
+        var doc = BusinessEventScaffolder.EventClass("MyEvent", "MyEventContract", "Ledger", primaryTable: "FmVehicle");
+
+        var methods = doc.Descendants("Method").ToDictionary(
+            m => m.Element("Name")!.Value, m => m.Element("Source")!.Value);
+
+        Assert.DoesNotContain("parmId(", string.Concat(methods.Values), StringComparison.Ordinal);
+        Assert.Contains("parmFmVehicle", methods.Keys);
+        Assert.Contains("businessEvent.parmFmVehicle(_fmVehicle);", methods["newFromFmVehicle"], StringComparison.Ordinal);
     }
 
     [Fact]

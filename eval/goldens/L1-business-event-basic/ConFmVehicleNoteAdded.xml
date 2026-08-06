@@ -2,19 +2,31 @@
 <AxClass>
   <Name>ConFmVehicleNoteAdded</Name>
   <SourceCode>
-    <Declaration>[BusinessEvents(classStr(ConFmVehicleNoteAdded), classStr(ConFmVehicleNoteAddedContract), "Custom", "Custom")]
+    <Declaration>[BusinessEvents(classStr(ConFmVehicleNoteAddedContract), 'ConFmVehicleNoteAdded', 'ConFmVehicleNoteAdded', ModuleAxapta::NotApplicable)]
 public final class ConFmVehicleNoteAdded extends BusinessEventsBase
 {
+    private Common common;
 }
 </Declaration>
     <Methods>
       <Method>
         <Name>newFromTable</Name>
-        <Source>public static ConFmVehicleNoteAdded newFromTable(Common _table)
+        <Source>public static ConFmVehicleNoteAdded newFromTable(Common _common)
 {
-    ConFmVehicleNoteAdded event = new ConFmVehicleNoteAdded();
-    event.parmId(classStr(ConFmVehicleNoteAdded));
-    return event;
+    ConFmVehicleNoteAdded businessEvent = new ConFmVehicleNoteAdded();
+    businessEvent.parmCommon(_common);
+
+    return businessEvent;
+}
+</Source>
+      </Method>
+      <Method>
+        <Name>parmCommon</Name>
+        <Source>private Common parmCommon(Common _common = common)
+{
+    common = _common;
+
+    return common;
 }
 </Source>
       </Method>

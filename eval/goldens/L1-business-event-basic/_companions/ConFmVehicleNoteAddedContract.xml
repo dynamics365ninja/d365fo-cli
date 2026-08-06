@@ -1,0 +1,24 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<AxClass>
+  <Name>ConFmVehicleNoteAddedContract</Name>
+  <SourceCode>
+    <Declaration>[DataContractAttribute]
+public class ConFmVehicleNoteAddedContract extends BusinessEventsContract
+{
+    Name noteId;
+}
+</Declaration>
+    <Methods>
+      <Method>
+        <Name>parmNoteId</Name>
+        <Source>[DataMember]
+public Name parmNoteId(Name _noteId = noteId)
+{
+    noteId = _noteId;
+    return noteId;
+}
+</Source>
+      </Method>
+    </Methods>
+  </SourceCode>
+</AxClass>

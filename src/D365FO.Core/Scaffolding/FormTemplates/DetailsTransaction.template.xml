@@ -34,19 +34,26 @@ public class {FormName} extends FormRun
       <Fields />
       <ReferencedDataSources />
       <InsertIfEmpty>No</InsertIfEmpty>
-      <DataSourceLinks>
-        <AxFormDataSourceRootLink>
-          <Name>{DsName}</Name>
-          <LinkType>Active</LinkType>
-        </AxFormDataSourceRootLink>
-      </DataSourceLinks>
+      <JoinSource>{DsName}</JoinSource>
+      <LinkType>Active</LinkType>
+      <DataSourceLinks />
       <DerivedDataSources />
     </AxFormDataSource>
   </DataSources>
+  <!--
+    Shaped after the AOT registry's DetailsTransaction 1.4. It is Details Master's
+    layout with the details panel split in two: a title group, then a HeaderLinePanels
+    tab holding a Lines panel and a Header panel. The previous shape declared version
+    1.1, which exists on no installation, and put an ActionPaneTab straight under a tab
+    page, which the reader forbids.
+  -->
   <Design>
-{Caption}    <DataSource xmlns="">{DsName}</DataSource>
+    <ArrangeMethod xmlns="">Vertical</ArrangeMethod>
+{Caption}    <Columns xmlns="">1</Columns>
+    <ColumnsMode xmlns="">Fixed</ColumnsMode>
+    <DataSource xmlns="">{DsName}</DataSource>
     <Pattern xmlns="">DetailsTransaction</Pattern>
-    <PatternVersion xmlns="">1.1</PatternVersion>
+    <PatternVersion xmlns="">1.4</PatternVersion>
     <Style xmlns="">DetailsFormTransaction</Style>
     <TitleDataSource xmlns="">{DsName}</TitleDataSource>
     <Controls xmlns="">
@@ -69,17 +76,22 @@ public class {FormName} extends FormRun
         <AlignChild>No</AlignChild>
         <AlignChildren>No</AlignChildren>
         <ArrangeMethod>Vertical</ArrangeMethod>
+        <Style>Standard</Style>
       </AxFormControl>
       <AxFormControl xmlns="" i:type="AxFormGroupControl">
-        <Name>NavigationFilterGroup</Name>
-        <Pattern>CustomAndQuickFilters</Pattern>
-        <PatternVersion>1.1</PatternVersion>
+        <Name>NavigationList</Name>
+        <Height>-1</Height>
+        <HeightMode>SizeToAvailable</HeightMode>
         <Type>Group</Type>
-        <WidthMode>SizeToAvailable</WidthMode>
+        <Visible>No</Visible>
+        <Width>-1</Width>
+        <WidthMode>SizeToContent</WidthMode>
         <FormControlExtension i:nil="true" />
         <Controls>
+          <!-- Unique control name; the extension name is what identifies the type. -->
           <AxFormControl>
-            <Name>QuickFilterControl</Name>
+            <Name>NavigationListQuickFilter</Name>
+            <WidthMode>SizeToAvailable</WidthMode>
             <FormControlExtension>
               <Name>QuickFilterControl</Name>
               <ExtensionComponents />
@@ -87,74 +99,291 @@ public class {FormName} extends FormRun
                 <AxFormControlExtensionProperty>
                   <Name>targetControlName</Name>
                   <Type>String</Type>
-                  <Value>Grid</Value>
+                  <Value>NavigationListGrid</Value>
                 </AxFormControlExtensionProperty>
               </ExtensionProperties>
             </FormControlExtension>
           </AxFormControl>
+          <AxFormControl xmlns="" i:type="AxFormGridControl">
+            <Name>NavigationListGrid</Name>
+            <AllowEdit>No</AllowEdit>
+            <Height>-1</Height>
+            <HeightMode>SizeToAvailable</HeightMode>
+            <Type>Grid</Type>
+            <Width>-1</Width>
+            <WidthMode>SizeToContent</WidthMode>
+            <FormControlExtension i:nil="true" />
+            <Controls />
+            <DataSource>{DsName}</DataSource>
+            <MultiSelect>No</MultiSelect>
+            <ShowRowLabels>No</ShowRowLabels>
+            <Style>List</Style>
+          </AxFormControl>
         </Controls>
-        <ArrangeMethod>HorizontalLeft</ArrangeMethod>
+        <ArrangeMethod>Vertical</ArrangeMethod>
+        <Columns>1</Columns>
+        <ColumnsMode>Fixed</ColumnsMode>
         <FrameType>None</FrameType>
-        <Style>CustomFilter</Style>
-        <ViewEditMode>Edit</ViewEditMode>
+        <Style>SidePanel</Style>
       </AxFormControl>
       <AxFormControl xmlns="" i:type="AxFormTabControl">
-        <Name>Tab</Name>
+        <Name>PanelTab</Name>
+        <Height>-1</Height>
+        <HeightMode>SizeToAvailable</HeightMode>
         <Type>Tab</Type>
+        <Width>-1</Width>
+        <WidthMode>SizeToAvailable</WidthMode>
         <FormControlExtension i:nil="true" />
         <Controls>
           <AxFormControl xmlns="" i:type="AxFormTabPageControl">
-            <Name>TabPageHeader</Name>
-            <Pattern>FieldsFieldGroups</Pattern>
-            <PatternVersion>1.1</PatternVersion>
+            <Name>DetailsPanel</Name>
             <Type>TabPage</Type>
-            <Caption>Header</Caption>
             <FormControlExtension i:nil="true" />
             <Controls>
               <AxFormControl xmlns="" i:type="AxFormGroupControl">
-                <Name>HeaderGeneralGroup</Name>
+                <Name>TitleGroup</Name>
+                <Height>-1</Height>
+                <HeightMode>SizeToContent</HeightMode>
                 <Type>Group</Type>
-                <Caption>General</Caption>
-                <DataGroup>Overview</DataGroup>
+                <Width>-1</Width>
+                <WidthMode>SizeToAvailable</WidthMode>
                 <FormControlExtension i:nil="true" />
                 <Controls>
-{HeaderFieldControls}                </Controls>
+{HeaderTitleControl}                </Controls>
+                <ArrangeMethod>HorizontalLeft</ArrangeMethod>
+                <Columns>1</Columns>
+                <ColumnsMode>Fixed</ColumnsMode>
+                <DataSource>{DsName}</DataSource>
+                <FrameType>None</FrameType>
+                <Style>DetailTitleContainer</Style>
               </AxFormControl>
-            </Controls>
-          </AxFormControl>
-          <AxFormControl xmlns="" i:type="AxFormTabPageControl">
-            <Name>TabPageLines</Name>
-            <Type>TabPage</Type>
-            <Caption>Lines</Caption>
-            <FormControlExtension i:nil="true" />
-            <Controls>
-              <AxFormControl xmlns="" i:type="AxFormActionPaneTabControl">
-                <Name>LinesActionPane</Name>
-                <Type>ActionPaneTab</Type>
+              <AxFormControl xmlns="" i:type="AxFormTabControl">
+                <Name>HeaderLinePanels</Name>
+                <Height>-1</Height>
+                <HeightMode>SizeToAvailable</HeightMode>
+                <Type>Tab</Type>
+                <Width>-1</Width>
+                <WidthMode>SizeToAvailable</WidthMode>
                 <FormControlExtension i:nil="true" />
                 <Controls>
-                  <AxFormControl xmlns="" i:type="AxFormButtonGroupControl">
-                    <Name>LinesButtonGroup</Name>
-                    <Type>ButtonGroup</Type>
+                  <AxFormControl xmlns="" i:type="AxFormTabPageControl">
+                    <Name>LinesPanel</Name>
+                    <Type>TabPage</Type>
                     <FormControlExtension i:nil="true" />
-                    <Controls />
+                    <Controls>
+                      <AxFormControl xmlns="" i:type="AxFormTabControl">
+                        <Name>LineViewTab</Name>
+                        <Height>-1</Height>
+                        <HeightMode>SizeToAvailable</HeightMode>
+                        <Type>Tab</Type>
+                        <Width>-1</Width>
+                        <WidthMode>SizeToAvailable</WidthMode>
+                        <FormControlExtension i:nil="true" />
+                        <Controls>
+                          <AxFormControl xmlns="" i:type="AxFormTabPageControl">
+                            <Name>LineViewHeader</Name>
+                            <Type>TabPage</Type>
+                            <FormControlExtension i:nil="true" />
+                            <Controls />
+                            <HideIfEmpty>Yes</HideIfEmpty>
+                            <PanelStyle>Auto</PanelStyle>
+                          </AxFormControl>
+                          <AxFormControl xmlns="" i:type="AxFormTabPageControl">
+                            <Name>LineViewLines</Name>
+                            <Height>-1</Height>
+                            <HeightMode>SizeToAvailable</HeightMode>
+                            <Type>TabPage</Type>
+                            <FormControlExtension i:nil="true" />
+                            <Controls>
+                              <AxFormControl xmlns="" i:type="AxFormActionPaneControl">
+                                <Name>LineViewLinesToolbar</Name>
+                                <Height>-1</Height>
+                                <HeightMode>SizeToContent</HeightMode>
+                                <Type>ActionPane</Type>
+                                <Width>-1</Width>
+                                <WidthMode>SizeToAvailable</WidthMode>
+                                <FormControlExtension i:nil="true" />
+                                <Controls />
+                                <Style>Strip</Style>
+                              </AxFormControl>
+                              <AxFormControl xmlns="" i:type="AxFormGridControl">
+                                <Name>LineViewLinesGrid</Name>
+                                <Height>-1</Height>
+                                <HeightMode>SizeToAvailable</HeightMode>
+                                <Type>Grid</Type>
+                                <Width>-1</Width>
+                                <WidthMode>SizeToAvailable</WidthMode>
+                                <FormControlExtension i:nil="true" />
+                                <Controls />
+                                <DataGroup>Overview</DataGroup>
+                                <DataSource>{LinesDsName}</DataSource>
+                                <Style>Tabular</Style>
+                                <VisibleRows>5</VisibleRows>
+                                <VisibleRowsMode>Fixed</VisibleRowsMode>
+                              </AxFormControl>
+                            </Controls>
+                            <FastTabExpanded>Always</FastTabExpanded>
+                            <HideIfEmpty>Yes</HideIfEmpty>
+                            <PanelStyle>Auto</PanelStyle>
+                          </AxFormControl>
+                          <AxFormControl xmlns="" i:type="AxFormTabPageControl">
+                            <Name>LineViewLineDetails</Name>
+                            <Type>TabPage</Type>
+                            <FormControlExtension i:nil="true" />
+                            <Controls>
+                              <AxFormControl xmlns="" i:type="AxFormTabControl">
+                                <Name>LineDetailsTab</Name>
+                                <Height>-1</Height>
+                                <HeightMode>SizeToAvailable</HeightMode>
+                                <Type>Tab</Type>
+                                <Width>-1</Width>
+                                <WidthMode>SizeToAvailable</WidthMode>
+                                <FormControlExtension i:nil="true" />
+                                <Controls>
+                                  <AxFormControl xmlns="" i:type="AxFormTabPageControl">
+                                    <Name>LineDetailTabPage</Name>
+                                    <Type>TabPage</Type>
+                                    <Caption>Line details</Caption>
+                                    <FormControlExtension i:nil="true" />
+                                    <Controls />
+                                    <PanelStyle>Auto</PanelStyle>
+                                  </AxFormControl>
+                                </Controls>
+                                <ShowTabs>Yes</ShowTabs>
+                                <Style>Tabs</Style>
+                              </AxFormControl>
+                            </Controls>
+                            <HideIfEmpty>Yes</HideIfEmpty>
+                            <PanelStyle>Auto</PanelStyle>
+                          </AxFormControl>
+                        </Controls>
+                        <Style>FastTabs</Style>
+                      </AxFormControl>
+                    </Controls>
                     <ArrangeMethod>Vertical</ArrangeMethod>
+                    <Columns>1</Columns>
+                    <ColumnsMode>Fixed</ColumnsMode>
+                    <HideIfEmpty>Yes</HideIfEmpty>
+                    <PanelStyle>DetailsLine</PanelStyle>
+                  </AxFormControl>
+                  <AxFormControl xmlns="" i:type="AxFormTabPageControl">
+                    <Name>HeaderPanel</Name>
+                    <Type>TabPage</Type>
+                    <FormControlExtension i:nil="true" />
+                    <Controls>
+                      <AxFormControl xmlns="" i:type="AxFormTabControl">
+                        <Name>HeaderDetailsTab</Name>
+                        <Height>-1</Height>
+                        <HeightMode>SizeToAvailable</HeightMode>
+                        <Type>Tab</Type>
+                        <Width>-1</Width>
+                        <WidthMode>SizeToAvailable</WidthMode>
+                        <FormControlExtension i:nil="true" />
+                        <Controls>
+                          <AxFormControl xmlns="" i:type="AxFormTabPageControl">
+                            <Name>HeaderGeneralPage</Name>
+                            <Type>TabPage</Type>
+                            <Caption>General</Caption>
+                            <FormControlExtension i:nil="true" />
+                            <Controls>
+                              <AxFormControl xmlns="" i:type="AxFormGroupControl">
+                                <Name>HeaderGeneralGroup</Name>
+                                <Type>Group</Type>
+                                <FormControlExtension i:nil="true" />
+                                <Controls>
+{HeaderFieldControls}                                </Controls>
+                                <!-- DataGroup needs the sibling DataSource naming its table. -->
+                                <DataGroup>Overview</DataGroup>
+                                <DataSource>{DsName}</DataSource>
+                              </AxFormControl>
+                            </Controls>
+                            <PanelStyle>Auto</PanelStyle>
+                          </AxFormControl>
+                        </Controls>
+                        <Style>FastTabs</Style>
+                      </AxFormControl>
+                    </Controls>
+                    <Columns>1</Columns>
+                    <ColumnsMode>Fixed</ColumnsMode>
+                    <HideIfEmpty>Yes</HideIfEmpty>
+                    <PanelStyle>DetailsHeader</PanelStyle>
                   </AxFormControl>
                 </Controls>
-              </AxFormControl>
-              <AxFormControl xmlns="" i:type="AxFormGridControl">
-                <Name>LinesGrid</Name>
-                <Type>Grid</Type>
-                <FormControlExtension i:nil="true" />
-                <Controls />
-                <DataSource>{LinesDsName}</DataSource>
-                <DataGroup>Overview</DataGroup>
-                <Style>Tabular</Style>
+                <ShowTabs>No</ShowTabs>
+                <Style>Tabs</Style>
               </AxFormControl>
             </Controls>
+            <ArrangeMethod>Vertical</ArrangeMethod>
+            <Columns>1</Columns>
+            <ColumnsMode>Fixed</ColumnsMode>
+            <PanelStyle>Details</PanelStyle>
+            <Style>DetailsFormDetails</Style>
+          </AxFormControl>
+          <AxFormControl xmlns="" i:type="AxFormTabPageControl">
+            <Name>GridPanel</Name>
+            <Type>TabPage</Type>
+            <FormControlExtension i:nil="true" />
+            <Controls>
+              <AxFormControl xmlns="" i:type="AxFormGroupControl">
+                <Name>CustomAndQuickFilterGroup</Name>
+                <Pattern>CustomAndQuickFilters</Pattern>
+                <PatternVersion>1.1</PatternVersion>
+                <Type>Group</Type>
+                <WidthMode>SizeToAvailable</WidthMode>
+                <FormControlExtension i:nil="true" />
+                <Controls>
+                  <AxFormControl>
+                    <Name>QuickFilterControl</Name>
+                    <WidthMode>SizeToAvailable</WidthMode>
+                    <FormControlExtension>
+                      <Name>QuickFilterControl</Name>
+                      <ExtensionComponents />
+                      <ExtensionProperties>
+                        <AxFormControlExtensionProperty>
+                          <Name>targetControlName</Name>
+                          <Type>String</Type>
+                          <Value>MainGrid</Value>
+                        </AxFormControlExtensionProperty>
+                      </ExtensionProperties>
+                    </FormControlExtension>
+                  </AxFormControl>
+                </Controls>
+                <ArrangeMethod>HorizontalLeft</ArrangeMethod>
+                <FrameType>None</FrameType>
+                <Style>CustomFilter</Style>
+                <ViewEditMode>Edit</ViewEditMode>
+              </AxFormControl>
+              <AxFormControl xmlns="" i:type="AxFormGridControl">
+                <Name>MainGrid</Name>
+                <AllowEdit>Yes</AllowEdit>
+                <Height>-1</Height>
+                <HeightMode>SizeToAvailable</HeightMode>
+                <Type>Grid</Type>
+                <Width>-1</Width>
+                <WidthMode>SizeToAvailable</WidthMode>
+                <FormControlExtension i:nil="true" />
+                <Controls />
+                <DataSource>{DsName}</DataSource>
+                <DefaultAction>MainGridDefaultAction</DefaultAction>
+                <Style>Tabular</Style>
+              </AxFormControl>
+              <AxFormControl xmlns="" i:type="AxFormCommandButtonControl">
+                <Name>MainGridDefaultAction</Name>
+                <Type>CommandButton</Type>
+                <Visible>No</Visible>
+                <FormControlExtension i:nil="true" />
+                <Command>DetailsView</Command>
+              </AxFormControl>
+            </Controls>
+            <ArrangeMethod>Vertical</ArrangeMethod>
+            <Columns>1</Columns>
+            <ColumnsMode>Fixed</ColumnsMode>
+            <PanelStyle>Grid</PanelStyle>
+            <Style>DetailsFormGrid</Style>
           </AxFormControl>
         </Controls>
-        <Style>FastTabs</Style>
+        <ShowTabs>No</ShowTabs>
+        <Style>Tabs</Style>
       </AxFormControl>
     </Controls>
   </Design>

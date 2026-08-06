@@ -73,7 +73,60 @@ public static class FormPatternCatalog
 
     // ── Top-level patterns ───────────────────────────────────────────────────
 
-    public static readonly IReadOnlyList<FormPatternSpec> Patterns = new[]
+    /// <summary>
+    /// Patterns whose <em>structure</em> is taken from the AOT registry
+    /// (<see cref="RegistrySpecFactory"/>) instead of the hand-written entry below:
+    /// versions, design properties, the required control tree and what else may sit
+    /// at the design root.
+    /// </summary>
+    /// <remarks>
+    /// The hand-written model drifted from the AOS — five of the nine generated
+    /// patterns named a version that exists on no installation, and the structures
+    /// disagreed too. Deriving them removes the drift, but each migration changes
+    /// what FP003/FP004 accept, so patterns move onto this list one at a time with
+    /// their template and goldens. Everything the registry does not know (purpose,
+    /// when to use it, reference forms, lifecycle guidance, sub-pattern hints) stays
+    /// hand-written in the entry.
+    /// </remarks>
+    private static readonly HashSet<string> RegistryDerived = new(StringComparer.Ordinal)
+    {
+        "SimpleList",
+        "TableOfContents",
+        "ListPage",
+        "DetailsMaster",
+        "DetailsTransaction",
+        "Lookup",
+        "Workspace",
+        "SimpleListDetails",
+
+    };
+
+    // Lazy, not a static readonly field: static initialisers run in textual order, and
+    // HandWrittenPatterns is declared below this point.
+    private static readonly Lazy<IReadOnlyList<FormPatternSpec>> PatternsLazy =
+        new(() => DeriveFromRegistry(HandWrittenPatterns));
+
+    public static IReadOnlyList<FormPatternSpec> Patterns => PatternsLazy.Value;
+
+    /// <summary>Replaces the structural half of every <see cref="RegistryDerived"/> entry with the registry's.</summary>
+    private static IReadOnlyList<FormPatternSpec> DeriveFromRegistry(IReadOnlyList<FormPatternSpec> specs) =>
+        specs.Select(spec =>
+        {
+            if (!RegistryDerived.Contains(spec.Id)) return spec;
+
+            var root = RegistrySpecFactory.Root(spec.XmlName);
+            if (root is null) return spec; // registry has no such pattern — the gate test reports it
+
+            return spec with
+            {
+                Versions = RegistrySpecFactory.Versions(spec.XmlName),
+                DesignProperties = RegistrySpecFactory.DesignProperties(spec.XmlName) ?? spec.DesignProperties,
+                Root = root,
+                ExtraRoot = RegistrySpecFactory.ExtraRoot(spec.XmlName),
+            };
+        }).ToList();
+
+    private static readonly IReadOnlyList<FormPatternSpec> HandWrittenPatterns = new[]
     {
         new FormPatternSpec
         {
@@ -256,7 +309,10 @@ public static class FormPatternCatalog
                 },
             },
             ExtraRoot = ExtraChildren.Any,
-            Notes = new[] { "xmlName to be confirmed by mining." },
+            // xmlName confirmed against the AOT pattern registry: the sub-pattern names the
+        // AOS uses are the plain Section* / Filters* spellings; the Workspace_* forms this
+        // catalog invented are kept as aliases so older hand-written forms still resolve.
+        Notes = new[] { "xmlName confirmed against Microsoft.Dynamics.AX.Metadata.Patterns.dll." },
         },
         new FormPatternSpec
         {
@@ -447,7 +503,10 @@ public static class FormPatternCatalog
         new FormPatternSpec
         {
             Id = "Lookup",
-            XmlName = "Lookup",
+            // The AOT registry has no pattern named "Lookup"; the grid-only variant is
+            // LookupGridOnly (LookupTab and LookupPreview are the others). No alias for the
+            // old spelling: aliasing it would make FP001 accept a name no AOS resolves.
+            XmlName = "LookupGridOnly",
             DisplayName = "Lookup - Basic",
             Versions = new[] { "1.2", "1.1", "1.0" },
             Purpose = "Form used as a lookup: a grid (or tree) optimized for picking a value, with optional "
@@ -508,8 +567,10 @@ public static class FormPatternCatalog
         new FormPatternSpec
         {
             Id = "Workspace",
-            XmlName = "Workspace",
-            DisplayName = "Workspace (Panorama)",
+            // "Workspace" is in the registry only as an inactive 2.0; the live operational
+            // workspace pattern is WorkspaceOperational.
+            XmlName = "WorkspaceOperational",
+            DisplayName = "Operational Workspace",
             Versions = new[] { "1.0" },
             Purpose = "Activity overview page: a horizontally scrolling panorama with a tile/KPI summary section "
                     + "followed by list/chart/link sections. Primary means of navigation for an activity.",
@@ -623,7 +684,10 @@ public static class FormPatternCatalog
                 new NodeSpec { Id = "Chart", ControlTypes = new[] { "*" }, Occurrence = Occurrence.Required },
             },
             ExtraRoot = ExtraChildren.Any,
-            Notes = new[] { "xmlName to be confirmed by mining." },
+            // xmlName confirmed against the AOT pattern registry: the sub-pattern names the
+        // AOS uses are the plain Section* / Filters* spellings; the Workspace_* forms this
+        // catalog invented are kept as aliases so older hand-written forms still resolve.
+        Notes = new[] { "xmlName confirmed against Microsoft.Dynamics.AX.Metadata.Patterns.dll." },
         },
         new FormPatternSpec
         {
@@ -651,7 +715,10 @@ public static class FormPatternCatalog
                 },
             },
             ExtraRoot = ExtraChildren.Any,
-            Notes = new[] { "xmlName to be confirmed by mining." },
+            // xmlName confirmed against the AOT pattern registry: the sub-pattern names the
+        // AOS uses are the plain Section* / Filters* spellings; the Workspace_* forms this
+        // catalog invented are kept as aliases so older hand-written forms still resolve.
+        Notes = new[] { "xmlName confirmed against Microsoft.Dynamics.AX.Metadata.Patterns.dll." },
         },
         new FormPatternSpec
         {
@@ -675,7 +742,10 @@ public static class FormPatternCatalog
                 },
             },
             ExtraRoot = ExtraChildren.Any,
-            Notes = new[] { "xmlName to be confirmed by mining." },
+            // xmlName confirmed against the AOT pattern registry: the sub-pattern names the
+        // AOS uses are the plain Section* / Filters* spellings; the Workspace_* forms this
+        // catalog invented are kept as aliases so older hand-written forms still resolve.
+        Notes = new[] { "xmlName confirmed against Microsoft.Dynamics.AX.Metadata.Patterns.dll." },
         },
         new FormPatternSpec
         {
@@ -830,7 +900,10 @@ public static class FormPatternCatalog
         ReferenceForms = referenceForms,
         Root = Array.Empty<NodeSpec>(),
         ExtraRoot = ExtraChildren.Any,
-        Notes = new[] { "xmlName to be confirmed by mining." },
+        // xmlName confirmed against the AOT pattern registry: the sub-pattern names the
+        // AOS uses are the plain Section* / Filters* spellings; the Workspace_* forms this
+        // catalog invented are kept as aliases so older hand-written forms still resolve.
+        Notes = new[] { "xmlName confirmed against Microsoft.Dynamics.AX.Metadata.Patterns.dll." },
     };
 
     public static readonly IReadOnlyList<SubPatternSpec> SubPatterns = new[]
@@ -942,7 +1015,10 @@ public static class FormPatternCatalog
             ReferenceForms = new[] { "SalesTable (GroupHeaderAddressHeaderOverview)" },
             Root = Array.Empty<NodeSpec>(),
             ExtraRoot = ExtraChildren.Any,
-            Notes = new[] { "xmlName to be confirmed by mining." },
+            // xmlName confirmed against the AOT pattern registry: the sub-pattern names the
+        // AOS uses are the plain Section* / Filters* spellings; the Workspace_* forms this
+        // catalog invented are kept as aliases so older hand-written forms still resolve.
+        Notes = new[] { "xmlName confirmed against Microsoft.Dynamics.AX.Metadata.Patterns.dll." },
         },
         new SubPatternSpec
         {
@@ -958,7 +1034,10 @@ public static class FormPatternCatalog
                 new() { Id = "Image", ControlTypes = new[] { "Image" }, Occurrence = Occurrence.Required },
             },
             ExtraRoot = ExtraChildren.Any,
-            Notes = new[] { "xmlName to be confirmed by mining." },
+            // xmlName confirmed against the AOT pattern registry: the sub-pattern names the
+        // AOS uses are the plain Section* / Filters* spellings; the Workspace_* forms this
+        // catalog invented are kept as aliases so older hand-written forms still resolve.
+        Notes = new[] { "xmlName confirmed against Microsoft.Dynamics.AX.Metadata.Patterns.dll." },
         },
         new SubPatternSpec
         {
@@ -1036,7 +1115,10 @@ public static class FormPatternCatalog
                 new() { Id = "SecondList", ControlTypes = new[] { "Grid" }, Occurrence = Occurrence.Required, Extra = ExtraChildren.Any },
             },
             ExtraRoot = ExtraChildren.Any,
-            Notes = new[] { "xmlName to be confirmed by mining." },
+            // xmlName confirmed against the AOT pattern registry: the sub-pattern names the
+        // AOS uses are the plain Section* / Filters* spellings; the Workspace_* forms this
+        // catalog invented are kept as aliases so older hand-written forms still resolve.
+        Notes = new[] { "xmlName confirmed against Microsoft.Dynamics.AX.Metadata.Patterns.dll." },
         },
         new SubPatternSpec
         {
@@ -1093,7 +1175,10 @@ public static class FormPatternCatalog
                 new() { Id = "DimensionControl", ControlTypes = new[] { "Control", "*" }, Occurrence = Occurrence.Required },
             },
             ExtraRoot = ExtraChildren.None,
-            Notes = new[] { "xmlName to be confirmed by mining." },
+            // xmlName confirmed against the AOT pattern registry: the sub-pattern names the
+        // AOS uses are the plain Section* / Filters* spellings; the Workspace_* forms this
+        // catalog invented are kept as aliases so older hand-written forms still resolve.
+        Notes = new[] { "xmlName confirmed against Microsoft.Dynamics.AX.Metadata.Patterns.dll." },
         },
         new SubPatternSpec
         {
@@ -1106,48 +1191,51 @@ public static class FormPatternCatalog
             ReferenceForms = new[] { "LedgerAllocationRuleDestination" },
             Root = Array.Empty<NodeSpec>(),
             ExtraRoot = ExtraChildren.Any,
-            Notes = new[] { "xmlName to be confirmed by mining." },
+            // xmlName confirmed against the AOT pattern registry: the sub-pattern names the
+        // AOS uses are the plain Section* / Filters* spellings; the Workspace_* forms this
+        // catalog invented are kept as aliases so older hand-written forms still resolve.
+        Notes = new[] { "xmlName confirmed against Microsoft.Dynamics.AX.Metadata.Patterns.dll." },
         },
         WorkspaceSection(
-            "WorkspaceSectionTiles", "Workspace_Tiles",
-            new[] { "SectionTiles", "WorkspaceTiles" },
+            "WorkspaceSectionTiles", "SectionTiles",
+            new[] { "Workspace_Tiles", "WorkspaceTiles" },
             "Section Tiles",
             "Set of count tiles / charts in a workspace summary section (tiles bound to menu items, charts via Form Part controls).",
             new[] { "SalesOrderProcessingWorkspace" }),
         WorkspaceSection(
-            "WorkspaceSectionRelatedLinks", "Workspace_Links",
-            new[] { "SectionRelatedLinks", "WorkspaceLinks", "Workspace_RelatedLinks" },
+            "WorkspaceSectionRelatedLinks", "SectionRelatedLinks",
+            new[] { "Workspace_Links", "WorkspaceLinks", "Workspace_RelatedLinks" },
             "Section Related Links",
             "Set of hyperlinks (menu item buttons) in a workspace links section.",
             new[] { "SalesOrderProcessingWorkspace" }),
         WorkspaceSection(
-            "WorkspaceSectionTabbedList", "Workspace_TabbedList",
-            new[] { "SectionTabbedList" },
+            "WorkspaceSectionTabbedList", "SectionTabbedList",
+            new[] { "Workspace_TabbedList" },
             "Section Tabbed List",
             "Multiple list variants in one workspace section — only one visible at a time."),
         WorkspaceSection(
-            "WorkspaceSectionStackedChart", "Workspace_StackedChart",
-            new[] { "SectionStackedChart" },
+            "WorkspaceSectionStackedChart", "SectionStackedChart",
+            new[] { "Workspace_StackedChart" },
             "Section Stacked Chart",
             "Up to two charts stacked in an Operational Workspace section."),
         WorkspaceSection(
-            "WorkspaceSectionPowerBI", "Workspace_PowerBI",
-            new[] { "SectionPowerBI" },
+            "WorkspaceSectionPowerBI", "SectionPowerBI",
+            new[] { "Workspace_PowerBI" },
             "Section Power BI",
             "Power BI content section in an Operational Workspace."),
         WorkspaceSection(
-            "WorkspacePageFilterGroup", "Workspace_FilterGroup",
-            new[] { "WorkspacePageFilterGroup", "Workspace_PageFilter" },
+            "WorkspacePageFilterGroup", "WorkspacePageFilterGroup",
+            new[] { "Workspace_FilterGroup", "Workspace_PageFilter" },
             "Workspace Page Filter Group",
             "A single page-level filter applied across workspace sections."),
         WorkspaceSection(
-            "FiltersAndToolbarStacked", "FiltersAndToolbar_Stacked",
-            new[] { "FiltersAndToolbarStacked" },
+            "FiltersAndToolbarStacked", "FiltersAndToolbarStacked",
+            new[] { "FiltersAndToolbar_Stacked" },
             "Filters and Toolbar - Stacked",
             "Form Part Section List: actions BELOW filters."),
         WorkspaceSection(
-            "FiltersAndToolbarInline", "FiltersAndToolbar_Inline",
-            new[] { "FiltersAndToolbarInline" },
+            "FiltersAndToolbarInline", "FiltersAndToolbarInline",
+            new[] { "FiltersAndToolbar_Inline" },
             "Filters and Toolbar - Inline",
             "Form Part Section List: filters and actions on the SAME line."),
     };

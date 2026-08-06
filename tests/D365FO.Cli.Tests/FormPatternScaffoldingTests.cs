@@ -1,3 +1,4 @@
+using D365FO.Core.FormPatterns;
 using D365FO.Core.Scaffolding;
 using System.Xml.Linq;
 
@@ -44,7 +45,13 @@ public class FormPatternScaffoldingTests
         // (xmlns="" attribute on each element).
         var patternEl = design!.Element("Pattern");
         Assert.NotNull(patternEl);
-        Assert.Equal(pattern.ToString(), patternEl!.Value);
+
+        // The serialized pattern is the AOT registry's name, which is not always the
+        // enum's: there is no pattern called "Lookup" (it is LookupGridOnly) and
+        // "Workspace" exists only as an inactive 2.0 (the live one is
+        // WorkspaceOperational). FormPatternCatalog.XmlName is the mapping.
+        var expected = FormPatternCatalog.Patterns.Single(p => p.Id == pattern.ToString()).XmlName;
+        Assert.Equal(expected, patternEl!.Value);
 
         var versionEl = design.Element("PatternVersion");
         Assert.NotNull(versionEl);
@@ -73,7 +80,10 @@ public class FormPatternScaffoldingTests
         Assert.Contains("<Name>FmOrderLine</Name>", xml);
         Assert.Contains("<Table>FmOrderLine</Table>", xml);
         Assert.Contains("<LinkType>Active</LinkType>", xml);
-        Assert.Contains("<Name>LinesGrid</Name>", xml);
+        // The lines grid is the registry's LineViewLinesGrid part, inside the Lines
+        // panel's own FastTab — the flat "LinesGrid" on the tab page was the shape the
+        // AOS rejected.
+        Assert.Contains("<Name>LineViewLinesGrid</Name>", xml);
     }
 
     [Fact]
@@ -108,19 +118,20 @@ public class FormPatternScaffoldingTests
         Assert.DoesNotContain("TOCList", xml);
     }
 
+    /// <summary>
+    /// The workspace is no longer a Panorama of inline list sections. The AOT registry
+    /// has no active "Workspace" pattern — WorkspaceOperational 1.1 is the live one,
+    /// and its sections are FastTab pages whose lists live in separate
+    /// FormPartSectionList forms.
+    /// </summary>
     [Fact]
-    public void Workspace_renders_summary_section_and_extra_panorama_lists()
+    public void Workspace_is_an_operational_workspace_not_a_panorama()
     {
-        var xml = XppScaffolder.Form("FmWorkspace", "FmVehicle", FormPattern.Workspace,
-            sections: new[]
-            {
-                new FormSectionSpec("OpenOrders", "Open orders"),
-                new FormSectionSpec("BackOrders", "Back orders"),
-            });
-        Assert.Contains("<Name>SummarySection</Name>", xml);
-        Assert.Contains("<Name>OpenOrdersSection</Name>", xml);
-        Assert.Contains("<Name>BackOrdersGrid</Name>", xml);
-        Assert.Contains("<Style>Panorama</Style>", xml);
+        var xml = XppScaffolder.Form("FmWorkspace", "FmVehicle", FormPattern.Workspace);
+
+        Assert.Contains("<Pattern xmlns=\"\">WorkspaceOperational</Pattern>", xml);
+        Assert.DoesNotContain("<Style>Panorama</Style>", xml);
+        Assert.DoesNotContain("<Name>PanoramaBody</Name>", xml);
     }
 
     /// <summary>
@@ -135,6 +146,12 @@ public class FormPatternScaffoldingTests
     [MemberData(nameof(AllPatterns))]
     public void No_pattern_silently_discards_requested_fields(FormPattern pattern)
     {
+        // Workspace is the one pattern that cannot place fields at all: its lists live
+        // in separate FormPartSectionList forms. It does not discard them silently
+        // either — `generate form` refuses --field for it outright, which is the same
+        // contract stated the other way round.
+        if (pattern == FormPattern.Workspace) return;
+
         var xml = XppScaffolder.Form(
             formName:        "FmFieldSink",
             dataSourceTable: "FmVehicle",
@@ -162,38 +179,27 @@ public class FormPatternScaffoldingTests
         Assert.Empty(pages[1].Descendants("DataField"));
     }
 
+    /// <summary>
+    /// An operational workspace is a shell of sections. Its lists are not inline: a
+    /// tabbed-list page must hold a FormPartControl pointing at a separate form whose
+    /// own design pattern is FormPartSectionList, so the workspace scaffold emits the
+    /// three required sections and nothing else. The fields the caller asked for are
+    /// refused by `generate form` rather than dropped here — see
+    /// GenerateCommands' Workspace guard.
+    /// </summary>
     [Fact]
-    public void Workspace_gives_fields_an_implicit_list_section_when_none_requested()
-    {
-        var xml = XppScaffolder.Form("FmWorkspace", "FmVehicle", FormPattern.Workspace,
-            gridFields: new[] { "VIN", "Make" });
-
-        // No --section, but --field was supplied: one implicit list section named
-        // after the datasource carries them, rather than the fields vanishing.
-        Assert.Contains("<Name>FmVehicleSection</Name>", xml);
-        Assert.Contains("<Name>FmVehicleGrid_VIN</Name>", xml);
-        Assert.Contains("<Name>FmVehicleGrid_Make</Name>", xml);
-    }
-
-    [Fact]
-    public void Workspace_binds_fields_into_every_requested_section_grid()
-    {
-        var xml = XppScaffolder.Form("FmWorkspace", "FmVehicle", FormPattern.Workspace,
-            gridFields: new[] { "VIN" },
-            sections: new[]
-            {
-                new FormSectionSpec("OpenOrders", "Open orders"),
-                new FormSectionSpec("BackOrders", "Back orders"),
-            });
-        Assert.Contains("<Name>OpenOrdersGrid_VIN</Name>", xml);
-        Assert.Contains("<Name>BackOrdersGrid_VIN</Name>", xml);
-    }
-
-    [Fact]
-    public void Workspace_without_fields_still_renders_only_the_summary_section()
+    public void Workspace_renders_the_three_sections_the_pattern_requires()
     {
         var xml = XppScaffolder.Form("FmWorkspace", "FmVehicle", FormPattern.Workspace);
-        Assert.Contains("<Name>SummarySection</Name>", xml);
+
+        Assert.Contains("<Name>WorkspaceSections</Name>", xml);
+        Assert.Contains("<Name>SectionSummaryTiles</Name>", xml);
+        Assert.Contains("<Name>SectionTabbedList</Name>", xml);
+        Assert.Contains("<Name>SectionRelatedLinks</Name>", xml);
+
+        // The tabbed list's own tab is present and empty — its pages are Count="*",
+        // and each would need a FormPart this command does not generate.
+        Assert.Contains("<Name>TabbedList</Name>", xml);
         Assert.DoesNotContain("<Name>FmVehicleSection</Name>", xml);
     }
 

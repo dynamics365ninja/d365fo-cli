@@ -41,6 +41,20 @@ public class FmVehicleService
     }
 ]]></Source>
       </Method>
+      <Method>
+        <Name>OnInitialized</Name>
+        <Source><![CDATA[
+    /// <summary>
+    /// Delegate the L2-event-handler-basic eval case subscribes to. Without it the
+    /// generated handler is metadata-valid and still fails to compile —
+    /// delegateStr() is checked by the X++ compiler, so an eval case that names a
+    /// delegate nothing declares can never prove the scaffolder right.
+    /// </summary>
+    delegate void OnInitialized(XppPrePostArgs _args)
+    {
+    }
+]]></Source>
+      </Method>
     </Methods>
   </SourceCode>
 </AxClass>

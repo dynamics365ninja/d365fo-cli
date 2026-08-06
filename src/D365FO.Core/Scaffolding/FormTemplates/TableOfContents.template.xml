@@ -19,22 +19,32 @@ public class {FormName} extends FormRun
     <Members xmlns="" />
   </SourceCode>
 {DataSourcesXml}  <Design>
-{Caption}{DataSourceOnDesign}    <Pattern xmlns="">TableOfContents</Pattern>
+    <ArrangeMethod xmlns="">Vertical</ArrangeMethod>
+{Caption}    <Columns xmlns="">1</Columns>
+    <ColumnsMode xmlns="">Fixed</ColumnsMode>
+{DataSourceOnDesign}    <Pattern xmlns="">TableOfContents</Pattern>
     <PatternVersion xmlns="">1.1</PatternVersion>
     <Style xmlns="">TableOfContents</Style>
+    <!--
+      The registry's Table of Contents design has exactly one part — the vertical
+      tab — and allows nothing beside it: an ActionPane here is rejected with
+      "has child 'ActionPane' which is not allowed at its current location".
+    -->
     <Controls xmlns="">
-      <AxFormControl xmlns="" i:type="AxFormActionPaneControl">
-        <Name>ActionPane</Name>
-        <Type>ActionPane</Type>
-        <FormControlExtension i:nil="true" />
-        <Controls />
-      </AxFormControl>
       <AxFormControl xmlns="" i:type="AxFormTabControl">
         <Name>Tab</Name>
+        <Height>-1</Height>
+        <HeightMode>SizeToAvailable</HeightMode>
+        <Skip>No</Skip>
         <Type>Tab</Type>
+        <Visible>Yes</Visible>
+        <Width>-1</Width>
+        <WidthMode>SizeToAvailable</WidthMode>
         <FormControlExtension i:nil="true" />
         <Controls>
 {TabPageControls}        </Controls>
+        <ShowTabs>Yes</ShowTabs>
+        <Style>VerticalTabs</Style>
       </AxFormControl>
     </Controls>
   </Design>

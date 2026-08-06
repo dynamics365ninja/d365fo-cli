@@ -55,6 +55,23 @@ jobs:
       - name: Audit the knowledge corpus
         run: dotnet run --project src/D365FO.Cli -c Release -- knowledge audit --verify --output json
 
+  # The eval catalog is the regression gate for the two competencies the repo claims:
+  # every case replays its canonical_args through a real `d365fo` child process and diffs
+  # the result against a reviewed golden, so a scaffolder change that alters output lands
+  # here rather than on a customer's AOS. Replay is agent-free and offline (temp SQLite
+  # index + temp output dir), which is what makes it CI-safe.
+  eval:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+      - name: Replay the eval catalog
+        run: dotnet run --project src/D365FO.Cli -c Release -- eval run --all --output json
+      - name: Check the K/E/T coverage report
+        run: dotnet run --project src/D365FO.Cli -c Release --no-build -- eval coverage --check --output json
+
   skills:
     runs-on: ubuntu-latest
     steps:

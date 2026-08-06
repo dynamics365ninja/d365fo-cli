@@ -67,10 +67,25 @@ public static class CustomServiceScaffolder
     /// <summary>
     /// Scaffolds the <c>AxService</c> XML binding the service class to its operations.
     /// </summary>
+    /// <param name="serviceName">AOT name of the service.</param>
+    /// <param name="serviceClass">The <c>AxClass</c> implementing the operations.</param>
+    /// <param name="operations">The operations to expose.</param>
+    /// <param name="externalName">
+    /// The name the service is published under. Falls back to
+    /// <paramref name="serviceName"/> when not supplied.
+    /// </param>
+    /// <remarks>
+    /// <c>ExternalName</c> is not optional: the metadata provider rejects an
+    /// <c>AxService</c> without one ("ExternalName: Property cannot be empty"), so
+    /// omitting it shipped a service that could not build. Defaulting it to the
+    /// service's own name matches the shipped services, which publish under a name
+    /// of their choosing but never under none.
+    /// </remarks>
     public static XDocument ServiceXml(
         string serviceName,
         string serviceClass,
-        IReadOnlyList<OperationSpec> operations)
+        IReadOnlyList<OperationSpec> operations,
+        string? externalName = null)
     {
         var ops = (operations ?? Array.Empty<OperationSpec>()).ToList();
         if (ops.Count == 0)
@@ -85,6 +100,8 @@ public static class CustomServiceScaffolder
             new XElement("AxService",
                 new XElement("Name", serviceName),
                 new XElement("Class", serviceClass),
+                new XElement("ExternalName",
+                    string.IsNullOrWhiteSpace(externalName) ? serviceName : externalName!.Trim()),
                 new XElement("ServiceOperations", operationEls)));
     }
 

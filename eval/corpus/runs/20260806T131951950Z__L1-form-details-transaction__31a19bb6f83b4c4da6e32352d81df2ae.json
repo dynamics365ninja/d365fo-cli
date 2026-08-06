@@ -1,0 +1,20 @@
+{
+  "runId": "20260806T131951950Z__L1-form-details-transaction__31a19bb6f83b4c4da6e32352d81df2ae",
+  "caseId": "L1-form-details-transaction",
+  "tier": 1,
+  "timestampUtc": "2026-08-06T13:19:51.9509638+00:00",
+  "source": "build-oracle",
+  "score": {
+    "xppErrors": 0,
+    "referenceErrors": 0,
+    "goldenMatch": true,
+    "goldenDiff": {
+      "missing": [],
+      "extra": [],
+      "changed": [],
+      "isMatch": true
+    },
+    "buildClean": true,
+    "buildErrors": 0
+  }
+}

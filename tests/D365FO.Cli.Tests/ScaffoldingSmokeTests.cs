@@ -223,10 +223,19 @@ public class ScaffoldingSmokeTests
     public void EventHandler_emits_expected_attribute_for_form_kind()
     {
         var doc = XppScaffolder.EventHandler("Contoso_CustTable_Handler", "Table", "CustTable", "inserted");
-        var decl = doc.Descendants("Declaration").Single().Value;
-        Assert.Contains("DataEventHandler", decl, StringComparison.Ordinal);
-        Assert.Contains("tableStr(CustTable)", decl, StringComparison.Ordinal);
-        Assert.Contains("DataEventType::inserted", decl, StringComparison.Ordinal);
+
+        // The handler lives in an XML <Method> with its own <Name>, not inline in
+        // <Declaration>: the compiler rejects the latter ("The method name in the
+        // source code … does not match the name in the XML file, ''"), which is what
+        // `eval verify-build` caught on L2-event-handler-basic.
+        var method = doc.Descendants("Method").Single();
+        Assert.Equal("OnEvent", method.Element("Name")!.Value);
+        Assert.DoesNotContain("OnEvent", doc.Descendants("Declaration").Single().Value, StringComparison.Ordinal);
+
+        var source = method.Element("Source")!.Value;
+        Assert.Contains("DataEventHandler", source, StringComparison.Ordinal);
+        Assert.Contains("tableStr(CustTable)", source, StringComparison.Ordinal);
+        Assert.Contains("DataEventType::inserted", source, StringComparison.Ordinal);
     }
 
     [Fact]

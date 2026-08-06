@@ -210,6 +210,11 @@ public sealed class EvalRunCommand : Command<EvalRunCommand.Settings>
 
             if (write)
             {
+                // Replay is agent-free, so the scorecard alone identifies the class
+                // (MODEL_ERROR is impossible without a model in the loop). It is still
+                // only a hypothesis — the eval-improver confirms it by reproducing the
+                // defect as a failing test before touching source.
+                var (classification, triageNote) = EvalTriage.Hypothesize(@case, score, "replay");
                 var record = new EvalCorpusRecord(
                     RunId: BuildRunId(@case.Id),
                     CaseId: @case.Id,
@@ -217,8 +222,8 @@ public sealed class EvalRunCommand : Command<EvalRunCommand.Settings>
                     TimestampUtc: DateTimeOffset.UtcNow,
                     Source: "replay",
                     Score: score,
-                    Classification: null,
-                    Note: note);
+                    Classification: classification,
+                    Note: string.IsNullOrWhiteSpace(note) ? triageNote : note);
                 EvalCorpusStore.Append(EvalPaths.CorpusRunsDir(root), record);
             }
 
@@ -236,6 +241,7 @@ public sealed class EvalRunCommand : Command<EvalRunCommand.Settings>
         caseId = @case.Id,
         tier = @case.Tier,
         ok,
+        classification = EvalTriage.Hypothesize(@case, score, "replay").Classification,
         xppClean = score.XppClean,
         xppErrors = score.XppErrors,
         referencesClean = score.ReferencesClean,

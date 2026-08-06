@@ -114,13 +114,21 @@ public static class FormPatternTemplates
     public static string BuildDetailsMaster(FormTemplateOptions opt)
     {
         var (dsName, dsTable) = ResolveDs(opt);
-        var overview = string.Concat(opt.GridFields.Select(f => RenderGridFieldControl("Overview", f, dsName, indent: 16)));
+        var overview = string.Concat(opt.GridFields.Select(f => RenderGridFieldControl("Overview", f, dsName, indent: 24)));
+
+        // The pattern's title group requires a HeaderTitle control — the field shown as
+        // the record's title on the details panel. The first requested field is the
+        // best guess a scaffold can make; with none, it stays unbound for the author.
+        var titleField = opt.GridFields.FirstOrDefault();
+        var headerTitle = RenderHeaderTitle(titleField, dsName, indent: 16);
+
         return Fill("DetailsMaster.template.xml", new()
         {
             ["FormName"]              = opt.FormName,
             ["DsName"]                = dsName,
             ["DsTable"]               = dsTable,
             ["Caption"]               = RenderCaption(opt.Caption),
+            ["HeaderTitleControl"]    = headerTitle,
             ["OverviewFieldControls"] = overview,
         });
     }
@@ -130,7 +138,9 @@ public static class FormPatternTemplates
         var (dsName, dsTable) = ResolveDs(opt);
         var linesDs = string.IsNullOrEmpty(opt.LinesDsName) ? $"{dsName}Lines" : opt.LinesDsName!;
         var linesTable = string.IsNullOrEmpty(opt.LinesDsTable) ? linesDs : opt.LinesDsTable!;
-        var header = string.Concat(opt.GridFields.Select(f => RenderGridFieldControl("Header", f, dsName, indent: 18)));
+        var header = string.Concat(opt.GridFields.Select(f => RenderGridFieldControl("Header", f, dsName, indent: 34)));
+        var headerTitle = RenderHeaderTitle(opt.GridFields.FirstOrDefault(), dsName, indent: 16);
+
         return Fill("DetailsTransaction.template.xml", new()
         {
             ["FormName"]            = opt.FormName,
@@ -139,6 +149,7 @@ public static class FormPatternTemplates
             ["LinesDsName"]         = linesDs,
             ["LinesDsTable"]        = linesTable,
             ["Caption"]             = RenderCaption(opt.Caption),
+            ["HeaderTitleControl"]  = headerTitle,
             ["HeaderFieldControls"] = header,
         });
     }
@@ -245,18 +256,14 @@ public static class FormPatternTemplates
     {
         var (dsName, dsTable) = ResolveDs(opt);
 
-        // A workspace with requested fields but no --section used to render the
-        // Summary tiles only, silently dropping every --field. Give those fields
-        // a home: one implicit list section named after the datasource, matching
-        // what a real panorama workspace does (Summary + one list per subject).
-        var specs = opt.Sections.Count > 0
-            ? opt.Sections
-            : opt.GridFields.Count > 0
-                ? new[] { new FormSectionSpec(dsName, dsName) }
-                : Array.Empty<FormSectionSpec>();
-
-        var sections = string.Concat(specs.Select((s, i) =>
-            RenderWorkspaceListSection(s, i, dsName, opt.GridFields, indent: 10)));
+        // No inline list sections. A WorkspaceOperational tabbed-list page must contain
+        // a FormPartControl pointing at a *separate* form whose own design pattern is
+        // FormPartSectionList — the AOS rejects anything else there, and a FormPart
+        // naming a menu item that does not exist is the dangling reference this repo
+        // refuses to emit. The tab is generated empty (its pages are Count="*"), and
+        // GenerateFormCommand refuses --field/--section for this pattern rather than
+        // dropping them silently or writing a form no AOS would load.
+        var sections = string.Empty;
         return Fill("Workspace.template.xml", new()
         {
             ["FormName"]      = opt.FormName,
@@ -351,6 +358,35 @@ public static class FormPatternTemplates
         return sb.ToString();
     }
 
+    /// <summary>
+    /// The <c>HeaderTitle</c> control a Details Master title group requires — bound to
+    /// the first requested field when there is one.
+    /// </summary>
+    private static string RenderHeaderTitle(string? field, string? ds, int indent)
+    {
+        var pad = new string(' ', indent);
+        var sb = new StringBuilder();
+        sb.Append(pad).Append("<AxFormControl xmlns=\"\" i:type=\"AxFormStringControl\">\n");
+        sb.Append(pad).Append("  <Name>HeaderTitle</Name>\n");
+        sb.Append(pad).Append("  <Skip>Yes</Skip>\n");
+        sb.Append(pad).Append("  <Type>String</Type>\n");
+        sb.Append(pad).Append("  <WidthMode>SizeToAvailable</WidthMode>\n");
+        sb.Append(pad).Append("  <FormControlExtension i:nil=\"true\" />\n");
+        if (!string.IsNullOrEmpty(field) && !string.IsNullOrEmpty(ds))
+        {
+            sb.Append(pad).Append("  <DataField>").Append(SplitTypedName(field)).Append("</DataField>\n");
+            sb.Append(pad).Append("  <DataSource>").Append(ds).Append("</DataSource>\n");
+        }
+        sb.Append(pad).Append("  <ShowLabel>No</ShowLabel>\n");
+        sb.Append(pad).Append("  <Style>TitleField</Style>\n");
+        sb.Append(pad).Append("</AxFormControl>\n");
+        return sb.ToString();
+    }
+
+    /// <summary>Field specs may carry a type suffix ("VIN:str"); the control wants the name.</summary>
+    private static string SplitTypedName(string field) =>
+        field.Split(':', 2)[0].Trim();
+
     private static string RenderTocTabPage(
         FormSectionSpec s, IReadOnlyList<string> fields, string? ds, int indent)
     {
@@ -358,23 +394,84 @@ public static class FormPatternTemplates
         var sb = new StringBuilder();
         sb.Append(pad).Append("<AxFormControl xmlns=\"\" i:type=\"AxFormTabPageControl\">\n");
         sb.Append(pad).Append("  <Name>").Append(s.Name).Append("</Name>\n");
-        sb.Append(pad).Append("  <Pattern>FieldsFieldGroups</Pattern>\n");
-        sb.Append(pad).Append("  <PatternVersion>1.1</PatternVersion>\n");
+        // No sub-pattern on a TOC page: the Table of Contents pattern already defines
+        // what a page contains (a title group, then whatever the page is for). Stamping
+        // FieldsFieldGroups here made the AOS apply that sub-pattern's rules instead —
+        // "ColumnsMode must have value 'Fill' per pattern 'Fields and Field Groups'" —
+        // and it forbids the title text the TOC pattern requires.
         sb.Append(pad).Append("  <Type>TabPage</Type>\n");
         sb.Append(pad).Append("  <Caption>").Append(s.Caption).Append("</Caption>\n");
         // No FrameType: it belongs to Group / ButtonGroup / RadioButton / ReferenceGroup, not
         // to a tab page, and on one it is discarded on read.
         sb.Append(pad).Append("  <FormControlExtension i:nil=\"true\" />\n");
+
+        // Every TOC page carries a title group (registry part 'TOCPageTitleGroup')
+        // holding the page's main title. It is a title container, not the field host —
+        // Style=TOCTitleContainer, Skip=Yes — so the fields go in a sibling group.
+        sb.Append(pad).Append("  <Controls>\n");
+        sb.Append(pad).Append("    <AxFormControl xmlns=\"\" i:type=\"AxFormGroupControl\">\n");
+        sb.Append(pad).Append("      <Name>").Append(s.Name).Append("TitleGroup</Name>\n");
+        sb.Append(pad).Append("      <Height>-1</Height>\n");
+        sb.Append(pad).Append("      <HeightMode>SizeToContent</HeightMode>\n");
+        sb.Append(pad).Append("      <Skip>Yes</Skip>\n");
+        sb.Append(pad).Append("      <Type>Group</Type>\n");
+        sb.Append(pad).Append("      <Visible>Yes</Visible>\n");
+        sb.Append(pad).Append("      <Width>-1</Width>\n");
+        sb.Append(pad).Append("      <WidthMode>SizeToAvailable</WidthMode>\n");
+        sb.Append(pad).Append("      <FormControlExtension i:nil=\"true\" />\n");
+        sb.Append(pad).Append("      <Controls>\n");
+        sb.Append(pad).Append("        <AxFormControl xmlns=\"\" i:type=\"AxFormStaticTextControl\">\n");
+        sb.Append(pad).Append("          <Name>").Append(s.Name).Append("MainTitle</Name>\n");
+        sb.Append(pad).Append("          <Skip>Yes</Skip>\n");
+        sb.Append(pad).Append("          <Type>StaticText</Type>\n");
+        sb.Append(pad).Append("          <Width>-1</Width>\n");
+        sb.Append(pad).Append("          <WidthMode>SizeToAvailable</WidthMode>\n");
+        sb.Append(pad).Append("          <FormControlExtension i:nil=\"true\" />\n");
+        sb.Append(pad).Append("          <Text>").Append(s.Caption).Append("</Text>\n");
+        sb.Append(pad).Append("          <Style>MainInstruction</Style>\n");
+        sb.Append(pad).Append("        </AxFormControl>\n");
+        sb.Append(pad).Append("      </Controls>\n");
+        sb.Append(pad).Append("      <AllowUserSetup>No</AllowUserSetup>\n");
+        sb.Append(pad).Append("      <ArrangeMethod>Vertical</ArrangeMethod>\n");
+        sb.Append(pad).Append("      <Columns>1</Columns>\n");
+        sb.Append(pad).Append("      <ColumnsMode>Fixed</ColumnsMode>\n");
+        sb.Append(pad).Append("      <FrameType>None</FrameType>\n");
+        sb.Append(pad).Append("      <Style>TOCTitleContainer</Style>\n");
+        sb.Append(pad).Append("    </AxFormControl>\n");
+
+        // Always emitted, empty or not: a TOC page carrying only its title group is
+        // rejected ("is missing a child required by pattern 'Table of Contents'"), and
+        // an empty content group is what a freshly-added page looks like in the designer.
+        sb.Append(pad).Append("    <AxFormControl xmlns=\"\" i:type=\"AxFormGroupControl\">\n");
+        sb.Append(pad).Append("      <Name>").Append(s.Name).Append("FieldsGroup</Name>\n");
+        sb.Append(pad).Append("      <Height>-1</Height>\n");
+        sb.Append(pad).Append("      <HeightMode>SizeToAvailable</HeightMode>\n");
+        sb.Append(pad).Append("      <Type>Group</Type>\n");
+        sb.Append(pad).Append("      <Width>-1</Width>\n");
+        sb.Append(pad).Append("      <WidthMode>SizeToAvailable</WidthMode>\n");
+        sb.Append(pad).Append("      <FormControlExtension i:nil=\"true\" />\n");
         if (fields.Count == 0)
         {
-            sb.Append(pad).Append("  <Controls />\n");
+            sb.Append(pad).Append("      <Controls />\n");
         }
         else
         {
-            sb.Append(pad).Append("  <Controls>\n");
-            foreach (var f in fields) sb.Append(RenderDialogField(f, ds, indent + 4));
-            sb.Append(pad).Append("  </Controls>\n");
+            sb.Append(pad).Append("      <Controls>\n");
+            foreach (var f in fields) sb.Append(RenderDialogField(f, ds, indent + 8));
+            sb.Append(pad).Append("      </Controls>\n");
         }
+        sb.Append(pad).Append("      <FrameType>None</FrameType>\n");
+        sb.Append(pad).Append("    </AxFormControl>\n");
+
+        sb.Append(pad).Append("  </Controls>\n");
+
+        // Contract order after <Controls>: AllowUserSetup, ArrangeMethod, Columns,
+        // ColumnsMode, … PanelStyle.
+        sb.Append(pad).Append("  <AllowUserSetup>Yes</AllowUserSetup>\n");
+        sb.Append(pad).Append("  <ArrangeMethod>Vertical</ArrangeMethod>\n");
+        sb.Append(pad).Append("  <Columns>1</Columns>\n");
+        sb.Append(pad).Append("  <ColumnsMode>Fixed</ColumnsMode>\n");
+        sb.Append(pad).Append("  <PanelStyle>Auto</PanelStyle>\n");
         sb.Append(pad).Append("</AxFormControl>\n");
         return sb.ToString();
     }

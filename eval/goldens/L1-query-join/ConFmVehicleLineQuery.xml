@@ -1,13 +1,27 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
 <AxQuery xmlns:i="http://www.w3.org/2001/XMLSchema-instance" i:type="AxQuerySimple">
   <Name>ConFmVehicleLineQuery</Name>
+  <SourceCode>
+    <Methods>
+      <Method>
+        <Name>classDeclaration</Name>
+        <Source>[Query]
+public class ConFmVehicleLineQuery extends QueryRun
+{
+}
+</Source>
+      </Method>
+    </Methods>
+  </SourceCode>
   <DataSources>
     <AxQuerySimpleRootDataSource>
       <Name>FmVehicle</Name>
+      <DynamicFields>Yes</DynamicFields>
       <Table>FmVehicle</Table>
       <DataSources>
         <AxQuerySimpleEmbeddedDataSource>
           <Name>FmVehicleLine</Name>
+          <DynamicFields>Yes</DynamicFields>
           <Table>FmVehicleLine</Table>
           <JoinMode>InnerJoin</JoinMode>
           <UseRelations>Yes</UseRelations>

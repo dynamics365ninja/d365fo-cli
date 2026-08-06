@@ -75,6 +75,20 @@ public sealed class EvalScoreCommand : Command<EvalScoreCommand.Settings>
         var score = EvalScorer.Score(@case, settings.Actual, EvalPaths.GoldensDir(root!), repo);
         var source = string.IsNullOrWhiteSpace(settings.Source) ? "agent" : settings.Source!;
 
+        // An explicit --hypothesis always wins: the agent that drove the run knows
+        // things the scorecard does not. Without one, only a replay run can be
+        // classified from the score alone — for an agent run the same failure is
+        // either a tool defect or the agent's own mistake, so it stays untriaged.
+        var hypothesis = EvalTriage.Normalize(settings.Hypothesis)
+                         ?? EvalTriage.Hypothesize(@case, score, source).Classification;
+
+        if (!string.IsNullOrWhiteSpace(settings.Hypothesis) && hypothesis is null)
+        {
+            return RenderHelpers.Render(kind, ToolResult<object>.Fail(
+                D365FoErrorCodes.BadInput,
+                $"--hypothesis '{settings.Hypothesis}' is not one of TOOL_DEFECT, VALIDATOR_GAP, KNOWLEDGE_GAP, MODEL_ERROR, ENV_FLAKE."));
+        }
+
         if (settings.Write)
         {
             var record = new EvalCorpusRecord(
@@ -84,8 +98,10 @@ public sealed class EvalScoreCommand : Command<EvalScoreCommand.Settings>
                 TimestampUtc: DateTimeOffset.UtcNow,
                 Source: source,
                 Score: score,
-                Classification: settings.Hypothesis,
-                Note: settings.Note);
+                Classification: hypothesis,
+                Note: string.IsNullOrWhiteSpace(settings.Note)
+                    ? EvalTriage.Hypothesize(@case, score, source).Note
+                    : settings.Note);
             EvalCorpusStore.Append(EvalPaths.CorpusRunsDir(root!), record);
         }
 
@@ -94,6 +110,7 @@ public sealed class EvalScoreCommand : Command<EvalScoreCommand.Settings>
             caseId = @case.Id,
             tier = @case.Tier,
             source,
+            classification = hypothesis,
             xppClean = score.XppClean,
             xppErrors = score.XppErrors,
             referencesClean = score.ReferencesClean,

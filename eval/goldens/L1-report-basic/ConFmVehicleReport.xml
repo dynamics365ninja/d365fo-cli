@@ -26,6 +26,49 @@
       <Parameters />
     </AxReportDataSet>
   </DataSets>
+  <DefaultParameterGroup>
+    <Name xmlns="">Parameters</Name>
+    <ReportParameterBases xmlns="">
+      <AxReportParameterBase i:type="AxReportParameter">
+        <Name>AX_PartitionKey</Name>
+        <AllowBlank>true</AllowBlank>
+        <Nullable>true</Nullable>
+        <UserVisibility>Hidden</UserVisibility>
+        <DefaultValue />
+        <Values />
+      </AxReportParameterBase>
+      <AxReportParameterBase i:type="AxReportParameter">
+        <Name>AX_CompanyName</Name>
+        <UserVisibility>Hidden</UserVisibility>
+        <DefaultValue />
+        <Values />
+      </AxReportParameterBase>
+      <AxReportParameterBase i:type="AxReportParameter">
+        <Name>AX_UserContext</Name>
+        <AllowBlank>true</AllowBlank>
+        <Nullable>true</Nullable>
+        <UserVisibility>Hidden</UserVisibility>
+        <DefaultValue />
+        <Values />
+      </AxReportParameterBase>
+      <AxReportParameterBase i:type="AxReportParameter">
+        <Name>AX_RenderingCulture</Name>
+        <AllowBlank>true</AllowBlank>
+        <Nullable>true</Nullable>
+        <UserVisibility>Hidden</UserVisibility>
+        <DefaultValue />
+        <Values />
+      </AxReportParameterBase>
+      <AxReportParameterBase i:type="AxReportParameter">
+        <Name>AX_ReportContext</Name>
+        <AllowBlank>true</AllowBlank>
+        <Nullable>true</Nullable>
+        <UserVisibility>Hidden</UserVisibility>
+        <DefaultValue />
+        <Values />
+      </AxReportParameterBase>
+    </ReportParameterBases>
+  </DefaultParameterGroup>
   <Designs>
     <AxReportDesign i:type="AxReportAutoDesign" xmlns="">
       <Name>AutoDesign</Name>
@@ -59,6 +102,23 @@
           <Sorting />
         </AxReportDataRegion>
       </DataRegions>
+      <InteractiveSize>
+        <Name>InteractiveSize</Name>
+        <Height>11in</Height>
+        <Width>8.5in</Width>
+      </InteractiveSize>
+      <Margin>
+        <Name>Margin</Name>
+        <Bottom>.5in</Bottom>
+        <Left>.5in</Left>
+        <Right>.5in</Right>
+        <Top>.5in</Top>
+      </Margin>
+      <PageSize>
+        <Name>PageSize</Name>
+        <Height>11in</Height>
+        <Width>8.5in</Width>
+      </PageSize>
     </AxReportDesign>
   </Designs>
 </AxReport>

@@ -1,0 +1,21 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<AxEnum xmlns:i="http://www.w3.org/2001/XMLSchema-instance">
+  <Name>FmVehicleStatus</Name>
+  <Label>@Fleet:VehicleStatus</Label>
+  <UseEnumValue>No</UseEnumValue>
+  <EnumValues>
+    <AxEnumValue>
+      <Name>Available</Name>
+      <Value>0</Value>
+    </AxEnumValue>
+    <AxEnumValue>
+      <Name>Rented</Name>
+      <Value>1</Value>
+    </AxEnumValue>
+    <AxEnumValue>
+      <Name>Service</Name>
+      <Value>2</Value>
+    </AxEnumValue>
+  </EnumValues>
+  <IsExtensible>true</IsExtensible>
+</AxEnum>

@@ -6,6 +6,6 @@
   <Enabled>Yes</Enabled>
   <Operation>Select</Operation>
   <PrimaryTable>FmVehicle</PrimaryTable>
-  <Query>ConFmVehicleOwnerQuery</Query>
+  <Query>ConFmVehicleQuery</Query>
   <ConstrainedTables />
 </AxSecurityPolicy>

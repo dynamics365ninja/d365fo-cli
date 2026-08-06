@@ -29,13 +29,26 @@ public class {FormName} extends FormRun
     </AxFormDataSource>
   </DataSources>
   <Design>
-{Caption}    <Pattern xmlns="">Lookup</Pattern>
-    <PatternVersion xmlns="">1.2</PatternVersion>
+    <ArrangeMethod xmlns="">Vertical</ArrangeMethod>
+{Caption}    <Columns xmlns="">1</Columns>
+    <ColumnsMode xmlns="">Fixed</ColumnsMode>
+    <Height xmlns="">-1</Height>
+    <HeightMode xmlns="">SizeToContent</HeightMode>
+    <!--
+      There is no pattern named "Lookup" in the AOT registry at all — the grid-only
+      lookup is LookupGridOnly, alongside LookupTab and LookupPreview. "Lookup 1.2"
+      resolved to nothing ("Pattern 'Lookup 1.2' not found").
+    -->
+    <Pattern xmlns="">LookupGridOnly</Pattern>
+    <PatternVersion xmlns="">1.1</PatternVersion>
     <Style xmlns="">Lookup</Style>
+    <Width xmlns="">-1</Width>
+    <WidthMode xmlns="">SizeToAvailable</WidthMode>
     <Controls xmlns="">
       <AxFormControl xmlns="" i:type="AxFormGroupControl">
         <Name>CustomFilterGroup</Name>
-        <Pattern>CustomAndQuickFilters</Pattern>
+        <!-- This pattern's filter group takes CustomFilters, not CustomAndQuickFilters. -->
+        <Pattern>CustomFilters</Pattern>
         <PatternVersion>1.1</PatternVersion>
         <Type>Group</Type>
         <WidthMode>SizeToAvailable</WidthMode>
@@ -68,13 +81,20 @@ public class {FormName} extends FormRun
         <ArrangeMethod>HorizontalLeft</ArrangeMethod>
         <FrameType>None</FrameType>
         <Style>CustomFilter</Style>
+        <ViewEditMode>Edit</ViewEditMode>
       </AxFormControl>
       <AxFormControl xmlns="" i:type="AxFormGridControl">
         <Name>Grid</Name>
+        <!-- A lookup grid picks a value; it is never editable. -->
+        <AllowEdit>No</AllowEdit>
         <ElementPosition>1431655764</ElementPosition>
         <FilterExpression>%1</FilterExpression>
+        <Height>-1</Height>
+        <HeightMode>SizeToContent</HeightMode>
         <Type>Grid</Type>
         <VerticalSpacing>-1</VerticalSpacing>
+        <Width>-1</Width>
+        <WidthMode>SizeToAvailable</WidthMode>
         <FormControlExtension i:nil="true" />
         <Controls>
 {GridFieldControls}        </Controls>

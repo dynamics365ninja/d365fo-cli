@@ -1,12 +1,23 @@
 {
   "id": "L2-enum-extension",
-  "title": "Enum extension shell over a standard base enum",
+  "title": "AxEnumExtension over an extensible standard base enum",
   "tier": 2,
-  "instruction": "Create an enum extension over the standard base enum NoYes. Use only the d365fo CLI (search/get/generate/validate) — do not hand-write XML.",
-  "canonical_args": ["generate", "extension", "Enum", "NoYes"],
-  "target_artifact_types": ["AxEnumExtension"],
+  "instruction": "Create an enum extension over the standard base enum BusinessEventsEndpointType. Note that only enums marked IsExtensible can be extended — NoYes and friends cannot, and the compiler rejects the extension outright. Use only the d365fo CLI (search/get/generate/validate) — do not hand-write XML.",
+  "canonical_args": [
+    "generate",
+    "extension",
+    "Enum",
+    "BusinessEventsEndpointType"
+  ],
+  "target_artifact_types": [
+    "AxEnumExtension"
+  ],
   "golden_path": "L2-enum-extension",
-  "tags": ["extension", "enum", "metadata"],
+  "tags": [
+    "extension",
+    "enum",
+    "metadata"
+  ],
   "ignore": [],
   "requires_fixture_index": false,
   "golden_pending": false

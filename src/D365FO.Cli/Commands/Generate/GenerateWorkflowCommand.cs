@@ -33,7 +33,7 @@ public sealed class GenerateWorkflowCommand : Command<GenerateWorkflowCommand.Se
         public string? TaskName { get; init; }
 
         [CommandOption("--category <NAME>")]
-        [System.ComponentModel.Description("Existing AxWorkflowCategory the workflow belongs to. Omitted when not set — the workflow cannot be configured in the UI until a category is assigned.")]
+        [System.ComponentModel.Description("Required. Existing AxWorkflowCategory the workflow belongs to (e.g. FixedAssets, PurchCategory).")]
         public string? Category { get; init; }
 
         [CommandOption("--document-menu-item <NAME>")]
@@ -49,8 +49,16 @@ public sealed class GenerateWorkflowCommand : Command<GenerateWorkflowCommand.Se
         public string? DocumentClassName { get; init; }
 
         [CommandOption("--query <NAME>")]
-        [System.ComponentModel.Description("Query name used by the WorkflowDocument. Defaults to <DocumentClass>Query.")]
+        [System.ComponentModel.Description("Query name used by the WorkflowDocument. Defaults to <DocumentClass>Query. Generated over --table unless --no-query is passed.")]
         public string? QueryName { get; init; }
+
+        [CommandOption("--no-query")]
+        [System.ComponentModel.Description("Skip generating the AxQuery. Use when --query names a query that already exists.")]
+        public bool NoQuery { get; init; }
+
+        [CommandOption("--out-query <PATH>")]
+        [System.ComponentModel.Description("Output path for the AxQuery. Defaults to sibling of --out.")]
+        public string? OutQuery { get; init; }
 
         [CommandOption("--out-document <PATH>")]
         [System.ComponentModel.Description("Output path for the WorkflowDocument class. Defaults to sibling of --out.")]
@@ -82,6 +90,17 @@ public sealed class GenerateWorkflowCommand : Command<GenerateWorkflowCommand.Se
         if (string.IsNullOrWhiteSpace(settings.TableName))
             return RenderHelpers.Render(kind, ToolResult<object>.Fail(D365FoErrorCodes.BadInput, "--table <TABLE> required."));
 
+        // Category is a required property of AxWorkflowTemplate, not a nicety: without
+        // it the metadata provider rejects the template outright ("Category: Property
+        // cannot be empty"). Emitting one anyway, with a warning that it "cannot be
+        // configured in the UI", understated it by a whole severity level — the
+        // workflow did not build at all. There is no defensible default, so ask.
+        if (string.IsNullOrWhiteSpace(settings.Category))
+            return RenderHelpers.Render(kind, ToolResult<object>.Fail(
+                D365FoErrorCodes.BadInput,
+                "--category <NAME> required: AxWorkflowTemplate.Category cannot be empty. " +
+                "Pass an existing AxWorkflowCategory (search for one with `d365fo search --type WorkflowCategory`)."));
+
         var hasInstall = !string.IsNullOrWhiteSpace(settings.InstallTo);
         var hasOut     = !string.IsNullOrWhiteSpace(settings.Out);
         if (!hasInstall && !hasOut)
@@ -90,7 +109,10 @@ public sealed class GenerateWorkflowCommand : Command<GenerateWorkflowCommand.Se
         var docClassName    = string.IsNullOrWhiteSpace(settings.DocumentClassName)
             ? settings.Name + "Document"
             : settings.DocumentClassName!;
-        var submitExtName   = settings.TableName + "_WorkflowExtension";
+        var submitExtName   = settings.TableName + "_Workflow_Extension";
+        var queryName       = string.IsNullOrWhiteSpace(settings.QueryName)
+            ? docClassName.Replace("Document", "") + "Query"
+            : settings.QueryName!;
         var generateSubmit  = !settings.NoSubmitStub;
         var docMenuItem     = string.IsNullOrWhiteSpace(settings.DocumentMenuItem)
             ? settings.Name + "MenuItem"
@@ -101,10 +123,19 @@ public sealed class GenerateWorkflowCommand : Command<GenerateWorkflowCommand.Se
         var approvalName    = string.IsNullOrWhiteSpace(settings.ApprovalName) ? null : settings.ApprovalName!.Trim();
         var taskName        = string.IsNullOrWhiteSpace(settings.TaskName)     ? null : settings.TaskName!.Trim();
 
+        // The WorkflowDocument's getQueryName() names a query; generating the document
+        // without the query left an unresolvable reference in every scaffold ("Query
+        // 'XQuery' is not found"). The driving table is already known, so scaffold it.
+        var generateQuery = !settings.NoQuery;
+
         // Resolve output paths.
-        string? workflowPath, documentPath, submitPath, approvalPath, taskPath;
+        string? workflowPath, documentPath, submitPath, approvalPath, taskPath, queryPath;
         if (hasInstall && !hasOut)
         {
+            queryPath = !generateQuery ? null
+                : string.IsNullOrWhiteSpace(settings.OutQuery)
+                    ? GenerateInstaller.ResolveInstallPath(kind, Folders.Query, queryName, settings.InstallTo!, out _)
+                    : settings.OutQuery;
             workflowPath  = GenerateInstaller.ResolveInstallPath(kind, WorkflowScaffolder.TemplateRoot, settings.Name, settings.InstallTo!, out var f1);
             if (f1.HasValue) return f1.Value;
             documentPath  = string.IsNullOrWhiteSpace(settings.OutDocument)
@@ -134,6 +165,8 @@ public sealed class GenerateWorkflowCommand : Command<GenerateWorkflowCommand.Se
                 : settings.OutApproval ?? System.IO.Path.Combine(dir, approvalName + ".xml");
             taskPath      = taskName is null ? null
                 : settings.OutTask ?? System.IO.Path.Combine(dir, taskName + ".xml");
+            queryPath     = !generateQuery ? null
+                : settings.OutQuery ?? System.IO.Path.Combine(dir, queryName + ".xml");
         }
 
         try
@@ -150,8 +183,16 @@ public sealed class GenerateWorkflowCommand : Command<GenerateWorkflowCommand.Se
                 workflowPath!, settings.Overwrite);
 
             var documentResult = ScaffoldFileWriter.Write(
-                WorkflowScaffolder.WorkflowDocument(docClassName, settings.QueryName),
+                WorkflowScaffolder.WorkflowDocument(docClassName, queryName),
                 documentPath!, settings.Overwrite);
+
+            ScaffoldFileWriter.WriteResult? queryResult = null;
+            if (generateQuery && queryPath is not null)
+            {
+                queryResult = ScaffoldFileWriter.Write(
+                    QueryScaffolder.Query(queryName, [new QueryDataSourceSpec(settings.TableName!)]),
+                    queryPath, settings.Overwrite);
+            }
 
             ScaffoldFileWriter.WriteResult? approvalResult = null;
             if (approvalName is not null && approvalPath is not null)
@@ -183,10 +224,9 @@ public sealed class GenerateWorkflowCommand : Command<GenerateWorkflowCommand.Se
             {
                 $"AxMenuItemDisplay {docMenuItem} (opens the document)",
                 $"AxMenuItemAction {submitMenuItem} (submits the document)",
-                $"AxQuery {settings.QueryName ?? docClassName.Replace("Document", "") + "Query"} (returned by getQueryName)",
             };
-            if (string.IsNullOrWhiteSpace(settings.Category))
-                pending.Add("AxWorkflowCategory — pass --category <NAME> once one exists; without it the workflow cannot be configured");
+            if (!generateQuery)
+                pending.Add($"AxQuery {queryName} (returned by getQueryName)");
             if (approvalResult is not null || taskResult is not null)
                 pending.Add("AxMenuItemAction per outcome (Approve/Reject/RequestChange/Complete), then set ActionMenuItem on each outcome");
 
@@ -208,6 +248,7 @@ public sealed class GenerateWorkflowCommand : Command<GenerateWorkflowCommand.Se
                 taskName        = taskName,
                 workflow        = new { path = workflowResult.Path,  bytes = workflowResult.Bytes,  backup = workflowResult.BackupPath },
                 document        = new { path = documentResult.Path,  bytes = documentResult.Bytes,  backup = documentResult.BackupPath },
+                query           = queryResult    is null ? null : new { path = queryResult.Path,    bytes = queryResult.Bytes,    backup = queryResult.BackupPath },
                 approval        = approvalResult is null ? null : new { path = approvalResult.Path, bytes = approvalResult.Bytes, backup = approvalResult.BackupPath },
                 task            = taskResult     is null ? null : new { path = taskResult.Path,     bytes = taskResult.Bytes,     backup = taskResult.BackupPath },
                 submitStub      = submitResult   is null ? null : new { path = submitResult.Path,   bytes = submitResult.Bytes,   backup = submitResult.BackupPath },

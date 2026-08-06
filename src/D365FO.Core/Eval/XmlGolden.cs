@@ -11,6 +11,9 @@ public sealed record XmlGoldenDiff(
     IReadOnlyList<XmlGoldenChange> Changed)
 {
     public bool IsMatch => Missing.Count == 0 && Extra.Count == 0 && Changed.Count == 0;
+
+    /// <summary>No difference — for scorecards whose golden dimension was not the thing being measured.</summary>
+    public static XmlGoldenDiff Empty { get; } = new([], [], []);
 }
 
 /// <summary>

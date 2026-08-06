@@ -64,7 +64,12 @@ public static class WorkflowScaffolder
     /// </summary>
     /// <param name="workflowTypeName">Name of the workflow type.</param>
     /// <param name="documentClassName">The <c>WorkflowDocument</c> subclass driving the workflow.</param>
-    /// <param name="category">Existing <c>AxWorkflowCategory</c>; omitted when null (the workflow will not surface in the UI until one is set).</param>
+    /// <param name="category">
+    /// Existing <c>AxWorkflowCategory</c>. Omitted when null, which produces metadata
+    /// the provider rejects — <c>Category</c> is required. Callers are expected to
+    /// supply one; the parameter stays nullable only so the scaffolder keeps emitting
+    /// members in serializer order rather than guessing a category of its own.
+    /// </param>
     /// <param name="documentMenuItem">Display menu item opening the document.</param>
     /// <param name="submitMenuItem">Action menu item submitting the document.</param>
     /// <param name="approvalName">Approval element to reference in <c>SupportedElements</c>.</param>
@@ -177,7 +182,10 @@ public static class WorkflowScaffolder
     /// </summary>
     public static XDocument CanSubmitExtension(string tableName)
     {
-        var extensionName = tableName + "_WorkflowExtension";
+        // "FmVehicle_WorkflowExtension" ends with "WorkflowExtension", not "_Extension" —
+        // and the compiler checks for the underscore literally ("Invalid extension class
+        // name … should end with '_Extension'").
+        var extensionName = tableName + "_Workflow_Extension";
 
         var declaration =
             $"[ExtensionOf(tableStr({tableName}))]\n" +
@@ -185,8 +193,11 @@ public static class WorkflowScaffolder
             "{\n" +
             "}\n";
 
+        // No default on _workflowType, even though the method it wraps declares one:
+        // "Default parameter values on chain of command methods may not be provided on
+        // the corresponding extension methods."
         var canSubmitSrc =
-            "public boolean canSubmitToWorkflow(str _workflowType = '')\n" +
+            "public boolean canSubmitToWorkflow(str _workflowType)\n" +
             "{\n" +
             "    boolean canSubmit = next canSubmitToWorkflow(_workflowType);\n" +
             "\n" +

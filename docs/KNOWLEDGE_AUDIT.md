@@ -33,6 +33,14 @@ uneven:
 - **Eval loop** is healthy at L0–L2 (31 cases, 31 goldens, 39 committed runs) but has no CI gate,
   no L3/L4 tier, `classification` is null on every corpus record, and the corpus schema
   contradicts reality about gitignoring.
+  *Closed 2026-08-06 in Phase 4, except the L4 runtime tier: the catalog replays in CI, `eval
+  verify-build` compiles every golden with `xppc` on a real installation (51/51 clean, zero
+  unattributed diagnostics; the shipping defects it found — in `generate query`,
+  `generate event-handler`, `generate migration-script`, `generate business-event`,
+  `generate report`, `generate entity`, `generate form`, all nine form patterns,
+  `generate custom-service`, `generate workflow` and `generate number-sequence` — are
+  fixed, along with four mis-authored cases), replay runs now carry a triage hypothesis, and `eval/COVERAGE.md`
+  reports K ∧ E ∧ T per family and per `generate` capability.*
 - **The predecessor `d365fo-mcp-server`** contains battle-tested material this repo has not yet
   absorbed — see §7.
 

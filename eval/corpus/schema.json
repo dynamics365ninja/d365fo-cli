@@ -10,7 +10,7 @@
     "caseId": { "type": "string" },
     "tier": { "type": "integer" },
     "timestampUtc": { "type": "string", "format": "date-time" },
-    "source": { "type": "string", "enum": ["replay", "agent"], "description": "replay = `d365fo eval run` (deterministic, canonical_args). agent = `d365fo eval score` fed by the eval-runner agent driving the natural-language instruction by hand." },
+    "source": { "type": "string", "enum": ["replay", "agent", "build-oracle"], "description": "replay = `d365fo eval run` (deterministic, canonical_args). agent = `d365fo eval score` fed by the eval-runner agent driving the natural-language instruction by hand. build-oracle = `d365fo eval verify-build`, which scores only the build dimension and leaves the offline ones null rather than copying them from an earlier run." },
     "score": {
       "type": "object",
       "properties": {
@@ -19,6 +19,8 @@
         "referencesClean": { "type": ["boolean", "null"] },
         "referenceErrors": { "type": "integer" },
         "goldenMatch": { "type": "boolean" },
+        "buildClean": { "type": ["boolean", "null"], "description": "L3 only: xppc compiled this case's golden with zero errors. null means no compiler ran — never false by default, because reporting a compile verdict nobody collected is the confident lie the triage rubric puts first." },
+        "buildErrors": { "type": "integer" },
         "goldenDiff": {
           "type": "object",
           "properties": {
@@ -42,7 +44,7 @@
     "classification": {
       "type": ["string", "null"],
       "enum": ["TOOL_DEFECT", "VALIDATOR_GAP", "KNOWLEDGE_GAP", "MODEL_ERROR", "ENV_FLAKE", null],
-      "description": "A hypothesis recorded by the runner (replay leaves this null; the agent may pass --hypothesis), confirmed or corrected by the eval-improver before any fix lands. See docs/AGENT_EVAL_LOOP.md for the rubric."
+      "description": "A hypothesis recorded by the runner, confirmed or corrected by the eval-improver before any fix lands. Replay and build-oracle runs derive it from the scorecard (no model is in the loop, so MODEL_ERROR is impossible); agent runs leave it null unless --hypothesis is passed, because there the same scorecard is equally consistent with a tool defect and with the agent's own mistake. See docs/AGENT_EVAL_LOOP.md §9."
     },
     "note": { "type": ["string", "null"] }
   }

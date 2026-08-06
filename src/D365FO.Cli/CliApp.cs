@@ -328,6 +328,9 @@ public static class CliApp
                 b.AddCommand<EvalCaptureCommand>("capture").WithDescription("Capture/update a case's golden from a reviewed artifact.");
                 b.AddCommand<EvalReportCommand>("report").WithDescription("Aggregate scoreboard over the corpus of run records.");
                 b.AddCommand<EvalClustersCommand>("clusters").WithDescription("Rank failure clusters over the corpus of run records.");
+                b.AddCommand<EvalCoverageCommand>("coverage").WithDescription("K/E/T coverage taxonomy per AOT family and generate capability; --check gates eval/COVERAGE.md.");
+                b.AddCommand<EvalKnowledgeCommand>("knowledge").WithDescription("Turn KNOWLEDGE_GAP / MODEL_ERROR runs into skills/_source topic-edit proposals with corpus provenance.");
+                b.AddCommand<EvalVerifyBuildCommand>("verify-build").WithDescription("L3 oracle (Windows + D365FO install): recompile every golden with xppc and persist the verdicts.");
             });
 
             // The CLI's `get_knowledge` equivalent: the verified skills/_source corpus,

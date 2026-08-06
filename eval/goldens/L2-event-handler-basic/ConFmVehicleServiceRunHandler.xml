@@ -4,12 +4,18 @@
   <SourceCode>
     <Declaration>public static class ConFmVehicleServiceRunHandler
 {
-    [SubscribesTo(classStr(FmVehicleService), delegateStr(FmVehicleService, OnInitialized))]
+}
+</Declaration>
+    <Methods>
+      <Method>
+        <Name>run</Name>
+        <Source>    [SubscribesTo(classStr(FmVehicleService), delegateStr(FmVehicleService, OnInitialized))]
     public static void run(XppPrePostArgs args)
     {
         // handler logic here
     }
-}
-</Declaration>
+</Source>
+      </Method>
+    </Methods>
   </SourceCode>
 </AxClass>

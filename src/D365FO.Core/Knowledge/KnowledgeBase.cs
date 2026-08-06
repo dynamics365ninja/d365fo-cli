@@ -13,7 +13,8 @@ public sealed record KnowledgeTopic(
     string Id,
     string Description,
     string? AppliesWhen,
-    string Body)
+    string Body,
+    string? Covers = null)
 {
     /// <summary>The <c>##</c>-level sections of <see cref="Body"/>, in document order.</summary>
     public IReadOnlyList<KnowledgeSection> Sections => KnowledgeBase.SplitSections(Body);
@@ -180,13 +181,13 @@ public static class KnowledgeBase
 
     /// <summary>
     /// Parse the same frontmatter <c>scripts/emit-skills.py</c> reads (<c>id</c>,
-    /// <c>description</c>, <c>appliesWhen</c>). List-valued keys such as
+    /// <c>description</c>, <c>appliesWhen</c>, <c>covers</c>). List-valued keys such as
     /// <c>applyTo</c> are Copilot-only and deliberately ignored here.
     /// </summary>
     internal static KnowledgeTopic Parse(string raw, string fallbackId)
     {
         var text = raw.Replace("\r\n", "\n");
-        string id = fallbackId, description = "", appliesWhen = "";
+        string id = fallbackId, description = "", appliesWhen = "", covers = "";
         var body = text;
 
         if (text.StartsWith("---\n", StringComparison.Ordinal))
@@ -198,7 +199,7 @@ public static class KnowledgeBase
                 body = text[(end + 4)..].TrimStart('\n');
                 foreach (var line in front.Split('\n'))
                 {
-                    var m = Regex.Match(line, @"^(id|description|appliesWhen)\s*:\s*(.+)$");
+                    var m = Regex.Match(line, @"^(id|description|appliesWhen|covers)\s*:\s*(.+)$");
                     if (!m.Success) continue;
                     var value = m.Groups[2].Value.Trim().Trim('"').Trim('\'');
                     switch (m.Groups[1].Value)
@@ -206,12 +207,18 @@ public static class KnowledgeBase
                         case "id": id = value; break;
                         case "description": description = value; break;
                         case "appliesWhen": appliesWhen = value; break;
+                        case "covers": covers = value; break;
                     }
                 }
             }
         }
 
-        return new KnowledgeTopic(id, description, appliesWhen.Length > 0 ? appliesWhen : null, body.Trim());
+        return new KnowledgeTopic(
+            id,
+            description,
+            appliesWhen.Length > 0 ? appliesWhen : null,
+            body.Trim(),
+            covers.Length > 0 ? covers : null);
     }
 
     private static List<string> Tokenize(string query) =>

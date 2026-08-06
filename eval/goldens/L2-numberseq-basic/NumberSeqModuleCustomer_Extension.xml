@@ -1,16 +1,16 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
 <AxClass>
-  <Name>NumberSeqApplicationModule_ConDemo_Extension</Name>
+  <Name>NumberSeqModuleCustomer_Extension</Name>
   <SourceCode>
-    <Declaration>[ExtensionOf(classStr(NumberSeqApplicationModule_ConDemo))]
-final class NumberSeqApplicationModule_ConDemo_Extension
+    <Declaration>[ExtensionOf(classStr(NumberSeqModuleCustomer))]
+final class NumberSeqModuleCustomer_Extension
 {
 }
 </Declaration>
     <Methods>
       <Method>
         <Name>loadModule</Name>
-        <Source>public void loadModule()
+        <Source>protected void loadModule()
 {
     next loadModule();
 

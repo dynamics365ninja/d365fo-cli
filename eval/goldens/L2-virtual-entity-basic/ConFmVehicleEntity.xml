@@ -4,6 +4,7 @@
   <DataManagementEnabled>No</DataManagementEnabled>
   <DataManagementStagingTable />
   <IsPublic>Yes</IsPublic>
+  <PrimaryKey>EntityKey</PrimaryKey>
   <PublicCollectionName>ConFmVehicleEntities</PublicCollectionName>
   <PublicEntityName>ConFmVehicleEntity</PublicEntityName>
   <Fields>
@@ -18,6 +19,16 @@
       <DataSource>FmVehicle</DataSource>
     </AxDataEntityViewField>
   </Fields>
+  <Keys>
+    <AxDataEntityViewKey>
+      <Name>EntityKey</Name>
+      <Fields>
+        <AxDataEntityViewKeyField>
+          <DataField>VIN</DataField>
+        </AxDataEntityViewKeyField>
+      </Fields>
+    </AxDataEntityViewKey>
+  </Keys>
   <ViewMetadata>
     <Name>Metadata</Name>
     <DataSources>

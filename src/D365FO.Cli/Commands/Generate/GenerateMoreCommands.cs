@@ -39,6 +39,10 @@ public sealed class GenerateEntityCommand : Command<GenerateEntityCommand.Settin
         [CommandOption("--staging-table <TABLE>")]
         [System.ComponentModel.Description("Staging table name when --data-management is set (default: <ENTITY>Staging).")]
         public string? StagingTable { get; init; }
+
+        [CommandOption("--key <FIELD>")]
+        [System.ComponentModel.Description("Repeatable: entity field forming the EntityKey. Derived from the table's alternate-key index when omitted — a public entity is invalid without one.")]
+        public string[] Keys { get; init; } = Array.Empty<string>();
     }
 
     public override int Execute(CommandContext ctx, Settings settings)
@@ -73,9 +77,12 @@ public sealed class GenerateEntityCommand : Command<GenerateEntityCommand.Settin
                 fields.Add(new EntityFieldSpec(f.Name, f.Name, f.Mandatory));
             autoFromTable = true;
         }
+        var (keys, keySource, keyFailure) = ResolveKeys(kind, settings, fields);
+        if (keyFailure.HasValue) return keyFailure.Value;
+
         var doc = XppScaffolder.DataEntity(
             settings.EntityName, settings.Table!, settings.PublicEntity, settings.PublicCollection, fields,
-            settings.DataManagement, settings.StagingTable);
+            settings.DataManagement, settings.StagingTable, entityCategory: null, keyFields: keys);
         try
         {
             var res = ScaffoldFileWriter.Write(doc, outPath!, settings.Overwrite);
@@ -89,6 +96,8 @@ public sealed class GenerateEntityCommand : Command<GenerateEntityCommand.Settin
                 backup = res.BackupPath,
                 fieldCount = fields.Count,
                 fieldsFromTable = autoFromTable,
+                keyFields = keys,
+                keySource,
                 model = settings.InstallTo,
             }));
         }
@@ -105,6 +114,51 @@ public sealed class GenerateEntityCommand : Command<GenerateEntityCommand.Settin
         var data = parts.Length > 1 && parts[1].Length > 0 ? parts[1] : null;
         var mandatory = parts.Length > 2 && string.Equals(parts[2], "mandatory", StringComparison.OrdinalIgnoreCase);
         return new EntityFieldSpec(name, data, mandatory);
+    }
+
+    /// <summary>
+    /// The EntityKey's fields, and where they came from. A public data entity without
+    /// one is rejected by the metadata validator outright, so this refuses to guess:
+    /// the table's own alternate key is the answer when the index knows it, an
+    /// explicitly-mandatory field is the fallback, and otherwise the caller is asked
+    /// rather than handed an entity that cannot load.
+    /// </summary>
+    private static (IReadOnlyList<string> Keys, string Source, int? Failure) ResolveKeys(
+        OutputMode.Kind kind, Settings settings, List<EntityFieldSpec> fields)
+    {
+        if (settings.Keys.Length > 0)
+            return (settings.Keys, "option", null);
+
+        var mapped = fields
+            .Select(f => f.DataField ?? f.Name)
+            .Where(n => !string.IsNullOrWhiteSpace(n))
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        // The table's alternate key is what a data entity key normally mirrors.
+        try
+        {
+            var repo = RepoFactory.Create();
+            var alternate = repo.GetTableIndexes(settings.Table!)
+                .Where(i => i.AlternateKey && !string.IsNullOrWhiteSpace(i.FieldsCsv))
+                .Select(i => i.FieldsCsv!.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+                .FirstOrDefault(f => f.Length > 0 && f.All(mapped.Contains));
+
+            if (alternate is not null) return (alternate, "alternate-key-index", null);
+        }
+        catch (Exception)
+        {
+            // No index configured — fall through to the field-level fallbacks. The
+            // caller still gets an actionable error below if nothing else works.
+        }
+
+        var mandatory = fields.Where(f => f.IsMandatory).Select(f => f.DataField ?? f.Name).ToList();
+        if (mandatory.Count > 0) return (mandatory, "mandatory-fields", null);
+
+        return ([], "none", RenderHelpers.Render(kind, ToolResult<object>.Fail(
+            D365FoErrorCodes.BadInput,
+            $"Cannot determine an EntityKey for '{settings.EntityName}'.",
+            $"A public data entity is invalid without one. Pass --key <FIELD> (repeatable), mark a field mandatory " +
+            $"(--field <NAME>::mandatory), or index '{settings.Table}' so its alternate key can be read.")));
     }
 }
 
@@ -621,7 +675,7 @@ public sealed class GenerateReportCommand : Command<GenerateReportCommand.Settin
         public string[]? Parameters { get; init; }
 
         [CommandOption("--extra-dataset <SPEC>")]
-        [System.ComponentModel.Description("Additional dataset (repeatable). Format: DatasetName:DPClassName. Each produces its own tablix in the design.")]
+        [System.ComponentModel.Description("Additional dataset (repeatable). Format: DatasetName:DPClassName[[:Field1,Field2]]. Each produces its own table data region; fields default to --field.")]
         public string[]? ExtraDatasets { get; init; }
 
         [CommandOption("--out-dp <PATH>")]
@@ -663,11 +717,26 @@ public sealed class GenerateReportCommand : Command<GenerateReportCommand.Settin
             extraDatasets = [];
             foreach (var raw in settings.ExtraDatasets)
             {
-                var parts = raw.Split(':', 2);
+                var parts = raw.Split(':', 3);
                 if (parts.Length < 2 || string.IsNullOrWhiteSpace(parts[1]))
                     return RenderHelpers.Render(kind, ToolResult<object>.Fail(D365FoErrorCodes.BadInput,
-                        $"--extra-dataset '{raw}' must be in Name:DPClass format."));
-                extraDatasets.Add(new ReportDatasetSpec(parts[0], parts[1]));
+                        $"--extra-dataset '{raw}' must be in Name:DPClass[[:field,field]] format."));
+
+                // A dataset with no fields is rejected outright ("The dataset X has no
+                // fields specified"), and its table data region with it ("Missing Data
+                // fields"). Its temp table would be empty too. Falling back to the
+                // report's own --field list keeps the dataset, the temp table, the DP
+                // getter and the design region describing the same columns.
+                var fields = parts.Length > 2 && !string.IsNullOrWhiteSpace(parts[2])
+                    ? parts[2].Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                    : settings.Fields;
+
+                if (fields is not { Length: > 0 })
+                    return RenderHelpers.Render(kind, ToolResult<object>.Fail(D365FoErrorCodes.BadInput,
+                        $"--extra-dataset '{parts[0]}' has no fields.",
+                        "Give them inline (Name:DPClass:Field1,Field2) or pass --field, which extra datasets inherit."));
+
+                extraDatasets.Add(new ReportDatasetSpec(parts[0], parts[1], fields));
             }
         }
 

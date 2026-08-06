@@ -1,0 +1,20 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<AxClass>
+  <Name>ConFmVehicleNoteWorkflowDocument</Name>
+  <SourceCode>
+    <Declaration>class ConFmVehicleNoteWorkflowDocument extends WorkflowDocument
+{
+}
+</Declaration>
+    <Methods>
+      <Method>
+        <Name>getQueryName</Name>
+        <Source>public QueryName getQueryName()
+{
+    return queryStr(ConFmVehicleNoteWorkflowQuery);
+}
+</Source>
+      </Method>
+    </Methods>
+  </SourceCode>
+</AxClass>

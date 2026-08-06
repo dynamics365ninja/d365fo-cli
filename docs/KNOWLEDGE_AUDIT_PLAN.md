@@ -223,27 +223,171 @@ the widened `skills` job.
 
 ## Phase 4 — Eval loop to predecessor parity (R7)
 
-4.1 **CI gate:** add `eval` job running replay cases (`requires_fixture_index` subset) on every
-PR; fail on golden mismatch or validator regressions.
+4.1 ✅ **CI gate** — an `eval` job replays the whole catalog (`eval run --all`, 51/51 green) and
+runs `eval coverage --check` on every PR. The replay subset is not restricted to
+`requires_fixture_index` as planned: every case carries `canonical_args` and passes, so
+narrowing it would only reduce cover.
 
-4.2 **L3 build oracle:** VM-side `verify-goldens-build` equivalent — recompile every golden via
-`xppc` one case at a time, persist `eval/golden-build-verification.json`; wire
-`XppcDiagnostics` results back into corpus records.
+4.2 ✅ **L3 build oracle** — `d365fo eval verify-build` provisions every reviewed golden into a
+throwaway model, compiles it with `xppc.exe`, attributes each diagnostic back to the case whose
+golden produced the named object, and persists `eval/golden-build-verification.json`.
+`EvalScoreCard` gained `BuildClean`/`BuildErrors`, null everywhere a compiler did not actually
+run. `--provision-only` exercises the whole provisioning half on any OS.
 
-4.3 **L4 runtime oracle:** SysTest-backed cases via existing `test run` shell-out, fixtures
-provisioned per run in a throwaway model.
+Four things this could only be learned by running it, and all four were wrong first:
+- A four-element model descriptor (name/publisher/layer/module refs) is enough for this repo's
+  extractor and kills the compiler before it compiles anything — `ModelKey..ctor` throws on the
+  missing `<ModelModule>`, `Layer` is an ordinal (`usr` = 14), and the string collections live in
+  the DataContract arrays namespace.
+- Referencing `ApplicationSuite` alone leaves the standard `Name` EDT and the `ModuleAxapta` enum
+  unresolvable; ApplicationPlatform and ApplicationFoundation are needed too.
+- Provisioning the fixture as its own module and referencing it does **not** make its tables
+  visible — five goldens were reported as referencing "a nonexistent table or view named
+  'FmVehicle'". The fixture now goes into the same module as the goldens.
+- `XppcDiagnostics` recognised five severity prefixes and the compiler emits more: the first real
+  run produced `Errors: 8` while the parser returned zero diagnostics and the harness called
+  every golden clean. `MetadataProvider Error`, `Unspecified Fatal Error` and `TaskListItem
+  Information` are now parsed, as are the two line shapes without a `dynamics://` URL or without a
+  source location. TODO markers are `information` and count as neither error nor warning.
 
-4.4 **Classification & clusters:** populate `classification`
-(TOOL_DEFECT/VALIDATOR_GAP/KNOWLEDGE_GAP/MODEL_ERROR) on new runs, make `eval clusters` rank
-them, and implement the MODEL_ERROR → `skills/_source` feedback path (K4) so knowledge gaps
-found in evals become topic edits with provenance.
+**Seven shipping defects the offline loop could never see, all now fixed:**
+- `generate query` (2 cases) — the reader threw `KeyNotFoundException` on every generated query.
+  Ground-truthed against shipped queries (300/300 carry it):
+  `<SourceCode><Methods><Method><Name>classDeclaration` is mandatory, and each data source needs
+  `<DynamicFields>Yes</DynamicFields>` in contract position (after `ConcurrencyModel`) or the
+  compiler rejects the empty field list.
+- `generate event-handler` (1 case) — the subscriber method was written inside `<Declaration>`;
+  the provider needs it as an XML `<Method>` with a `<Name>`, which is what every other class
+  scaffolder here already emitted.
+- `generate migration-script` — surfaced only after the first two were fixed, because the
+  metadata-level crashes had been aborting the compile before IL generation: the loop counter was
+  named `count`, an X++ keyword, so the declaration was rejected and the rest of the method
+  mis-parsed.
+- `generate business-event` — the `[BusinessEvents]` attribute named the event class where the
+  contract belongs, passed a second `classStr` where the display name belongs, and a plain string
+  where `ModuleAxapta::<module>` belongs. `--category` is now validated against the 40 real enum
+  values. The generated factory also called `parmId()`, which exists on no business event
+  (`BusinessEventsBase` declares only `parmUserId`); it now keeps the source record the way
+  shipped events do, in a private member behind a generated parm method.
+- `generate report` — no `DefaultParameterGroup` unless the caller passed `--parameter`, so every
+  report was missing it *and* the five mandatory `AX_*` framework parameters the SSRS runtime
+  injects; the auto design carried no `PageSize`/`InteractiveSize`/`Margin`, so its height and
+  width were zero ("Invalid page size"); and `--extra-dataset Name:DPClass` produced a dataset
+  with no fields, an empty temp table and a data region with no data fields. Extra datasets now
+  take fields inline (`Name:DPClass:F1,F2`) or inherit `--field`.
+- `generate entity` — `IsPublic` was hard-coded `Yes` while `Keys` stayed optional, so every
+  generated entity failed "There must be a key defined for a public data entity". The command now
+  derives the EntityKey from the table's alternate-key index (or `--key`, or explicitly mandatory
+  fields) and asks rather than guessing when it cannot; the scaffolder keeps `IsPublic` and
+  `Keys` in step so the two can no longer disagree.
+- `generate form` — the R5 trap the audit listed as absorbable predecessor knowledge, confirmed:
+  `<DataGroup>` was emitted without its sibling `<DataSource>` and *before* `<Controls>` rather
+  than after, so a group control reported "Field group 'Overview' does not exist" even once the
+  table declared the group. Both now sit after `Controls` in contract order. Separately, an
+  `AxFormActionPaneTabControl` sat directly under a tab page; the reader requires an
+  `AxFormActionPaneControl` between them. The mini-AOT tables gained the field groups
+  `generate table` produces for exactly this reason — the fixture was hand-written without them,
+  which is the contract `generate form`'s preflight check already warns about.
 
-4.5 **Coverage taxonomy:** port the K ∧ E ∧ T model (knowledge teaches ∧ eval proves ∧ tool
-builds) into a generated `eval/COVERAGE.md` with a `--check` CI mode; grow the fixture AOT
-beyond one table + one class so reference resolution in evals is realistic.
+**Baseline: 51 of 51 goldens compile clean, with zero unattributed diagnostics.** The count moves
+in both directions and only one of them is about the tool — it drops whenever the parser learns a
+severity prefix it had been discarding, and rises when a scaffolder is fixed. The signal to watch
+is the unattributed count, not the clean count. It first dipped from a flattering 48 because the
+metadata validator
+reports in its own shape (`Metadata Error: AxForm/<object>/Design/Controls/…/DataGroup: …`), which
+the parser did not recognise, and the attribution key was the golden's file stem, which truncates
+`NoYes.Extension` at the dot. Both dropped real findings on the floor while the scoreboard looked
+good — the same failure mode as a validator that passes because it never ran.
 
-**Gate:** CI red on any eval regression; coverage report shows per-family K/E/T status;
-clusters command returns ranked, classified clusters.
+The last eight reds fell in two groups. Five were false alarms: a case scores one artifact, but
+its command ships several, and compiling the scored file alone made the siblings dangle. Siblings
+now live in a `_companions` subfolder of the golden directory — invisible to the scorer, compiled
+by the oracle — and with them out of the way the real defects underneath surfaced: an `AxService`
+with an empty `ExternalName`, an `AxWorkflowTemplate` with no `Category`, a `WorkflowDocument`
+naming a query nothing generated, a CoC class whose name did not end in the literal `_Extension`
+and which restated a forbidden default parameter, a business event contract that `implements` a
+class, and a number sequence extending `NumberSeqApplicationModule_<Module>` — a name assembled
+from the abstract base, which exists in no module. Four cases were themselves wrong: extending a
+non-extensible `NoYes`, adding a privilege the duty already had, naming a policy query nothing
+generates, and hanging a number sequence off a module that does not exist.
+
+`known-reference-gap` cases are recorded but never classified as `TOOL_DEFECT`: their X++ names a
+sibling artifact the case's single golden does not include, or a standard object the fixture
+cannot contain. The mini-AOT fixture gained a query (once `generate query` could produce a
+readable one) and an `OnInitialized` delegate on `FmVehicleService`, without which the
+event-handler case could not compile however correct the scaffolder was.
+
+**AOT form-pattern compliance is closed.** All nine form patterns now name a pattern the AOS has,
+and every form eval case compiles clean against it.
+
+`scripts/emit-form-patterns.ps1` derives the whole registry — 162 definitions across top-level
+patterns *and* container sub-patterns: versions, required parts with cardinality, `<OneOf>` choice
+slots, declared sub-patterns, and the property values each part must carry — from
+`Microsoft.Dynamics.AX.Metadata.Patterns.dll` into
+`src/D365FO.Core/FormPatterns/form-patterns.json`, exactly as `emit-metadata-contracts.ps1` does
+for the DataContract catalog. `FormPatternCatalog` takes the structural half of every pattern from
+it (versions, design properties, required tree, design-root policy) and keeps the editorial half
+hand-written. `FormTemplatePatternRegistryTests` pins every template against the registry and its
+`KnownWrong` list is empty.
+
+Beyond five wrong version numbers, the migration corrected: `Lookup 1.2` → `LookupGridOnly 1.1`
+(no pattern named `Lookup` exists at all); `Workspace 1.0` → `WorkspaceOperational 1.1`
+(`Workspace` is an inactive 2.0); `ListPage 1.1` → its single version, the string `UX7 1.0`;
+`SidePanel` declared as a sub-pattern when it is a `Style`; and six sub-pattern names the catalog
+had invented — `Workspace_Tiles`, `Workspace_Links`, `ToolbarAndList`, … are really `SectionTiles`,
+`SectionRelatedLinks`, `ToolbarList`. The catalog's own note said those were "to be confirmed by
+mining"; the registry confirmed the alias had been the real name all along.
+
+Five things only the compiler could have told us, each now in a template: a Details Master title
+group requires a `HeaderTitle` and `MainGrid.DefaultAction` cannot be empty; a form may not repeat
+a control name, though the *extension's* name is what identifies a control's type; a Table of
+Contents page needs a title group *and* a content group even when empty, and must not declare
+`FieldsFieldGroups`; an operational workspace's lists are not inline at all — a tabbed-list page
+must hold a `FormPartControl` pointing at a separate `FormPartSectionList` form, so
+`generate form --pattern Workspace` now refuses `--field`/`--section` and says why rather than
+emitting a dangling FormPart; and the section sub-patterns' `1.0` versions are inactive.
+
+Two derivation corrections came with it, both in `RegistrySpecFactory`: a part's declared children
+are the ones that must be *present*, not the only ones that may appear — the closed set is the
+design root, proven by an AOS that accepts field controls on a TOC page while rejecting an
+ActionPane at the root; and versions come in two lineages, plain numbers and an older series whose
+version string is literally `UX7 1.0`, which sorts above `1.4` unless the lineages are ranked.
+
+**The 8 remaining reds are non-form:** a workflow and two security objects with an empty mandatory property; a custom service
+naming a class the command does not generate; `L2-enum-extension` extending `NoYes`, which is not
+extensible on this platform (a case-authoring bug, not a scaffolder one); and the three
+`known-reference-gap` cases, which are recorded but never classified.
+
+4.3 ❌ **L4 runtime oracle — not built.** It needs a live AOS, a `SysTestRunner` result parser
+(none exists; `test run` returns a raw output tail) and per-run fixture provisioning inside a real
+model. One prerequisite defect was fixed on the way: `test run --suite X` passed `"--suite X"` as a
+single argv element, so the flag could never have worked.
+
+4.4 ✅ **Classification & clusters** — `EvalTriage` derives a hypothesis for replay runs, where no
+model is in the loop: a golden mismatch can only be the scaffolder changing, and a validator
+complaining about output that *matches* a reviewed golden can only be the validator. Agent runs
+stay unclassified unless the runner passes `--hypothesis`, because there the same scorecard is
+equally consistent with a tool defect and with the agent's own mistake. `eval clusters` gained
+`--actionable`/`--top`, carries run ids as provenance and the failing dimensions, and exempts
+`known-reference-gap` cases so real clusters are not buried under documented noise.
+`d365fo eval knowledge` turns `KNOWLEDGE_GAP`/`MODEL_ERROR` runs into `skills/_source` proposals
+(K4), naming candidate topics *and the literal that links them* — a case no topic names yields no
+candidates, which is itself the finding.
+
+4.5 ✅ **Coverage taxonomy** — `eval/COVERAGE.md` is generated from `ObjectTypeRegistry` (families),
+a new `GenerateSurface` (capabilities), the case catalog (E) and the embedded corpus (K):
+**42 of 70 leaves complete**. Matching is word-bounded, so the table topic does not silently mark
+`AxTableExtension` as taught, and a `golden_pending` case proves nothing. `GenerateSurface` is
+gated in both directions — `generate <name> --help` must succeed for every entry, and every
+subcommand `CliApp` registers must have a leaf — so it cannot become the fifth drifting registry.
+Fixture growth: `VinEdt` (closing a reference `FmVehicle.VIN` had dangled on since the fixture was
+written), `FmVehicleStatus` and `FmVehicleQuery`, all produced by the CLI's own generators, plus
+an `OnInitialized` delegate on `FmVehicleService`. The whole fixture module compiles clean, which
+is what makes it usable as the L3 oracle's reference material.
+
+**Gate:** ✅ CI red on any eval regression (`eval` job); ✅ coverage report shows per-family K/E/T
+status and gates on drift; ✅ `eval clusters --actionable` returns three ranked, classified,
+evidence-carrying clusters. ❌ No runtime dimension — 4.3 is open.
 
 ---
 

@@ -100,11 +100,16 @@ public class MiniAotEndToEndTests : IDisposable
 
         var cls = Assert.Single(batch.Classes);
         Assert.Equal("FmVehicleService", cls.Name);
-        Assert.Equal(3, cls.Methods.Count);
+        Assert.Equal(4, cls.Methods.Count);
 
         Assert.Contains(cls.Methods, m => m.Name == "new");
         Assert.Contains(cls.Methods, m => m.Name == "run");
         Assert.Contains(cls.Methods, m => m.Name == "construct");
+
+        // The delegate L2-event-handler-basic subscribes to. delegateStr() is
+        // compile-time checked, so without it that case's golden cannot compile
+        // however correct the scaffolder is.
+        Assert.Contains(cls.Methods, m => m.Name == "OnInitialized");
     }
 
     // ─── Repository: count assertions ──────────────────────────────────────
@@ -120,6 +125,35 @@ public class MiniAotEndToEndTests : IDisposable
         Assert.Equal(2, counts.Tables);
         Assert.Equal(6, counts.Fields);
         Assert.Equal(1, counts.Classes);
+    }
+
+    /// <summary>
+    /// The fixture grew past "one table and one class" (plan item 4.5) so that
+    /// reference resolution in evals has something real to resolve against: before
+    /// this, <c>FmVehicle.VIN</c> named an EDT the index did not contain, so every
+    /// generated artifact touching it scored a reference violation that said
+    /// nothing about the artifact. All three files were produced by the CLI's own
+    /// generators, not hand-written — the same rule the corpus gives agents — and
+    /// the whole fixture module compiles clean under <c>eval verify-build</c>, which
+    /// is what makes it usable as the L3 oracle's reference material.
+    /// </summary>
+    [Fact]
+    public void ExtractAll_indexes_the_edt_enum_and_query_the_fixture_tables_reference()
+    {
+        var ex = new MetadataExtractor();
+        var batch = ex.ExtractAll(SamplesDir).Single();
+
+        var edt = Assert.Single(batch.Edts);
+        Assert.Equal("VinEdt", edt.Name);
+        Assert.Equal(
+            edt.Name,
+            batch.Tables.Single(t => t.Name == "FmVehicle").Fields.Single(f => f.Name == "VIN").EdtName);
+
+        var @enum = Assert.Single(batch.Enums);
+        Assert.Equal("FmVehicleStatus", @enum.Name);
+
+        var query = Assert.Single(batch.Queries);
+        Assert.Equal("FmVehicleQuery", query.Name);
     }
 
     [Fact]
@@ -168,7 +202,7 @@ public class MiniAotEndToEndTests : IDisposable
         Assert.NotNull(details);
         Assert.Equal("FmVehicleService", details!.Class.Name);
         Assert.Equal("TestModel", details.Class.Model);
-        Assert.Equal(3, details.Methods.Count);
+        Assert.Equal(4, details.Methods.Count);
 
         Assert.Contains(details.Methods, m => m.Name == "construct");
     }

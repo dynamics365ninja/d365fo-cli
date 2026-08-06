@@ -1,0 +1,22 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<AxClass>
+  <Name>ConFmVehicleImportService</Name>
+  <SourceCode>
+    <Declaration>class ConFmVehicleImportService extends SysOperationServiceBase
+{
+}
+</Declaration>
+    <Methods>
+      <Method>
+        <Name>process</Name>
+        <Source>public void process(ConFmVehicleImportContract _contract)
+{
+    Name vehicleNote = _contract.parmVehicleNote();
+
+    // service logic here
+}
+</Source>
+      </Method>
+    </Methods>
+  </SourceCode>
+</AxClass>
