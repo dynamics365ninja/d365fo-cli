@@ -60,8 +60,32 @@ function ConvertTo-Part([System.Xml.XmlElement] $control) {
     }
 
     $children = @()
+    $subPatterns = @()
     foreach ($c in $control.ChildNodes) {
-        if ($c.LocalName -eq 'Control') { $children += (ConvertTo-Part $c) }
+        switch ($c.LocalName) {
+            'Control' { $children += (ConvertTo-Part $c) }
+            # <OneOf> is a choice slot: exactly one of the listed controls appears
+            # there. Skipping it silently drops real parts — LookupGridOnly's whole
+            # list control (Grid | Tree | ListView) lives inside one.
+            'OneOf' {
+                $alts = @()
+                foreach ($alt in $c.ChildNodes) {
+                    if ($alt.LocalName -eq 'Control') { $alts += (ConvertTo-Part $alt) }
+                }
+                if ($alts.Count) {
+                    $children += [ordered]@{
+                        part  = ($alts | ForEach-Object { $_.part }) -join '|'
+                        alias = $alts[0].alias
+                        type  = ($alts | ForEach-Object { $_.type }) -join '|'
+                        count = $(if ($c.GetAttribute('Count')) { $c.GetAttribute('Count') } else { '1' })
+                        extraChildrenAllowed = $true
+                        oneOf = $alts
+                    }
+                }
+            }
+            # <SubPattern Name="X" /> — the container must declare that sub-pattern.
+            'SubPattern' { $subPatterns += $c.GetAttribute('Name') }
+        }
     }
 
     $node = [ordered]@{
@@ -73,6 +97,7 @@ function ConvertTo-Part([System.Xml.XmlElement] $control) {
         extraChildrenAllowed = ($control.GetAttribute('Children') -eq '*')
     }
     if ($props.Count) { $node.properties = $props }
+    if ($subPatterns.Count) { $node.subPatterns = $subPatterns }
     if ($children.Count) { $node.children = $children }
     return $node
 }

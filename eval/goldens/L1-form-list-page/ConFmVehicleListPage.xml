@@ -34,10 +34,17 @@ public class ConFmVehicleListPage extends FormRun
     <Name>FmVehicle</Name><Table>FmVehicle</Table><Fields /><ReferencedDataSources /><AllowCreate>No</AllowCreate><AllowDelete>No</AllowDelete><AllowEdit>No</AllowEdit><InsertIfEmpty>No</InsertIfEmpty><DataSourceLinks /><DerivedDataSources /></AxFormDataSource>
   </DataSources>
   <Design>
+    <ArrangeMethod xmlns="">Vertical</ArrangeMethod>
     <Caption xmlns="">Fleet vehicles</Caption>
+    <Columns xmlns="">1</Columns>
+    <ColumnsMode xmlns="">Fixed</ColumnsMode>
     <DataSource xmlns="">FmVehicle</DataSource>
     <Pattern xmlns="">ListPage</Pattern>
-    <PatternVersion xmlns="">1.1</PatternVersion>
+    <!--
+      ListPage has exactly one version in the AOT registry and it is the string
+      "UX7 1.0" — "1.1" resolves to nothing ("Pattern 'ListPage 1.1' not found").
+    -->
+    <PatternVersion xmlns="">UX7 1.0</PatternVersion>
     <Style xmlns="">ListPage</Style>
     <TitleDataSource xmlns="">FmVehicle</TitleDataSource>
     <Controls xmlns="">
@@ -112,10 +119,16 @@ public class ConFmVehicleListPage extends FormRun
       </AxFormControl>
       <AxFormControl xmlns="" i:type="AxFormGridControl">
         <Name>Grid</Name>
+        <!-- Registry part 'Grid': a list page's grid is read-only. -->
+        <AllowEdit>No</AllowEdit>
         <ElementPosition>1431655764</ElementPosition>
         <FilterExpression>%1</FilterExpression>
+        <Height>-1</Height>
+        <HeightMode>SizeToAvailable</HeightMode>
         <Type>Grid</Type>
         <VerticalSpacing>-1</VerticalSpacing>
+        <Width>-1</Width>
+        <WidthMode>SizeToAvailable</WidthMode>
         <FormControlExtension i:nil="true" />
         <Controls>
           <AxFormControl xmlns="" i:type="AxFormStringControl">

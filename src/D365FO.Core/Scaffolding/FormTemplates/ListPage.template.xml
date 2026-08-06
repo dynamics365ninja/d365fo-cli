@@ -33,9 +33,16 @@ public class {FormName} extends FormRun
     </AxFormDataSource>
   </DataSources>
   <Design>
-{Caption}    <DataSource xmlns="">{DsName}</DataSource>
+    <ArrangeMethod xmlns="">Vertical</ArrangeMethod>
+{Caption}    <Columns xmlns="">1</Columns>
+    <ColumnsMode xmlns="">Fixed</ColumnsMode>
+    <DataSource xmlns="">{DsName}</DataSource>
     <Pattern xmlns="">ListPage</Pattern>
-    <PatternVersion xmlns="">1.1</PatternVersion>
+    <!--
+      ListPage has exactly one version in the AOT registry and it is the string
+      "UX7 1.0" — "1.1" resolves to nothing ("Pattern 'ListPage 1.1' not found").
+    -->
+    <PatternVersion xmlns="">UX7 1.0</PatternVersion>
     <Style xmlns="">ListPage</Style>
     <TitleDataSource xmlns="">{DsName}</TitleDataSource>
     <Controls xmlns="">
@@ -110,10 +117,16 @@ public class {FormName} extends FormRun
       </AxFormControl>
       <AxFormControl xmlns="" i:type="AxFormGridControl">
         <Name>Grid</Name>
+        <!-- Registry part 'Grid': a list page's grid is read-only. -->
+        <AllowEdit>No</AllowEdit>
         <ElementPosition>1431655764</ElementPosition>
         <FilterExpression>%1</FilterExpression>
+        <Height>-1</Height>
+        <HeightMode>SizeToAvailable</HeightMode>
         <Type>Grid</Type>
         <VerticalSpacing>-1</VerticalSpacing>
+        <Width>-1</Width>
+        <WidthMode>SizeToAvailable</WidthMode>
         <FormControlExtension i:nil="true" />
         <Controls>
 {GridFieldControls}        </Controls>

@@ -18,10 +18,10 @@ namespace D365FO.Core.Tests;
 /// doing exactly that.
 /// </para>
 /// <para>
-/// The five are listed in <see cref="KnownWrong"/> rather than silently tolerated:
-/// each needs its template restructured to satisfy the real pattern's required parts,
-/// and its entry removed here when that lands. Shrinking this list is the work item;
-/// adding to it is a regression.
+/// The ones still wrong are listed in <see cref="KnownWrong"/> rather than silently
+/// tolerated: each needs its template restructured to satisfy the real pattern's
+/// required parts, and its entry removed here when that lands. Shrinking this list is
+/// the work item; adding to it is a regression.
 /// </para>
 /// </remarks>
 public class FormTemplatePatternRegistryTests
@@ -34,7 +34,6 @@ public class FormTemplatePatternRegistryTests
     {
         ["DetailsMaster 1.1"] = "DetailsMaster exists; 1.1 does not. Newest is 1.4, which wants NavigationList(SidePanel) + Details/Overview tab pages",
         ["DetailsTransaction 1.1"] = "DetailsTransaction exists; 1.1 does not. Newest is 1.4",
-        ["ListPage 1.1"] = "ListPage exists with exactly one version, the string 'UX7 1.0' — only the version is wrong",
         ["Lookup 1.2"] = "there is no pattern named 'Lookup' at all: LookupGridOnly 1.1, LookupTab 1.0, LookupPreview 1.0",
         ["Workspace 1.0"] = "Workspace exists only as an inactive 2.0; the active pattern is WorkspaceOperational 1.1",
     };
@@ -87,6 +86,32 @@ public class FormTemplatePatternRegistryTests
 
         // And the alias is what the AOS puts in its error messages.
         Assert.Equal("Details Master", FormPatternRegistry.Find("DetailsMaster", "1.4")!.Alias);
+    }
+
+    /// <summary>
+    /// The sub-pattern names this repo's catalog does not have. Four of them are ours
+    /// spelled wrong (`ToolbarAndList` for the registry's `ToolbarList`, and friends) —
+    /// and the shipped-form census backs the registry: real forms declare
+    /// `ToolbarList 1.2`. The rest are sub-patterns the catalog never covered.
+    /// Recorded rather than silently tolerated: <c>RegistrySpecFactory</c> drops
+    /// unknown names from <c>AllowedSubPatterns</c>, so FP007 would otherwise quietly
+    /// stop checking them.
+    /// </summary>
+    [Fact]
+    public void The_sub_pattern_names_the_catalog_is_missing_are_the_ones_we_know_about()
+    {
+        var missing = RegistrySpecFactory.UnknownSubPatternNames();
+
+        Assert.Equal(
+            [
+                "Custom",
+                "HorizontalFieldsButtonsGroup", // ours drops the plural: HorizontalFieldsButtonGroup
+                "TabPageTabularFields",
+                "ToolbarFields",               // ours: ToolbarAndFields
+                "ToolbarList",                 // ours: ToolbarAndList
+                "ToolbarListDouble",           // ours: ToolbarAndListDouble
+            ],
+            missing);
     }
 
     /// <summary>

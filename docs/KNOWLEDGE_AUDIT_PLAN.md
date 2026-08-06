@@ -289,7 +289,7 @@ Four things this could only be learned by running it, and all four were wrong fi
   `generate table` produces for exactly this reason — the fixture was hand-written without them,
   which is the contract `generate form`'s preflight check already warns about.
 
-**Baseline: 37 of 51 goldens compile clean, with zero unattributed diagnostics.** The count moves
+**Baseline: 38 of 51 goldens compile clean, with zero unattributed diagnostics.** The count moves
 in both directions and only one of them is about the tool — it drops whenever the parser learns a
 severity prefix it had been discarding, and rises when a scaffolder is fixed. The signal to watch
 is the unattributed count, not the clean count. It first dipped from a flattering 48 because the
@@ -305,8 +305,8 @@ cannot contain. The mini-AOT fixture gained a query (once `generate query` could
 readable one) and an `OnInitialized` delegate on `FmVehicleService`, without which the
 event-handler case could not compile however correct the scaffolder was.
 
-**The 14 remaining reds are the honest work queue**, and the largest slice is one project:
-**AOT form-pattern compliance**. Five form cases fail `FormPatternValidation` — a different
+**The 13 remaining reds are the honest work queue**, and the largest slice is one project:
+**AOT form-pattern compliance**. Four form cases fail `FormPatternValidation` — a different
 validator from this repo's own FP001–FP010, run by the AOS against its pattern registry.
 
 That registry is now derived rather than guessed: `scripts/emit-form-patterns.ps1` extracts all

@@ -92,6 +92,7 @@ public static class FormPatternCatalog
     {
         "SimpleList",
         "TableOfContents",
+        "ListPage",
 
     };
 

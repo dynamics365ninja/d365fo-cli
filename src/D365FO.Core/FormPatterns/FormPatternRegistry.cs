@@ -11,6 +11,12 @@ namespace D365FO.Core.FormPatterns;
 /// <param name="Count">Cardinality as the registry writes it: <c>1</c>, <c>0..1</c>, <c>1..*</c>, <c>0..*</c>.</param>
 /// <param name="ExtraChildrenAllowed">The registry's <c>Children="*"</c> — anything else may appear inside.</param>
 /// <param name="Properties">Property values the AOS requires on this control.</param>
+/// <param name="SubPatterns">Sub-patterns the container must declare, from <c>&lt;SubPattern&gt;</c>.</param>
+/// <param name="IsChoice">
+/// This slot came from a <c>&lt;OneOf&gt;</c>: exactly one of the pipe-separated
+/// <see cref="Type"/>s appears here. LookupGridOnly's entire list control
+/// (Grid | Tree | ListView) is one of these, and skipping them dropped the part.
+/// </param>
 public sealed record RegisteredPart(
     string Part,
     string? Alias,
@@ -18,7 +24,9 @@ public sealed record RegisteredPart(
     string Count,
     bool ExtraChildrenAllowed,
     IReadOnlyDictionary<string, string> Properties,
-    IReadOnlyList<RegisteredPart> Children);
+    IReadOnlyList<RegisteredPart> Children,
+    IReadOnlyList<string> SubPatterns,
+    bool IsChoice);
 
 /// <summary>One pattern the AOS will validate a form against.</summary>
 /// <param name="Alias">Human-readable name the validator uses in its messages ("Details Master").</param>
@@ -142,6 +150,13 @@ public static class FormPatternRegistry
             foreach (var k in kids.EnumerateArray()) children.Add(ReadPart(k));
         }
 
+        var subPatterns = new List<string>();
+        if (e.TryGetProperty("subPatterns", out var subs) && subs.ValueKind == JsonValueKind.Array)
+        {
+            foreach (var s in subs.EnumerateArray())
+                if (s.GetString() is { Length: > 0 } name) subPatterns.Add(name);
+        }
+
         return new RegisteredPart(
             e.TryGetProperty("part", out var part) ? part.GetString() ?? "" : "",
             e.TryGetProperty("alias", out var alias) ? alias.GetString() : null,
@@ -149,6 +164,8 @@ public static class FormPatternRegistry
             e.TryGetProperty("count", out var count) ? count.GetString() ?? "1" : "1",
             e.TryGetProperty("extraChildrenAllowed", out var extra) && extra.GetBoolean(),
             properties,
-            children);
+            children,
+            subPatterns,
+            e.TryGetProperty("oneOf", out var oneOf) && oneOf.ValueKind == JsonValueKind.Array);
     }
 }

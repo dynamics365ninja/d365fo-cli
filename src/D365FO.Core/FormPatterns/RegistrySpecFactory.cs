@@ -73,10 +73,22 @@ public static class RegistrySpecFactory
     private static NodeSpec ToNodeSpec(RegisteredPart part) => new()
     {
         Id = string.IsNullOrEmpty(part.Part) ? (part.Alias ?? part.Type) : part.Part,
-        ControlTypes = [NormalizeType(part.Type)],
+        // A choice slot lists its alternatives pipe-separated; NodeSpec already models
+        // "one of these types" natively.
+        ControlTypes = part.Type.Split('|', StringSplitOptions.RemoveEmptyEntries)
+            .Select(NormalizeType).ToList(),
         Occurrence = ToOccurrence(part.Count),
         NameHint = string.IsNullOrEmpty(part.Part) ? null : part.Part,
-        Properties = part.Properties.Count > 0 ? part.Properties : null,
+        RequiresSubPattern = part.SubPatterns.Count > 0,
+        // Only names this repo's sub-pattern catalog actually knows. The registry uses
+        // several our catalog spells differently (ToolbarList vs ToolbarAndList,
+        // HorizontalFieldsButtonsGroup vs …ButtonGroup) or does not have at all — see
+        // FormTemplatePatternRegistryTests, which lists them. Claiming an unknown name
+        // is "allowed" would make FP007 accept anything.
+        AllowedSubPatterns = KnownSubPatterns(part.SubPatterns),
+        // Property requirements belong to a specific alternative, so a choice slot
+        // carries none: demanding the Grid's AllowEdit of a Tree would be nonsense.
+        Properties = !part.IsChoice && part.Properties.Count > 0 ? part.Properties : null,
         Children = part.Children.Count > 0 ? part.Children.Select(ToNodeSpec).ToList() : null,
         // The registry lists parts in the order the AOS expects them, but it does not
         // say that order is enforced — and it demonstrably is not for optional parts.
@@ -90,6 +102,46 @@ public static class RegistrySpecFactory
         // children are the ones that must be present, not the only ones that may be.
         Extra = ExtraChildren.Any,
     };
+
+    /// <summary>
+    /// The registry's sub-pattern names this repo's catalog can actually resolve.
+    /// Returns null when none of them are known, which leaves FP006 asking for a
+    /// sub-pattern without FP007 pretending to know which ones are valid.
+    /// </summary>
+    internal static IReadOnlyList<string>? KnownSubPatterns(IReadOnlyList<string> names)
+    {
+        var known = names.Where(IsKnownSubPattern).ToList();
+        return known.Count > 0 ? known : null;
+    }
+
+    /// <summary>Registry sub-pattern names this repo's catalog does not have — a tracked gap.</summary>
+    public static IReadOnlyList<string> UnknownSubPatternNames() =>
+        FormPatternRegistry.All
+            .Where(p => p.Active && p.Design is not null)
+            .SelectMany(p => Flatten(p.Design!))
+            .SelectMany(part => part.SubPatterns)
+            .Distinct(StringComparer.Ordinal)
+            .Where(n => !IsKnownSubPattern(n))
+            .OrderBy(n => n, StringComparer.Ordinal)
+            .ToList();
+
+    /// <summary>
+    /// Matched against the sub-pattern array directly rather than through
+    /// <c>FormPatternCatalog.ResolveSubPattern</c>: that goes via an index which is
+    /// itself built from <c>Patterns</c>, and <c>Patterns</c> is what calls this.
+    /// </summary>
+    private static bool IsKnownSubPattern(string name) =>
+        FormPatternCatalog.SubPatterns.Any(s =>
+            string.Equals(s.XmlName, name, StringComparison.OrdinalIgnoreCase) ||
+            (s.XmlAliases?.Contains(name, StringComparer.OrdinalIgnoreCase) ?? false));
+
+    private static IEnumerable<RegisteredPart> Flatten(RegisteredPart part)
+    {
+        yield return part;
+        foreach (var child in part.Children)
+            foreach (var descendant in Flatten(child))
+                yield return descendant;
+    }
 
     private static string NormalizeType(string type) =>
         TypeAliases.TryGetValue(type, out var mapped) ? mapped : type;

@@ -1,13 +1,13 @@
 {
-  "capturedUtc": "2026-08-06T11:36:48.7103369+00:00",
+  "capturedUtc": "2026-08-06T11:48:57.1178162+00:00",
   "host": "D365ASLDEV2-1",
   "packagesRoot": "K:\\AosService\\PackagesLocalDirectory",
   "compiler": "K:\\AosService\\PackagesLocalDirectory\\Bin\\xppc.exe",
-  "compilerArgs": "-metadata=C:\\Users\\Admin7e00859cee\\AppData\\Local\\Temp\\2\\claude\\K--repos-d365fo-cli\\ac58616d-375a-4381-b289-fca2d371276f\\scratchpad\\l3toc -modelmodule=D365FoCliEvalGoldens -output=C:\\Users\\Admin7e00859cee\\AppData\\Local\\Temp\\2\\claude\\K--repos-d365fo-cli\\ac58616d-375a-4381-b289-fca2d371276f\\scratchpad\\l3toc\\bin -referencefolder=K:\\AosService\\PackagesLocalDirectory -refPath=C:\\Users\\Admin7e00859cee\\AppData\\Local\\Temp\\2\\claude\\K--repos-d365fo-cli\\ac58616d-375a-4381-b289-fca2d371276f\\scratchpad\\l3toc\\bin -log=C:\\Users\\Admin7e00859cee\\AppData\\Local\\Temp\\2\\claude\\K--repos-d365fo-cli\\ac58616d-375a-4381-b289-fca2d371276f\\scratchpad\\l3toc\\Dynamics.AX.D365FoCliEvalGoldens.xppc.log",
+  "compilerArgs": "-metadata=C:\\Users\\Admin7e00859cee\\AppData\\Local\\Temp\\2\\claude\\K--repos-d365fo-cli\\ac58616d-375a-4381-b289-fca2d371276f\\scratchpad\\l3lp -modelmodule=D365FoCliEvalGoldens -output=C:\\Users\\Admin7e00859cee\\AppData\\Local\\Temp\\2\\claude\\K--repos-d365fo-cli\\ac58616d-375a-4381-b289-fca2d371276f\\scratchpad\\l3lp\\bin -referencefolder=K:\\AosService\\PackagesLocalDirectory -refPath=C:\\Users\\Admin7e00859cee\\AppData\\Local\\Temp\\2\\claude\\K--repos-d365fo-cli\\ac58616d-375a-4381-b289-fca2d371276f\\scratchpad\\l3lp\\bin -log=C:\\Users\\Admin7e00859cee\\AppData\\Local\\Temp\\2\\claude\\K--repos-d365fo-cli\\ac58616d-375a-4381-b289-fca2d371276f\\scratchpad\\l3lp\\Dynamics.AX.D365FoCliEvalGoldens.xppc.log",
   "modelName": "D365FoCliEvalGoldens",
   "total": 51,
-  "clean": 37,
-  "failed": 14,
+  "clean": 38,
+  "failed": 13,
   "skipped": 0,
   "cases": [
     {
@@ -123,13 +123,11 @@
     },
     {
       "caseId": "L1-form-list-page",
-      "verdict": "errors",
-      "errors": 1,
+      "verdict": "clean",
+      "errors": 0,
       "warnings": 0,
       "ruleIds": [],
-      "messages": [
-        "Unable to validate pattern \u0027ListPage 1.1\u0027. Message: Pattern \u0027ListPage 1.1\u0027 not found."
-      ]
+      "messages": []
     },
     {
       "caseId": "L1-form-lookup",
@@ -415,8 +413,8 @@
         "XPPC-METHOD-MISSING"
       ],
       "messages": [
-        "The \u0027NumberSeqApplicationModule_ConDemo\u0027 argument of the \u0027classStr\u0027 compile-time function does not specify a known class.",
         "The ExtendsOfAttribute specification is invalid. Please specify an existing element to extend.",
+        "The \u0027NumberSeqApplicationModule_ConDemo\u0027 argument of the \u0027classStr\u0027 compile-time function does not specify a known class.",
         "The next method cannot be invoked in method \u0027loadModule\u0027 because it\u0027s not a Chain Of Command Method.",
         "The \u0027ConDemoNum\u0027 argument of the \u0027extendedTypeNum\u0027 compile-time function does not specify a known extended data type.",
         "ClassDoesNotContainMethod: Class \u0027NumberSeqApplicationModule_ConDemo\u0027 does not contain a definition for method \u0027create\u0027 and no extension method \u0027create\u0027 accepting a first argument of type \u0027NumberSeqApplicationModule_ConDemo\u0027 is found on any extension class."
