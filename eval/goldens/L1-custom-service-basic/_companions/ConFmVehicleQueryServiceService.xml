@@ -1,0 +1,21 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<AxClass>
+  <Name>ConFmVehicleQueryServiceService</Name>
+  <SourceCode>
+    <Declaration>public class ConFmVehicleQueryServiceService
+{
+}
+</Declaration>
+    <Methods>
+      <Method>
+        <Name>lookup</Name>
+        <Source>public str lookup()
+{
+    // TODO: implement
+    return '';
+}
+</Source>
+      </Method>
+    </Methods>
+  </SourceCode>
+</AxClass>

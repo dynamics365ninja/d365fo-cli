@@ -1,0 +1,20 @@
+{
+  "runId": "20260806T131952013Z__L2-numberseq-basic__280589f40c4a402faf18b1afa28fb652",
+  "caseId": "L2-numberseq-basic",
+  "tier": 2,
+  "timestampUtc": "2026-08-06T13:19:52.0130448+00:00",
+  "source": "build-oracle",
+  "score": {
+    "xppErrors": 0,
+    "referenceErrors": 0,
+    "goldenMatch": true,
+    "goldenDiff": {
+      "missing": [],
+      "extra": [],
+      "changed": [],
+      "isMatch": true
+    },
+    "buildClean": true,
+    "buildErrors": 0
+  }
+}

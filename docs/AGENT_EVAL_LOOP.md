@@ -245,6 +245,17 @@ report a verdict nobody collected*:
 - a diagnostic naming an object no case provisioned is reported as *unattributed*
   rather than spread across every case.
 
+**Companions.** A case scores exactly one artifact — `EvalScorer` rejects a golden
+directory holding more, and rightly so. But one generate command usually ships
+several: `generate custom-service` writes the `AxService` *and* the class it names;
+`generate business-event` writes the event and its contract. Compiling the scored
+file alone left those siblings dangling and reported five cases red for objects the
+tool does in fact generate. Sibling artifacts now live in a `_companions` subfolder
+of the case's golden directory — invisible to the scorer, which enumerates the case
+directory non-recursively, and compiled by the oracle. They are captured from the
+same command run as the golden, so a companion that drifts fails the build exactly
+like the golden does.
+
 Its first runs found seven shipping defects the offline loop had no way to see —
 every generated `AxQuery` crashed the metadata reader; a generated event handler
 put its method where the provider could not find the name; a generated migration
@@ -258,6 +269,22 @@ seven are fixed. Each became visible only once the one before it stopped abortin
 the compile earlier, which is the usual shape of a compiler-backed oracle: the queue
 deepens as it clears.
 
+Then the nine form patterns, and then — once companions stopped masking them —
+eight more: an `AxService` published under no name at all (`ExternalName` is not
+optional); a workflow template with no `Category`, which the command treated as a
+UI nicety and the metadata provider treats as fatal; a `WorkflowDocument` whose
+`getQueryName()` named a query nothing created; a `canSubmitToWorkflow` CoC class
+named `_WorkflowExtension`, which does not end with the literal `_Extension` the
+compiler checks for, restating a default parameter value CoC forbids; a business
+event contract that `implements BusinessEventsContract`, which is a class, not an
+interface; and a number sequence extending `NumberSeqApplicationModule_<Module>`,
+a name assembled from the abstract base class that exists in no module — the
+convention is `NumberSeqModule<Module>`, and the wrapped `loadModule` is
+`protected`, not `public`. Four cases were also mis-authored: they extended a
+`NoYes` that is not extensible, added a privilege a duty already had, named a
+policy query nothing generates, and hung a number sequence off a module that does
+not exist. The catalog is now 51 of 51 clean.
+
 **Attribution is the load-bearing part.** Every diagnostic must land on the case
 whose golden produced the object it names, and the parser must recognise the shapes
 the toolchain actually emits — otherwise the oracle under-reports while looking
@@ -265,9 +292,9 @@ green, which is worse than not running it. The baseline is reported with an
 unattributed count for exactly that reason; it is currently zero.
 
 Cases tagged `known-reference-gap` are exempt from this dimension too: their X++
-names a sibling artifact the case's single golden does not include, or a standard
-object the fixture cannot contain, and the compiler rejects those names for exactly
-the reason `validate references` does.
+names a standard object the fixture cannot contain, and the compiler rejects those
+names for exactly the reason `validate references` does. The *sibling* half of that
+exemption is gone — siblings are companions now, and they compile.
 
 ---
 

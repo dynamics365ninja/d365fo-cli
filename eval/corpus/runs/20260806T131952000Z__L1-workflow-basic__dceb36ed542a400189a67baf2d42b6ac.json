@@ -1,0 +1,20 @@
+{
+  "runId": "20260806T131952000Z__L1-workflow-basic__dceb36ed542a400189a67baf2d42b6ac",
+  "caseId": "L1-workflow-basic",
+  "tier": 1,
+  "timestampUtc": "2026-08-06T13:19:52.0003546+00:00",
+  "source": "build-oracle",
+  "score": {
+    "xppErrors": 0,
+    "referenceErrors": 0,
+    "goldenMatch": true,
+    "goldenDiff": {
+      "missing": [],
+      "extra": [],
+      "changed": [],
+      "isMatch": true
+    },
+    "buildClean": true,
+    "buildErrors": 0
+  }
+}

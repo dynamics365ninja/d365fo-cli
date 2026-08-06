@@ -1,0 +1,20 @@
+{
+  "runId": "20260806T131951963Z__L1-map-multi-table__ee641a5f2cba4e3c947a872205018da3",
+  "caseId": "L1-map-multi-table",
+  "tier": 1,
+  "timestampUtc": "2026-08-06T13:19:51.9638405+00:00",
+  "source": "build-oracle",
+  "score": {
+    "xppErrors": 0,
+    "referenceErrors": 0,
+    "goldenMatch": true,
+    "goldenDiff": {
+      "missing": [],
+      "extra": [],
+      "changed": [],
+      "isMatch": true
+    },
+    "buildClean": true,
+    "buildErrors": 0
+  }
+}

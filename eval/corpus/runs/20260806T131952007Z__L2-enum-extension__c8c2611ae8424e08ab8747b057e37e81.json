@@ -1,0 +1,20 @@
+{
+  "runId": "20260806T131952007Z__L2-enum-extension__c8c2611ae8424e08ab8747b057e37e81",
+  "caseId": "L2-enum-extension",
+  "tier": 2,
+  "timestampUtc": "2026-08-06T13:19:52.0072825+00:00",
+  "source": "build-oracle",
+  "score": {
+    "xppErrors": 0,
+    "referenceErrors": 0,
+    "goldenMatch": true,
+    "goldenDiff": {
+      "missing": [],
+      "extra": [],
+      "changed": [],
+      "isMatch": true
+    },
+    "buildClean": true,
+    "buildErrors": 0
+  }
+}

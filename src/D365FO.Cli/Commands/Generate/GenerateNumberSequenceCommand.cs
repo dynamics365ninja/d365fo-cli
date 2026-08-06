@@ -16,7 +16,7 @@ public sealed class GenerateNumberSequenceCommand : Command<GenerateNumberSequen
     public sealed class Settings : GenerateSettings
     {
         [CommandArgument(0, "<MODULE_NAME>")]
-        [System.ComponentModel.Description("Module name suffix, e.g. 'Cust'. The CoC target will be NumberSeqApplicationModule_<MODULE_NAME>.")]
+        [System.ComponentModel.Description("Existing number-sequence module, e.g. 'Customer' or 'Asset'. The CoC target will be NumberSeqModule<MODULE_NAME>.")]
         public string ModuleName { get; init; } = "";
 
         [CommandOption("--edt <NAME>")]
@@ -64,7 +64,7 @@ public sealed class GenerateNumberSequenceCommand : Command<GenerateNumberSequen
         if (!hasInstall && !hasOut)
             return RenderHelpers.Render(kind, ToolResult<object>.Fail(D365FoErrorCodes.BadInput, "--out or --install-to is required."));
 
-        var extensionName = $"NumberSeqApplicationModule_{settings.ModuleName}_Extension";
+        var extensionName = NumberSequenceScaffolder.ModuleClassName(settings.ModuleName) + "_Extension";
         var handlerClass  = string.IsNullOrWhiteSpace(settings.TableName)
             ? null
             : settings.TableName + "_NumberSeqHandler";

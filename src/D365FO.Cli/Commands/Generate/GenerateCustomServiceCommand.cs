@@ -22,6 +22,10 @@ public sealed class GenerateCustomServiceCommand : Command<GenerateCustomService
         [System.ComponentModel.Description("Service class name. Defaults to <NAME>Service.")]
         public string? ClassName { get; init; }
 
+        [CommandOption("--external-name <NAME>")]
+        [System.ComponentModel.Description("Name the service is published under. Defaults to <NAME>; it cannot be empty, the metadata provider rejects the service.")]
+        public string? ExternalName { get; init; }
+
         [CommandOption("--group-name <NAME>")]
         [System.ComponentModel.Description("Service group name. Defaults to <NAME>Group.")]
         public string? GroupName { get; init; }
@@ -54,6 +58,11 @@ public sealed class GenerateCustomServiceCommand : Command<GenerateCustomService
         if (string.IsNullOrWhiteSpace(settings.Name))
             return RenderHelpers.Render(kind, ToolResult<object>.Fail(D365FoErrorCodes.BadInput, "Service name required."));
 
+        // The suffix is appended unconditionally, so "ConFmVehicleQueryService" yields
+        // class "ConFmVehicleQueryServiceService". Ugly, and the shipped services do
+        // name their class after themselves — but dropping the suffix makes the class
+        // and the service collide on one path under a flat --out, and that trade is
+        // worse than the stutter. Pass --class-name to choose the name yourself.
         var className = string.IsNullOrWhiteSpace(settings.ClassName) ? settings.Name + "Service" : settings.ClassName!;
         var groupName = string.IsNullOrWhiteSpace(settings.GroupName) ? settings.Name + "Group"   : settings.GroupName!;
 
@@ -92,7 +101,7 @@ public sealed class GenerateCustomServiceCommand : Command<GenerateCustomService
                 classPath!, settings.Overwrite);
 
             var serviceResult = ScaffoldFileWriter.Write(
-                CustomServiceScaffolder.ServiceXml(settings.Name, className, ops),
+                CustomServiceScaffolder.ServiceXml(settings.Name, className, ops, settings.ExternalName),
                 servicePath!, settings.Overwrite);
 
             var groupResult = ScaffoldFileWriter.Write(

@@ -11,15 +11,37 @@ public enum NumberSequenceScope { Company, Shared }
 public static class NumberSequenceScaffolder
 {
     /// <summary>
-    /// Scaffolds a CoC extension of the per-module <c>NumberSeqApplicationModule_&lt;ModuleName&gt;</c>
+    /// The AOT name of the module class a number sequence attaches to.
+    /// </summary>
+    /// <remarks>
+    /// The convention is <c>NumberSeqModule&lt;Module&gt;</c> — <c>NumberSeqModuleAsset</c>,
+    /// <c>NumberSeqModuleCustomer</c>, <c>NumberSeqModuleBank</c>. This scaffolder used
+    /// to target <c>NumberSeqApplicationModule_&lt;Module&gt;</c>, which is the name of
+    /// the abstract base class with a suffix bolted on; no such class exists in any
+    /// module, so every scaffold it produced failed with "ExtendsOf attribute
+    /// specification is invalid", and the <c>next</c> call then failed a second time
+    /// because a class that extends nothing has nothing to chain to.
+    /// </remarks>
+    public static string ModuleClassName(string moduleName) =>
+        moduleName.StartsWith("NumberSeqModule", StringComparison.Ordinal)
+            ? moduleName
+            : "NumberSeqModule" + moduleName;
+
+    /// <summary>
+    /// Scaffolds a CoC extension of the per-module <c>NumberSeqModule&lt;ModuleName&gt;</c>
     /// class that registers a new number sequence reference in <c>loadModule()</c>.
     /// </summary>
+    /// <remarks>
+    /// The target must already exist: a number sequence hangs off an existing module,
+    /// and creating a genuinely new one means a new <c>NumberSeqModule</c> enum value,
+    /// which is not what this command does.
+    /// </remarks>
     public static XDocument ModuleExtension(
         string moduleName,
         string edtName,
         NumberSequenceScope scope = NumberSequenceScope.Company)
     {
-        var targetClass   = $"NumberSeqApplicationModule_{moduleName}";
+        var targetClass   = ModuleClassName(moduleName);
         var extensionName = targetClass + "_Extension";
 
         var declaration =
@@ -32,8 +54,10 @@ public static class NumberSequenceScaffolder
             ? "    datatype.addParameterType(NumberSeqParameterType::DataArea, false, false);"
             : "    datatype.addParameterType(NumberSeqParameterType::DataArea, true, false);";
 
+        // protected, not public: a CoC method's signature has to match the one it
+        // wraps, and NumberSeqApplicationModule::loadModule is protected.
         var loadModuleSrc =
-            "public void loadModule()\n" +
+            "protected void loadModule()\n" +
             "{\n" +
             "    next loadModule();\n" +
             "\n" +

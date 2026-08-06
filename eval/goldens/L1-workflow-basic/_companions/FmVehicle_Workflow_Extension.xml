@@ -1,0 +1,26 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<AxClass>
+  <Name>FmVehicle_Workflow_Extension</Name>
+  <SourceCode>
+    <Declaration>[ExtensionOf(tableStr(FmVehicle))]
+final class FmVehicle_Workflow_Extension
+{
+}
+</Declaration>
+    <Methods>
+      <Method>
+        <Name>canSubmitToWorkflow</Name>
+        <Source>public boolean canSubmitToWorkflow(str _workflowType)
+{
+    boolean canSubmit = next canSubmitToWorkflow(_workflowType);
+
+    // Add conditions under which this record can be submitted:
+    // canSubmit = canSubmit &amp;&amp; this.Status == MyStatus::Draft;
+
+    return canSubmit;
+}
+</Source>
+      </Method>
+    </Methods>
+  </SourceCode>
+</AxClass>

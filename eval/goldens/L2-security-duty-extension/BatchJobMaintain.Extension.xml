@@ -1,6 +1,6 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
 <AxSecurityDutyExtension>
-  <Name>ConFmVehicleMaintainDuty.Extension</Name>
+  <Name>BatchJobMaintain.Extension</Name>
   <Privileges>
     <AxSecurityPrivilegeReference>
       <Name>ConFmVehicleMaintainPriv</Name>

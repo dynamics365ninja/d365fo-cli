@@ -1,0 +1,24 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<AxClass>
+  <Name>ConFmVehicleImportContract</Name>
+  <SourceCode>
+    <Declaration>[DataContractAttribute]
+class ConFmVehicleImportContract
+{
+    Name vehicleNote;
+}
+</Declaration>
+    <Methods>
+      <Method>
+        <Name>parmVehicleNote</Name>
+        <Source>[DataMemberAttribute('VehicleNote')]
+public Name parmVehicleNote(Name _vehicleNote = vehicleNote)
+{
+    vehicleNote = _vehicleNote;
+    return vehicleNote;
+}
+</Source>
+      </Method>
+    </Methods>
+  </SourceCode>
+</AxClass>

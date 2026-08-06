@@ -1,6 +1,7 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
 <AxWorkflowTemplate xmlns="Microsoft.Dynamics.AX.Metadata.V2">
   <Name>ConFmVehicleNoteWorkflow</Name>
+  <Category>FixedAssets</Category>
   <Document>ConFmVehicleNoteWorkflowDocument</Document>
   <DocumentMenuItem>ConFmVehicleNoteWorkflowMenuItem</DocumentMenuItem>
   <SubmitToWorkflowMenuItem>ConFmVehicleNoteWorkflowSubmit</SubmitToWorkflowMenuItem>

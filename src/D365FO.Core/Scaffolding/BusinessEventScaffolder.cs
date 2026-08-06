@@ -143,7 +143,10 @@ public static class BusinessEventScaffolder
 
         var declaration =
             "[DataContractAttribute]\n" +
-            $"public final class {contractName} implements BusinessEventsContract\n" +
+            // extends, not implements: BusinessEventsContract is a class. Declaring it
+            // in an implements list fails with "must designate an interface", and the
+            // buildContract() return then fails to convert as well.
+            $"public class {contractName} extends BusinessEventsContract\n" +
             "{\n" +
             memberDecls +
             "}\n";

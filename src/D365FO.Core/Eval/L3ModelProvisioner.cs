@@ -92,6 +92,8 @@ public static class L3ModelProvisioner
                 continue;
             }
 
+            files.AddRange(Companions(caseDir));
+
             foreach (var file in files)
             {
                 var (root, name, error) = ReadIdentity(file);
@@ -117,6 +119,43 @@ public static class L3ModelProvisioner
         }
 
         return new ProvisionedModel(modelName, modelRoot, artifacts, skipped);
+    }
+
+    /// <summary>
+    /// The folder inside a case's golden directory holding the artifacts the case's
+    /// command also produces but the case does not score.
+    /// </summary>
+    public const string CompanionFolder = "_companions";
+
+    /// <summary>
+    /// The sibling artifacts a case's command emits alongside the one artifact the
+    /// case scores.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// A case scores exactly one file — <c>EvalScorer</c> rejects a golden directory
+    /// holding more, and rightly so: a case asserts one artifact. But a single
+    /// generate command usually ships several. <c>generate custom-service</c> writes
+    /// an <c>AxService</c> <em>and</em> the class it names; <c>generate
+    /// business-event</c> writes the event class and its contract. Compiling the
+    /// scored file alone made those references dangle, and the oracle reported five
+    /// cases red for objects the tool does in fact generate — a false alarm that
+    /// buried the real defects underneath it.
+    /// </para>
+    /// <para>
+    /// Companions live in a <c>_companions</c> subfolder, invisible to the scorer
+    /// (which enumerates the case directory non-recursively) and compiled here. They
+    /// are captured from the same command run as the golden, so they stay honest:
+    /// a companion that drifts from what the tool emits shows up as a build failure,
+    /// exactly like the golden itself.
+    /// </para>
+    /// </remarks>
+    public static IReadOnlyList<string> Companions(string caseDir)
+    {
+        var dir = Path.Combine(caseDir, CompanionFolder);
+        return Directory.Exists(dir)
+            ? Directory.GetFiles(dir, "*.xml").OrderBy(f => f, StringComparer.Ordinal).ToList()
+            : Array.Empty<string>();
     }
 
     /// <summary>

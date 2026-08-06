@@ -1,0 +1,10 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<AxServiceGroup>
+  <Name>ConFmVehicleQueryServiceGroup</Name>
+  <Services>
+    <AxServiceGroupService>
+      <Name>ConFmVehicleQueryService</Name>
+      <Service>ConFmVehicleQueryService</Service>
+    </AxServiceGroupService>
+  </Services>
+</AxServiceGroup>

@@ -289,7 +289,7 @@ Four things this could only be learned by running it, and all four were wrong fi
   `generate table` produces for exactly this reason — the fixture was hand-written without them,
   which is the contract `generate form`'s preflight check already warns about.
 
-**Baseline: 43 of 51 goldens compile clean, with zero unattributed diagnostics.** The count moves
+**Baseline: 51 of 51 goldens compile clean, with zero unattributed diagnostics.** The count moves
 in both directions and only one of them is about the tool — it drops whenever the parser learns a
 severity prefix it had been discarding, and rises when a scaffolder is fixed. The signal to watch
 is the unattributed count, not the clean count. It first dipped from a flattering 48 because the
@@ -298,6 +298,18 @@ reports in its own shape (`Metadata Error: AxForm/<object>/Design/Controls/…/D
 the parser did not recognise, and the attribution key was the golden's file stem, which truncates
 `NoYes.Extension` at the dot. Both dropped real findings on the floor while the scoreboard looked
 good — the same failure mode as a validator that passes because it never ran.
+
+The last eight reds fell in two groups. Five were false alarms: a case scores one artifact, but
+its command ships several, and compiling the scored file alone made the siblings dangle. Siblings
+now live in a `_companions` subfolder of the golden directory — invisible to the scorer, compiled
+by the oracle — and with them out of the way the real defects underneath surfaced: an `AxService`
+with an empty `ExternalName`, an `AxWorkflowTemplate` with no `Category`, a `WorkflowDocument`
+naming a query nothing generated, a CoC class whose name did not end in the literal `_Extension`
+and which restated a forbidden default parameter, a business event contract that `implements` a
+class, and a number sequence extending `NumberSeqApplicationModule_<Module>` — a name assembled
+from the abstract base, which exists in no module. Four cases were themselves wrong: extending a
+non-extensible `NoYes`, adding a privilege the duty already had, naming a policy query nothing
+generates, and hanging a number sequence off a module that does not exist.
 
 `known-reference-gap` cases are recorded but never classified as `TOOL_DEFECT`: their X++ names a
 sibling artifact the case's single golden does not include, or a standard object the fixture

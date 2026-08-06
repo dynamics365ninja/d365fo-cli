@@ -75,7 +75,9 @@ dotnet run --project src/D365FO.Cli -- eval verify-build --provision-only --work
 It provisions every reviewed golden — plus the mini-AOT fixture, into the *same*
 module — as a throwaway model under a temp directory, runs `xppc.exe` against it,
 attributes each diagnostic to the case whose golden produced the named object, and
-writes `eval/golden-build-verification.json`. `--write` also appends corpus records
+writes `eval/golden-build-verification.json`. A case scores one artifact but its
+command usually ships several; the siblings go in a `_companions` subfolder of the
+golden directory, where the scorer does not see them and the compiler does. `--write` also appends corpus records
 carrying only the build dimension; the offline dimensions stay null there rather
 than being copied from an earlier, possibly stale replay.
 
@@ -85,7 +87,7 @@ returns `EVAL_BUILD_INVOCATION` and writes **no** verdicts — an argument mista
 must never be recorded as a broken golden. `EvalScoreCard.BuildClean` is `null`
 wherever no compiler ran; it is never `false` by default.
 
-Current baseline: **43 of 51 goldens compile clean**, with **zero unattributed
+Current baseline: **51 of 51 goldens compile clean**, with **zero unattributed
 diagnostics** — every complaint the compiler makes is blamed on the case that
 produced the object it names.
 
