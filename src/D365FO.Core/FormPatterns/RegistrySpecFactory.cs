@@ -78,7 +78,11 @@ public static class RegistrySpecFactory
         ControlTypes = part.Type.Split('|', StringSplitOptions.RemoveEmptyEntries)
             .Select(NormalizeType).ToList(),
         Occurrence = ToOccurrence(part.Count),
-        NameHint = string.IsNullOrEmpty(part.Part) ? null : part.Part,
+        // Never null: the repairer names a control it adds from the hint, and some
+        // registry parts (the unnamed custom-filter group, choice slots) have no Part.
+        NameHint = string.IsNullOrEmpty(part.Part)
+            ? (part.Alias?.Replace(" ", "") is { Length: > 0 } alias ? alias : part.Type)
+            : part.Part,
         RequiresSubPattern = part.SubPatterns.Count > 0,
         // Only names this repo's sub-pattern catalog actually knows. The registry uses
         // several our catalog spells differently (ToolbarList vs ToolbarAndList,

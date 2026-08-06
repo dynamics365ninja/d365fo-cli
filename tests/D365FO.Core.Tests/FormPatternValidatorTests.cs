@@ -190,20 +190,12 @@ public class FormPatternValidatorTests
     [Fact]
     public void FP006_design_container_requiring_sub_pattern_warns_when_unspecified()
     {
-        // DetailsMaster FastTab page without a sub-pattern
-        var report = FormPatternValidator.ValidateXml(Form("""
-    <Pattern>DetailsMaster</Pattern>
-    <PatternVersion>1.1</PatternVersion>
-    <Controls>
-      <AxFormControl xmlns="" i:type="AxFormActionPaneControl"><Name>ActionPane</Name></AxFormControl>
-      <AxFormControl xmlns="" i:type="AxFormTabControl">
-        <Name>Tab</Name><Style>FastTabs</Style>
-        <Controls>
-          <AxFormControl xmlns="" i:type="AxFormTabPageControl"><Name>General</Name></AxFormControl>
-        </Controls>
-      </AxFormControl>
-    </Controls>
-"""));
+        // A conforming SimpleList whose custom-filter group declares no sub-pattern.
+        // The registry marks that part CustomAndQuickFilters, so its absence is the
+        // "unspecified container" FP006 is about — and nothing else here is wrong,
+        // which is what makes the warning the only finding.
+        var report = FormPatternValidator.ValidateXml(Form(SimpleListDesign));
+
         Assert.Contains(report.Violations, v => v.Rule == "FP006" && v.Severity == "warning");
         Assert.False(report.HasErrors);
     }

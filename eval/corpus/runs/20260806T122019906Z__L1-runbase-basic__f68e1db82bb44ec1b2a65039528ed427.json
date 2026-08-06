@@ -1,0 +1,20 @@
+{
+  "runId": "20260806T122019906Z__L1-runbase-basic__f68e1db82bb44ec1b2a65039528ed427",
+  "caseId": "L1-runbase-basic",
+  "tier": 1,
+  "timestampUtc": "2026-08-06T12:20:19.9063252+00:00",
+  "source": "build-oracle",
+  "score": {
+    "xppErrors": 0,
+    "referenceErrors": 0,
+    "goldenMatch": true,
+    "goldenDiff": {
+      "missing": [],
+      "extra": [],
+      "changed": [],
+      "isMatch": true
+    },
+    "buildClean": true,
+    "buildErrors": 0
+  }
+}

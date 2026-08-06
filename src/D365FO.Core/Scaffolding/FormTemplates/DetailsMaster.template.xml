@@ -29,10 +29,24 @@ public class {FormName} extends FormRun
       <DerivedDataSources />
     </AxFormDataSource>
   </DataSources>
+  <!--
+    Shaped after the AOT registry's DetailsMaster 1.4 (alias "Details Master"), which
+    is what the AOS validates a details-master form against. The previous shape
+    declared version 1.1 — a version that exists on no installation — and a flat
+    ActionPane / filter group / HeaderGroup / FastTabs root that the real pattern
+    rejects outright ("has child 'HeaderGroup' which is not allowed at its current
+    location"). The registry's parts are: ApplicationBar, NavigationList (a SidePanel
+    group holding the quick filter and the list grid), and PanelTab — a tab with a
+    Details panel (title group + FastTabs) and a Grid panel (custom filter, main grid,
+    default action).
+  -->
   <Design>
-{Caption}    <DataSource xmlns="">{DsName}</DataSource>
+    <ArrangeMethod xmlns="">Vertical</ArrangeMethod>
+{Caption}    <Columns xmlns="">1</Columns>
+    <ColumnsMode xmlns="">Fixed</ColumnsMode>
+    <DataSource xmlns="">{DsName}</DataSource>
     <Pattern xmlns="">DetailsMaster</Pattern>
-    <PatternVersion xmlns="">1.1</PatternVersion>
+    <PatternVersion xmlns="">1.4</PatternVersion>
     <Style xmlns="">DetailsFormMaster</Style>
     <TitleDataSource xmlns="">{DsName}</TitleDataSource>
     <Controls xmlns="">
@@ -55,17 +69,27 @@ public class {FormName} extends FormRun
         <AlignChild>No</AlignChild>
         <AlignChildren>No</AlignChildren>
         <ArrangeMethod>Vertical</ArrangeMethod>
+        <Style>Standard</Style>
       </AxFormControl>
       <AxFormControl xmlns="" i:type="AxFormGroupControl">
-        <Name>NavigationFilterGroup</Name>
-        <Pattern>CustomAndQuickFilters</Pattern>
-        <PatternVersion>1.1</PatternVersion>
+        <Name>NavigationList</Name>
+        <Height>-1</Height>
+        <HeightMode>SizeToAvailable</HeightMode>
         <Type>Group</Type>
-        <WidthMode>SizeToAvailable</WidthMode>
+        <Visible>No</Visible>
+        <Width>-1</Width>
+        <WidthMode>SizeToContent</WidthMode>
         <FormControlExtension i:nil="true" />
         <Controls>
+          <!--
+            The control's own name has to be unique across the form ("Duplicate value
+            'QuickFilterControl' detected" — there is a second quick filter on the grid
+            panel), but the extension's name is what identifies the control *type*, so
+            that one stays QuickFilterControl.
+          -->
           <AxFormControl>
-            <Name>QuickFilterControl</Name>
+            <Name>NavigationQuickFilter</Name>
+            <WidthMode>SizeToAvailable</WidthMode>
             <FormControlExtension>
               <Name>QuickFilterControl</Name>
               <ExtensionComponents />
@@ -73,76 +97,195 @@ public class {FormName} extends FormRun
                 <AxFormControlExtensionProperty>
                   <Name>targetControlName</Name>
                   <Type>String</Type>
-                  <Value>Grid</Value>
+                  <Value>ListStyleGrid</Value>
                 </AxFormControlExtensionProperty>
               </ExtensionProperties>
             </FormControlExtension>
           </AxFormControl>
+          <AxFormControl xmlns="" i:type="AxFormGridControl">
+            <Name>ListStyleGrid</Name>
+            <AllowEdit>No</AllowEdit>
+            <Height>-1</Height>
+            <HeightMode>SizeToAvailable</HeightMode>
+            <Type>Grid</Type>
+            <Width>-1</Width>
+            <WidthMode>SizeToContent</WidthMode>
+            <FormControlExtension i:nil="true" />
+            <Controls />
+            <DataSource>{DsName}</DataSource>
+            <MultiSelect>No</MultiSelect>
+            <ShowRowLabels>No</ShowRowLabels>
+            <Style>List</Style>
+          </AxFormControl>
         </Controls>
-        <ArrangeMethod>HorizontalLeft</ArrangeMethod>
+        <ArrangeMethod>Vertical</ArrangeMethod>
+        <Columns>1</Columns>
+        <ColumnsMode>Fixed</ColumnsMode>
         <FrameType>None</FrameType>
-        <Style>CustomFilter</Style>
-        <ViewEditMode>Edit</ViewEditMode>
-      </AxFormControl>
-      <AxFormControl xmlns="" i:type="AxFormGroupControl">
-        <Name>HeaderGroup</Name>
-        <Type>Group</Type>
-        <FormControlExtension i:nil="true" />
-        <Controls />
-        <DataSource>{DsName}</DataSource>
-        <WidthMode>SizeToAvailable</WidthMode>
+        <Style>SidePanel</Style>
       </AxFormControl>
       <AxFormControl xmlns="" i:type="AxFormTabControl">
-        <Name>Tab</Name>
+        <Name>PanelTab</Name>
+        <Height>-1</Height>
+        <HeightMode>SizeToAvailable</HeightMode>
         <Type>Tab</Type>
+        <Width>-1</Width>
+        <WidthMode>SizeToAvailable</WidthMode>
         <FormControlExtension i:nil="true" />
         <Controls>
           <AxFormControl xmlns="" i:type="AxFormTabPageControl">
-            <Name>TabPageOverview</Name>
-            <Pattern>FieldsFieldGroups</Pattern>
-            <PatternVersion>1.1</PatternVersion>
+            <Name>DetailsPanel</Name>
             <Type>TabPage</Type>
-            <Caption>Overview</Caption>
             <FormControlExtension i:nil="true" />
             <Controls>
               <AxFormControl xmlns="" i:type="AxFormGroupControl">
-                <Name>OverviewGroup</Name>
+                <Name>TitleGroup</Name>
+                <Height>-1</Height>
+                <HeightMode>SizeToContent</HeightMode>
                 <Type>Group</Type>
+                <Width>-1</Width>
+                <WidthMode>SizeToAvailable</WidthMode>
                 <FormControlExtension i:nil="true" />
                 <Controls>
-{OverviewFieldControls}                </Controls>
-                <!--
-                  DataGroup names a field group on a table, so it is meaningless
-                  without the sibling DataSource that says which table — the reader
-                  reports "Field group 'Overview' does not exist" even when the table
-                  defines it. Both belong after Controls, which is where the contract
-                  declares them and where every shipped form puts them.
-                -->
-                <DataGroup>Overview</DataGroup>
+{HeaderTitleControl}                </Controls>
+                <ArrangeMethod>HorizontalLeft</ArrangeMethod>
+                <Columns>1</Columns>
+                <ColumnsMode>Fixed</ColumnsMode>
                 <DataSource>{DsName}</DataSource>
+                <FrameType>None</FrameType>
+                <Style>DetailTitleContainer</Style>
+              </AxFormControl>
+              <AxFormControl xmlns="" i:type="AxFormTabControl">
+                <Name>DetailsTab</Name>
+                <Height>-1</Height>
+                <HeightMode>SizeToAvailable</HeightMode>
+                <Type>Tab</Type>
+                <Width>-1</Width>
+                <WidthMode>SizeToAvailable</WidthMode>
+                <FormControlExtension i:nil="true" />
+                <Controls>
+                  <AxFormControl xmlns="" i:type="AxFormTabPageControl">
+                    <Name>TabPageOverview</Name>
+                    <Pattern>FieldsFieldGroups</Pattern>
+                    <PatternVersion>1.1</PatternVersion>
+                    <Type>TabPage</Type>
+                    <Caption>Overview</Caption>
+                    <FormControlExtension i:nil="true" />
+                    <Controls>
+                      <AxFormControl xmlns="" i:type="AxFormGroupControl">
+                        <Name>OverviewGroup</Name>
+                        <Type>Group</Type>
+                        <FormControlExtension i:nil="true" />
+                        <Controls>
+{OverviewFieldControls}                        </Controls>
+                        <!--
+                          DataGroup names a field group on a table, so it is
+                          meaningless without the sibling DataSource that says which
+                          table — the reader reports "Field group 'Overview' does not
+                          exist" even when the table defines it. Both belong after
+                          Controls, where the contract declares them.
+                        -->
+                        <DataGroup>Overview</DataGroup>
+                        <DataSource>{DsName}</DataSource>
+                      </AxFormControl>
+                    </Controls>
+                    <!-- Required by sub-pattern 'Fields and Field Groups'. -->
+                    <ColumnsMode>Fill</ColumnsMode>
+                  </AxFormControl>
+                  <AxFormControl xmlns="" i:type="AxFormTabPageControl">
+                    <Name>TabPageGeneral</Name>
+                    <Pattern>FieldsFieldGroups</Pattern>
+                    <PatternVersion>1.1</PatternVersion>
+                    <Type>TabPage</Type>
+                    <Caption>General</Caption>
+                    <FormControlExtension i:nil="true" />
+                    <Controls>
+                      <AxFormControl xmlns="" i:type="AxFormGroupControl">
+                        <Name>GeneralGroup</Name>
+                        <Type>Group</Type>
+                        <FormControlExtension i:nil="true" />
+                        <Controls />
+                        <DataGroup>General</DataGroup>
+                        <DataSource>{DsName}</DataSource>
+                      </AxFormControl>
+                    </Controls>
+                    <ColumnsMode>Fill</ColumnsMode>
+                  </AxFormControl>
+                </Controls>
+                <Style>FastTabs</Style>
               </AxFormControl>
             </Controls>
+            <ArrangeMethod>Vertical</ArrangeMethod>
+            <Columns>1</Columns>
+            <ColumnsMode>Fixed</ColumnsMode>
+            <PanelStyle>Details</PanelStyle>
+            <Style>DetailsFormDetails</Style>
           </AxFormControl>
           <AxFormControl xmlns="" i:type="AxFormTabPageControl">
-            <Name>TabPageGeneral</Name>
-            <Pattern>FieldsFieldGroups</Pattern>
-            <PatternVersion>1.1</PatternVersion>
+            <Name>GridPanel</Name>
             <Type>TabPage</Type>
-            <Caption>General</Caption>
             <FormControlExtension i:nil="true" />
             <Controls>
               <AxFormControl xmlns="" i:type="AxFormGroupControl">
-                <Name>GeneralGroup</Name>
+                <Name>CustomFilterGroup</Name>
+                <Pattern>CustomAndQuickFilters</Pattern>
+                <PatternVersion>1.1</PatternVersion>
                 <Type>Group</Type>
+                <WidthMode>SizeToAvailable</WidthMode>
+                <FormControlExtension i:nil="true" />
+                <Controls>
+                  <AxFormControl>
+                    <Name>QuickFilterControl</Name>
+                    <FormControlExtension>
+                      <Name>QuickFilterControl</Name>
+                      <ExtensionComponents />
+                      <ExtensionProperties>
+                        <AxFormControlExtensionProperty>
+                          <Name>targetControlName</Name>
+                          <Type>String</Type>
+                          <Value>MainGrid</Value>
+                        </AxFormControlExtensionProperty>
+                      </ExtensionProperties>
+                    </FormControlExtension>
+                  </AxFormControl>
+                </Controls>
+                <ArrangeMethod>HorizontalLeft</ArrangeMethod>
+                <FrameType>None</FrameType>
+                <Style>CustomFilter</Style>
+                <ViewEditMode>Edit</ViewEditMode>
+              </AxFormControl>
+              <AxFormControl xmlns="" i:type="AxFormGridControl">
+                <Name>MainGrid</Name>
+                <AllowEdit>Yes</AllowEdit>
+                <Height>-1</Height>
+                <HeightMode>SizeToAvailable</HeightMode>
+                <Type>Grid</Type>
+                <Width>-1</Width>
+                <WidthMode>SizeToAvailable</WidthMode>
                 <FormControlExtension i:nil="true" />
                 <Controls />
-                <DataGroup>General</DataGroup>
                 <DataSource>{DsName}</DataSource>
+                <!-- The pattern requires a default action; MainGridDefaultAction is it. -->
+                <DefaultAction>MainGridDefaultAction</DefaultAction>
+                <Style>Tabular</Style>
+              </AxFormControl>
+              <AxFormControl xmlns="" i:type="AxFormCommandButtonControl">
+                <Name>MainGridDefaultAction</Name>
+                <Type>CommandButton</Type>
+                <Visible>No</Visible>
+                <FormControlExtension i:nil="true" />
+                <Command>DetailsView</Command>
               </AxFormControl>
             </Controls>
+            <ArrangeMethod>Vertical</ArrangeMethod>
+            <Columns>1</Columns>
+            <ColumnsMode>Fixed</ColumnsMode>
+            <PanelStyle>Grid</PanelStyle>
+            <Style>DetailsFormGrid</Style>
           </AxFormControl>
         </Controls>
-        <Style>FastTabs</Style>
+        <ShowTabs>No</ShowTabs>
+        <Style>Tabs</Style>
       </AxFormControl>
     </Controls>
   </Design>

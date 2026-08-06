@@ -289,7 +289,7 @@ Four things this could only be learned by running it, and all four were wrong fi
   `generate table` produces for exactly this reason — the fixture was hand-written without them,
   which is the contract `generate form`'s preflight check already warns about.
 
-**Baseline: 38 of 51 goldens compile clean, with zero unattributed diagnostics.** The count moves
+**Baseline: 40 of 51 goldens compile clean, with zero unattributed diagnostics.** The count moves
 in both directions and only one of them is about the tool — it drops whenever the parser learns a
 severity prefix it had been discarding, and rises when a scaffolder is fixed. The signal to watch
 is the unattributed count, not the clean count. It first dipped from a flattering 48 because the
@@ -305,8 +305,8 @@ cannot contain. The mini-AOT fixture gained a query (once `generate query` could
 readable one) and an `OnInitialized` delegate on `FmVehicleService`, without which the
 event-handler case could not compile however correct the scaffolder was.
 
-**The 13 remaining reds are the honest work queue**, and the largest slice is one project:
-**AOT form-pattern compliance**. Four form cases fail `FormPatternValidation` — a different
+**The 11 remaining reds are the honest work queue**, and the largest slice is one project:
+**AOT form-pattern compliance**. Three form cases fail `FormPatternValidation` — a different
 validator from this repo's own FP001–FP010, run by the AOS against its pattern registry.
 
 That registry is now derived rather than guessed: `scripts/emit-form-patterns.ps1` extracts all
@@ -315,18 +315,19 @@ from `Microsoft.Dynamics.AX.Metadata.Patterns.dll` into
 `src/D365FO.Core/FormPatterns/form-patterns.json`, exactly as `emit-metadata-contracts.ps1` does
 for the DataContract catalog, and `FormPatternRegistry` serves it with no installation present.
 `FormTemplatePatternRegistryTests` pins every template's design pattern against it, so naming a
-pattern that does not exist is now an offline test failure rather than a VM-only surprise. Five
-templates sit on its `KnownWrong` list with the real pattern named — `DetailsMaster 1.1` → 1.4,
-`DetailsTransaction 1.1` → 1.4, `ListPage 1.1` → `ListPage UX7 1.0`, `Lookup 1.2` →
-`LookupGridOnly 1.1`, `Workspace 1.0` → `WorkspaceOperational 1.1`.
+pattern that does not exist is now an offline test failure rather than a VM-only surprise. Two
+templates are still on its `KnownWrong` list: `Lookup 1.2` (no pattern named Lookup exists at all —
+it is `LookupGridOnly` / `LookupTab` / `LookupPreview`) and `Workspace 1.0` (only an inactive 2.0;
+the active pattern is `WorkspaceOperational 1.1`).
 
 **The catalog migration has started.** `FormPatternCatalog` now derives the structural half of a
 pattern — versions, design properties, required control tree, what else may sit at the root — from
 the registry for everything on its `RegistryDerived` list, keeping the editorial half (purpose,
 when to use it, reference forms, lifecycle guidance, sub-pattern hints) hand-written because the
-registry does not know it. `SimpleList` and `TableOfContents` are migrated end to end: derived
-specs, templates carrying the parts and layout properties the AOS requires, goldens re-captured,
-and their forms (plus the two form-method cases built on SimpleList) compile clean.
+registry does not know it. Five patterns are migrated end to end — SimpleList, TableOfContents,
+ListPage, DetailsMaster and DetailsTransaction: derived specs, templates carrying the parts and
+layout properties the AOS requires, goldens re-captured, and their forms (plus the two form-method
+cases built on SimpleList) compile clean.
 
 Table of Contents is a fair measure of the per-pattern cost: drop the ActionPane (its design has
 exactly one part, the vertical tab, and allows nothing beside it), give every page the title group

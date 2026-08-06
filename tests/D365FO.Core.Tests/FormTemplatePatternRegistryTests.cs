@@ -32,8 +32,6 @@ public class FormTemplatePatternRegistryTests
     /// </summary>
     private static readonly Dictionary<string, string> KnownWrong = new(StringComparer.Ordinal)
     {
-        ["DetailsMaster 1.1"] = "DetailsMaster exists; 1.1 does not. Newest is 1.4, which wants NavigationList(SidePanel) + Details/Overview tab pages",
-        ["DetailsTransaction 1.1"] = "DetailsTransaction exists; 1.1 does not. Newest is 1.4",
         ["Lookup 1.2"] = "there is no pattern named 'Lookup' at all: LookupGridOnly 1.1, LookupTab 1.0, LookupPreview 1.0",
         ["Workspace 1.0"] = "Workspace exists only as an inactive 2.0; the active pattern is WorkspaceOperational 1.1",
     };

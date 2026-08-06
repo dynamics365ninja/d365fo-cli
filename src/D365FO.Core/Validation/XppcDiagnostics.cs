@@ -45,7 +45,7 @@ public static class XppcDiagnostics
         "Compile Fatal Error|Compile Error|Compile Warning|Generation Warning|Best Practice Warning" +
         "|MetadataProvider Error|Metadata Error|Metadata Warning|Unspecified Fatal Error" +
         "|FormPatternValidation Fatal Error|FormPatternValidation Error|TaskListItem Information" +
-        "|ExternalReference Warning|Generation Information";
+        "|ExternalReference Warning|Generation Error|Generation Information";
 
     /// <summary>
     /// <c>&lt;severity&gt;: [&lt;kind&gt;] dynamics://&lt;a&gt;/&lt;b&gt;[/…]: [(line,col)…]: &lt;message&gt;</c>.

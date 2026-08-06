@@ -93,6 +93,8 @@ public static class FormPatternCatalog
         "SimpleList",
         "TableOfContents",
         "ListPage",
+        "DetailsMaster",
+        "DetailsTransaction",
 
     };
 

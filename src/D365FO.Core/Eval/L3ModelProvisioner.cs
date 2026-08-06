@@ -111,7 +111,7 @@ public static class L3ModelProvisioner
                 var relative = Path.Combine(type.AotSubfolder, name + ".xml");
                 var destination = Path.Combine(contentRoot, relative);
                 Directory.CreateDirectory(Path.GetDirectoryName(destination)!);
-                File.Copy(file, destination, overwrite: true);
+                CopyWritable(file, destination);
                 artifacts.Add(new ProvisionedArtifact(@case.Id, file, relative, root!, name!));
             }
         }
@@ -182,12 +182,26 @@ public static class L3ModelProvisioner
                 var relative = Path.GetRelativePath(source, file);
                 var destination = Path.Combine(contentRoot, relative);
                 Directory.CreateDirectory(Path.GetDirectoryName(destination)!);
-                File.Copy(file, destination, overwrite: true);
+                CopyWritable(file, destination);
                 added.Add(relative);
             }
         }
 
         return added;
+    }
+
+    /// <summary>
+    /// Copies a golden into the throwaway model with the read-only attribute cleared.
+    /// The compiler rewrites a form's metadata header in place while validating it, and
+    /// a read-only copy makes it report "Failed to write metadata back to the file …
+    /// often due to the file being read-only" — a property of the copy, not of the
+    /// golden, and one that would otherwise be scored against the case.
+    /// </summary>
+    private static void CopyWritable(string source, string destination)
+    {
+        File.Copy(source, destination, overwrite: true);
+        var info = new FileInfo(destination);
+        if (info.IsReadOnly) info.IsReadOnly = false;
     }
 
     /// <summary>Layer ordinal the descriptor contract serialises — <c>usr</c> is 14, not the string "usr".</summary>

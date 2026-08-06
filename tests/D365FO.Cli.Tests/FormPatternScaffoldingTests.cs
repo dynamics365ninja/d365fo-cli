@@ -73,7 +73,10 @@ public class FormPatternScaffoldingTests
         Assert.Contains("<Name>FmOrderLine</Name>", xml);
         Assert.Contains("<Table>FmOrderLine</Table>", xml);
         Assert.Contains("<LinkType>Active</LinkType>", xml);
-        Assert.Contains("<Name>LinesGrid</Name>", xml);
+        // The lines grid is the registry's LineViewLinesGrid part, inside the Lines
+        // panel's own FastTab — the flat "LinesGrid" on the tab page was the shape the
+        // AOS rejected.
+        Assert.Contains("<Name>LineViewLinesGrid</Name>", xml);
     }
 
     [Fact]

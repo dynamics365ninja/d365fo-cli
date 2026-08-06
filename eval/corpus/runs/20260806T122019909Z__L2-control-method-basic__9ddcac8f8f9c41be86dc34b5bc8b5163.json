@@ -1,0 +1,20 @@
+{
+  "runId": "20260806T122019909Z__L2-control-method-basic__9ddcac8f8f9c41be86dc34b5bc8b5163",
+  "caseId": "L2-control-method-basic",
+  "tier": 2,
+  "timestampUtc": "2026-08-06T12:20:19.9099389+00:00",
+  "source": "build-oracle",
+  "score": {
+    "xppErrors": 0,
+    "referenceErrors": 0,
+    "goldenMatch": true,
+    "goldenDiff": {
+      "missing": [],
+      "extra": [],
+      "changed": [],
+      "isMatch": true
+    },
+    "buildClean": true,
+    "buildErrors": 0
+  }
+}

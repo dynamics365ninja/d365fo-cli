@@ -1,0 +1,22 @@
+{
+  "runId": "20260806T122019900Z__L1-form-simplelist-details__d116da10ab7e442aaa30fd7d313c992f",
+  "caseId": "L1-form-simplelist-details",
+  "tier": 1,
+  "timestampUtc": "2026-08-06T12:20:19.9001574+00:00",
+  "source": "build-oracle",
+  "score": {
+    "xppErrors": 0,
+    "referenceErrors": 0,
+    "goldenMatch": true,
+    "goldenDiff": {
+      "missing": [],
+      "extra": [],
+      "changed": [],
+      "isMatch": true
+    },
+    "buildClean": false,
+    "buildErrors": 4
+  },
+  "classification": "TOOL_DEFECT",
+  "note": "xppc reported 4 error(s) against this golden: Control \u0027AxForm/ConFmVehicleListDetails/Design\u0027 is missing child \u0027Details Tabs\u0027 required by pattern \u0027Simple List and Details - List Grid\u0027.; Unable to validate pattern \u0027SidePanel 1.0\u0027. Message: Pattern \u0027SidePanel 1.0\u0027 not found.; Property \u0027ColumnsMode\u0027 on control AxForm/ConFmVehicleListDetails/Design/Controls/DetailsGroup/Tab/TabPageOverview must have value \u0027Fill\u0027 per pattern \u0027Fields and Field Groups\u0027."
+}

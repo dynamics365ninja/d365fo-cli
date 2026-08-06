@@ -114,13 +114,21 @@ public static class FormPatternTemplates
     public static string BuildDetailsMaster(FormTemplateOptions opt)
     {
         var (dsName, dsTable) = ResolveDs(opt);
-        var overview = string.Concat(opt.GridFields.Select(f => RenderGridFieldControl("Overview", f, dsName, indent: 16)));
+        var overview = string.Concat(opt.GridFields.Select(f => RenderGridFieldControl("Overview", f, dsName, indent: 24)));
+
+        // The pattern's title group requires a HeaderTitle control — the field shown as
+        // the record's title on the details panel. The first requested field is the
+        // best guess a scaffold can make; with none, it stays unbound for the author.
+        var titleField = opt.GridFields.FirstOrDefault();
+        var headerTitle = RenderHeaderTitle(titleField, dsName, indent: 16);
+
         return Fill("DetailsMaster.template.xml", new()
         {
             ["FormName"]              = opt.FormName,
             ["DsName"]                = dsName,
             ["DsTable"]               = dsTable,
             ["Caption"]               = RenderCaption(opt.Caption),
+            ["HeaderTitleControl"]    = headerTitle,
             ["OverviewFieldControls"] = overview,
         });
     }
@@ -130,7 +138,9 @@ public static class FormPatternTemplates
         var (dsName, dsTable) = ResolveDs(opt);
         var linesDs = string.IsNullOrEmpty(opt.LinesDsName) ? $"{dsName}Lines" : opt.LinesDsName!;
         var linesTable = string.IsNullOrEmpty(opt.LinesDsTable) ? linesDs : opt.LinesDsTable!;
-        var header = string.Concat(opt.GridFields.Select(f => RenderGridFieldControl("Header", f, dsName, indent: 18)));
+        var header = string.Concat(opt.GridFields.Select(f => RenderGridFieldControl("Header", f, dsName, indent: 34)));
+        var headerTitle = RenderHeaderTitle(opt.GridFields.FirstOrDefault(), dsName, indent: 16);
+
         return Fill("DetailsTransaction.template.xml", new()
         {
             ["FormName"]            = opt.FormName,
@@ -139,6 +149,7 @@ public static class FormPatternTemplates
             ["LinesDsName"]         = linesDs,
             ["LinesDsTable"]        = linesTable,
             ["Caption"]             = RenderCaption(opt.Caption),
+            ["HeaderTitleControl"]  = headerTitle,
             ["HeaderFieldControls"] = header,
         });
     }
@@ -350,6 +361,35 @@ public static class FormPatternTemplates
         sb.Append(pad).Append("</AxFormControl>\n");
         return sb.ToString();
     }
+
+    /// <summary>
+    /// The <c>HeaderTitle</c> control a Details Master title group requires — bound to
+    /// the first requested field when there is one.
+    /// </summary>
+    private static string RenderHeaderTitle(string? field, string? ds, int indent)
+    {
+        var pad = new string(' ', indent);
+        var sb = new StringBuilder();
+        sb.Append(pad).Append("<AxFormControl xmlns=\"\" i:type=\"AxFormStringControl\">\n");
+        sb.Append(pad).Append("  <Name>HeaderTitle</Name>\n");
+        sb.Append(pad).Append("  <Skip>Yes</Skip>\n");
+        sb.Append(pad).Append("  <Type>String</Type>\n");
+        sb.Append(pad).Append("  <WidthMode>SizeToAvailable</WidthMode>\n");
+        sb.Append(pad).Append("  <FormControlExtension i:nil=\"true\" />\n");
+        if (!string.IsNullOrEmpty(field) && !string.IsNullOrEmpty(ds))
+        {
+            sb.Append(pad).Append("  <DataField>").Append(SplitTypedName(field)).Append("</DataField>\n");
+            sb.Append(pad).Append("  <DataSource>").Append(ds).Append("</DataSource>\n");
+        }
+        sb.Append(pad).Append("  <ShowLabel>No</ShowLabel>\n");
+        sb.Append(pad).Append("  <Style>TitleField</Style>\n");
+        sb.Append(pad).Append("</AxFormControl>\n");
+        return sb.ToString();
+    }
+
+    /// <summary>Field specs may carry a type suffix ("VIN:str"); the control wants the name.</summary>
+    private static string SplitTypedName(string field) =>
+        field.Split(':', 2)[0].Trim();
 
     private static string RenderTocTabPage(
         FormSectionSpec s, IReadOnlyList<string> fields, string? ds, int indent)
