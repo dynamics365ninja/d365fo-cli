@@ -621,6 +621,18 @@ public sealed class GenerateReportCommand : Command<GenerateReportCommand.Settin
         [CommandOption("--out-contract <PATH>")]
         [System.ComponentModel.Description("Output path for the DataContract class XML. Auto-derived when --parameter is used.")]
         public string? OutContract { get; init; }
+
+        [CommandOption("--no-tmp-table")]
+        [System.ComponentModel.Description("Skip the TempDB table each DP fills. The DP references it either way, so the model will not compile without one.")]
+        public bool NoTmpTable { get; init; }
+
+        [CommandOption("--no-controller")]
+        [System.ComponentModel.Description("Skip the SrsReportRunController class.")]
+        public bool NoController { get; init; }
+
+        [CommandOption("--no-menu-item")]
+        [System.ComponentModel.Description("Skip the output menu item that opens the report.")]
+        public bool NoMenuItem { get; init; }
     }
 
     public override int Execute(CommandContext ctx, Settings settings)
@@ -731,6 +743,50 @@ public sealed class GenerateReportCommand : Command<GenerateReportCommand.Settin
                     contractResult = ScaffoldFileWriter.Write(contractDoc, contractPath, settings.Overwrite);
             }
 
+            // The rest of the stack. A report is not one object: the DP declares and selects
+            // from a TempDB table, and something has to open the report — previously neither
+            // was generated, so the very first build failed on a table that did not exist.
+            string SiblingOf(string basePath, string objectName, string axFolder)
+                => hasInstall && !hasOut
+                    ? GenerateInstaller.ResolveInstallPath(kind, axFolder, objectName, settings.InstallTo!, out _)!
+                    : System.IO.Path.Combine(System.IO.Path.GetDirectoryName(basePath)!, objectName + ".xml");
+
+            var tmpTables = new List<object>();
+            if (!settings.NoTmpTable)
+            {
+                foreach (var ds in spec.EffectiveDatasets)
+                {
+                    var tmpName = ds.DpClass + "Tmp";
+                    var written = ScaffoldFileWriter.Write(
+                        XppScaffolder.ReportTmpTable(ds), SiblingOf(dpPath!, tmpName, Folders.Table), settings.Overwrite);
+                    tmpTables.Add(new { name = tmpName, path = written.Path, bytes = written.Bytes });
+                }
+            }
+
+            ScaffoldFileWriter.WriteResult? controllerResult = null;
+            if (!settings.NoController)
+            {
+                controllerResult = ScaffoldFileWriter.Write(
+                    XppScaffolder.ReportController(spec),
+                    SiblingOf(dpPath!, spec.EffectiveController, Folders.Class),
+                    settings.Overwrite);
+            }
+
+            ScaffoldFileWriter.WriteResult? menuItemResult = null;
+            if (!settings.NoMenuItem)
+            {
+                // The menu item opens the controller when there is one, and the report directly
+                // otherwise — pointing at a class that was not generated would be a dangling ref.
+                var target = settings.NoController ? spec.Name : spec.EffectiveController;
+                var targetType = settings.NoController ? MenuItemObjectType.Report : MenuItemObjectType.Class;
+
+                menuItemResult = ScaffoldFileWriter.Write(
+                    MenuItemScaffolder.MenuItem(
+                        MenuItemKind.Output, spec.EffectiveMenuItem, target, targetType, spec.Caption),
+                    SiblingOf(reportPath!, spec.EffectiveMenuItem, Folders.MenuItemOutput),
+                    settings.Overwrite);
+            }
+
             return RenderHelpers.Render(kind, ToolResult<object>.Success(new
             {
                 kind        = "AxReport",
@@ -741,6 +797,9 @@ public sealed class GenerateReportCommand : Command<GenerateReportCommand.Settin
                 parameters  = spec.Parameters?.Select(p => new { p.Name, p.DataType }).ToList(),
                 report      = new { path = reportResult.Path,   bytes = reportResult.Bytes,   backup = reportResult.BackupPath },
                 dp          = new { path = dpResult.Path,       bytes = dpResult.Bytes,       backup = dpResult.BackupPath },
+                tmpTables,
+                controller  = controllerResult is null ? null : new { name = spec.EffectiveController, path = controllerResult.Path, bytes = controllerResult.Bytes },
+                menuItem    = menuItemResult is null ? null : new { name = spec.EffectiveMenuItem, path = menuItemResult.Path, bytes = menuItemResult.Bytes },
                 contract    = contractResult is null ? null : new { path = contractResult.Path, bytes = contractResult.Bytes, backup = contractResult.BackupPath },
                 model       = settings.InstallTo,
             }));

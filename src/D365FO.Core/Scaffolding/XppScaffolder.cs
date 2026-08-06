@@ -2,6 +2,7 @@ using System.Xml.Linq;
 using System.Xml;
 using D365FO.Core.Guardrails;
 using D365FO.Core.Journal;
+using D365FO.Core.Validation;
 
 namespace D365FO.Core.Scaffolding;
 
@@ -793,6 +794,83 @@ public static class XppScaffolder
     }
 
     /// <summary>
+    /// The TempDB table a report's data provider fills and its dataset selects from.
+    /// </summary>
+    /// <remarks>
+    /// Every report generated before this referenced <c>&lt;DpClass&gt;Tmp</c> from the DP's
+    /// declaration, its getter and its dataset query, and nothing created it — the model did not
+    /// compile until someone noticed and wrote the table by hand.
+    /// </remarks>
+    public static XDocument ReportTmpTable(ReportDatasetSpec dataset, string? label = null)
+    {
+        ArgumentNullException.ThrowIfNull(dataset);
+
+        var fields = (dataset.Fields ?? [])
+            .Select(f =>
+            {
+                var (name, xppType) = SplitTyped(f);
+                return new TableFieldSpec(name, TableFieldEdt(xppType), null, Mandatory: false);
+            })
+            .ToList();
+
+        return Table(
+            dataset.DpClass + "Tmp",
+            label,
+            fields,
+            TablePattern.None,
+            TableStorage.TempDB);
+    }
+
+    /// <summary>An EDT that carries the X++ type a report field was declared with.</summary>
+    private static string TableFieldEdt(string? xppType) => (xppType ?? string.Empty).ToLowerInvariant() switch
+    {
+        "int" or "integer" or "int32" => "Integer",
+        "int64" or "long"             => "Int64",
+        "real" or "decimal"           => "Amount",
+        "date"                        => "TransDate",
+        "datetime" or "utcdatetime"   => "TransDateTime",
+        "boolean" or "bool" or "noyes" => "NoYesId",
+        "guid"                        => "GUID",
+        _                             => "Description255",
+    };
+
+    /// <summary>
+    /// The <c>SrsReportRunController</c> that launches the report, which is what an output menu
+    /// item points at when the report needs code to run before it (parameter defaults, caller
+    /// context, a chosen design).
+    /// </summary>
+    public static XDocument ReportController(ReportSpec spec)
+    {
+        ArgumentNullException.ThrowIfNull(spec);
+
+        var controller = spec.EffectiveController;
+        var declaration =
+            $"public class {controller} extends SrsReportRunController\n" +
+            "{\n" +
+            "}\n";
+
+        var main =
+            "public static void main(Args _args)\n" +
+            "{\n" +
+            $"    {controller} controller = new {controller}();\n" +
+            "\n" +
+            $"    controller.parmReportName(ssrsReportStr({spec.Name}, AutoDesign));\n" +
+            "    controller.parmArgs(_args);\n" +
+            "    controller.startOperation();\n" +
+            "}\n";
+
+        return new XDocument(
+            new XElement("AxClass",
+                new XElement("Name", controller),
+                new XElement("SourceCode",
+                    new XElement("Declaration", declaration),
+                    new XElement("Methods",
+                        new XElement("Method",
+                            new XElement("Name", "main"),
+                            new XElement("Source", main))))));
+    }
+
+    /// <summary>
     /// Maps an X++ (or plain) type name onto the CLR type name SSRS datasets are written in.
     /// Unknown and absent types become <c>System.String</c> — a string column renders, where a
     /// wrong numeric type does not.
@@ -1229,6 +1307,12 @@ public sealed record ReportSpec(
 
     /// <summary>Name of the companion DataContract class.</summary>
     public string ContractClass => EffectiveDpClass + "Contract";
+
+    /// <summary>Name of the controller class that launches the report.</summary>
+    public string EffectiveController => Name + "Controller";
+
+    /// <summary>Name of the output menu item that opens the report.</summary>
+    public string EffectiveMenuItem => Name + "MenuItem";
 }
 
 public sealed record TableFieldSpec(string Name, string? Edt, string? Label, bool Mandatory);
@@ -1299,6 +1383,7 @@ public static class ScaffoldFileWriter
         EnsureConcreteAxRoot(doc.Root);
         EnsureValidEdtRoot(doc.Root);
         EnsureValueShapes(doc.Root);
+        EnsureContractShape(doc.ToString(SaveOptions.DisableFormatting), path);
         return WriteCore(doc.ToString(SaveOptions.None), path, overwrite, declarationOnSaveFromXDoc: true, doc);
     }
 
@@ -1321,6 +1406,7 @@ public static class ScaffoldFileWriter
         EnsureConcreteAxRoot(root);
         EnsureValidEdtRoot(root);
         EnsureValueShapes(root);
+        EnsureContractShape(effective, path);
         return WriteCore(effective, path, overwrite, declarationOnSaveFromXDoc: false, null);
     }
 
@@ -1461,6 +1547,36 @@ public static class ScaffoldFileWriter
     /// primitive values whose encoding the metadata reader would reject. Both
     /// run before anything touches disk, in either <c>Write</c> overload.
     /// </summary>
+    /// <summary>
+    /// Refuses to write a document the AOT reader would mangle.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The two failures this catches are the ones nothing else does. A member the type does not
+    /// declare (XML007) is discarded in silence — the file parses, every other check passes, and
+    /// the property is simply absent. A value outside its enum (XML008) is worse still: the
+    /// reader throws and abandons the document, so the object does not exist as far as the rest
+    /// of the toolchain is concerned.
+    /// </para>
+    /// <para>
+    /// Both were previously discoverable only by installing the artifact on a machine with the
+    /// metadata assemblies and reading it back. Failing here turns "generated successfully, and
+    /// then nothing worked" into an error at the point of the mistake.
+    /// </para>
+    /// </remarks>
+    private static void EnsureContractShape(string xml, string path)
+    {
+        var violations = new List<XppViolation>();
+        ContractShapeRules.Check(xml, violations);
+        if (violations.Count == 0) return;
+
+        var first = violations[0];
+        throw new InvalidOperationException(
+            $"Refusing to write {System.IO.Path.GetFileName(path)}: the metadata reader would not "
+            + $"load it as written. {first.Fix} ({first.Rule} at {first.Excerpt})"
+            + (violations.Count > 1 ? $" — and {violations.Count - 1} more." : string.Empty));
+    }
+
     private static void EnsureValueShapes(XElement? root)
     {
         if (root is null) return;
