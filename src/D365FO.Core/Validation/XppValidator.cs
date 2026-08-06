@@ -41,11 +41,21 @@ public interface IPropertyStatsProvider
 ///   XML004  AxTableField without &lt;ExtendedDataType&gt;/&lt;EnumType&gt; (data-driven)
 ///   XML005  AxTable missing &lt;ClusteredIndex&gt;   (only when standard usage ≥ threshold)
 ///   XML007  Member the AOT type does not declare — silently dropped when the file is read
+///   XML008  Value outside the enum its member is typed as — the whole document fails to load
+///   XML009  Root element names no AOT type
+///   XML010  Abstract root with no concrete &lt;c&gt;i:type&lt;/c&gt; pinned
+///   XML011  XMLSchema-instance namespace used or required but not declared on the root
+///   XML012  Document not in the XML namespace its contract declares
+///   XML013  File sitting in an AOT folder another family owns (path-aware)
 /// </summary>
 /// <remarks>
-/// XML007 comes from <see cref="D365FO.Core.Metadata.MetadataContracts"/> and applies to every
-/// AOT family, not just tables. It is the offline counterpart of <c>validate metadata</c>,
-/// which asks the live provider the same question.
+/// XML001–XML005 are AxTable-only by nature — they are property-presence rules mined from
+/// standard tables. XML007–XML013 are not: they come from
+/// <see cref="D365FO.Core.Metadata.MetadataContracts"/> (565 types) and
+/// <see cref="D365FO.Core.ObjectTypes.ObjectTypeRegistry"/>, so they apply to every AOT family.
+/// Together they are the offline counterpart of <c>validate metadata</c>, which asks the live
+/// provider the same questions — see <see cref="ObjectShapeRules"/> for the mapping onto the
+/// bridge's own rejection codes.
 /// </remarks>
 public static class XppValidator
 {
@@ -75,7 +85,12 @@ public static class XppValidator
         "menuitemoutputstr", "varstr", "con2str", "int2str", "num2str",
     };
 
-    public static IReadOnlyList<XppViolation> Validate(string code, string codeType = CodeTypeXpp, IPropertyStatsProvider? stats = null)
+    /// <param name="sourcePath">
+    /// Where the document came from, when the caller knows. Only XML013 uses it — a file in the
+    /// wrong AOT folder is not something stdin can be guilty of.
+    /// </param>
+    public static IReadOnlyList<XppViolation> Validate(
+        string code, string codeType = CodeTypeXpp, IPropertyStatsProvider? stats = null, string? sourcePath = null)
     {
         var violations = new List<XppViolation>();
         var normalized = NormalizeCodeType(codeType);
@@ -89,17 +104,28 @@ public static class XppValidator
             CheckMissingAlternateKey(code, violations);
             CheckTableProperties(code, stats, violations);
             CheckFieldEdt(code, stats, violations);
-            ContractShapeRules.Check(code, violations);
+            RunXmlShapeRules(code, sourcePath, violations);
         }
         else
         {
             CheckMissingAlternateKey(code, violations);
             CheckTableProperties(code, stats, violations);
             CheckFieldEdt(code, stats, violations);
-            // Applies to every AOT family, not just tables: the contract catalog knows them all.
-            ContractShapeRules.Check(code, violations);
+            RunXmlShapeRules(code, sourcePath, violations);
         }
         return violations;
+    }
+
+    /// <summary>
+    /// The family-agnostic half of the XML rules: the root's own shape (XML009–XML013) and
+    /// everything inside it (XML007–XML008). Both are driven by the contract catalog and the
+    /// object-type registry, so they apply to every AOT family rather than the AxTable-only set
+    /// XML001–XML005 covers (issue #163).
+    /// </summary>
+    private static void RunXmlShapeRules(string code, string? sourcePath, List<XppViolation> violations)
+    {
+        ObjectShapeRules.Check(code, violations, sourcePath);
+        ContractShapeRules.Check(code, violations);
     }
 
     public static string NormalizeCodeType(string? codeType) => codeType?.ToLowerInvariant() switch

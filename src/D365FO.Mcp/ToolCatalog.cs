@@ -268,15 +268,17 @@ public static class ToolCatalog
 
         new Descriptor("validate",
             "Check an artifact before it is written. `mode`:\n" +
-            "• xpp — the offline X++/XML best-practice validator (XML001-XML008, BP rules). `codeType` " +
+            "• xpp — the offline X++/XML best-practice validator (XML001-XML013, BP rules). `codeType` " +
             "xpp | xml-table | xml-any, auto-detected when omitted.\n" +
             "• references — every identifier in the code must exist in the index; the anti-hallucination gate. " +
             "Requires an index.\n" +
             "• form-pattern — structural AxForm pattern rules FP001-FP010, the same gate generate_object(form) enforces.\n" +
-            "• metadata-shape — judges AOT XML against the serialization contract the AOT reader is generated from: " +
-            "XML007 (a member the type does not declare, silently dropped on read) and XML008 (a value outside its " +
-            "enum, which stops the read outright). Needs no bridge and no VM; this is the offline half of the CLI's " +
-            "`validate metadata`.",
+            "• metadata-shape — judges AOT XML against the serialization contract the AOT reader is generated from. " +
+            "Inside the document: XML007 (a member the type does not declare, silently dropped on read) and XML008 " +
+            "(a value outside its enum, which stops the read outright). The root itself: XML009 (names no AOT type), " +
+            "XML010 (abstract root with no concrete i:type), XML011 (missing xmlns:i), XML012 (wrong contract " +
+            "namespace). Every AOT family, not just tables. Needs no bridge and no VM; this is the offline half of " +
+            "the CLI's `validate metadata`.",
             Schema(("mode", "string", true), ("code", "string", true),
                    ("context", "string", false), ("codeType", "string", false)),
             (h, p) => h.Validate(Str(p, "mode"), Str(p, "code"), StrOrNull(p, "context"), StrOrNull(p, "codeType"))),

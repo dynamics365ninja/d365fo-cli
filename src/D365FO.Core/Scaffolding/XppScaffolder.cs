@@ -1693,6 +1693,20 @@ public static class ScaffoldFileWriter
     {
         var violations = new List<XppViolation>();
         ContractShapeRules.Check(xml, violations);
+
+        // The root's own shape, from the same catalog (issue #163). Only the two rules nothing
+        // else on this path covers: an unreal root (XML009) and the wrong contract namespace
+        // (XML012) — ContractNamespaceApplier *fixes* a missing namespace but stands aside when
+        // the document already declares one, so a document carrying the wrong one used to be
+        // written unchallenged. The abstract-root and xmlns:i policies (XML010/XML011) are left
+        // to EnsureConcreteAxRoot / EnsureXsiNamespaceDeclared above, whose messages name the
+        // concrete EDT subtype to use; the folder rule (XML013) belongs to `validate xpp`, where
+        // a wrong guess is advice rather than a refused write.
+        var rootShape = new List<XppViolation>();
+        ObjectShapeRules.Check(xml, rootShape);
+        violations.AddRange(rootShape.Where(v =>
+            v.Rule is ObjectShapeRules.RuleUnknownRoot or ObjectShapeRules.RuleContractNamespace));
+
         if (violations.Count == 0) return;
 
         var first = violations[0];
