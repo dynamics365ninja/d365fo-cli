@@ -232,19 +232,41 @@ public sealed class TestRunCommand : Command<TestRunCommand.Settings>
         var resultsWritten = !string.IsNullOrWhiteSpace(settings.ResultsPath)
                              && System.IO.File.Exists(settings.ResultsPath!);
 
-        return RenderHelpers.Render(kind, exit == 0
-            ? ToolResult<object>.Success(new
+        if (exit != 0)
+            return RenderHelpers.Render(kind, ToolResult<object>.Fail(
+                "TESTS_FAILED", $"Runner exited with {exit}.", string.Join('\n', stderr.Split('\n').TakeLast(5))));
+
+        // The verdict comes from the runner's own result document, not from its exit code: a
+        // run that dies half way still exits 0 with its remaining cases marked pending.
+        var results = D365FO.Core.Eval.SysTestResults.TryParseFile(settings.ResultsPath);
+
+        var warnings = new List<string>();
+        if (!resultsWritten && !string.IsNullOrWhiteSpace(settings.ResultsPath))
+            warnings.Add($"The runner exited cleanly but wrote no result document at {settings.ResultsPath}.");
+        else if (resultsWritten && results is null)
+            warnings.Add($"{settings.ResultsPath} is not a SysTest result document (expected a <test-results> root).");
+
+        var payload = ToolResult<object>.Success(new
+        {
+            exitCode = exit,
+            elapsedMs = (long)elapsed.TotalMilliseconds,
+            testClasses = classes,
+            resultsPath = resultsWritten ? settings.ResultsPath : null,
+            results = results is null ? null : new
             {
-                exitCode = exit,
-                elapsedMs = (long)elapsed.TotalMilliseconds,
-                testClasses = classes,
-                resultsPath = resultsWritten ? settings.ResultsPath : null,
-                tail = stdout.Split('\n').TakeLast(40).ToArray(),
+                clean = results.Clean,
+                passed = results.Passed,
+                failed = results.Failed,
+                skipped = results.Skipped,
+                pending = results.Pending,
+                failures = results.Failures.Select(f => new { name = f.Name, message = f.FailureMessage }).ToList(),
             },
-            resultsWritten || string.IsNullOrWhiteSpace(settings.ResultsPath)
-                ? null
-                : [$"The runner exited cleanly but wrote no result document at {settings.ResultsPath}."])
-            : ToolResult<object>.Fail("TESTS_FAILED", $"Runner exited with {exit}.", string.Join('\n', stderr.Split('\n').TakeLast(5))));
+            tail = stdout.Split('\n').TakeLast(40).ToArray(),
+        }, warnings.Count > 0 ? warnings : null);
+
+        var rc = RenderHelpers.Render(kind, payload);
+        // A parsed run that is not clean is a failed run, whatever the exit code said.
+        return rc != 0 ? rc : results is { Clean: false } ? 2 : 0;
     }
 }
 

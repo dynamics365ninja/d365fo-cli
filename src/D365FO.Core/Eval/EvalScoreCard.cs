@@ -16,11 +16,10 @@ namespace D365FO.Core.Eval;
 /// <para>
 /// <see cref="RuntimeClean"/> is the L4 dimension (issue #160) and follows the same discipline
 /// one level further out: it is <c>null</c> unless a SysTest run actually happened and its
-/// results were read. No runner is wired to it yet — the platform's runner is
-/// <c>SysTestConsole.exe</c> and emits its verdict as an XML document via <c>/xml:</c>, but
-/// nothing in this repo parses that document, so nothing may claim a runtime verdict. The field
-/// exists so the scoring surface has one shape rather than growing a second one later; a
-/// scorecard where it is null means "not run", exactly as with <see cref="BuildClean"/>.
+/// results were read. <see cref="SysTestResults"/> reads the document
+/// <c>SysTestConsole.exe /xml:</c> writes, so a caller that ran tests can fill this in; nothing
+/// fills it in from an exit code or an absent file. A scorecard where it is null means "not
+/// run", exactly as with <see cref="BuildClean"/> — never "passed".
 /// </para>
 /// </remarks>
 public sealed record EvalScoreCard(
