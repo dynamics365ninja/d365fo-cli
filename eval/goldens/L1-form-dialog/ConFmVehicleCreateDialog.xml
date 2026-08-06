@@ -37,9 +37,11 @@ public class ConFmVehicleCreateDialog extends FormRun
     <Controls xmlns="">
       <AxFormControl xmlns="" i:type="AxFormGroupControl">
         <Name>DialogBody</Name>
+        <HeightMode>SizeToAvailable</HeightMode>
         <Pattern>FieldsFieldGroups</Pattern>
         <PatternVersion>1.1</PatternVersion>
         <Type>Group</Type>
+        <WidthMode>SizeToAvailable</WidthMode>
         <FormControlExtension i:nil="true" />
         <Controls>
           <AxFormControl xmlns="" i:type="AxFormStringControl">
@@ -57,11 +59,15 @@ public class ConFmVehicleCreateDialog extends FormRun
             <DataSource>FmVehicle</DataSource>
           </AxFormControl>
         </Controls>
+        <!-- Required by pattern 'Fields and Field Groups'. -->
+        <ColumnsMode>Fill</ColumnsMode>
         <Style>DialogContent</Style>
       </AxFormControl>
       <AxFormControl xmlns="" i:type="AxFormButtonGroupControl">
         <Name>ButtonGroup</Name>
         <Type>ButtonGroup</Type>
+        <!-- Required by pattern 'Dialog - Basic'. -->
+        <WidthMode>SizeToAvailable</WidthMode>
         <FormControlExtension i:nil="true" />
         <Controls>
           <AxFormControl xmlns="" i:type="AxFormCommandButtonControl">
@@ -77,6 +83,8 @@ public class ConFmVehicleCreateDialog extends FormRun
             <Command>Cancel</Command>
           </AxFormControl>
         </Controls>
+        <!-- Required by pattern 'Dialog - Basic'. -->
+        <ArrangeMethod>HorizontalRight</ArrangeMethod>
         <Style>DialogCommitContainer</Style>
       </AxFormControl>
     </Controls>

@@ -111,7 +111,7 @@ public class XppcDiagnosticsTests
         var diagnostics = XppcDiagnostics.Parse(
             "TaskListItem Information: Class Method dynamics://Class/C/Method/run: [(1,1)]: TODO: implement");
 
-        Assert.Empty(diagnostics.Where(d => d.Severity is "error" or "warning"));
+        Assert.DoesNotContain(diagnostics, d => d.Severity is "error" or "warning");
     }
 
     [Fact]

@@ -289,7 +289,7 @@ Four things this could only be learned by running it, and all four were wrong fi
   `generate table` produces for exactly this reason — the fixture was hand-written without them,
   which is the contract `generate form`'s preflight check already warns about.
 
-**Baseline: 35 of 51 goldens compile clean, with zero unattributed diagnostics.** The count moves
+**Baseline: 36 of 51 goldens compile clean, with zero unattributed diagnostics.** The count moves
 in both directions and only one of them is about the tool — it drops whenever the parser learns a
 severity prefix it had been discarding, and rises when a scaffolder is fixed. The signal to watch
 is the unattributed count, not the clean count. It first dipped from a flattering 48 because the
@@ -305,16 +305,28 @@ cannot contain. The mini-AOT fixture gained a query (once `generate query` could
 readable one) and an `OnInitialized` delegate on `FmVehicleService`, without which the
 event-handler case could not compile however correct the scaffolder was.
 
-**The 16 remaining reds are the honest work queue**, and the largest slice is one project:
-**AOT form-pattern compliance**. Seven form cases fail `FormPatternValidation` — a different
-validator from this repo's own FP001–FP010, run by the AOS against its pattern registry. Five
-design `<Pattern>` values name patterns that registry does not have (`DetailsMaster 1.1`,
-`ListPage 1.1`, `Lookup 1.2`, `DetailsTransaction 1.1`, `Workspace 1.0`, plus `SidePanel 1.0` on a
-container), and the rest are missing required children (`TOC Tabs`, `Details Tabs`) and required
-property values (`ColumnsMode=Fill`, `WidthMode`/`HeightMode=SizeToAvailable`,
-`ArrangeMethod=HorizontalRight`, `ViewEditMode=Edit`). Reconciling `FormPatternCatalog` with the
-registry the AOS validates against — and teaching FP001–FP010 the same rules, so the offline gate
-catches them — is its own piece of work.
+**The 15 remaining reds are the honest work queue**, and the largest slice is one project:
+**AOT form-pattern compliance**. Six form cases fail `FormPatternValidation` — a different
+validator from this repo's own FP001–FP010, run by the AOS against its pattern registry.
+
+That registry is now derived rather than guessed: `scripts/emit-form-patterns.ps1` extracts all
+102 definitions (name, version, alias, required parts with cardinality, required property values)
+from `Microsoft.Dynamics.AX.Metadata.Patterns.dll` into
+`src/D365FO.Core/FormPatterns/form-patterns.json`, exactly as `emit-metadata-contracts.ps1` does
+for the DataContract catalog, and `FormPatternRegistry` serves it with no installation present.
+`FormTemplatePatternRegistryTests` pins every template's design pattern against it, so naming a
+pattern that does not exist is now an offline test failure rather than a VM-only surprise. Five
+templates sit on its `KnownWrong` list with the real pattern named — `DetailsMaster 1.1` → 1.4,
+`DetailsTransaction 1.1` → 1.4, `ListPage 1.1` → `ListPage UX7 1.0`, `Lookup 1.2` →
+`LookupGridOnly 1.1`, `Workspace 1.0` → `WorkspaceOperational 1.1`.
+
+Shrinking that list is the remaining work, and it is a two-sided migration rather than a set of
+edits: **`FormPatternCatalog`'s model of the patterns disagrees with the registry**, so a template
+rewritten to satisfy the AOS is rejected by our own FP003 before it can be written. Verified by
+doing it — restructuring DetailsMaster to the shipped 1.4 shape (SidePanel navigation list,
+Details page with a nested FastTabs tab, Overview page with the main grid) satisfied the AOS and
+failed FP003 on the quick-filter sub-pattern. The catalog, the templates, the validator, the nine
+form goldens and ~90 form-pattern tests move together or not at all.
 
 The rest: a workflow and two security objects with an empty mandatory property; a custom service
 naming a class the command does not generate; `L2-enum-extension` extending `NoYes`, which is not

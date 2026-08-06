@@ -34,7 +34,7 @@ uneven:
   no L3/L4 tier, `classification` is null on every corpus record, and the corpus schema
   contradicts reality about gitignoring.
   *Closed 2026-08-06 in Phase 4, except the L4 runtime tier: the catalog replays in CI, `eval
-  verify-build` compiles every golden with `xppc` on a real installation (35/51 clean, zero
+  verify-build` compiles every golden with `xppc` on a real installation (36/51 clean, zero
   unattributed diagnostics; seven shipping defects it found — in `generate query`,
   `generate event-handler`, `generate migration-script`, `generate business-event`,
   `generate report`, `generate entity` and `generate form` — are fixed, and the remaining reds are an honest

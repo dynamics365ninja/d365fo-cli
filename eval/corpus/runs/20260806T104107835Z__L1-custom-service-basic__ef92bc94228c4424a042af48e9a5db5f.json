@@ -1,0 +1,22 @@
+{
+  "runId": "20260806T104107835Z__L1-custom-service-basic__ef92bc94228c4424a042af48e9a5db5f",
+  "caseId": "L1-custom-service-basic",
+  "tier": 1,
+  "timestampUtc": "2026-08-06T10:41:07.8353454+00:00",
+  "source": "build-oracle",
+  "score": {
+    "xppErrors": 0,
+    "referenceErrors": 0,
+    "goldenMatch": true,
+    "goldenDiff": {
+      "missing": [],
+      "extra": [],
+      "changed": [],
+      "isMatch": true
+    },
+    "buildClean": false,
+    "buildErrors": 2
+  },
+  "classification": "TOOL_DEFECT",
+  "note": "xppc reported 2 error(s) against this golden: Property cannot be empty.; Class \u0027ConFmVehicleQueryServiceService\u0027 does not exist."
+}

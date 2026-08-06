@@ -1,0 +1,22 @@
+{
+  "runId": "20260806T104107839Z__L1-form-lookup__c1220838b3d64ab0b8cc5ae4c6501263",
+  "caseId": "L1-form-lookup",
+  "tier": 1,
+  "timestampUtc": "2026-08-06T10:41:07.8392125+00:00",
+  "source": "build-oracle",
+  "score": {
+    "xppErrors": 0,
+    "referenceErrors": 0,
+    "goldenMatch": true,
+    "goldenDiff": {
+      "missing": [],
+      "extra": [],
+      "changed": [],
+      "isMatch": true
+    },
+    "buildClean": false,
+    "buildErrors": 2
+  },
+  "classification": "TOOL_DEFECT",
+  "note": "xppc reported 2 error(s) against this golden: Unable to validate pattern \u0027Lookup 1.2\u0027. Message: Pattern \u0027Lookup 1.2\u0027 not found.; Property \u0027ViewEditMode\u0027 on control AxForm/ConFmVehicleLookupForm/Design/Controls/CustomFilterGroup must have value \u0027Edit\u0027 per pattern \u0027Custom and Quick Filters\u0027."
+}

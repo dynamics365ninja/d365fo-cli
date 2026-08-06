@@ -1,13 +1,13 @@
 {
-  "capturedUtc": "2026-08-06T10:12:45.5010324+00:00",
+  "capturedUtc": "2026-08-06T10:41:07.7709267+00:00",
   "host": "D365ASLDEV2-1",
   "packagesRoot": "K:\\AosService\\PackagesLocalDirectory",
   "compiler": "K:\\AosService\\PackagesLocalDirectory\\Bin\\xppc.exe",
-  "compilerArgs": "-metadata=C:\\Users\\Admin7e00859cee\\AppData\\Local\\Temp\\2\\claude\\K--repos-d365fo-cli\\ac58616d-375a-4381-b289-fca2d371276f\\scratchpad\\l3form3-w -modelmodule=D365FoCliEvalGoldens -output=C:\\Users\\Admin7e00859cee\\AppData\\Local\\Temp\\2\\claude\\K--repos-d365fo-cli\\ac58616d-375a-4381-b289-fca2d371276f\\scratchpad\\l3form3-w\\bin -referencefolder=K:\\AosService\\PackagesLocalDirectory -refPath=C:\\Users\\Admin7e00859cee\\AppData\\Local\\Temp\\2\\claude\\K--repos-d365fo-cli\\ac58616d-375a-4381-b289-fca2d371276f\\scratchpad\\l3form3-w\\bin -log=C:\\Users\\Admin7e00859cee\\AppData\\Local\\Temp\\2\\claude\\K--repos-d365fo-cli\\ac58616d-375a-4381-b289-fca2d371276f\\scratchpad\\l3form3-w\\Dynamics.AX.D365FoCliEvalGoldens.xppc.log",
+  "compilerArgs": "-metadata=C:\\Users\\Admin7e00859cee\\AppData\\Local\\Temp\\2\\claude\\K--repos-d365fo-cli\\ac58616d-375a-4381-b289-fca2d371276f\\scratchpad\\l3pat -modelmodule=D365FoCliEvalGoldens -output=C:\\Users\\Admin7e00859cee\\AppData\\Local\\Temp\\2\\claude\\K--repos-d365fo-cli\\ac58616d-375a-4381-b289-fca2d371276f\\scratchpad\\l3pat\\bin -referencefolder=K:\\AosService\\PackagesLocalDirectory -refPath=C:\\Users\\Admin7e00859cee\\AppData\\Local\\Temp\\2\\claude\\K--repos-d365fo-cli\\ac58616d-375a-4381-b289-fca2d371276f\\scratchpad\\l3pat\\bin -log=C:\\Users\\Admin7e00859cee\\AppData\\Local\\Temp\\2\\claude\\K--repos-d365fo-cli\\ac58616d-375a-4381-b289-fca2d371276f\\scratchpad\\l3pat\\Dynamics.AX.D365FoCliEvalGoldens.xppc.log",
   "modelName": "D365FoCliEvalGoldens",
   "total": 51,
-  "clean": 35,
-  "failed": 16,
+  "clean": 36,
+  "failed": 15,
   "skipped": 0,
   "cases": [
     {
@@ -115,17 +115,11 @@
     },
     {
       "caseId": "L1-form-dialog",
-      "verdict": "errors",
-      "errors": 5,
+      "verdict": "clean",
+      "errors": 0,
       "warnings": 0,
       "ruleIds": [],
-      "messages": [
-        "Property \u0027WidthMode\u0027 on control AxForm/ConFmVehicleCreateDialog/Design/Controls/DialogBody must have value \u0027SizeToAvailable\u0027 per pattern \u0027Dialog - Basic\u0027.",
-        "Property \u0027HeightMode\u0027 on control AxForm/ConFmVehicleCreateDialog/Design/Controls/DialogBody must have value \u0027SizeToAvailable\u0027 per pattern \u0027Dialog - Basic\u0027.",
-        "Property \u0027WidthMode\u0027 on control AxForm/ConFmVehicleCreateDialog/Design/Controls/ButtonGroup must have value \u0027SizeToAvailable\u0027 per pattern \u0027Dialog - Basic\u0027.",
-        "Property \u0027ArrangeMethod\u0027 on control AxForm/ConFmVehicleCreateDialog/Design/Controls/ButtonGroup must have value \u0027HorizontalRight\u0027 per pattern \u0027Dialog - Basic\u0027.",
-        "Property \u0027ColumnsMode\u0027 on control AxForm/ConFmVehicleCreateDialog/Design/Controls/DialogBody must have value \u0027Fill\u0027 per pattern \u0027Fields and Field Groups\u0027."
-      ]
+      "messages": []
     },
     {
       "caseId": "L1-form-list-page",

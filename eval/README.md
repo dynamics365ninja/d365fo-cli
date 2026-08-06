@@ -85,7 +85,7 @@ returns `EVAL_BUILD_INVOCATION` and writes **no** verdicts — an argument mista
 must never be recorded as a broken golden. `EvalScoreCard.BuildClean` is `null`
 wherever no compiler ran; it is never `false` by default.
 
-Current baseline: **35 of 51 goldens compile clean**, with **zero unattributed
+Current baseline: **36 of 51 goldens compile clean**, with **zero unattributed
 diagnostics** — every complaint the compiler makes is blamed on the case that
 produced the object it names.
 
@@ -120,14 +120,31 @@ golden diff or to any offline validator, which is the whole argument for the tie
 | `generate entity` | "There must be a key defined for a public data entity" — `IsPublic` was hard-coded `Yes` while `Keys` stayed optional |
 | `generate form` | `<DataGroup>` emitted without its sibling `<DataSource>` and before `<Controls>` instead of after, so "Field group 'Overview' does not exist" even once the table declared it; and an `AxFormActionPaneTabControl` placed directly under a tab page, which the reader forbids |
 
-**Open: AOT form-pattern compliance.** Seven form cases still fail
-`FormPatternValidation`, which is a different validator from this repo's own
-FP001–FP010: five design `<Pattern>` values name patterns the AOS registry does not
-have (`DetailsMaster 1.1`, `ListPage 1.1`, `Lookup 1.2`, `DetailsTransaction 1.1`,
-`Workspace 1.0`), and the rest are required child controls and required property
-values (`ColumnsMode=Fill`, `WidthMode=SizeToAvailable`, `ViewEditMode=Edit`).
-Reconciling `FormPatternCatalog` with the registry the AOS actually validates
-against is its own piece of work.
+**Open: AOT form-pattern compliance.** Six form cases still fail
+`FormPatternValidation` — a different validator from this repo's own FP001–FP010,
+run by the AOS against its own pattern registry.
+
+That registry is no longer a mystery: `scripts/emit-form-patterns.ps1` derives all
+102 pattern definitions from `Microsoft.Dynamics.AX.Metadata.Patterns.dll` into
+`src/D365FO.Core/FormPatterns/form-patterns.json` (same approach as
+`emit-metadata-contracts.ps1`), and `FormPatternRegistry` serves them with no
+installation present. `FormTemplatePatternRegistryTests` now pins every template's
+design pattern against it, so *naming a pattern that does not exist* is an offline
+test failure instead of a VM-only surprise. Five templates are on its
+`KnownWrong` list with the real pattern named — shrinking that list is the work item:
+
+| Template says | Registry has |
+|---|---|
+| `DetailsMaster 1.1` | `DetailsMaster 1.4` — needs a `SidePanel` navigation list and Details/Overview tab pages |
+| `DetailsTransaction 1.1` | `DetailsTransaction 1.4` |
+| `ListPage 1.1` | `ListPage UX7 1.0` |
+| `Lookup 1.2` | `LookupGridOnly 1.1` / `LookupTab 1.0` — there is no plain `Lookup` |
+| `Workspace 1.0` | `WorkspaceOperational 1.1` / `TabbedWorkspace 1.0` |
+
+Each fix is a template restructure against that pattern's required parts, and
+`FormPatternCatalog` + FP001–FP010 have to move with it — this repo's model of the
+patterns disagrees with the registry, which is why a template rewritten to satisfy
+the AOS is currently rejected by our own FP003 before it can even be written.
 
 ## Improver toolchain
 
