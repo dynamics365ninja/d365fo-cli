@@ -1,0 +1,13 @@
+{
+  "id": "L2-form-clone-basic",
+  "title": "Clone a two-datasource details-transaction form under a new name",
+  "tier": 2,
+  "instruction": "Clone the existing form eval/goldens/L1-form-details-transaction/ConFmVehicleServiceOrder.xml as ConFmVehicleServiceOrderInquiry. The clone keeps the original's pattern, both datasources and their join, and its whole control tree — only the form's own self-references (root name, class declaration, formStr) take the new name. Use only the d365fo CLI (search/get/generate/validate) — do not hand-write XML.",
+  "canonical_args": ["generate", "form-clone", "ConFmVehicleServiceOrderInquiry", "--from", "eval/goldens/L1-form-details-transaction/ConFmVehicleServiceOrder.xml"],
+  "target_artifact_types": ["AxForm"],
+  "golden_path": "L2-form-clone-basic",
+  "tags": ["form-clone", "form", "metadata"],
+  "ignore": [],
+  "requires_fixture_index": false,
+  "golden_pending": false
+}
