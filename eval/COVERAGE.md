@@ -14,7 +14,7 @@ Every column is derived — families from `ObjectTypeRegistry`, capabilities fro
 file cannot claim coverage that no longer exists. Regenerate with
 `d365fo eval coverage --write`; CI runs `--check`.
 
-**42 of 70 leaves complete.**
+**42 of 71 leaves complete.**
 
 ## AOT families
 
@@ -30,7 +30,7 @@ file cannot claim coverage that no longer exists. Regenerate with
 | `AxEdtExtension` | edtextension | — | ✅ | ✅ | — | `L2-edt-extension` | generate extension |
 | `AxEnum` | enum | ✅ | ✅ | ✅ | `event-handler-authoring`, `object-extension-authoring` | `L0-enum-basic`, `L0-enum-non-extensible` | generate enum |
 | `AxEnumExtension` | enumextension | — | ✅ | ✅ | — | `L2-enum-extension` | generate extension |
-| `AxForm` | form | ✅ | ✅ | ✅ | `coc-extension-authoring`, `data-entity-scaffolding`, `event-handler-authoring`, `form-pattern-scaffolding`, `label-translation`, `model-dependency-and-coupling`, `object-extension-authoring`, `review-and-checkpoint-workflow`, `security-hierarchy-trace`, `table-scaffolding`, `x++-class-authoring`, `xpp-best-practice-rules`, `xpp-class-and-method-rules`, `xpp-database-queries`, `xpp-statement-and-type-rules` | `L1-form-basic`, `L1-form-details-master`, `L1-form-details-transaction`, `L1-form-dialog`, `L1-form-list-page`, `L1-form-lookup`, `L1-form-simplelist-details`, `L1-form-table-of-contents`, `L1-form-workspace`, `L2-control-method-basic`, `L2-datasource-method-basic` | generate form |
+| `AxForm` | form | ✅ | ✅ | ✅ | `coc-extension-authoring`, `data-entity-scaffolding`, `event-handler-authoring`, `form-pattern-scaffolding`, `label-translation`, `model-dependency-and-coupling`, `object-extension-authoring`, `review-and-checkpoint-workflow`, `security-hierarchy-trace`, `table-scaffolding`, `x++-class-authoring`, `xpp-best-practice-rules`, `xpp-class-and-method-rules`, `xpp-database-queries`, `xpp-statement-and-type-rules` | `L1-form-basic`, `L1-form-details-master`, `L1-form-details-transaction`, `L1-form-dialog`, `L1-form-list-page`, `L1-form-lookup`, `L1-form-simplelist-details`, `L1-form-table-of-contents`, `L1-form-workspace`, `L2-control-method-basic`, `L2-datasource-method-basic`, `L2-form-clone-basic` | generate form |
 | `AxFormExtension` | formextension | ✅ | ✅ | ✅ | `form-pattern-scaffolding`, `review-and-checkpoint-workflow` | `L2-form-extension-basic` | generate extension |
 | `AxFormPart` | formpart | — | — | — | — | — | — |
 | `AxLabelFile` | labelfile | ✅ | — | — | `label-translation` | — | — |
@@ -75,6 +75,7 @@ whether it is taught and proven.
 | `generate form` | AxForm | ✅ | ✅ | `form-pattern-scaffolding` | `L1-form-basic`, `L1-form-details-master`, `L1-form-details-transaction`, `L1-form-dialog`, `L1-form-list-page`, `L1-form-lookup`, `L1-form-simplelist-details`, `L1-form-table-of-contents`, `L1-form-workspace` |
 | `generate datasource-method` | AxForm | — | ✅ | — | `L2-datasource-method-basic` |
 | `generate control-method` | AxForm | — | ✅ | — | `L2-control-method-basic` |
+| `generate form-clone` | AxForm | — | ✅ | — | `L2-form-clone-basic` |
 | `generate simple-list` | deprecated alias | — | — | — | — |
 | `generate entity` | AxDataEntityView | ✅ | ✅ | `data-entity-scaffolding`, `integration-dmf-dualwrite`, `integration-patterns` | `L2-virtual-entity-basic` |
 | `generate extension` | AxTableExtension, AxFormExtension, AxEdtExtension, AxEnumExtension, AxViewExtension, AxQuerySimpleExtension, AxDataEntityViewExtension, AxSecurityDutyExtension, AxSecurityRoleExtension | ✅ | ✅ | `forms-and-navigation`, `object-extension-authoring`, `xpp-best-practice-rules` | `L2-edt-extension`, `L2-enum-extension`, `L2-form-extension-basic`, `L2-security-duty-extension`, `L2-security-role-extension`, `L2-table-extension` |
@@ -106,6 +107,7 @@ cannot build at all are omitted — they are a generation gap, not a coverage ga
 
 - **control-method** (capability) — no topic names it
 - **datasource-method** (capability) — no topic names it
+- **form-clone** (capability) — no topic names it
 - **map** (capability) — no topic names it
 - **simple-list** (capability) — no topic names it; no case with a reviewed golden
 - **systest** (capability) — no topic names it

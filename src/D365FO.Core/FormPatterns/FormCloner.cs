@@ -141,12 +141,12 @@ public static class FormCloner
             xml = Regex.Replace(xml, tableTag, $"<Table>{newTable}</Table>");
             rebound.Add($"{oldTable} -> {newTable}");
 
-            // The datasource element that carried the table, and every control pointing at it.
+            // The datasource element that carried the table, and everything pointing at it.
             var dsName = $"<Name>{Regex.Escape(oldTable)}</Name>";
             if (Regex.IsMatch(xml, dsName))
             {
                 xml = Regex.Replace(xml, dsName, $"<Name>{newTable}</Name>");
-                xml = Regex.Replace(xml, $"<DataSource>{Regex.Escape(oldTable)}</DataSource>", $"<DataSource>{newTable}</DataSource>");
+                xml = RenameDataSourceReferences(xml, oldTable, newTable);
                 renamed.Add($"{oldTable} -> {newTable}");
             }
 
@@ -157,6 +157,48 @@ public static class FormCloner
         }
 
         return (rebound, renamed);
+    }
+
+    /// <summary>
+    /// Elements whose text is the name of a datasource, so a renamed datasource has to be
+    /// followed into all of them.
+    /// </summary>
+    /// <remarks>
+    /// Grounded on a live installation rather than guessed: across 300 shipped
+    /// <c>ApplicationSuite\Foundation\AxForm</c> forms these are the only elements carrying a
+    /// datasource name as their value. The rest of the <c>*DataSource*</c> family is either a
+    /// container (<c>DataSources</c>, <c>DataSourceLinks</c>, <c>ReferencedDataSources</c>) or
+    /// holds something else entirely (<c>DataSourceChangeGroupMode</c> is an enum,
+    /// <c>DataSourceRelation</c> names a relation). Datasource names reached through a nested
+    /// <c>&lt;Name&gt;</c> — root links, referenced and derived datasources — are already covered
+    /// by the <c>&lt;Name&gt;</c> rewrite above.
+    /// </remarks>
+    private static readonly string[] DataSourceRefElements =
+        ["DataSource", "TitleDataSource", "WorkflowDataSource", "PresenceDataSource", "JoinSource"];
+
+    /// <summary>
+    /// Repoint every reference to a renamed datasource, whatever attributes the tag carries.
+    /// </summary>
+    /// <remarks>
+    /// The attribute tolerance is the whole point. A <c>&lt;Design&gt;</c>'s own
+    /// <c>DataSource</c>/<c>TitleDataSource</c> are first-level children written in the empty
+    /// namespace, so they appear as <c>&lt;DataSource xmlns=""&gt;</c>, while the control-level
+    /// ones nested under <c>&lt;Controls xmlns=""&gt;</c> inherit it and appear bare. Matching only
+    /// the bare form rebinds the controls and leaves the design pointing at a datasource the
+    /// clone no longer has.
+    /// <para>
+    /// The alternation cannot bleed into a longer tag: the group must be followed immediately by
+    /// whitespace or <c>&gt;</c>, so <c>DataSource</c> never matches the start of
+    /// <c>DataSourceLinks</c>. The closing tag is a backreference, so the two always agree.
+    /// </para>
+    /// </remarks>
+    private static string RenameDataSourceReferences(string xml, string oldName, string newName)
+    {
+        var tags = string.Join('|', DataSourceRefElements);
+        return Regex.Replace(
+            xml,
+            $@"<({tags})((?:\s[^>]*)?)>{Regex.Escape(oldName)}</\1>",
+            m => $"<{m.Groups[1].Value}{m.Groups[2].Value}>{newName}</{m.Groups[1].Value}>");
     }
 
     /// <summary>

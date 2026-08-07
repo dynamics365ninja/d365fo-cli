@@ -11,7 +11,10 @@ namespace D365FO.Core.Tests;
 /// <remarks>
 /// The fixture mirrors the shape of a real shipped form: the root name, the X++ class
 /// declaration, a datasource entry under <c>&lt;SourceCode&gt;</c> (where override methods live),
-/// the design datasource, and a control pointing at it by name. Verified against
+/// the design datasource, the design's own <c>DataSource</c>/<c>TitleDataSource</c> properties
+/// (first-level children of <c>&lt;Design&gt;</c>, so they carry an explicit <c>xmlns=""</c> where
+/// the control-level ones inherit it), and a control pointing at the datasource by name. Verified
+/// against
 /// <c>ApplicationSuite\Foundation\AxForm\CustGroup.xml</c> on a live installation — a 16 KB form
 /// where the clone differs from the source on exactly the intended lines and is byte-identical
 /// everywhere else.
@@ -41,8 +44,15 @@ public class FormClonerTests
         			<Name>CustGroup</Name>
         			<Table>CustGroup</Table>
         		</AxFormDataSource>
+        		<AxFormDataSource>
+        			<Name>CustTrans</Name>
+        			<Table>CustTrans</Table>
+        			<JoinSource>CustGroup</JoinSource>
+        		</AxFormDataSource>
         	</DataSources>
         	<Design>
+        		<DataSource xmlns="">CustGroup</DataSource>
+        		<TitleDataSource xmlns="">CustGroup</TitleDataSource>
         		<AxFormControl xmlns="" i:type="AxFormStringControl">
         			<Name>Grid_CustGroupId</Name>
         			<DataField>CustGroupId</DataField>
@@ -87,6 +97,61 @@ public class FormClonerTests
         Assert.Equal(2, Regex.Matches(result.Xml, "<Name>ConVehicleGroupTable</Name>").Count);
         Assert.Single(result.Rebound);
         Assert.Single(result.RenamedDataSources);
+    }
+
+    [Fact]
+    public void A_rebind_follows_the_datasource_into_the_design_properties_that_name_it()
+    {
+        // The design's own DataSource/TitleDataSource are first-level children of <Design>, so
+        // they are written as <DataSource xmlns="">. A pattern anchored on the bare "<DataSource>"
+        // misses them, and the clone then names a datasource it no longer has — a form that
+        // compiles and breaks at runtime. Grounded on a live installation: of 300 shipped
+        // ApplicationSuite forms, 128 <DataSource> and 78 <TitleDataSource> nodes carry attributes.
+        var result = FormCloner.Clone(Source, "ConVehicleGroup", Rebind("CustGroup", "ConVehicleGroupTable"));
+
+        Assert.Contains("<DataSource xmlns=\"\">ConVehicleGroupTable</DataSource>", result.Xml);
+        Assert.Contains("<TitleDataSource xmlns=\"\">ConVehicleGroupTable</TitleDataSource>", result.Xml);
+        Assert.DoesNotContain("CustGroup</DataSource>", result.Xml);
+        Assert.DoesNotContain("CustGroup</TitleDataSource>", result.Xml);
+    }
+
+    [Fact]
+    public void A_rebind_follows_the_datasource_into_the_join_that_names_it()
+    {
+        // A joined datasource names its parent by datasource name, so renaming the parent has to
+        // reach the join too — otherwise the child joins to something that no longer exists.
+        var result = FormCloner.Clone(Source, "ConVehicleGroup", Rebind("CustGroup", "ConVehicleGroupTable"));
+
+        Assert.Contains("<JoinSource>ConVehicleGroupTable</JoinSource>", result.Xml);
+    }
+
+    [Fact]
+    public void A_tag_that_merely_starts_with_a_matched_element_name_is_not_rewritten()
+    {
+        // The alternation must not let "DataSource" bleed into "DataSourceLinks" and friends.
+        var withLinks = Source.Replace(
+            "<JoinSource>CustGroup</JoinSource>",
+            "<JoinSource>CustGroup</JoinSource><DataSourceLinks>CustGroup</DataSourceLinks>");
+
+        var result = FormCloner.Clone(withLinks, "ConVehicleGroup", Rebind("CustGroup", "ConVehicleGroupTable"));
+
+        Assert.Contains("<DataSourceLinks>CustGroup</DataSourceLinks>", result.Xml);
+    }
+
+    [Fact]
+    public void A_rebind_leaves_no_control_or_design_node_naming_the_old_datasource()
+    {
+        // The whole-document guarantee behind the case above: after a rebind that renamed the
+        // datasource, nothing anywhere still refers to the old name.
+        var result = FormCloner.Clone(Source, "ConVehicleGroup", Rebind("CustGroup", "ConVehicleGroupTable"));
+
+        var stillNamingOld = XDocument.Parse(result.Xml)
+            .Descendants()
+            .Where(e => e.Value.Trim() == "CustGroup" && !e.HasElements)
+            .Select(e => e.Name.LocalName)
+            .ToList();
+
+        Assert.Empty(stillNamingOld);
     }
 
     [Fact]
