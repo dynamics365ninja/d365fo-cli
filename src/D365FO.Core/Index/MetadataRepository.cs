@@ -434,6 +434,19 @@ public sealed partial class MetadataRepository
             WHERE e.Name = @name LIMIT 1", new { name });
     }
 
+    internal IReadOnlyList<EdtInfo> FindEdtsExact(string name)
+    {
+        using var conn = OpenReadOnly();
+        return conn.Query<EdtInfo>(@"
+            SELECT e.Name, m.Name AS Model, e.ExtendsName AS Extends,
+                   e.BaseType, e.Label, e.StringSize,
+                   e.ReferenceTable, e.FormHelp, e.AnalysisUsage, e.EnumType
+            FROM Edts e JOIN Models m ON m.ModelId = e.ModelId
+            WHERE e.Name = @name COLLATE NOCASE
+            ORDER BY m.IsCustom DESC, m.Name COLLATE NOCASE, e.Name COLLATE NOCASE",
+            new { name }).ToList();
+    }
+
     /// <summary>
     /// Index rows store the <em>base</em> object an extension targets (e.g.
     /// <c>CustTable</c>), but callers and LLMs often pass the full extension
