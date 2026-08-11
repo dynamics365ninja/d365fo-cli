@@ -1,6 +1,6 @@
 ---
 name: d365fo-cli
-description: D365 Finance & Operations X++ AI development skill powered by the d365fo CLI. Use whenever the user is working in a D365 F&O X++ project: writing classes, tables, forms, CoC extensions, event handlers, entities, security, batch jobs, business events, labels, or any AOT artifact. Loads topic-specific guidance lazily from references/.
+description: "D365 Finance & Operations X++ AI development skill powered by the d365fo CLI. Use whenever the user is working in a D365 F&O X++ project: writing classes, tables, forms, CoC extensions, event handlers, entities, security, batch jobs, business events, labels, or any AOT artifact. Loads topic-specific guidance lazily from references/."
 compatibility: Requires GitHub Copilot agent mode (VS 2022/2026 or VS Code) and d365fo CLI in PATH.
 ---
 
