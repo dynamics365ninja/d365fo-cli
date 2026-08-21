@@ -33,23 +33,31 @@ public static class EdtSuggester
         var target = fieldName.Trim();
         var stripped = Strip(target);
 
-        // Keep an exact EDT match outside the fuzzy-search budget. SearchEdts
-        // orders custom models first and applies its limit before scoring, so a
-        // standard EDT can otherwise be truncated before receiving a 1.0 score.
-        var exactCandidates = repo.FindEdtsExact(target);
-
         // Over-fetch then score. Single LIKE scan on Name — Edts table is small.
-        var candidates = repo.SearchEdts(stripped.Length >= 3 ? stripped : target, Math.Max(limit * 20, 100)).ToList();
+        var fetch = Math.Min(Math.Max(limit * 20, 100), MetadataRepository.MaxRowLimit);
+        var candidates = repo.SearchEdts(stripped.Length >= 3 ? stripped : target, fetch).ToList();
         if (candidates.Count == 0 && stripped.Length >= 3)
-            candidates.AddRange(repo.SearchEdts(stripped, Math.Max(limit * 20, 100)));
+            candidates.AddRange(repo.SearchEdts(stripped, fetch));
 
-        foreach (var exact in exactCandidates)
+        // SearchEdts orders custom models first and applies its limit before
+        // scoring, so a standard EDT can be truncated away before it ever earns
+        // its 1.0 exact-match score. Re-fetch exact names to put them back.
+        //
+        // Only when the sweep filled its whole budget can anything have been
+        // truncated — a short sweep already contains every name matching the
+        // root, exact ones included. Skipping the lookup in that case keeps
+        // the common path at a single query — prepare calls Suggest once per
+        // field, and each call opens its own connection.
+        if (candidates.Count >= fetch)
         {
-            if (!candidates.Any(candidate =>
-                    string.Equals(candidate.Name, exact.Name, StringComparison.OrdinalIgnoreCase) &&
-                    string.Equals(candidate.Model, exact.Model, StringComparison.OrdinalIgnoreCase)))
+            foreach (var exact in repo.FindEdtsExact(target))
             {
-                candidates.Add(exact);
+                if (!candidates.Any(candidate =>
+                        string.Equals(candidate.Name, exact.Name, StringComparison.OrdinalIgnoreCase) &&
+                        string.Equals(candidate.Model, exact.Model, StringComparison.OrdinalIgnoreCase)))
+                {
+                    candidates.Add(exact);
+                }
             }
         }
 
