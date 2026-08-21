@@ -70,13 +70,44 @@ def parse_yaml(text: str) -> dict[str, object]:
     return data
 
 
+# YAML indicator characters: a plain scalar may not start with one of these.
+_YAML_LEADERS = set("-?:,[]{}#&*!|>'\"%@`")
+
+# Plain scalars YAML would read as something other than a string.
+_YAML_RESERVED = {"true", "false", "yes", "no", "on", "off", "null", "none", "~", ""}
+
+
+def needs_quoting(value: str) -> bool:
+    """
+    True when `value` cannot be written as a bare YAML scalar.
+
+    The failure this guards against is a description containing ": " — YAML
+    reads that as a nested mapping key and the whole frontmatter block stops
+    parsing (issue #172). Deliberately conservative: quoting a value that would
+    have been fine costs nothing, missing one breaks every consumer of the file.
+    """
+    if value != value.strip() or value.lower() in _YAML_RESERVED:
+        return True
+    if value[0] in _YAML_LEADERS:
+        return True
+    return ": " in value or value.endswith(":") or " #" in value
+
+
+def yaml_scalar(value: object) -> str:
+    """Render `value` as a YAML scalar, quoting only when a bare one would misparse."""
+    text = str(value)
+    if not needs_quoting(text):
+        return text
+    return '"' + text.replace("\\", "\\\\").replace('"', '\\"') + '"'
+
+
 def emit_copilot(meta: dict, body: str, out_dir: Path) -> Path:
     sid = meta["id"]
     apply_to = meta.get("applyTo") or []
     if isinstance(apply_to, str):
         apply_to = [apply_to]
     glob = ",".join(apply_to) if apply_to else "**/*"
-    fm = f"---\ndescription: {meta['description']}\napplyTo: '{glob}'\n---\n"
+    fm = f"---\ndescription: {yaml_scalar(meta['description'])}\napplyTo: '{glob}'\n---\n"
     out_dir.mkdir(parents=True, exist_ok=True)
     path = out_dir / f"{sid}.instructions.md"
     path.write_text(fm + body, encoding="utf-8")
@@ -85,9 +116,9 @@ def emit_copilot(meta: dict, body: str, out_dir: Path) -> Path:
 
 def emit_anthropic(meta: dict, body: str, out_dir: Path) -> Path:
     sid = meta["id"]
-    lines = ["---", f"name: {sid}", f"description: {meta['description']}"]
+    lines = ["---", f"name: {sid}", f"description: {yaml_scalar(meta['description'])}"]
     if "appliesWhen" in meta:
-        lines.append(f"applies_when: {meta['appliesWhen']}")
+        lines.append(f"applies_when: {yaml_scalar(meta['appliesWhen'])}")
     lines.append("---\n")
     fm = "\n".join(lines)
     dir_ = out_dir / sid
