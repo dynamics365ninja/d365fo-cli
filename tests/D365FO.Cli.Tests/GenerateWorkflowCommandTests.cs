@@ -13,6 +13,10 @@ namespace D365FO.Cli.Tests;
 /// <c>getQueryName()</c> named a query the command never created. The command used
 /// to warn about each and ship anyway — a warning, for metadata that could not build.
 /// </remarks>
+// Captures Console.Out, which is process-global: it has to be serialised against the
+// other console-capturing classes rather than left to xUnit's per-class parallelism.
+// Without this it reads another class's output and fails on empty JSON.
+[Collection("EnvIndexDb")]
 public class GenerateWorkflowCommandTests
 {
     private static (int Exit, JsonDocument Json) Run(GenerateWorkflowCommand.Settings settings)
