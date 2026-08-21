@@ -115,6 +115,25 @@ public class EdtSuggesterTests : IDisposable
     }
 
     [Fact]
+    public void Whole_name_match_is_recovered_when_the_root_sweep_is_truncated()
+    {
+        // "LineNum" strips to the root "Line", and the root sweep is the broader
+        // of the two — so the only way a name carrying the whole field name gets
+        // lost is the budget cutting it off behind a crowd of custom names.
+        SeedCrowdedFuzzyWindow("Line");
+        SeedEdt("Foundation", isCustom: false, "InventLineNum");
+
+        Assert.DoesNotContain(_repo.SearchEdts("Line", 100),
+            edt => string.Equals(edt.Name, "InventLineNum", StringComparison.OrdinalIgnoreCase));
+
+        var suggestions = EdtSuggester.Suggest(_repo, "LineNum", limit: 5);
+
+        Assert.NotEmpty(suggestions);
+        Assert.Equal("InventLineNum", suggestions[0].Edt.Name);
+        Assert.Equal("whole-name token match", suggestions[0].Reason);
+    }
+
+    [Fact]
     public void Exact_candidates_preserve_model_identity()
     {
         // Crowd the window too, otherwise the fuzzy sweep returns both rows on

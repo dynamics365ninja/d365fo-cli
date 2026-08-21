@@ -423,6 +423,13 @@ public sealed partial class MetadataRepository
         return new TableDetails(table, fields, relations, methods, indexes, deleteActions);
     }
 
+    /// <summary>
+    /// One EDT by name, case-insensitively — X++ identifiers are, and callers
+    /// pass names an LLM produced. Where the name exists in several models the
+    /// custom one wins, so the answer does not depend on insertion order.
+    /// Served by <c>IX_Edts_Name_NoCase</c>, the same index
+    /// <see cref="FindEdtsExact"/> uses.
+    /// </summary>
     public EdtInfo? GetEdt(string name)
     {
         using var conn = OpenReadOnly();
@@ -431,7 +438,9 @@ public sealed partial class MetadataRepository
                    e.BaseType, e.Label, e.StringSize,
                    e.ReferenceTable, e.FormHelp, e.AnalysisUsage, e.EnumType
             FROM Edts e JOIN Models m ON m.ModelId = e.ModelId
-            WHERE e.Name = @name LIMIT 1", new { name });
+            WHERE e.Name = @name COLLATE NOCASE
+            ORDER BY m.IsCustom DESC, m.Name COLLATE NOCASE
+            LIMIT 1", new { name });
     }
 
     /// <summary>

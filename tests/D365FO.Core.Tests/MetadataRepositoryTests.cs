@@ -345,4 +345,45 @@ public class MetadataRepositoryTests : IDisposable
         Assert.Equal("RunBaseBatch", detail!.Class.Extends);
         Assert.Empty(detail.InheritedMethods);
     }
+
+    [Theory]
+    [InlineData("CustAccount")]
+    [InlineData("custaccount")]
+    [InlineData("CUSTACCOUNT")]
+    [InlineData("cUsTaCcOuNt")]
+    public void GetEdt_matches_regardless_of_case(string queried)
+    {
+        var repo = new MetadataRepository(_dbPath);
+        repo.EnsureSchema();
+        repo.ApplyExtract(ExtractBatch.Empty("ApplicationSuite") with
+        {
+            Edts = new[] { new ExtractedEdt("CustAccount", null, "String", null, 20) },
+        });
+
+        var edt = repo.GetEdt(queried);
+
+        Assert.NotNull(edt);
+        Assert.Equal("CustAccount", edt!.Name);
+    }
+
+    [Fact]
+    public void GetEdt_prefers_the_custom_model_when_the_name_exists_in_several()
+    {
+        var repo = new MetadataRepository(_dbPath);
+        repo.EnsureSchema();
+        repo.ApplyExtract(ExtractBatch.Empty("ApplicationSuite") with
+        {
+            IsCustom = false,
+            Edts = new[] { new ExtractedEdt("SharedId", null, "String", null, 10) },
+        });
+        repo.ApplyExtract(ExtractBatch.Empty("Contoso") with
+        {
+            IsCustom = true,
+            Edts = new[] { new ExtractedEdt("SharedId", null, "String", null, 20) },
+        });
+
+        // Without an ORDER BY the LIMIT 1 took whichever row SQLite reached
+        // first, so the answer depended on insertion order.
+        Assert.Equal("Contoso", repo.GetEdt("sharedid")!.Model);
+    }
 }

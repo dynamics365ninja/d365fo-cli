@@ -35,30 +35,29 @@ public static class EdtSuggester
 
         // Over-fetch then score. Single LIKE scan on Name — Edts table is small.
         var fetch = Math.Min(Math.Max(limit * 20, 100), MetadataRepository.MaxRowLimit);
-        var candidates = repo.SearchEdts(stripped.Length >= 3 ? stripped : target, fetch).ToList();
-        if (candidates.Count == 0 && stripped.Length >= 3)
-            candidates.AddRange(repo.SearchEdts(stripped, fetch));
+        var root = stripped.Length >= 3 ? stripped : target;
+        var candidates = repo.SearchEdts(root, fetch).ToList();
 
         // SearchEdts orders custom models first and applies its limit before
-        // scoring, so a standard EDT can be truncated away before it ever earns
-        // its 1.0 exact-match score. Re-fetch exact names to put them back.
-        //
-        // Only when the sweep filled its whole budget can anything have been
-        // truncated — a short sweep already contains every name matching the
-        // root, exact ones included. Skipping the lookup in that case keeps
-        // the common path at a single query — prepare calls Suggest once per
-        // field, and each call opens its own connection.
+        // scoring, so the sweep can drop a name that would have outscored
+        // everything it kept. That is only possible when the sweep filled its
+        // whole budget — a short one already holds every name matching the
+        // root. Checking first keeps the common path at a single query, which
+        // matters because prepare calls Suggest once per field and each call
+        // opens its own connection.
         if (candidates.Count >= fetch)
         {
-            foreach (var exact in repo.FindEdtsExact(target))
-            {
-                if (!candidates.Any(candidate =>
-                        string.Equals(candidate.Name, exact.Name, StringComparison.OrdinalIgnoreCase) &&
-                        string.Equals(candidate.Model, exact.Model, StringComparison.OrdinalIgnoreCase)))
-                {
-                    candidates.Add(exact);
-                }
-            }
+            // The root sweep is the broader of the two: stripping only ever
+            // shortens the term, so every name containing the whole field name
+            // also contains its root. Re-running on the full name therefore adds
+            // nothing unless the budget cut those longer, higher-scoring names
+            // off — which is exactly the case being repaired here.
+            if (!string.Equals(root, target, StringComparison.Ordinal))
+                Merge(candidates, repo.SearchEdts(target, fetch));
+
+            // Same reasoning for the exact name, which scores 1.0 and must never
+            // lose to a crowd of custom-model near-misses.
+            Merge(candidates, repo.FindEdtsExact(target));
         }
 
         var scored = new List<Suggestion>();
@@ -73,6 +72,20 @@ public static class EdtSuggester
             .ThenBy(s => s.Edt.Name, StringComparer.OrdinalIgnoreCase)
             .Take(limit)
             .ToList();
+    }
+
+    /// <summary>Appends the rows of <paramref name="extra"/> that <paramref name="into"/> does not already hold, keyed by qualified name.</summary>
+    private static void Merge(List<EdtInfo> into, IReadOnlyList<EdtInfo> extra)
+    {
+        foreach (var candidate in extra)
+        {
+            if (!into.Any(existing =>
+                    string.Equals(existing.Name, candidate.Name, StringComparison.OrdinalIgnoreCase) &&
+                    string.Equals(existing.Model, candidate.Model, StringComparison.OrdinalIgnoreCase)))
+            {
+                into.Add(candidate);
+            }
+        }
     }
 
     private static (double Score, string Reason) Score(string target, string stripped, string edtName)
