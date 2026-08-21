@@ -20,3 +20,7 @@ memory/
 
 # Agent workflow scratch worktrees
 .claude/worktrees/
+
+# Python bytecode from scripts/ (test-emit-skills.py imports emit-skills.py)
+__pycache__/
+*.pyc

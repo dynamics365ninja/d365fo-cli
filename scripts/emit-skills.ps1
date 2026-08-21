@@ -79,10 +79,39 @@ function Parse-Yaml {
     return $map
 }
 
+# Kept in lock-step with needs_quoting()/yaml_scalar() in scripts/emit-skills.py.
+$script:YamlLeaders = '-?:,[]{}#&*!|>''"%@`'.ToCharArray()
+$script:YamlReserved = @('true', 'false', 'yes', 'no', 'on', 'off', 'null', 'none', '~', '')
+
+<#
+.SYNOPSIS
+    Renders a value as a YAML scalar, quoting only when a bare one would misparse.
+.DESCRIPTION
+    The failure this guards against is a description containing ": " — YAML reads
+    that as a nested mapping key and the whole frontmatter block stops parsing
+    (issue #172). Deliberately conservative: quoting a value that would have been
+    fine costs nothing, missing one breaks every consumer of the generated file.
+#>
+function ConvertTo-YamlScalar {
+    param([string]$Value)
+
+    $text = [string]$Value
+    $needsQuoting =
+        $text -ne $text.Trim() -or
+        $script:YamlReserved -contains $text.ToLowerInvariant() -or
+        ($text.Length -gt 0 -and $script:YamlLeaders -contains $text[0]) -or
+        $text.Contains(': ') -or
+        $text.EndsWith(':') -or
+        $text.Contains(' #')
+
+    if (-not $needsQuoting) { return $text }
+    return '"' + ($text -replace '\\', '\\' -replace '"', '\"') + '"'
+}
+
 function Emit-Copilot {
     param($Meta, [string]$Body, [string]$OutDir)
     $id = $Meta.id
-    $desc = $Meta.description
+    $desc = ConvertTo-YamlScalar $Meta.description
     $applyTo = @($Meta.applyTo) | Where-Object { $_ }
     $glob = if ($applyTo.Count -gt 0) { $applyTo -join ',' } else { '**/*' }
 
@@ -101,8 +130,8 @@ applyTo: '$glob'
 function Emit-Anthropic {
     param($Meta, [string]$Body, [string]$OutDir)
     $id = $Meta.id
-    $desc = $Meta.description
-    $appliesWhen = $Meta.appliesWhen
+    $desc = ConvertTo-YamlScalar $Meta.description
+    $appliesWhen = if ($Meta.appliesWhen) { ConvertTo-YamlScalar $Meta.appliesWhen } else { $null }
 
     $fm = @"
 ---

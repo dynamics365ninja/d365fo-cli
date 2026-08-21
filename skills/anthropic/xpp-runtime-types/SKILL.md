@@ -1,7 +1,7 @@
 ---
 name: xpp-runtime-types
 description: Use the X++ runtime type surface correctly — collections and containers, utcdatetime and time zones, .NET interop, the Dict* reflection API, and macros. Invoke when the user asks about List/Map/Set/Struct/container, date and time zone handling, calling .NET from X++, runtime metadata, or macro libraries.
-applies_when: User intent mentions List, Map, Set, Struct, container, conPeek/conIns, enumerator, utcdatetime, DateTimeUtil, time zone, date arithmetic, .NET interop, CLRInterop, CLRError, StringBuilder, reflection, DictTable/DictField/DictClass/DictEnum, or macros and #define.
+applies_when: "User intent mentions List, Map, Set, Struct, container, conPeek/conIns, enumerator, utcdatetime, DateTimeUtil, time zone, date arithmetic, .NET interop, CLRInterop, CLRError, StringBuilder, reflection, DictTable/DictField/DictClass/DictEnum, or macros and #define."
 ---
 > ⛔ **NEVER write X++ AOT XML files directly** via PowerShell, terminal file commands (`Set-Content`, `Out-File`, `New-Item`), editor write tools, or any raw text approach. The XML schema is proprietary. **ALWAYS use `d365fo generate …` commands** to produce correct AOT XML. If `d365fo` is unavailable in PATH, stop and ask the user to install it.
 
