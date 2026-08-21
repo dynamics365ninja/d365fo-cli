@@ -14,7 +14,7 @@ namespace D365FO.Core.Index;
 public sealed partial class MetadataRepository
 {
     /// <summary>Current schema version tracked in PRAGMA user_version.</summary>
-    public const int CurrentSchemaVersion = 15;
+    public const int CurrentSchemaVersion = 16;
 
     private static readonly Lazy<string> SchemaSql = new(LoadEmbeddedSchema);
 
@@ -432,6 +432,26 @@ public sealed partial class MetadataRepository
                    e.ReferenceTable, e.FormHelp, e.AnalysisUsage, e.EnumType
             FROM Edts e JOIN Models m ON m.ModelId = e.ModelId
             WHERE e.Name = @name LIMIT 1", new { name });
+    }
+
+    /// <summary>
+    /// Every EDT named exactly <paramref name="name"/> (case-insensitive),
+    /// across all models. Served by <c>IX_Edts_Name_NoCase</c> — the BINARY
+    /// <c>IX_Edts_Name</c> cannot answer a <c>COLLATE NOCASE</c> comparison.
+    /// </summary>
+    internal IReadOnlyList<EdtInfo> FindEdtsExact(string name, int limit = 50)
+    {
+        limit = ClampLimit(limit, 50);
+        using var conn = OpenReadOnly();
+        return conn.Query<EdtInfo>(@"
+            SELECT e.Name, m.Name AS Model, e.ExtendsName AS Extends,
+                   e.BaseType, e.Label, e.StringSize,
+                   e.ReferenceTable, e.FormHelp, e.AnalysisUsage, e.EnumType
+            FROM Edts e JOIN Models m ON m.ModelId = e.ModelId
+            WHERE e.Name = @name COLLATE NOCASE
+            ORDER BY m.IsCustom DESC, m.Name COLLATE NOCASE, e.Name COLLATE NOCASE
+            LIMIT @limit",
+            new { name, limit }).ToList();
     }
 
     /// <summary>

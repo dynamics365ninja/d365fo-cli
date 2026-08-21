@@ -113,6 +113,10 @@ CREATE TABLE IF NOT EXISTS Edts (
     FOREIGN KEY (ModelId) REFERENCES Models(ModelId)
 );
 CREATE INDEX IF NOT EXISTS IX_Edts_Name ON Edts(Name);
+-- Case-insensitive twin for EdtSuggester's exact-name lookup. A COLLATE NOCASE
+-- comparison cannot use the BINARY index above, so without this every exact
+-- lookup scans Edts (~25k rows on a full AOT).
+CREATE INDEX IF NOT EXISTS IX_Edts_Name_NoCase ON Edts(Name COLLATE NOCASE);
 
 CREATE TABLE IF NOT EXISTS Enums (
     EnumId      INTEGER PRIMARY KEY AUTOINCREMENT,
