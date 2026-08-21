@@ -81,18 +81,7 @@ public static class XppScaffolder
         // and a concrete i:type on every polymorphic AxTableField (abstract base).
         XNamespace xsi = "http://www.w3.org/2001/XMLSchema-instance";
 
-        var fieldEls = effectiveFields.Select(f =>
-        {
-            var edtName = f.Edt ?? "Name";
-            var suffix  = TableFieldConcreteSuffix(edtName, edtBaseTypeResolver);
-            var el = new XElement("AxTableField",
-                new XAttribute(XName.Get("type", xsi.NamespaceName), $"AxTableField{suffix}"),
-                new XElement("Name", f.Name),
-                new XElement("ExtendedDataType", edtName));
-            if (!string.IsNullOrEmpty(f.Label)) el.Add(new XElement("Label", f.Label));
-            if (f.Mandatory) el.Add(new XElement("Mandatory", "Yes"));
-            return el;
-        });
+        var fieldEls = effectiveFields.Select(f => TableFieldElement(f, edtBaseTypeResolver));
 
         // Pick the primary-key / alternate-key index. Order of preference:
         //   1. caller-supplied --primary-key list (must reference real fields).
@@ -177,6 +166,29 @@ public static class XppScaffolder
                     BuildFieldGroup("Overview", effectiveFields),
                     BuildFieldGroup("General", effectiveFields)),
                 indexesEl));
+    }
+
+    /// <summary>
+    /// <summary>
+    /// One <c>&lt;AxTableField&gt;</c>, carrying the concrete <c>i:type</c> discriminator
+    /// the metadata reader requires on the abstract base.
+    /// </summary>
+    /// <remarks>
+    /// Shared by <see cref="Table"/> and <see cref="Extension"/>: a field added through a
+    /// table extension has exactly the shape it would have on the table itself, and two
+    /// copies of that rule is one copy too many.
+    /// </remarks>
+    private static XElement TableFieldElement(TableFieldSpec spec, Func<string, string?>? edtBaseTypeResolver)
+    {
+        var edtName = spec.Edt ?? "Name";
+        var suffix = TableFieldConcreteSuffix(edtName, edtBaseTypeResolver);
+        var el = new XElement("AxTableField",
+            new XAttribute(XName.Get("type", Xsi.NamespaceName), $"AxTableField{suffix}"),
+            new XElement("Name", spec.Name),
+            new XElement("ExtendedDataType", edtName));
+        if (!string.IsNullOrEmpty(spec.Label)) el.Add(new XElement("Label", spec.Label));
+        if (spec.Mandatory) el.Add(new XElement("Mandatory", "Yes"));
+        return el;
     }
 
     /// <summary>
@@ -573,8 +585,14 @@ public static class XppScaffolder
     /// changes as <c>PropertyModifications</c>, which is why an EDT extension can retype
     /// nothing and only override properties.</para>
     /// </summary>
+    /// <param name="tableFields">
+    /// Fields to add through a <c>table</c> extension. Any other kind rejects them rather
+    /// than dropping them silently — an <c>AxFormExtension</c> has no <c>Fields</c> member,
+    /// so anything written there vanishes on read. Omit for the bare skeleton.
+    /// </param>
     public static XDocument Extension(
-        string kind, string targetName, string suffix, Func<string, string?>? edtBaseTypeResolver = null)
+        string kind, string targetName, string suffix, Func<string, string?>? edtBaseTypeResolver = null,
+        IEnumerable<TableFieldSpec>? tableFields = null)
     {
         // The type name is not derivable from the kind: a query's extension is
         // AxQuerySimpleExtension, not AxQueryExtension — there is no type or AOT folder of the
@@ -598,12 +616,32 @@ public static class XppScaffolder
         XNamespace xsi = "http://www.w3.org/2001/XMLSchema-instance";
         root.SetAttributeValue(XNamespace.Xmlns + "i", xsi.NamespaceName);
 
+        var fields = (tableFields ?? Enumerable.Empty<TableFieldSpec>())
+            .Where(f => f is not null && !string.IsNullOrWhiteSpace(f.Name))
+            .ToList();
+        if (fields.Count > 0 && elementName != "AxTableExtension")
+        {
+            throw new ArgumentException(
+                $"Fields can only be added through a table extension; {elementName} has no Fields member.",
+                nameof(tableFields));
+        }
+
         // The empty collections a shipped extension of each kind carries. They are not
         // decoration: an extension is a list of modifications, and the collections are where a
         // caller's later edits go — emitting the container means the next tool has somewhere to
         // write instead of guessing at the order itself.
         foreach (var collection in ExtensionCollections(elementName))
             root.Add(new XElement(collection));
+
+        // AxTableExtension declares no collection up front — a shipped one carries only the
+        // members it actually modifies — so <Fields> appears exactly when there are fields
+        // to put in it. This is the same shape `modify add-field` builds when it creates the
+        // extension against a live AOT; the two paths differ only in reaching disk.
+        if (fields.Count > 0)
+        {
+            root.Add(new XElement("Fields",
+                fields.Select(f => TableFieldElement(f, edtBaseTypeResolver))));
+        }
 
         return new XDocument(root);
     }

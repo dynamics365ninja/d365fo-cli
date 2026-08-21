@@ -323,6 +323,10 @@ public sealed class GenerateExtensionCommand : Command<GenerateExtensionCommand.
         [System.ComponentModel.Description("Extension suffix. Defaults to the InstallTo model name or 'Extension'.")]
         public string? Suffix { get; init; }
 
+        [CommandOption("--field <SPEC>")]
+        [System.ComponentModel.Description("Repeatable; Table only: <name>:<edt>[[:mandatory]]. Example: --field QuantityD:Qty:mandatory")]
+        public string[] Fields { get; init; } = Array.Empty<string>();
+
         [CommandOption("--privilege <NAME>")]
         [System.ComponentModel.Description("Repeatable; SecurityDuty/SecurityRole only: privilege reference to add to the base duty/role.")]
         public string[] Privileges { get; init; } = Array.Empty<string>();
@@ -334,6 +338,20 @@ public sealed class GenerateExtensionCommand : Command<GenerateExtensionCommand.
         [CommandOption("--set-property <SPEC>")]
         [System.ComponentModel.Description("Repeatable; SecurityDuty/SecurityRole only: <Member>=<Value>. Overrides a property of the base object (Enabled, Label, Description, ContextString…) without overlaying it.")]
         public string[] PropertyModifications { get; init; } = Array.Empty<string>();
+    }
+
+    /// <summary>
+    /// Parse <c>--field &lt;name&gt;:&lt;edt&gt;[:mandatory]</c>, the same spelling
+    /// <c>generate table --field</c> takes — a field added through an extension is the same
+    /// declaration, so it should not need a second syntax to remember.
+    /// </summary>
+    private static TableFieldSpec ParseField(string raw)
+    {
+        var parts = raw.Split(':', StringSplitOptions.TrimEntries);
+        var name = parts.Length > 0 ? parts[0] : "";
+        var edt = parts.Length > 1 ? parts[1] : null;
+        var mandatory = parts.Length > 2 && string.Equals(parts[2], "mandatory", StringComparison.OrdinalIgnoreCase);
+        return new TableFieldSpec(name, string.IsNullOrEmpty(edt) ? null : edt, null, mandatory);
     }
 
     /// <summary>Parse <c>--set-property &lt;Member&gt;=&lt;Value&gt;</c> pairs.</summary>
@@ -414,25 +432,45 @@ public sealed class GenerateExtensionCommand : Command<GenerateExtensionCommand.
                 $"--set-property applies to SecurityDuty and SecurityRole extensions only; {axFolder} has no PropertyModifications member, " +
                 "so the overrides would be dropped on read."));
 
+        var fieldSpecs = settings.Fields
+            .Where(f => !string.IsNullOrWhiteSpace(f))
+            .Select(ParseField)
+            .ToList();
+        if (fieldSpecs.Count > 0 && axFolder != "AxTableExtension")
+            return RenderHelpers.Render(kind, ToolResult<object>.Fail(
+                D365FoErrorCodes.BadInput,
+                $"--field applies to Table extensions only; {axFolder} has no Fields member, " +
+                "so the fields would be dropped on read."));
+        if (fieldSpecs.Any(f => string.IsNullOrWhiteSpace(f.Name)))
+            return RenderHelpers.Render(kind, ToolResult<object>.Fail(
+                D365FoErrorCodes.BadInput, "Every --field needs a name: <name>:<edt>[:mandatory]."));
+        if (fieldSpecs.FirstOrDefault(f => string.IsNullOrWhiteSpace(f.Edt)) is { } noEdt)
+            return RenderHelpers.Render(kind, ToolResult<object>.Fail(
+                D365FoErrorCodes.BadInput,
+                $"--field '{noEdt.Name}' has no EDT. Every field on a table extension needs one: <name>:<edt>[:mandatory].",
+                "Run `d365fo suggest edt <name>` to find one, or `d365fo generate edt` to create it."));
+
         var doc = axFolder switch
         {
             "AxSecurityDutyExtension" => XppScaffolder.SecurityDutyExtension(settings.Target, suffix, settings.Privileges, propertyMods),
             "AxSecurityRoleExtension" => XppScaffolder.SecurityRoleExtension(settings.Target, suffix, settings.Duties, settings.Privileges, propertyMods),
-            // The EDT case needs the index-backed base-type resolver to pin the concrete
-            // AxEdt*Extension subtype; the other kinds ignore it.
             // The scaffolder takes the base kind, not the type name — and the two differ for
             // queries, whose extension is AxQuerySimpleExtension.
             "AxQuerySimpleExtension" => XppScaffolder.Extension("query", settings.Target, suffix),
             // The EDT case needs the index-backed base-type resolver to pin the concrete
-            // AxEdt*Extension subtype; the other kinds ignore it.
+            // AxEdt*Extension subtype; for a table extension the same resolver picks the
+            // concrete AxTableField* subtype per field. The other kinds ignore it.
             _ => XppScaffolder.Extension(axFolder["Ax".Length..^"Extension".Length], settings.Target, suffix,
-                     GenerateInstaller.BuildEdtBaseTypeResolver()),
+                     GenerateInstaller.BuildEdtBaseTypeResolver(), fieldSpecs),
         };
 
         // Grounding gate: the target object must exist in the index; fail
-        // closed under D365FO_GROUNDING_ENFORCE=true.
+        // closed under D365FO_GROUNDING_ENFORCE=true. The EDTs a field names are
+        // required too — a hallucinated EDT is the failure this gate exists for.
         var gate = GenerateInstaller.Gate(settings, settings.Target, doc,
-            requiredSymbols: new[] { settings.Target });
+            requiredSymbols: new[] { settings.Target }
+                .Concat(fieldSpecs.Select(f => f.Edt!))
+                .ToArray());
         if (gate.Failure is not null) return RenderHelpers.Render(kind, gate.Failure);
 
         try
@@ -444,6 +482,9 @@ public sealed class GenerateExtensionCommand : Command<GenerateExtensionCommand.
                 name = fullName,
                 target = settings.Target,
                 suffix,
+                fields = fieldSpecs.Count == 0
+                    ? null
+                    : fieldSpecs.Select(f => new { name = f.Name, edt = f.Edt, mandatory = f.Mandatory }).ToArray(),
                 path = res.Path,
                 bytes = res.Bytes,
                 backup = res.BackupPath,
