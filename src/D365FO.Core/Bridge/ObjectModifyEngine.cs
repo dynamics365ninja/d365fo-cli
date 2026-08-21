@@ -7,6 +7,7 @@ using System.Xml.Linq;
 using D365FO.Core.FormPatterns;
 using D365FO.Core.Index;
 using D365FO.Core.Journal;
+using D365FO.Core.ObjectTypes;
 using D365FO.Core.Scaffolding;
 
 namespace D365FO.Core.Bridge;
@@ -106,30 +107,21 @@ public static class ObjectModifyEngine
     private static readonly IReadOnlySet<string> SupportedKinds =
         new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "class", "table", "edt", "enum", "form" };
 
-    /// <summary>Base kind → the bridge kind that extends it.</summary>
-    private static readonly IReadOnlyDictionary<string, string> ExtensionKindFor =
-        new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
-        {
-            ["table"] = "tableExtension",
-            ["form"] = "formExtension",
-            ["edt"] = "edtExtension",
-            ["enum"] = "enumExtension",
-            ["view"] = "viewExtension",
-            ["query"] = "queryExtension",
-            ["dataentityview"] = "dataEntityViewExtension",
-        };
-
-    /// <summary>Base kind → the root element name of its extension object.</summary>
-    private static readonly IReadOnlyDictionary<string, string> ExtensionRootFor =
-        new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
-        {
-            ["table"] = "AxTableExtension",
-            ["form"] = "AxFormExtension",
-            ["enum"] = "AxEnumExtension",
-            ["view"] = "AxViewExtension",
-            ["query"] = "AxQueryExtension",
-            ["dataentityview"] = "AxDataEntityViewExtension",
-        };
+    /// <summary>
+    /// The AOT type that extends <paramref name="kind"/>, or null when there is none.
+    /// </summary>
+    /// <remarks>
+    /// This used to be two hand-maintained dictionaries — one for the kind the bridge is
+    /// asked for, one for the root element to scaffold — and they drifted from the
+    /// registry the bridge itself resolves collections through, which is how a redirect
+    /// to a perfectly writable <c>AxTableExtension</c> came back as INVALID_KIND (#171).
+    /// One lookup, one source of truth. It also drops two wrong entries the tables
+    /// carried: <c>edt</c> had no root at all and fell through to a mis-cased
+    /// "AxedtExtension", and <c>query</c> named an <c>AxQueryExtension</c> type that no
+    /// MetaModel assembly declares.
+    /// </remarks>
+    private static ObjectTypeInfo? ExtensionTypeFor(string kind)
+        => ObjectTypeRegistry.ExtensionOf(kind);
 
     /// <summary>Entry point for the CLI and the MCP tool. Spawns the bridge and fails closed when it is absent.</summary>
     public static ToolResult<object> Modify(
@@ -214,9 +206,7 @@ public static class ObjectModifyEngine
             var msg = (string?)writeResult["message"] ?? "unknown error";
             return ToolResult<object>.Fail(code,
                 $"Bridge could not write {target.Kind} '{target.Name}': {msg}",
-                target.IsExtension
-                    ? $"The {target.Kind} collection may not be exposed by this platform build; check `d365fo doctor` and the bridge log."
-                    : null);
+                BridgeFailureHint(code, target));
         }
 
         warnings.Add($"Index not auto-refreshed — run `d365fo index refresh --model {target.Model}` so '{request.Member}' is searchable.");
@@ -232,6 +222,29 @@ public static class ObjectModifyEngine
             source = "bridge",
             applied,
         }, warnings);
+    }
+
+    /// <summary>
+    /// What to tell the caller when the bridge refuses a read or a write.
+    /// </summary>
+    /// <remarks>
+    /// INVALID_KIND used to be reported as "this platform build may not expose the
+    /// collection", which sent #171 chasing a platform capability that was there all
+    /// along. Both halves resolve kinds through the same <see cref="ObjectTypeRegistry"/>,
+    /// so if this process planned a write to a kind the bridge does not recognise, the
+    /// two binaries are from different builds — that is the thing to say.
+    /// </remarks>
+    private static string? BridgeFailureHint(string code, WriteTarget target)
+    {
+        if (string.Equals(code, "INVALID_KIND", StringComparison.Ordinal))
+        {
+            return $"The bridge does not recognise '{target.Kind}', but this build resolves it to the " +
+                   $"{ObjectTypeRegistry.Find(target.Kind)?.ProviderCollection ?? "?"} provider collection — " +
+                   "the bridge executable is from an older build. Rebuild it, or point D365FO_BRIDGE_PATH at a matching one.";
+        }
+        return target.IsExtension
+            ? $"Check `d365fo doctor` and the bridge log for why {target.Kind} '{target.Name}' was rejected."
+            : null;
     }
 
     // ---------------------------------------------------------------- validation
@@ -289,7 +302,8 @@ public static class ObjectModifyEngine
         if (baseWritable)
             return (new WriteTarget(kind, request.ObjectName, baseModel, IsExtension: false, Exists: true), null);
 
-        if (!ExtensionKindFor.TryGetValue(kind, out var extKind))
+        var extensionType = ExtensionTypeFor(kind);
+        if (extensionType is null)
         {
             if (request.RequireExtension || request.ExtensionSuffix is not null)
             {
@@ -301,6 +315,18 @@ public static class ObjectModifyEngine
                          "and this kind has no extension form — modifying it in place.");
             return (new WriteTarget(kind, request.ObjectName, baseModel, IsExtension: false, Exists: true), null);
         }
+
+        // Catch a type the AOT models but the provider exposes no channel for here,
+        // rather than letting the bridge answer INVALID_KIND from three layers down.
+        if (extensionType.ProviderCollection is null)
+        {
+            return (null, ToolResult<object>.Fail(D365FoErrorCodes.BadInput,
+                $"{extensionType.RootElement} cannot be written through the metadata provider, " +
+                $"so '{request.ObjectName}' cannot be extended.",
+                $"Scaffold the extension with `d365fo generate extension` and edit the {extensionType.RootElement} file instead."));
+        }
+
+        var extKind = extensionType.Kind;
 
         var suffix = request.ExtensionSuffix is { Length: > 0 } s ? s : DefaultSuffix(request, repo);
         var extName = $"{request.ObjectName}.{suffix}";
@@ -393,8 +419,11 @@ public static class ObjectModifyEngine
         {
             // A brand-new extension object: start from the minimal shape the scaffolder
             // emits, so the document the bridge deserializes is the same one
-            // `generate extension` would have produced.
-            var root = ExtensionRootFor.TryGetValue(kind, out var r) ? r : $"Ax{kind}Extension";
+            // `generate extension` would have produced. The registry owns the root
+            // element — PlanTarget already refused any kind it does not know.
+            var root = ExtensionTypeFor(kind)?.RootElement
+                       ?? ObjectTypeRegistry.Find(target.Kind)?.RootElement
+                       ?? throw new InvalidOperationException($"No registered AOT type for '{target.Kind}'.");
             var fresh = new XDocument(new XElement(root, new XElement("Name", target.Name)));
             return (fresh, null, null);
         }
@@ -421,7 +450,8 @@ public static class ObjectModifyEngine
             var code = (string?)readResult["error"] ?? "READ_FAILED";
             var msg = (string?)readResult["message"] ?? "unknown error";
             return (null, null, ToolResult<object>.Fail(code == "NOT_FOUND" ? NotFoundCodeFor(kind) : code,
-                $"Bridge could not read {target.Kind} '{target.Name}': {msg}"));
+                $"Bridge could not read {target.Kind} '{target.Name}': {msg}",
+                BridgeFailureHint(code, target)));
         }
 
         var xml = (string?)readResult["xml"];

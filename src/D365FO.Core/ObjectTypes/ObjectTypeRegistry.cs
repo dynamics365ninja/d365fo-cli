@@ -320,6 +320,28 @@ namespace D365FO.Core.ObjectTypes
             return null;
         }
 
+        /// <summary>
+        /// The type that extends <paramref name="baseKindOrRoot"/>, or null when the AOT
+        /// has no extension form for it. Every registered extension kind is its base kind
+        /// plus "extension", so the relation needs no second table to drift out of step:
+        /// the returned entry carries the real root element ("query" yields
+        /// <c>AxQuerySimpleExtension</c>, not the <c>AxQueryExtension</c> that no
+        /// assembly declares) and the provider collection the bridge writes through.
+        /// </summary>
+        public static ObjectTypeInfo ExtensionOf(string baseKindOrRoot)
+        {
+            var baseType = Find(baseKindOrRoot);
+            if (baseType == null) return null;
+            // Extensions do not nest: an extension has no extension of its own.
+            if (baseType.Kind.EndsWith("extension", StringComparison.Ordinal)) return null;
+
+            var wanted = baseType.Kind + "extension";
+            for (var i = 0; i < _all.Length; i++)
+                if (_all[i].Kind == wanted)
+                    return _all[i];
+            return null;
+        }
+
         /// <summary>AOT subfolder for a kind. Throws for an unknown kind — callers hard-code folders otherwise.</summary>
         public static string Subfolder(string kindOrRoot)
         {

@@ -50,6 +50,7 @@ public sealed class ObjectModifyEngineTests : IDisposable
             IsCustom = false,
             Tables = new[] { new ExtractedTable("CustTable", null, "x", Array.Empty<ExtractedTableField>()) },
             Enums = new[] { new ExtractedEnum("CustAccountStatus", null, Array.Empty<ExtractedEnumValue>()) },
+            Edts = new[] { new ExtractedEdt("CustAccount", null, "String", null, 20) },
             Forms = new[] { new ExtractedForm("FmVehicleList", "x", Array.Empty<ExtractedFormDataSource>()) },
         });
 
@@ -249,7 +250,7 @@ public sealed class ObjectModifyEngineTests : IDisposable
         Assert.True(result.Ok, result.Error?.Message);
         // A new extension object is *created*, never an update of CustTable itself.
         Assert.Equal("createObject", capture.WriteVerb);
-        Assert.Equal("tableExtension", (string?)capture.WriteArgs!["kind"]);
+        Assert.Equal("tableextension", (string?)capture.WriteArgs!["kind"]);
         Assert.Equal("CustTable.Extension", (string?)capture.WriteArgs!["name"]);
         Assert.Equal("FleetCustom", (string?)capture.WriteArgs!["model"]);
 
@@ -278,7 +279,7 @@ public sealed class ObjectModifyEngineTests : IDisposable
         }, _repo, harness.Client, _journalDb);
 
         Assert.True(result.Ok, result.Error?.Message);
-        Assert.Equal("enumExtension", (string?)capture.WriteArgs!["kind"]);
+        Assert.Equal("enumextension", (string?)capture.WriteArgs!["kind"]);
 
         var written = XDocument.Parse((string)capture.WriteArgs!["xml"]!);
         var value = written.Descendants("AxEnumValue").Single();
@@ -286,6 +287,71 @@ public sealed class ObjectModifyEngineTests : IDisposable
         // An extensible enum is position-based; a written <Value> breaks when another
         // model inserts a member ahead of this one.
         Assert.Null(value.Element("Value"));
+    }
+
+    [Fact]
+    public void An_edt_extension_is_scaffolded_with_the_root_element_the_metamodel_declares()
+    {
+        var capture = new BridgeCapture(readXml: null);
+        using var harness = FakeBridge.Create(capture.Respond);
+
+        var result = ObjectModifyEngine.ModifyCore(new ObjectModifyEngine.ModifyRequest
+        {
+            Operation = ObjectModifyEngine.Operation.SetProperty,
+            Kind = "edt",
+            ObjectName = "CustAccount",
+            Member = "StringSize",
+            Value = "30",
+        }, _repo, harness.Client, _journalDb);
+
+        Assert.True(result.Ok, result.Error?.Message);
+        Assert.Equal("edtextension", (string?)capture.WriteArgs!["kind"]);
+
+        // The table this replaced had no "edt" row, so the root fell through to
+        // $"Ax{kind}Extension" and emitted a mis-cased <AxedtExtension>.
+        var written = XDocument.Parse((string)capture.WriteArgs!["xml"]!);
+        Assert.Equal("AxEdtExtension", written.Root!.Name.LocalName);
+    }
+
+    [Fact]
+    public void An_invalid_kind_from_the_bridge_points_at_the_bridge_build_not_the_platform()
+    {
+        using var harness = FakeBridge.Create(request =>
+        {
+            // An older bridge: its kind table predates the extension entries, so it
+            // rejects the redirect target on whichever leg reaches it first.
+            var result = new JsonObject
+            {
+                ["ok"] = false,
+                ["error"] = "INVALID_KIND",
+                ["message"] = "kind must be one of: class, table, edt, enum, form",
+            };
+            return new JsonObject
+            {
+                ["jsonrpc"] = "2.0",
+                ["id"] = request["id"]?.DeepClone(),
+                ["result"] = result,
+            };
+        });
+
+        var result = ObjectModifyEngine.ModifyCore(new ObjectModifyEngine.ModifyRequest
+        {
+            Operation = ObjectModifyEngine.Operation.AddField,
+            Kind = "table",
+            ObjectName = "CustTable",
+            Member = "FleetRating",
+            Type = "Name",
+            ExtensionSuffix = "Fleet",
+        }, _repo, harness.Client, _journalDb);
+
+        Assert.False(result.Ok);
+        Assert.Equal("INVALID_KIND", result.Error!.Code);
+        // #171 blamed the platform for a collection it does in fact expose. The
+        // registry both halves read says this kind is writable, so the two
+        // binaries disagreeing is the only thing left.
+        Assert.Contains("older build", result.Error.Hint);
+        Assert.Contains("TableExtensions", result.Error.Hint);
+        Assert.DoesNotContain("platform build", result.Error.Hint);
     }
 
     [Fact]

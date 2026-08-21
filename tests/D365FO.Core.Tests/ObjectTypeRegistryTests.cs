@@ -217,4 +217,60 @@ public class ObjectTypeRegistryTests
                  })
             Assert.Contains(expected, commands);
     }
+
+    // ---- extension relation (#171) -------------------------------------------
+
+    [Theory]
+    [InlineData("table", "AxTableExtension", "TableExtensions")]
+    [InlineData("form", "AxFormExtension", "FormExtensions")]
+    [InlineData("enum", "AxEnumExtension", "EnumExtensions")]
+    [InlineData("edt", "AxEdtExtension", "EdtExtensions")]
+    [InlineData("view", "AxViewExtension", "ViewExtensions")]
+    [InlineData("dataentityview", "AxDataEntityViewExtension", "DataEntityViewExtensions")]
+    public void ExtensionOf_resolves_the_root_and_collection(string baseKind, string root, string collection)
+    {
+        var extension = ObjectTypeRegistry.ExtensionOf(baseKind);
+
+        Assert.NotNull(extension);
+        Assert.Equal(root, extension!.RootElement);
+        Assert.Equal(collection, extension.ProviderCollection);
+    }
+
+    [Fact]
+    public void ExtensionOf_query_names_the_type_that_actually_exists()
+    {
+        // The hand-maintained table this replaced said "AxQueryExtension". No MetaModel
+        // assembly declares one — the real type is AxQuerySimpleExtension.
+        Assert.Equal("AxQuerySimpleExtension", ObjectTypeRegistry.ExtensionOf("query")!.RootElement);
+    }
+
+    [Fact]
+    public void ExtensionOf_returns_null_for_types_with_no_extension_form_and_does_not_nest()
+    {
+        Assert.Null(ObjectTypeRegistry.ExtensionOf("class"));
+        Assert.Null(ObjectTypeRegistry.ExtensionOf("tableextension"));
+        Assert.Null(ObjectTypeRegistry.ExtensionOf("nosuchkind"));
+        Assert.Null(ObjectTypeRegistry.ExtensionOf(""));
+    }
+
+    /// <summary>
+    /// The failure in #171 was a redirect the CLI planned to a kind the bridge would not
+    /// accept. Both halves read this registry, so an extension the CLI can target must
+    /// carry the provider collection the bridge resolves it through.
+    /// </summary>
+    [Fact]
+    public void Every_extension_the_modify_path_can_target_is_bridge_writable()
+    {
+        var bridgeKinds = ObjectTypeRegistry.BridgeCollections();
+
+        foreach (var baseKind in new[] { "table", "form", "edt", "enum" })
+        {
+            var extension = ObjectTypeRegistry.ExtensionOf(baseKind);
+            Assert.NotNull(extension);
+            Assert.True(
+                bridgeKinds.ContainsKey(extension!.Kind),
+                $"'{extension.Kind}' is reachable by redirecting a {baseKind} write, " +
+                "but the bridge would answer INVALID_KIND for it.");
+        }
+    }
 }
