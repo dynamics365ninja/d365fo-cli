@@ -74,7 +74,7 @@ public sealed class GenerateMigrationScriptCommand : Command<GenerateMigrationSc
 
             var res = GenerateInstaller.Write(gate, doc, outPath!, settings.Overwrite);
 
-            return RenderHelpers.Render(kind, ToolResult<object>.Success(new
+            return GenerateInstaller.Done(kind, gate, settings, new
             {
                 kind        = "MigrationScript",
                 name        = settings.Name,
@@ -86,7 +86,7 @@ public sealed class GenerateMigrationScriptCommand : Command<GenerateMigrationSc
                 bytes       = res.Bytes,
                 backup      = res.BackupPath,
                 model       = settings.InstallTo,
-            }, gate.Warnings));
+            });
         }
         catch (Exception ex)
         {

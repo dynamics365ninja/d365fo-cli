@@ -206,6 +206,16 @@ In a real terminal, `init` is a wizard unless `--packages`, `--output`, `--dry-r
 
 Add `--verify` to read the artefact back through the D365FO Metadata API after writing it, the way Visual Studio would. It applies to `--install-to` (the provider resolves objects by name inside the packages paths, so an arbitrary `--out` path is not something it can look up) and is skipped with a note when the runtime is unavailable — generation keeps working offline either way. A write that the provider then refuses to load fails with `VERIFY_FAILED`; the file is left on disk so you can open it in Visual Studio.
 
+Every `generate` subcommand honours the flag, and the multi-file emitters (`business-event`, `custom-service`, `report`, `workflow`, `number-sequence`, …) verify each artefact they produce, not just the headline one. The payload always carries a `verify` object so a caller can tell the three outcomes apart rather than inferring them from silence:
+
+```jsonc
+"verify": { "status": "not-requested" }                       // --verify was not passed
+"verify": { "status": "skipped", "detail": "…" }              // runtime unavailable, or --out rather than --install-to
+"verify": { "status": "verified", "artefacts": [ … ] }        // every artefact read back, one entry each
+```
+
+Only one answer fails the command: `IMetadataProvider` was reachable and would not hand the object back — the document the reader refuses, which is what the flag is for. Everything else is a skip with its reason, because it is a limit of the tooling rather than a verdict on the artefact: a bridge that did not answer, a kind the bridge has no read channel for, or a MetaModel type its serializer cannot reflect (`AxMenuItemAction` and `AxSecurityPrivilege` load fine and still cannot be rendered back as XML — those verify, with the caveat in `detail`).
+
 ### Table
 
 ```sh

@@ -104,7 +104,7 @@ public sealed class GenerateBusinessEventCommand : Command<GenerateBusinessEvent
             var eventResult    = GenerateInstaller.Write(gate, eventDoc, eventPath!, settings.Overwrite);
             var contractResult = GenerateInstaller.Write(gate, contractDoc, contractPath!, settings.Overwrite);
 
-            return RenderHelpers.Render(kind, ToolResult<object>.Success(new
+            return GenerateInstaller.Done(kind, gate, settings, new
             {
                 kind         = "BusinessEvent",
                 name         = settings.Name,
@@ -116,7 +116,7 @@ public sealed class GenerateBusinessEventCommand : Command<GenerateBusinessEvent
                 contract     = new { path = contractResult.Path, bytes = contractResult.Bytes, backup = contractResult.BackupPath },
                 model        = settings.InstallTo,
                 grounding    = gate.Grounding,
-            }, gate.Warnings));
+            });
         }
         catch (Exception ex)
         {

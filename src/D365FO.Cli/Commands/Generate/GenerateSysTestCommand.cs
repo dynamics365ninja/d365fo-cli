@@ -124,7 +124,7 @@ public sealed class GenerateSysTestCommand : Command<GenerateSysTestCommand.Sett
             var res = GenerateInstaller.Write(gate, doc, outPath!, settings.Overwrite);
             var testMethodName = $"{subject ?? "subject"}_scenario_expectedResult";
 
-            return RenderHelpers.Render(kind, ToolResult<object>.Success(new
+            return GenerateInstaller.Done(kind, gate, settings, new
             {
                 kind       = "SysTest",
                 name       = settings.Name,
@@ -137,7 +137,7 @@ public sealed class GenerateSysTestCommand : Command<GenerateSysTestCommand.Sett
                 bytes      = res.Bytes,
                 backup     = res.BackupPath,
                 model      = settings.InstallTo,
-            }, gate.Warnings));
+            });
         }
         catch (Exception ex)
         {

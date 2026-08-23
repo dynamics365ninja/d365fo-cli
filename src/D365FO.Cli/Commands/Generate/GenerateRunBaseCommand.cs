@@ -59,7 +59,7 @@ public sealed class GenerateRunBaseCommand : Command<GenerateRunBaseCommand.Sett
 
             var res = GenerateInstaller.Write(gate, doc, outPath!, settings.Overwrite);
 
-            return RenderHelpers.Render(kind, ToolResult<object>.Success(new
+            return GenerateInstaller.Done(kind, gate, settings, new
             {
                 kind            = "RunBase",
                 name            = settings.Name,
@@ -71,7 +71,7 @@ public sealed class GenerateRunBaseCommand : Command<GenerateRunBaseCommand.Sett
                 bytes           = res.Bytes,
                 backup          = res.BackupPath,
                 model           = settings.InstallTo,
-            }, gate.Warnings));
+            });
         }
         catch (Exception ex)
         {

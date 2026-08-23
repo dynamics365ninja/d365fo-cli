@@ -108,7 +108,7 @@ public sealed class GenerateCustomServiceCommand : Command<GenerateCustomService
             var serviceResult = GenerateInstaller.Write(gate, serviceDoc, servicePath!, settings.Overwrite);
             var groupResult   = GenerateInstaller.Write(gate, groupDoc,   groupPath!,   settings.Overwrite);
 
-            return RenderHelpers.Render(kind, ToolResult<object>.Success(new
+            return GenerateInstaller.Done(kind, gate, settings, new
             {
                 kind           = "CustomService",
                 name           = settings.Name,
@@ -121,7 +121,7 @@ public sealed class GenerateCustomServiceCommand : Command<GenerateCustomService
                 serviceGroup   = new { path = groupResult.Path,   bytes = groupResult.Bytes,   backup = groupResult.BackupPath },
                 model          = settings.InstallTo,
                 grounding      = gate.Grounding,
-            }, gate.Warnings));
+            });
         }
         catch (Exception ex)
         {

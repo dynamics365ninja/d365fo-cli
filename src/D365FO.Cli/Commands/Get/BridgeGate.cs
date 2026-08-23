@@ -310,13 +310,28 @@ internal static class BridgeGate
     /// </summary>
     /// <param name="axKind">Bridge collection kind (class | table | edt | enum | form | view | map | query | dataEntityView | *Extension).</param>
     /// <returns>
-    /// <see cref="VerifyOutcome.Skipped"/> when the bridge is unavailable or the kind
-    /// has no read verb, <see cref="VerifyOutcome.Readable"/> when the provider
-    /// returned the object, <see cref="VerifyOutcome.Unreadable"/> when the provider
-    /// was reachable but could not load it.
+    /// <see cref="VerifyOutcome.Skipped"/> when nothing could be asked — the bridge is
+    /// unavailable, did not answer, or has no read channel for the kind;
+    /// <see cref="VerifyOutcome.Readable"/> when the provider returned the object;
+    /// <see cref="VerifyOutcome.Unreadable"/> when the provider was reachable and still
+    /// could not load it. <c>detail</c> carries the reason for the first and last, and a
+    /// caveat for the one <see cref="VerifyOutcome.Readable"/> case that is not clean.
     /// </returns>
+    /// <remarks>
+    /// The bridge's own error code decides, rather than "did a read come back": every
+    /// failure used to collapse to <see cref="VerifyOutcome.Unreadable"/>, which reads as
+    /// "the metadata reader refuses your file" and fails the command. Most of the codes
+    /// mean nothing of the sort — a bridge timeout, a kind with no read channel, or a
+    /// MetaModel type the bridge's <c>XmlSerializer</c> cannot reflect are all limits of
+    /// the tooling, and blaming a perfectly good artefact for them is worse than not
+    /// checking at all.
+    /// </remarks>
     internal static (VerifyOutcome outcome, string? detail) TryVerifyObject(string axKind, string name)
     {
+        // The typed read verbs exist only for the five original kinds. Everything the
+        // bridge can now write (views, maps, queries, and the *Extension kinds) is
+        // verified through the generic readObjectXml instead, so `--verify` covers the
+        // whole write surface rather than the subset that predates it.
         var method = axKind?.ToLowerInvariant() switch
         {
             "class" => "readClass",
@@ -332,18 +347,71 @@ internal static class BridgeGate
         if (!BridgeClient.IsAvailable())
             return (VerifyOutcome.Skipped, "the D365FO Metadata API runtime is not available.");
 
-        // The typed read verbs exist only for the five original kinds. Everything the
-        // bridge can now write (views, maps, queries, and the *Extension kinds) is
-        // verified through the generic readObjectXml instead, so `--verify` covers the
-        // whole write surface rather than the subset that predates it.
-        var readable = method is not null
-            ? TryRead(method, name) is not null
-            : TryReadObjectXml(axKind ?? "", name) is not null;
+        var response = method is not null
+            ? SendRaw(method, new JsonObject { ["name"] = name })
+            : SendRaw("readObjectXml", new JsonObject { ["kind"] = axKind ?? "", ["name"] = name });
 
-        return readable
-            ? (VerifyOutcome.Readable, null)
-            : (VerifyOutcome.Unreadable,
-               "the metadata provider is reachable but could not load the object back.");
+        return VerdictFrom(axKind, response);
+    }
+
+    /// <summary>
+    /// Turn one bridge read response into a verification verdict. Split out from
+    /// <see cref="TryVerifyObject"/> so the mapping — the part that decides whether a
+    /// command fails — is testable without a live AOS.
+    /// </summary>
+    /// <param name="response">The bridge envelope, or null when the bridge did not answer.</param>
+    internal static (VerifyOutcome outcome, string? detail) VerdictFrom(string? axKind, JsonObject? response)
+    {
+        // No answer at all — a timeout or a child process that died says nothing about
+        // the artefact, so it is a skip and never a verdict against the file.
+        if (response is null)
+            return (VerifyOutcome.Skipped, "the metadata bridge did not answer, so nothing was read back.");
+
+        if ((bool?)response["ok"] == true)
+            return (VerifyOutcome.Readable, null);
+
+        var code = (string?)response["error"];
+        var message = (string?)response["message"];
+
+        return code switch
+        {
+            // IMetadataProvider handed the artefact back; only the bridge's own
+            // XmlSerializer could not reflect that MetaModel type (AxMenuItemAction and
+            // AxSecurityPrivilege both fail this way on a live AOS). The load — which is
+            // what --verify asks about — succeeded.
+            "SERIALIZE_FAILED" => (VerifyOutcome.Readable,
+                "the provider loaded it, though the bridge could not render it back as XML"),
+
+            "INVALID_KIND" => (VerifyOutcome.Skipped,
+                $"the metadata bridge has no read channel for '{axKind}'."),
+
+            "METADATA_UNAVAILABLE" => (VerifyOutcome.Skipped,
+                message ?? "the D365FO Metadata API runtime is not available."),
+
+            _ => (VerifyOutcome.Unreadable,
+                "the metadata provider is reachable but could not load the object back" +
+                (string.IsNullOrWhiteSpace(message) ? "." : $" ({message}).")),
+        };
+    }
+
+    /// <summary>
+    /// One bridge round-trip, envelope and all. Null only when the bridge could not be
+    /// reached — a <c>{ok:false}</c> answer is returned as-is so the caller can tell the
+    /// bridge's error codes apart.
+    /// </summary>
+    private static JsonObject? SendRaw(string method, JsonObject args)
+    {
+        if (!BridgeClient.IsAvailable()) return null;
+        try
+        {
+            var options = DefaultOptions();
+            using var client = new BridgeClient(options);
+            return client.SendAsync(method, args).GetAwaiter().GetResult();
+        }
+        catch (BridgeException)
+        {
+            return null;
+        }
     }
 
     private static object? TryRead(string method, string name)
