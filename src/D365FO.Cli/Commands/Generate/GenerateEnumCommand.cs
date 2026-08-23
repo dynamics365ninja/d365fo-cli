@@ -42,8 +42,8 @@ public sealed class GenerateEnumCommand : Command<GenerateEnumCommand.Settings>
         if (gate.Failure is not null) return RenderHelpers.Render(kind, gate.Failure);
 
         return GenerateInstaller.Emit(
-            kind, gate, "enum", Folders.Enum, settings.Name,
-            settings.InstallTo, settings.Out, settings.Overwrite, doc,
+            kind, gate, settings, "enum", Folders.Enum, settings.Name,
+            doc,
             r => new
             {
                 kind         = "AxEnum",
@@ -59,8 +59,7 @@ public sealed class GenerateEnumCommand : Command<GenerateEnumCommand.Settings>
                 model        = settings.InstallTo,
                 grounding    = gate.Grounding,
             },
-            gate.Warnings,
-            verify: settings.Verify);
+            gate.Warnings);
     }
 
     private static EnumValueSpec ParseValue(string raw)

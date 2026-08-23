@@ -97,7 +97,7 @@ public sealed class GenerateViewCommand : Command<GenerateViewCommand.Settings>
             if (gate.Failure is not null) return RenderHelpers.Render(kind, gate.Failure);
 
             var res = GenerateInstaller.Write(gate, doc, outPath!, settings.Overwrite);
-            return RenderHelpers.Render(kind, ToolResult<object>.Success(new
+            return GenerateInstaller.Done(kind, gate, settings, new
             {
                 kind = "AxView",
                 name = settings.Name,
@@ -109,7 +109,7 @@ public sealed class GenerateViewCommand : Command<GenerateViewCommand.Settings>
                 bytes = res.Bytes,
                 backup = res.BackupPath,
                 model = settings.InstallTo,
-            }, gate.Warnings));
+            });
         }
         catch (Exception ex)
         {
@@ -244,7 +244,7 @@ public sealed class GenerateMapCommand : Command<GenerateMapCommand.Settings>
             if (gate.Failure is not null) return RenderHelpers.Render(kind, gate.Failure);
 
             var res = GenerateInstaller.Write(gate, doc, outPath!, settings.Overwrite);
-            return RenderHelpers.Render(kind, ToolResult<object>.Success(new
+            return GenerateInstaller.Done(kind, gate, settings, new
             {
                 kind = "AxMap",
                 name = settings.Name,
@@ -254,7 +254,7 @@ public sealed class GenerateMapCommand : Command<GenerateMapCommand.Settings>
                 bytes = res.Bytes,
                 backup = res.BackupPath,
                 model = settings.InstallTo,
-            }, gate.Warnings));
+            });
         }
         catch (Exception ex)
         {

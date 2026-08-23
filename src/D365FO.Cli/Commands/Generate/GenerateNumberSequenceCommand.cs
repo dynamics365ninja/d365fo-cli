@@ -116,7 +116,7 @@ public sealed class GenerateNumberSequenceCommand : Command<GenerateNumberSequen
                     handlerPath, settings.Overwrite);
             }
 
-            return RenderHelpers.Render(kind, ToolResult<object>.Success(new
+            return GenerateInstaller.Done(kind, gate, settings, new
             {
                 kind         = "NumberSequence",
                 moduleName   = settings.ModuleName,
@@ -127,7 +127,7 @@ public sealed class GenerateNumberSequenceCommand : Command<GenerateNumberSequen
                 handler      = handlerResult is null ? null : new { path = handlerResult.Path, bytes = handlerResult.Bytes, backup = handlerResult.BackupPath },
                 model        = settings.InstallTo,
                 grounding    = gate.Grounding,
-            }, gate.Warnings));
+            });
         }
         catch (Exception ex)
         {

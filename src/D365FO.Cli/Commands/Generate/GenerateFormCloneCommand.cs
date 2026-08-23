@@ -82,7 +82,7 @@ public sealed class GenerateFormCloneCommand : Command<GenerateFormCloneCommand.
         try
         {
             var res = GenerateInstaller.Write(gate, clone.Xml, outPath!, settings.Overwrite);
-            return RenderHelpers.Render(kind, ToolResult<object>.Success(new
+            return GenerateInstaller.Done(kind, gate, settings, new
             {
                 kind = "AxForm",
                 role = "Clone",
@@ -95,7 +95,7 @@ public sealed class GenerateFormCloneCommand : Command<GenerateFormCloneCommand.
                 backup = res.BackupPath,
                 model = settings.InstallTo,
                 grounding = gate.Grounding,
-            }, warnings));
+            }, warnings);
         }
         catch (Exception ex)
         {

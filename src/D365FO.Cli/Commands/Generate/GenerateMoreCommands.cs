@@ -138,7 +138,7 @@ public sealed class GenerateEntityCommand : Command<GenerateEntityCommand.Settin
                 staging = new { name = stagingName, path = stagingRes.Path, bytes = stagingRes.Bytes };
             }
 
-            return RenderHelpers.Render(kind, ToolResult<object>.Success(new
+            return GenerateInstaller.Done(kind, gate, settings, new
             {
                 kind = "AxDataEntityView",
                 name = settings.EntityName,
@@ -154,7 +154,7 @@ public sealed class GenerateEntityCommand : Command<GenerateEntityCommand.Settin
                 computedFields = computed.Select(c => new { c.Name, c.Method, c.Edt }).ToList(),
                 stagingTable = staging,
                 model = settings.InstallTo,
-            }, gate.Warnings));
+            });
         }
         catch (Exception ex)
         {
@@ -476,7 +476,7 @@ public sealed class GenerateExtensionCommand : Command<GenerateExtensionCommand.
         try
         {
             var res = GenerateInstaller.Write(gate, doc, outPath!, settings.Overwrite);
-            return RenderHelpers.Render(kind, ToolResult<object>.Success(new
+            return GenerateInstaller.Done(kind, gate, settings, new
             {
                 kind = axFolder,
                 name = fullName,
@@ -490,7 +490,7 @@ public sealed class GenerateExtensionCommand : Command<GenerateExtensionCommand.
                 backup = res.BackupPath,
                 model = settings.InstallTo,
                 grounding = gate.Grounding,
-            }, gate.Warnings));
+            });
         }
         catch (Exception ex)
         {
@@ -539,8 +539,8 @@ public sealed class GenerateEventHandlerCommand : Command<GenerateEventHandlerCo
         if (gate.Failure is not null) return RenderHelpers.Render(kind, gate.Failure);
 
         return GenerateInstaller.Emit(
-            kind, gate, "class", Folders.Class, settings.ClassName,
-            settings.InstallTo, settings.Out, settings.Overwrite, doc,
+            kind, gate, settings, "class", Folders.Class, settings.ClassName,
+            doc,
             r => new
             {
                 kind = "AxClass",
@@ -557,8 +557,7 @@ public sealed class GenerateEventHandlerCommand : Command<GenerateEventHandlerCo
                 model = settings.InstallTo,
                 grounding = gate.Grounding,
             },
-            gate.Warnings,
-            verify: settings.Verify);
+            gate.Warnings);
     }
 }
 
@@ -643,7 +642,7 @@ public sealed class GeneratePrivilegeCommand : Command<GeneratePrivilegeCommand.
                     return RenderHelpers.Render(kind, ToolResult<object>.Fail(D365FoErrorCodes.WriteFailed, err!));
                 }
             }
-            return RenderHelpers.Render(kind, ToolResult<object>.Success(new
+            return GenerateInstaller.Done(kind, gate, settings, new
             {
                 kind = "AxSecurityPrivilege",
                 name = settings.Name,
@@ -657,7 +656,7 @@ public sealed class GeneratePrivilegeCommand : Command<GeneratePrivilegeCommand.
                 backup = res.BackupPath,
                 model = settings.InstallTo,
                 intoRole,
-            }, gate.Warnings));
+            });
         }
         catch (Exception ex)
         {
@@ -740,7 +739,7 @@ public sealed class GenerateDutyCommand : Command<GenerateDutyCommand.Settings>
                     return RenderHelpers.Render(kind, ToolResult<object>.Fail(D365FoErrorCodes.WriteFailed, err!));
                 }
             }
-            return RenderHelpers.Render(kind, ToolResult<object>.Success(new
+            return GenerateInstaller.Done(kind, gate, settings, new
             {
                 kind = "AxSecurityDuty",
                 name = settings.Name,
@@ -751,7 +750,7 @@ public sealed class GenerateDutyCommand : Command<GenerateDutyCommand.Settings>
                 backup = res.BackupPath,
                 model = settings.InstallTo,
                 intoRole,
-            }, gate.Warnings));
+            });
         }
         catch (Exception ex)
         {
@@ -844,7 +843,7 @@ public sealed class GenerateRoleCommand : Command<GenerateRoleCommand.Settings>
             if (gate.Failure is not null) return RenderHelpers.Render(kind, gate.Failure);
 
             var res = GenerateInstaller.Write(gate, doc, outPath!, settings.Overwrite);
-            return RenderHelpers.Render(kind, ToolResult<object>.Success(new
+            return GenerateInstaller.Done(kind, gate, settings, new
             {
                 kind = "AxSecurityRole",
                 name = settings.Name,
@@ -856,7 +855,7 @@ public sealed class GenerateRoleCommand : Command<GenerateRoleCommand.Settings>
                 bytes = res.Bytes,
                 backup = res.BackupPath,
                 model = settings.InstallTo,
-            }, gate.Warnings));
+            });
         }
         catch (Exception ex)
         {
@@ -880,13 +879,13 @@ public sealed class GenerateRoleCommand : Command<GenerateRoleCommand.Settings>
             var changed = XppScaffolder.AddToRole(doc, settings.Duties, settings.Privileges);
             if (!changed)
             {
-                return RenderHelpers.Render(kind, ToolResult<object>.Success(new
+                return GenerateInstaller.Done(kind, gate: null, settings, new
                 {
                     kind = "AxSecurityRole",
                     path,
                     changed = false,
                     note = "All supplied duties / privileges were already referenced.",
-                }));
+                });
             }
 
             var tmp = path + ".tmp";
@@ -897,7 +896,7 @@ public sealed class GenerateRoleCommand : Command<GenerateRoleCommand.Settings>
             System.IO.File.Move(path, backup);
             System.IO.File.Move(tmp, path);
 
-            return RenderHelpers.Render(kind, ToolResult<object>.Success(new
+            return GenerateInstaller.Done(kind, gate: null, settings, new
             {
                 kind = "AxSecurityRole",
                 path,
@@ -905,7 +904,7 @@ public sealed class GenerateRoleCommand : Command<GenerateRoleCommand.Settings>
                 backup,
                 addedDuties = settings.Duties,
                 addedPrivileges = settings.Privileges,
-            }));
+            });
         }
         catch (Exception ex)
         {
@@ -1147,7 +1146,7 @@ public sealed class GenerateReportCommand : Command<GenerateReportCommand.Settin
                     settings.Overwrite);
             }
 
-            return RenderHelpers.Render(kind, ToolResult<object>.Success(new
+            return GenerateInstaller.Done(kind, gate, settings, new
             {
                 kind        = "AxReport",
                 name        = spec.Name,
@@ -1163,7 +1162,7 @@ public sealed class GenerateReportCommand : Command<GenerateReportCommand.Settin
                 contract    = contractResult is null ? null : new { path = contractResult.Path, bytes = contractResult.Bytes, backup = contractResult.BackupPath },
                 model       = settings.InstallTo,
                 grounding   = gate.Grounding,
-            }, gate.Warnings));
+            });
         }
         catch (Exception ex)
         {

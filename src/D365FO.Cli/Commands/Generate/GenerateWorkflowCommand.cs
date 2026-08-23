@@ -243,7 +243,7 @@ public sealed class GenerateWorkflowCommand : Command<GenerateWorkflowCommand.Se
             };
             warnings.AddRange(gate.Warnings);
 
-            return RenderHelpers.Render(kind, ToolResult<object>.Success(new
+            return GenerateInstaller.Done(kind, gate, settings, new
             {
                 kind            = "Workflow",
                 name            = settings.Name,
@@ -261,7 +261,7 @@ public sealed class GenerateWorkflowCommand : Command<GenerateWorkflowCommand.Se
                 task            = taskResult     is null ? null : new { path = taskResult.Path,     bytes = taskResult.Bytes,     backup = taskResult.BackupPath },
                 submitStub      = submitResult   is null ? null : new { path = submitResult.Path,   bytes = submitResult.Bytes,   backup = submitResult.BackupPath },
                 model           = settings.InstallTo,
-            }, warnings));
+            }, warnings);
         }
         catch (Exception ex)
         {

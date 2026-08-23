@@ -101,7 +101,7 @@ public sealed class GenerateSecurityPolicyCommand : Command<GenerateSecurityPoli
 
             var res = GenerateInstaller.Write(gate, doc, outPath!, settings.Overwrite);
 
-            return RenderHelpers.Render(kind, ToolResult<object>.Success(new
+            return GenerateInstaller.Done(kind, gate, settings, new
             {
                 kind             = "AxSecurityPolicy",
                 name             = settings.Name,
@@ -115,7 +115,7 @@ public sealed class GenerateSecurityPolicyCommand : Command<GenerateSecurityPoli
                 bytes            = res.Bytes,
                 backup           = res.BackupPath,
                 model            = settings.InstallTo,
-            }, gate.Warnings));
+            });
         }
         catch (Exception ex)
         {

@@ -26,7 +26,7 @@ public abstract class GenerateSettings : D365OutputSettings
     public string? GroundingToken { get; init; }
 
     [CommandOption("--verify")]
-    [System.ComponentModel.Description("After writing, read the artefact back through the D365FO Metadata API the way Visual Studio would. Skipped (never fails) when the runtime is unavailable. Requires D365FO_BRIDGE_ENABLED=1.")]
+    [System.ComponentModel.Description("After writing, read every artefact back through the D365FO Metadata API the way Visual Studio would. Applies to --install-to; skipped (never fails) when the runtime is unavailable. The payload's `verify` field reports which happened. Requires D365FO_BRIDGE_ENABLED=1.")]
     public bool Verify { get; init; }
 }
 
@@ -130,6 +130,8 @@ internal static class GenerateInstaller
         // Write finalises the document in place, so this is the form that reached disk — not the
         // scaffolder's pre-canonicalisation draft.
         gate.Observe(doc.ToString());
+        var (axKind, name) = IdentityOf(doc.Root);
+        gate.RecordArtefact(axKind, name, result.Path);
         return result;
     }
 
@@ -140,7 +142,30 @@ internal static class GenerateInstaller
         ArgumentNullException.ThrowIfNull(gate);
         var result = ScaffoldFileWriter.Write(xml, path, overwrite);
         gate.Observe(xml);
+        System.Xml.Linq.XElement? root = null;
+        try { root = System.Xml.Linq.XDocument.Parse(xml).Root; } catch { /* identity stays unknown */ }
+        var (axKind, name) = IdentityOf(root);
+        gate.RecordArtefact(axKind, name, result.Path);
         return result;
+    }
+
+    /// <summary>
+    /// The kind and name the metadata provider would use to look a written document up,
+    /// read off the document itself.
+    /// </summary>
+    /// <remarks>
+    /// Derived rather than declared, for the reason given on
+    /// <see cref="GroundingGate.GateResult.Artefacts"/>: the root element is already the
+    /// registry's key (<c>AxTable</c> → <c>table</c>), and every AOT document carries its
+    /// own <c>&lt;Name&gt;</c>, so a multi-file command gets each of its outputs identified
+    /// correctly without a table anyone has to remember to extend.
+    /// </remarks>
+    internal static (string? AxKind, string? Name) IdentityOf(System.Xml.Linq.XElement? root)
+    {
+        if (root is null) return (null, null);
+        var axKind = D365FO.Core.ObjectTypes.ObjectTypeRegistry.Find(root.Name.LocalName)?.Kind;
+        var name = root.Elements().FirstOrDefault(e => e.Name.LocalName == "Name")?.Value;
+        return (axKind, string.IsNullOrWhiteSpace(name) ? null : name);
     }
 
     /// <summary>
@@ -271,13 +296,18 @@ internal static class GenerateInstaller
     /// back to the scaffold. <paramref name="axKind"/> must be one of the bridge
     /// collection kinds: <c>class | table | edt | enum | form</c>.
     /// </summary>
+    /// <remarks>
+    /// Takes the whole <paramref name="settings"/> rather than the three or four fields it
+    /// reads off it, so that adding an option every emitter has to honour does not mean
+    /// revisiting each call site to thread it through — which is how <c>--verify</c> came to
+    /// be honoured by six subcommands and ignored by twenty-four (issue #180).
+    /// </remarks>
     internal static int Emit(
-        OutputMode.Kind kind, GroundingGate.GateResult gate, string axKind, string axSubfolder, string name,
-        string? installTo, string? outPath, bool overwrite,
+        OutputMode.Kind kind, GroundingGate.GateResult gate, GenerateSettings settings,
+        string axKind, string axSubfolder, string name,
         System.Xml.Linq.XDocument doc,
         Func<EmitResult, object> buildPayload,
-        List<string>? warnings = null,
-        bool verify = false)
+        List<string>? warnings = null)
     {
         // Canonicalise here, not only in ScaffoldFileWriter: the bridge path hands the XML
         // string straight to IMetadataProvider, so a document left in the wrong namespace or
@@ -286,60 +316,160 @@ internal static class GenerateInstaller
         ContractNamespaceApplier.Apply(doc);
         ContractOrderCanonicalizer.Apply(doc);
 
-        return EmitCore(kind, gate, axKind, axSubfolder, name, installTo, outPath, doc.ToString(),
-            path => Write(gate, doc, path, overwrite), buildPayload, warnings, verify);
+        return EmitCore(kind, gate, settings, axKind, axSubfolder, name, doc.ToString(),
+            path => Write(gate, doc, path, settings.Overwrite), buildPayload, warnings);
     }
 
     /// <summary>String-rendered counterpart of <see cref="Emit"/> (used for forms).</summary>
     internal static int EmitString(
-        OutputMode.Kind kind, GroundingGate.GateResult gate, string axKind, string axSubfolder, string name,
-        string? installTo, string? outPath, bool overwrite,
+        OutputMode.Kind kind, GroundingGate.GateResult gate, GenerateSettings settings,
+        string axKind, string axSubfolder, string name,
         string xml,
         Func<EmitResult, object> buildPayload,
-        List<string>? warnings = null,
-        bool verify = false)
-        => EmitCore(kind, gate, axKind, axSubfolder, name, installTo, outPath, xml,
-            path => Write(gate, xml, path, overwrite), buildPayload, warnings, verify);
+        List<string>? warnings = null)
+        => EmitCore(kind, gate, settings, axKind, axSubfolder, name, xml,
+            path => Write(gate, xml, path, settings.Overwrite), buildPayload, warnings);
 
     /// <summary>
-    /// Opt-in post-write check for <c>--verify</c>: read the artefact back through the
-    /// live metadata provider, the way Visual Studio would. Returns a rendered failure
-    /// only when the provider was reachable and still could not load the object —
-    /// an absent runtime is reported as a note and never blocks generation, which has
-    /// to keep working offline (CI, agent sessions, machines without the VS metadata
-    /// assemblies).
+    /// Opt-in post-write check for <c>--verify</c>: read every artefact the run emitted back
+    /// through the live metadata provider, the way Visual Studio would. Fails the command
+    /// only when the provider was reachable and still could not load an object — an absent
+    /// runtime is reported as a skip and never blocks generation, which has to keep working
+    /// offline (CI, agent sessions, machines without the VS metadata assemblies).
     /// </summary>
-    private static int? VerifyWritten(
-        OutputMode.Kind kind, string axKind, string name, string? installTo, string? writtenPath,
+    /// <remarks>
+    /// Issue #180. This used to live inside <see cref="EmitCore"/>, which only six of the
+    /// thirty subcommands reached: the other twenty-four accepted <c>--verify</c>, advertised
+    /// it in <c>--help</c>, and did nothing — output indistinguishable from a run that really
+    /// had verified. Running it from the shared terminal (<see cref="Finish"/>) puts it on the
+    /// path every generate command takes to render its success, and reporting the verdict in
+    /// the payload is what makes "not requested", "skipped" and "verified" tellable apart.
+    /// </remarks>
+    private static (object Report, int? Failure) RunVerify(
+        OutputMode.Kind kind, GroundingGate.GateResult? gate, bool verify, string? installTo,
         List<string> warnings)
     {
+        if (!verify) return (new { status = "not-requested" }, null);
+
         // The provider resolves objects by name inside the configured packages paths,
         // so an artefact parked at an arbitrary --out path is not something it can
         // look up — verifying would either miss it or match a different object of the
         // same name. Say so rather than emit a meaningless verdict.
         if (string.IsNullOrWhiteSpace(installTo))
+            return (Skip(warnings, "verification reads the object back by name from the configured " +
+                                   "packages paths, which only applies to --install-to."), null);
+
+        var artefacts = gate?.Artefacts ?? [];
+        if (artefacts.Count == 0)
+            return (Skip(warnings, "this command installed nothing through the shared writer, so there " +
+                                   "is no artefact to read back."), null);
+
+        var verdicts = new List<object>();
+        var skipped = false;
+
+        foreach (var artefact in artefacts)
         {
-            warnings.Add("--verify skipped: verification reads the object back by name from the " +
-                         "configured packages paths, which only applies to --install-to.");
-            return null;
+            if (artefact.AxKind is null || artefact.Name is null)
+            {
+                skipped = true;
+                const string unknown = "could not read the object's kind and name off the document root, " +
+                                       "so the provider has nothing to look up.";
+                warnings.Add($"--verify skipped for {artefact.Path ?? "an emitted document"}: {unknown}");
+                verdicts.Add(new { kind = artefact.AxKind, name = artefact.Name, path = artefact.Path, status = "skipped", detail = unknown });
+                continue;
+            }
+
+            var (outcome, detail) = BridgeGate.TryVerifyObject(artefact.AxKind, artefact.Name);
+            switch (outcome)
+            {
+                case BridgeGate.VerifyOutcome.Readable:
+                    warnings.Add($"--verify: the metadata provider read '{artefact.Name}' back successfully.");
+                    verdicts.Add(new { kind = artefact.AxKind, name = artefact.Name, path = artefact.Path, status = "verified", detail = (string?)null });
+                    break;
+
+                case BridgeGate.VerifyOutcome.Skipped:
+                    skipped = true;
+                    warnings.Add($"--verify skipped: {detail}");
+                    verdicts.Add(new { kind = artefact.AxKind, name = artefact.Name, path = artefact.Path, status = "skipped", detail });
+                    break;
+
+                default:
+                    return (new { status = "failed", artefacts = verdicts },
+                        RenderHelpers.Render(kind, ToolResult<object>.Fail(
+                            "VERIFY_FAILED",
+                            $"Wrote '{artefact.Name}' but {detail} " +
+                            (artefact.Path is null ? string.Empty : $"The file at {artefact.Path} was left in place. ") +
+                            "Open it in Visual Studio to see the metadata reader's own error.")));
+            }
         }
 
-        var (outcome, detail) = BridgeGate.TryVerifyObject(axKind, name);
-        switch (outcome)
+        return (new { status = skipped ? "skipped" : "verified", artefacts = verdicts }, null);
+
+        static object Skip(List<string> warnings, string detail)
         {
-            case BridgeGate.VerifyOutcome.Readable:
-                warnings.Add($"--verify: the metadata provider read '{name}' back successfully.");
-                return null;
-            case BridgeGate.VerifyOutcome.Skipped:
-                warnings.Add($"--verify skipped: {detail}");
-                return null;
-            default:
-                return RenderHelpers.Render(kind, ToolResult<object>.Fail(
-                    "VERIFY_FAILED",
-                    $"Wrote '{name}' but {detail} " +
-                    (writtenPath is null ? string.Empty : $"The file at {writtenPath} was left in place. ") +
-                    "Open it in Visual Studio to see the metadata reader's own error."));
+            warnings.Add("--verify skipped: " + detail);
+            return new { status = "skipped", detail };
         }
+    }
+
+    /// <summary>
+    /// Stamp the verification verdict onto a command's payload.
+    /// </summary>
+    /// <remarks>
+    /// The payloads are anonymous types built per command, so the field is grafted on as JSON
+    /// rather than by widening thirty declarations. Serialising with the same options the
+    /// renderer uses keeps naming and null-dropping identical to a payload that was never
+    /// touched.
+    /// </remarks>
+    private static object WithVerify(object payload, object verify)
+    {
+        try
+        {
+            if (System.Text.Json.JsonSerializer.SerializeToNode(payload, D365Json.Options)
+                is System.Text.Json.Nodes.JsonObject obj)
+            {
+                obj["verify"] = System.Text.Json.JsonSerializer.SerializeToNode(verify, D365Json.Options);
+                return obj;
+            }
+        }
+        catch { /* not an object-shaped payload — render it as it was */ }
+        return payload;
+    }
+
+    /// <summary>
+    /// The single success exit for every generate subcommand: run <c>--verify</c> over what was
+    /// emitted, fold in the property-honesty report, and render.
+    /// </summary>
+    /// <remarks>
+    /// <c>GenerateVerifySurfaceTests</c> fails the build if a command that writes renders its
+    /// own success envelope instead, which is the same guard <c>GenerateGateSurfaceTests</c>
+    /// puts on the grounding gate.
+    /// </remarks>
+    internal static int Done(
+        OutputMode.Kind kind, GroundingGate.GateResult? gate, GenerateSettings settings,
+        object payload, IEnumerable<string>? warnings = null)
+        => Finish(kind, gate, settings.Verify, settings.InstallTo, payload, Merge(gate, warnings));
+
+    private static int Finish(
+        OutputMode.Kind kind, GroundingGate.GateResult? gate, bool verify, string? installTo,
+        object payload, List<string> warnings)
+    {
+        var (report, failure) = RunVerify(kind, gate, verify, installTo, warnings);
+        if (failure.HasValue) return failure.Value;
+
+        if (gate is not null) WithHonesty(warnings, gate);
+
+        return RenderHelpers.Render(kind, ToolResult<object>.Success(
+            WithVerify(payload, report), warnings.Count > 0 ? warnings : null));
+    }
+
+    /// <summary>Gate warnings plus the caller's own, deduplicated and order-preserving.</summary>
+    private static List<string> Merge(GroundingGate.GateResult? gate, IEnumerable<string>? warnings)
+    {
+        var merged = new List<string>();
+        foreach (var w in (gate?.Warnings ?? Enumerable.Empty<string>()).Concat(warnings ?? []))
+            if (!merged.Contains(w)) merged.Add(w);
+        return merged;
     }
 
     /// <summary>
@@ -363,13 +493,15 @@ internal static class GenerateInstaller
     }
 
     private static int EmitCore(
-        OutputMode.Kind kind, GroundingGate.GateResult gate, string axKind, string axSubfolder, string name,
-        string? installTo, string? outPath, string xml,
+        OutputMode.Kind kind, GroundingGate.GateResult gate, GenerateSettings settings,
+        string axKind, string axSubfolder, string name, string xml,
         Func<string, ScaffoldFileWriter.WriteResult> write,
         Func<EmitResult, object> buildPayload,
-        List<string>? warnings,
-        bool verify)
+        List<string>? warnings)
     {
+        var installTo = settings.InstallTo;
+        var outPath   = settings.Out;
+        var verify    = settings.Verify;
         warnings ??= new List<string>();
         var hasInstall = !string.IsNullOrWhiteSpace(installTo);
         var hasOut     = !string.IsNullOrWhiteSpace(outPath);
@@ -385,23 +517,19 @@ internal static class GenerateInstaller
             if (plan.outcome == InstallOutcome.CreatedViaApi)
             {
                 // Nothing reached disk, but the provider was handed exactly this XML — which is
-                // the document the honesty report has to judge.
+                // the document the honesty report has to judge, and the object --verify reads
+                // back. Recorded explicitly because no Write ran to derive it.
                 gate.Observe(xml);
-                if (verify && VerifyWritten(kind, axKind, name, installTo, null, all) is int apiFailure)
-                    return apiFailure;
-                return RenderHelpers.Render(kind, ToolResult<object>.Success(
-                    buildPayload(new EmitResult("bridge", null, null, null)),
-                    WithHonesty(all, gate) is { Count: > 0 } w ? w : null));
+                gate.RecordArtefact(axKind, name, null);
+                return Finish(kind, gate, verify, installTo,
+                    buildPayload(new EmitResult("bridge", null, null, null)), all);
             }
 
             try
             {
                 var res = write(plan.writePath!);
-                if (verify && VerifyWritten(kind, axKind, name, installTo, res.Path, all) is int failure)
-                    return failure;
-                return RenderHelpers.Render(kind, ToolResult<object>.Success(
-                    buildPayload(new EmitResult("scaffold", res.Path, res.Bytes, res.BackupPath)),
-                    WithHonesty(all, gate) is { Count: > 0 } w ? w : null));
+                return Finish(kind, gate, verify, installTo,
+                    buildPayload(new EmitResult("scaffold", res.Path, res.Bytes, res.BackupPath)), all);
             }
             catch (Exception ex)
             {
@@ -412,11 +540,8 @@ internal static class GenerateInstaller
         try
         {
             var res = write(outPath!);
-            if (verify && VerifyWritten(kind, axKind, name, installTo, res.Path, warnings) is int outFailure)
-                return outFailure;
-            return RenderHelpers.Render(kind, ToolResult<object>.Success(
-                buildPayload(new EmitResult("scaffold", res.Path, res.Bytes, res.BackupPath)),
-                WithHonesty(warnings, gate) is { Count: > 0 } w ? w : null));
+            return Finish(kind, gate, verify, installTo,
+                buildPayload(new EmitResult("scaffold", res.Path, res.Bytes, res.BackupPath)), warnings);
         }
         catch (Exception ex)
         {
@@ -506,8 +631,8 @@ public sealed class GenerateTableCommand : Command<GenerateTableCommand.Settings
         // Prefer the live metadata provider for --install-to (canonical output,
         // consistent with VS / d365fo-mcp-server); fall back to the scaffold.
         return GenerateInstaller.Emit(
-            kind, gate, "table", Folders.Table, settings.Name,
-            settings.InstallTo, settings.Out, settings.Overwrite, doc,
+            kind, gate, settings, "table", Folders.Table, settings.Name,
+            doc,
             r => new
             {
                 kind = "AxTable",
@@ -525,8 +650,7 @@ public sealed class GenerateTableCommand : Command<GenerateTableCommand.Settings
                 model = settings.InstallTo,
                 grounding = gate.Grounding,
             },
-            warnings,
-            verify: settings.Verify);
+            warnings);
     }
 
     private static TableFieldSpec ParseField(string raw)
@@ -567,16 +691,15 @@ public sealed class GenerateClassCommand : Command<GenerateClassCommand.Settings
         if (gate.Failure is not null) return RenderHelpers.Render(kind, gate.Failure);
 
         return GenerateInstaller.Emit(
-            kind, gate, "class", Folders.Class, settings.Name,
-            settings.InstallTo, settings.Out, settings.Overwrite, doc,
+            kind, gate, settings, "class", Folders.Class, settings.Name,
+            doc,
             r => new
             {
                 kind = "AxClass", name = settings.Name, source = r.Source,
                 path = r.Path, bytes = r.Bytes, backup = r.Backup, model = settings.InstallTo,
                 grounding = gate.Grounding,
             },
-            gate.Warnings,
-            verify: settings.Verify);
+            gate.Warnings);
     }
 }
 
@@ -630,8 +753,8 @@ public sealed class GenerateCocCommand : Command<GenerateCocCommand.Settings>
         warnings.AddRange(gate.Warnings);
 
         return GenerateInstaller.Emit(
-            kind, gate, "class", Folders.Class, settings.Target + "_Extension",
-            settings.InstallTo, settings.Out, settings.Overwrite, doc,
+            kind, gate, settings, "class", Folders.Class, settings.Target + "_Extension",
+            doc,
             r => new
             {
                 kind = "AxClass",
@@ -644,8 +767,7 @@ public sealed class GenerateCocCommand : Command<GenerateCocCommand.Settings>
                 model = settings.InstallTo,
                 grounding = gate.Grounding,
             },
-            warnings,
-            verify: settings.Verify);
+            warnings);
     }
 }
 
@@ -671,11 +793,7 @@ public sealed class GenerateSimpleListCommand : Command<GenerateSimpleListComman
             caption:      null,
             fields:       Array.Empty<string>(),
             sections:     Array.Empty<string>(),
-            linesTable:   null,
-            outPath:      settings.Out,
-            installTo:    settings.InstallTo,
-            overwrite:    settings.Overwrite,
-            verify:       settings.Verify);
+            linesTable:   null);
     }
 }
 
@@ -728,11 +846,7 @@ public sealed class GenerateFormCommand : Command<GenerateFormCommand.Settings>
             caption:      settings.Caption,
             fields:       settings.Fields,
             sections:     settings.Sections,
-            linesTable:   settings.LinesTable,
-            outPath:      settings.Out,
-            installTo:    settings.InstallTo,
-            overwrite:    settings.Overwrite,
-            verify:       settings.Verify);
+            linesTable:   settings.LinesTable);
     }
 }
 
@@ -747,13 +861,11 @@ internal static class GenerateFormImpl
         string? caption,
         IReadOnlyList<string> fields,
         IReadOnlyList<string> sections,
-        string? linesTable,
-        string? outPath,
-        string? installTo,
-        bool overwrite,
-        bool verify = false)
+        string? linesTable)
     {
         var kind = OutputMode.Resolve(output);
+        var installTo = settings.InstallTo;
+        var outPath   = settings.Out;
         if (string.IsNullOrWhiteSpace(formName))
             return RenderHelpers.Render(kind, ToolResult<object>.Fail("BAD_INPUT", "Form name required."));
 
@@ -879,8 +991,8 @@ internal static class GenerateFormImpl
         patternWarnings.AddRange(gate.Warnings);
 
         return GenerateInstaller.EmitString(
-            kind, gate, "form", Folders.Form, formName,
-            installTo, outPath, overwrite, xml,
+            kind, gate, settings, "form", Folders.Form, formName,
+            xml,
             r => new
             {
                 kind         = "AxForm",
@@ -901,8 +1013,7 @@ internal static class GenerateFormImpl
                 },
                 grounding    = gate.Grounding,
             },
-            patternWarnings,
-            verify: verify);
+            patternWarnings);
     }
 
     /// <summary>

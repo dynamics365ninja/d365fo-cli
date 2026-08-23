@@ -111,7 +111,7 @@ public sealed class GenerateMenuItemCommand : Command<GenerateMenuItemCommand.Se
             if (gate.Failure is not null) return RenderHelpers.Render(kind, gate.Failure);
 
             var res = GenerateInstaller.Write(gate, doc, outPath!, settings.Overwrite);
-            return RenderHelpers.Render(kind, ToolResult<object>.Success(new
+            return GenerateInstaller.Done(kind, gate, settings, new
             {
                 kind        = axSubfolder,
                 name        = settings.Name,
@@ -129,7 +129,7 @@ public sealed class GenerateMenuItemCommand : Command<GenerateMenuItemCommand.Se
                 bytes       = res.Bytes,
                 backup      = res.BackupPath,
                 model       = settings.InstallTo,
-            }, gate.Warnings));
+            });
         }
         catch (Exception ex)
         {

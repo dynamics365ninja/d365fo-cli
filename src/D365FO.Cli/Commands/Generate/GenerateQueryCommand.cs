@@ -86,7 +86,7 @@ public sealed class GenerateQueryCommand : Command<GenerateQueryCommand.Settings
             var joins  = dsList.Where(d => !string.IsNullOrEmpty(d.ParentDs))
                                .Select(d => new { d.Table, d.JoinMode, parentDs = d.ParentDs }).ToList();
 
-            return RenderHelpers.Render(kind, ToolResult<object>.Success(new
+            return GenerateInstaller.Done(kind, gate, settings, new
             {
                 kind        = "AxQuery",
                 name        = settings.Name,
@@ -96,7 +96,7 @@ public sealed class GenerateQueryCommand : Command<GenerateQueryCommand.Settings
                 bytes       = res.Bytes,
                 backup      = res.BackupPath,
                 model       = settings.InstallTo,
-            }, gate.Warnings));
+            });
         }
         catch (Exception ex)
         {

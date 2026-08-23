@@ -46,6 +46,35 @@ internal static class GroundingGate
         /// <summary>Every document this gate has seen written, in order.</summary>
         public IReadOnlyList<string> WrittenDocuments => _written;
 
+        /// <summary>
+        /// One artefact this gate saw reach a target, named the way the metadata provider
+        /// names it. <see cref="AxKind"/>/<see cref="Name"/> are null when the identity could
+        /// not be read off the document — <c>--verify</c> reports that rather than skipping
+        /// silently.
+        /// </summary>
+        public readonly record struct Artefact(string? AxKind, string? Name, string? Path);
+
+        private readonly List<Artefact> _artefacts = [];
+
+        /// <summary>Every artefact this gate has seen written or installed, in order.</summary>
+        /// <remarks>
+        /// Issue #180. <c>--verify</c> reads artefacts back by name through the metadata
+        /// provider, and it can only do that for what was actually emitted — so the list is
+        /// built by <see cref="GenerateInstaller.Write"/> itself rather than declared per
+        /// command. A per-command declaration is the hand-maintained table that goes stale
+        /// the first time someone adds a second output file, which is precisely how the flag
+        /// came to be inert for twenty-four subcommands.
+        /// </remarks>
+        public IReadOnlyList<Artefact> Artefacts => _artefacts;
+
+        /// <summary>Record an artefact as emitted. Duplicate paths collapse to one entry.</summary>
+        internal void RecordArtefact(string? axKind, string? name, string? path)
+        {
+            if (path is not null && _artefacts.Any(a => string.Equals(a.Path, path, StringComparison.OrdinalIgnoreCase)))
+                return;
+            _artefacts.Add(new Artefact(axKind, string.IsNullOrWhiteSpace(name) ? null : name, path));
+        }
+
         /// <summary>Requested values that reached none of the written documents.</summary>
         public IReadOnlyList<PropertyGap> PropertyGaps { get; private set; } = [];
 

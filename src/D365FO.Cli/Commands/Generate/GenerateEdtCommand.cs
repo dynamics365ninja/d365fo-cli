@@ -63,8 +63,8 @@ public sealed class GenerateEdtCommand : Command<GenerateEdtCommand.Settings>
         if (gate.Failure is not null) return RenderHelpers.Render(kind, gate.Failure);
 
         return GenerateInstaller.Emit(
-            kind, gate, "edt", Folders.Edt, settings.Name,
-            settings.InstallTo, settings.Out, settings.Overwrite, doc,
+            kind, gate, settings, "edt", Folders.Edt, settings.Name,
+            doc,
             r => new
             {
                 kind       = "AxEdt",
@@ -81,8 +81,7 @@ public sealed class GenerateEdtCommand : Command<GenerateEdtCommand.Settings>
                 model      = settings.InstallTo,
                 grounding  = gate.Grounding,
             },
-            gate.Warnings,
-            verify: settings.Verify);
+            gate.Warnings);
     }
 
     private static string? ResolveEnumTypeFromExtendsChain(string extendsName)

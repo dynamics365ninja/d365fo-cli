@@ -112,7 +112,7 @@ public sealed class GenerateSysOperationCommand : Command<GenerateSysOperationCo
             var controllerResult  = GenerateInstaller.Write(gate,
                 SysOperationScaffolder.Controller(controllerName, serviceName, settings.ServiceMethod, mode), controllerPath!, settings.Overwrite);
 
-            return RenderHelpers.Render(kind, ToolResult<object>.Success(new
+            return GenerateInstaller.Done(kind, gate, settings, new
             {
                 kind           = "SysOperation",
                 name           = settings.Name,
@@ -127,7 +127,7 @@ public sealed class GenerateSysOperationCommand : Command<GenerateSysOperationCo
                 controller     = new { path = controllerResult.Path, bytes = controllerResult.Bytes, backup = controllerResult.BackupPath },
                 model          = settings.InstallTo,
                 grounding      = gate.Grounding,
-            }, gate.Warnings));
+            });
         }
         catch (Exception ex)
         {

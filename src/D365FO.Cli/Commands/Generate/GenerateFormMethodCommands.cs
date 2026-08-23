@@ -83,7 +83,7 @@ internal static class FormMethodImpl
             var methods = FormMethodCatalog.List(target)
                 .Select(m => new { name = m.Name, returnType = m.ReturnType, parameters = m.Parameters })
                 .ToList();
-            return RenderHelpers.Render(kind, ToolResult<object>.Success(new
+            return GenerateInstaller.Done(kind, gate: null, s, new
             {
                 kind = "OverridableMethods",
                 form = s.Form,
@@ -92,7 +92,7 @@ internal static class FormMethodImpl
                 count = methods.Count,
                 methods,
                 note = "Curated subset. For a framework method not listed, pass --method <NAME> --return-type <TYPE>.",
-            }));
+            });
         }
 
         if (string.IsNullOrWhiteSpace(ownerName))
@@ -215,7 +215,10 @@ internal static class FormMethodImpl
                     $"Could not update form '{formName}' in model '{s.InstallTo}' via the metadata bridge: {err}"));
             RecordJournalUpdate("form", formName, s.InstallTo, JournalWritePath.Bridge, null, preImageXml,
                 $"generate {(target == FormMethodCatalog.Target.DataSource ? "datasource-method" : "control-method")} --install-to");
-            return RenderHelpers.Render(kind, ToolResult<object>.Success(PayloadFor("bridge", null), warnings));
+            // The form went in through the provider rather than the shared writer, so the
+            // artefact --verify reads back is recorded here (issue #180).
+            gate.RecordArtefact("form", formName, null);
+            return GenerateInstaller.Done(kind, gate, s, PayloadFor("bridge", null), warnings);
         }
 
         var outPath = string.IsNullOrWhiteSpace(s.Out) ? formPath! : s.Out!;
@@ -237,7 +240,8 @@ internal static class FormMethodImpl
                 $"generate {(target == FormMethodCatalog.Target.DataSource ? "datasource-method" : "control-method")}");
         }
 
-        return RenderHelpers.Render(kind, ToolResult<object>.Success(PayloadFor("scaffold", outPath), warnings));
+        gate.RecordArtefact("form", formName, outPath);
+        return GenerateInstaller.Done(kind, gate, s, PayloadFor("scaffold", outPath), warnings);
     }
 
     /// <summary>
