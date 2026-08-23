@@ -214,6 +214,8 @@ Every `generate` subcommand honours the flag, and the multi-file emitters (`busi
 "verify": { "status": "verified", "artefacts": [ … ] }        // every artefact read back, one entry each
 ```
 
+Only one answer fails the command: `IMetadataProvider` was reachable and would not hand the object back — the document the reader refuses, which is what the flag is for. Everything else is a skip with its reason, because it is a limit of the tooling rather than a verdict on the artefact: a bridge that did not answer, a kind the bridge has no read channel for, or a MetaModel type its serializer cannot reflect (`AxMenuItemAction` and `AxSecurityPrivilege` load fine and still cannot be rendered back as XML — those verify, with the caveat in `detail`).
+
 ### Table
 
 ```sh

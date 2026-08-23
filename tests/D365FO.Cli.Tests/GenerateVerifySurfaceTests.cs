@@ -121,6 +121,80 @@ public class GenerateVerifySurfaceTests
 }
 
 /// <summary>
+/// Which bridge answers count as "the metadata reader refuses this artefact" — the only ones
+/// allowed to fail a generate command.
+/// </summary>
+/// <remarks>
+/// Every read failure used to collapse to "unreadable", which was harmless while <c>--verify</c>
+/// reached six subcommands and never met most kinds. Extending it to all thirty put real
+/// envelopes through that mapping, and two of them are not verdicts about the file at all: the
+/// bridge's own <c>XmlSerializer</c> cannot reflect <c>AxMenuItemAction</c> or
+/// <c>AxSecurityPrivilege</c>, so a correctly written menu item came back as
+/// <c>SERIALIZE_FAILED</c> — after <c>IMetadataProvider</c> had already handed the object over.
+/// Failing a good write on that is worse than not checking. The envelopes below are the ones a
+/// live AOS actually returned.
+/// </remarks>
+public class BridgeVerifyVerdictTests
+{
+    private static System.Text.Json.Nodes.JsonObject Envelope(string json)
+        => (System.Text.Json.Nodes.JsonNode.Parse(json) as System.Text.Json.Nodes.JsonObject)!;
+
+    [Fact]
+    public void A_provider_that_returned_the_object_verifies()
+    {
+        var (outcome, detail) = D365FO.Cli.Commands.Get.BridgeGate.VerdictFrom(
+            "query", Envelope("""{"ok":true,"kind":"query","name":"ConVerifyQuery","xml":"<AxQuerySimple />"}"""));
+
+        Assert.Equal(D365FO.Cli.Commands.Get.BridgeGate.VerifyOutcome.Readable, outcome);
+        Assert.Null(detail);
+    }
+
+    [Fact]
+    public void An_object_the_provider_would_not_return_is_the_failure_the_flag_exists_for()
+    {
+        // What a document the reader refuses to deserialize looks like from here: the provider
+        // simply does not hand it back.
+        var (outcome, detail) = D365FO.Cli.Commands.Get.BridgeGate.VerdictFrom(
+            "query", Envelope("""{"ok":false,"error":"NOT_FOUND","message":"query 'ConVerifyQuery' was not returned by IMetadataProvider."}"""));
+
+        Assert.Equal(D365FO.Cli.Commands.Get.BridgeGate.VerifyOutcome.Unreadable, outcome);
+        Assert.Contains("could not load the object back", detail);
+    }
+
+    [Fact]
+    public void A_type_the_bridge_cannot_serialise_still_counts_as_loaded()
+    {
+        var (outcome, detail) = D365FO.Cli.Commands.Get.BridgeGate.VerdictFrom(
+            "menuitemaction", Envelope("""{"ok":false,"error":"SERIALIZE_FAILED","message":"InvalidOperationException: There was an error reflecting type 'Microsoft.Dynamics.AX.Metadata.MetaModel.AxMenuItemAction'."}"""));
+
+        Assert.Equal(D365FO.Cli.Commands.Get.BridgeGate.VerifyOutcome.Readable, outcome);
+        Assert.Contains("could not render it back as XML", detail);
+    }
+
+    [Theory]
+    // A kind the bridge has no read channel for, a runtime that is not there, and a bridge that
+    // never answered are all "nothing was checked" — none of them is evidence against the write.
+    [InlineData("""{"ok":false,"error":"INVALID_KIND","message":"kind must be one of: …"}""")]
+    [InlineData("""{"ok":false,"error":"METADATA_UNAVAILABLE","message":"IMetadataProvider failed to initialise."}""")]
+    public void Answers_that_check_nothing_are_skips_not_verdicts(string json)
+    {
+        var (outcome, detail) = D365FO.Cli.Commands.Get.BridgeGate.VerdictFrom("tile", Envelope(json));
+
+        Assert.Equal(D365FO.Cli.Commands.Get.BridgeGate.VerifyOutcome.Skipped, outcome);
+        Assert.False(string.IsNullOrWhiteSpace(detail));
+    }
+
+    [Fact]
+    public void A_bridge_that_never_answered_is_a_skip()
+    {
+        var (outcome, detail) = D365FO.Cli.Commands.Get.BridgeGate.VerdictFrom("class", null);
+
+        Assert.Equal(D365FO.Cli.Commands.Get.BridgeGate.VerifyOutcome.Skipped, outcome);
+        Assert.Contains("did not answer", detail);
+    }
+}
+
+/// <summary>
 /// The behavioural half of issue #180: the flag now reports what it did, on a subcommand from
 /// the group that used to ignore it.
 /// </summary>

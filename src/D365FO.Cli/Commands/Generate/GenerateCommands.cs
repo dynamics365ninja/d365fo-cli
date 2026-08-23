@@ -383,8 +383,10 @@ internal static class GenerateInstaller
             switch (outcome)
             {
                 case BridgeGate.VerifyOutcome.Readable:
-                    warnings.Add($"--verify: the metadata provider read '{artefact.Name}' back successfully.");
-                    verdicts.Add(new { kind = artefact.AxKind, name = artefact.Name, path = artefact.Path, status = "verified", detail = (string?)null });
+                    warnings.Add(detail is null
+                        ? $"--verify: the metadata provider read '{artefact.Name}' back successfully."
+                        : $"--verify: the metadata provider read '{artefact.Name}' back successfully ({detail}).");
+                    verdicts.Add(new { kind = artefact.AxKind, name = artefact.Name, path = artefact.Path, status = "verified", detail });
                     break;
 
                 case BridgeGate.VerifyOutcome.Skipped:
