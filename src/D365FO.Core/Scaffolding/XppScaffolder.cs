@@ -1299,30 +1299,131 @@ public static class XppScaffolder
         ArgumentNullException.ThrowIfNull(spec);
 
         var controller = spec.EffectiveController;
+        var baseClass = spec.PrintMgmtController ? "SrsPrintMgmtController" : "SrsReportRunController";
         var declaration =
-            $"public class {controller} extends SrsReportRunController\n" +
+            $"public class {controller} extends {baseClass}\n" +
             "{\n" +
             "}\n";
 
-        var main =
-            "public static void main(Args _args)\n" +
-            "{\n" +
-            $"    {controller} controller = new {controller}();\n" +
-            "\n" +
-            $"    controller.parmReportName(ssrsReportStr({spec.Name}, AutoDesign));\n" +
-            "    controller.parmArgs(_args);\n" +
-            "    controller.startOperation();\n" +
-            "}\n";
+        var main = spec.PrintMgmtController
+            ? "public static void main(Args _args)\n" +
+              "{\n" +
+              $"    {controller} controller = new {controller}();\n" +
+              "\n" +
+              "    controller.parmArgs(_args);\n" +
+              $"    controller.parmReportName(ssrsReportStr({spec.Name}, AutoDesign));\n" +
+              "    controller.startOperation();\n" +
+              "}\n"
+            : "public static void main(Args _args)\n" +
+              "{\n" +
+              $"    {controller} controller = new {controller}();\n" +
+              "\n" +
+              $"    controller.parmReportName(ssrsReportStr({spec.Name}, AutoDesign));\n" +
+              "    controller.parmArgs(_args);\n" +
+              "    controller.startOperation();\n" +
+              "}\n";
+
+        var methods = new List<XElement>
+        {
+            new("Method",
+                new XElement("Name", "main"),
+                new XElement("Source", main)),
+        };
+
+        if (spec.PrintMgmtController)
+        {
+            // SrsPrintMgmtController declares runPrintMgmt() abstract — a subclass that does
+            // not implement it does not compile. initPrintMgmtReportRun() is where shipped
+            // subclasses construct the PrintMgmtReportRun for their hierarchy/node/document
+            // type and hand the controller to it before super(); the placeholders are the
+            // ones to replace. There is NO parmPrintMgmtDocType (xppc: "does not contain a
+            // definition for method 'parmPrintMgmtDocType'").
+            var initPrintMgmt =
+                "/// <summary>\n" +
+                "/// Creates the print-management run for this document type and hands it the controller.\n" +
+                "/// </summary>\n" +
+                "protected void initPrintMgmtReportRun()\n" +
+                "{\n" +
+                "    // TODO: replace the hierarchy, node and document type with the ones this document belongs to\n" +
+                "    printMgmtReportRun = PrintMgmtReportRun::construct(\n" +
+                "        PrintMgmtHierarchyType::Sales,\n" +
+                "        PrintMgmtNodeType::SalesTable,\n" +
+                "        PrintMgmtDocumentType::SalesOrderConfirmation);\n" +
+                "    printMgmtReportRun.parmReportRunController(this);\n" +
+                "\n" +
+                "    super();\n" +
+                "}\n";
+            var runPrintMgmt =
+                "/// <summary>\n" +
+                "/// Loads the print-management settings for the record being printed and outputs the report.\n" +
+                "/// </summary>\n" +
+                "protected void runPrintMgmt()\n" +
+                "{\n" +
+                "    // TODO: pass the query buffer, the referenced buffer and the language the settings are resolved for\n" +
+                "    printMgmtReportRun.load(this.parmArgs().record(), this.parmArgs().record(), Global::currentUserLanguage());\n" +
+                "\n" +
+                "    this.outputReports();\n" +
+                "}\n";
+            methods.Add(new XElement("Method",
+                new XElement("Name", "initPrintMgmtReportRun"),
+                new XElement("Source", initPrintMgmt)));
+            methods.Add(new XElement("Method",
+                new XElement("Name", "runPrintMgmt"),
+                new XElement("Source", runPrintMgmt)));
+        }
 
         return new XDocument(
             new XElement("AxClass",
                 new XElement("Name", controller),
                 new XElement("SourceCode",
                     new XElement("Declaration", declaration),
+                    new XElement("Methods", methods))));
+    }
+
+    /// <summary>
+    /// Scaffolds the companion UI-builder class for a report whose dialog needs behaviour
+    /// the contract attributes cannot express — a custom lookup, a field that reacts to
+    /// another. Bound on the contract via <c>[SysOperationContractProcessing]</c>
+    /// (see <see cref="ReportContract"/>); returns null when the spec does not ask for one.
+    /// </summary>
+    public static XDocument? ReportUiBuilder(ReportSpec spec)
+    {
+        ArgumentNullException.ThrowIfNull(spec);
+        if (!spec.UiBuilder) return null;
+
+        var name = spec.UiBuilderClass;
+        var exampleParm = spec.Parameters is { Count: > 0 } ? $"parm{spec.Parameters[0].Name}" : "parmMyParameter";
+        var declaration =
+            "/// <summary>\n" +
+            $"/// UI builder for the {spec.Name} report dialog — custom lookups, dependent fields, events.\n" +
+            "/// </summary>\n" +
+            $"public class {name} extends SrsReportDataContractUIBuilder\n" +
+            "{\n" +
+            "}\n";
+
+        var build =
+            "/// <summary>\n" +
+            "/// Builds the dialog and customizes its fields.\n" +
+            "/// </summary>\n" +
+            "public void build()\n" +
+            "{\n" +
+            "    super();\n" +
+            "\n" +
+            "    // TODO: customize dialog fields, e.g.:\n" +
+            $"    // {spec.ContractClass} contract = this.dataContractObject() as {spec.ContractClass};\n" +
+            $"    // DialogField df = this.bindInfo().getDialogField(contract, methodStr({spec.ContractClass}, {exampleParm}));\n" +
+            $"    // df.registerOverrideMethod(methodStr(FormStringControl, lookup), methodStr({name}, myParameterLookup), this);\n" +
+            "}\n";
+
+        return new XDocument(
+            new XElement("AxClass",
+                new XElement("Name", name),
+                new XElement("SourceCode",
+                    new XElement("Declaration", declaration),
                     new XElement("Methods",
                         new XElement("Method",
-                            new XElement("Name", "main"),
-                            new XElement("Source", main))))));
+                            new XElement("Name", "build"),
+                            new XElement("Source", build))))));
     }
 
     /// <summary>
@@ -1360,9 +1461,13 @@ public static class XppScaffolder
         var memberDecls = string.Join("\n", datasets.Select(ds =>
             $"    {ds.DpClass + "Tmp"} {char.ToLower(ds.DpClass[0]) + ds.DpClass[1..]}Tmp;"));
 
+        // PreProcessTempDB, not PreProcess: the scaffolded tmp table is TempDB, and that is
+        // the base shipped code pairs it with (upstream measured 332 of 370 pre-processed
+        // DPs; xppc accepts either pairing, so the compiler is no guard here).
+        var dpBase = spec.PreProcess ? "SrsReportDataProviderPreProcessTempDB" : "SrsReportDataProviderBase";
         var declaration =
             $"[SRSReportDataContract(\"{spec.ContractClass}\")]\n" +
-            $"class {dp} extends SrsReportDataProviderBase\n" +
+            $"class {dp} extends {dpBase}\n" +
             "{\n" +
             memberDecls + "\n" +
             "}\n";
@@ -1447,8 +1552,13 @@ public static class XppScaffolder
         var memberDecls = string.Join("\n",
             spec.Parameters.Select(p => $"    {XppType(p.DataType)} {char.ToLower(p.Name[0])}{p.Name[1..]};"));
 
+        // With a UI builder the contract binds it via SysOperationContractProcessing —
+        // the framework instantiates the builder from this attribute; nothing else wires it.
+        var contractAttributes = spec.UiBuilder
+            ? "[\n    DataContractAttribute,\n    SysOperationContractProcessing(classStr(" + spec.UiBuilderClass + "))\n]\n"
+            : "[DataContractAttribute]\n";
         var declaration =
-            "[DataContractAttribute]\n" +
+            contractAttributes +
             $"class {contractName} extends SrsReportDataContractBase\n" +
             "{\n" +
             memberDecls + "\n" +
@@ -1798,6 +1908,36 @@ public sealed record ReportSpec(
 
     /// <summary>Name of the controller class that launches the report.</summary>
     public string EffectiveController => Name + "Controller";
+
+    /// <summary>
+    /// When true, the DP extends <c>SrsReportDataProviderPreProcessTempDB</c>: rows are
+    /// written to the TempDB table BEFORE SSRS renders, so the report session reads a
+    /// finished set — the route for heavy computations and multi-dataset consistency.
+    /// PreProcessTempDB, not PreProcess: the scaffolded tmp table is TempDB, and that is
+    /// the base shipped code pairs it with (upstream measured 332 of 370 pre-processed
+    /// DPs; xppc accepts either, so the compiler is no guard here).
+    /// </summary>
+    public bool PreProcess { get; init; }
+
+    /// <summary>
+    /// When true, the controller extends <c>SrsPrintMgmtController</c> and implements the
+    /// abstract <c>runPrintMgmt()</c> plus <c>initPrintMgmtReportRun()</c> — the shape every
+    /// shipped direct subclass uses. There is no <c>parmPrintMgmtDocType</c> on the
+    /// controller (xppc-verified upstream); the document type is fixed in
+    /// <c>initPrintMgmtReportRun()</c>.
+    /// </summary>
+    public bool PrintMgmtController { get; init; }
+
+    /// <summary>
+    /// When true, a <c>&lt;Name&gt;UIBuilder</c> class (extends
+    /// <c>SrsReportDataContractUIBuilder</c>) is emitted and bound on the contract via
+    /// <c>[SysOperationContractProcessing]</c> — for custom dialog lookups and dependent
+    /// fields the attribute set cannot express.
+    /// </summary>
+    public bool UiBuilder { get; init; }
+
+    /// <summary>Name of the companion UI-builder class.</summary>
+    public string UiBuilderClass => Name + "UIBuilder";
 
     /// <summary>Name of the output menu item that opens the report.</summary>
     public string EffectiveMenuItem => Name + "MenuItem";

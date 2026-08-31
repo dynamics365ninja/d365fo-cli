@@ -971,6 +971,18 @@ public sealed class GenerateReportCommand : Command<GenerateReportCommand.Settin
         [System.ComponentModel.Description("Output path for the DataContract class XML. Auto-derived when --parameter is used.")]
         public string? OutContract { get; init; }
 
+        [CommandOption("--pre-process")]
+        [System.ComponentModel.Description("DP extends SrsReportDataProviderPreProcessTempDB: rows are written to the TempDB table BEFORE SSRS renders — the route for heavy computations. PreProcessTempDB is the base shipped code pairs a TempDB table with.")]
+        public bool PreProcess { get; init; }
+
+        [CommandOption("--controller-type <TYPE>")]
+        [System.ComponentModel.Description("simple (default, SrsReportRunController) | print-mgmt (SrsPrintMgmtController with the abstract runPrintMgmt() implemented and initPrintMgmtReportRun() placeholders — there is no parmPrintMgmtDocType).")]
+        public string? ControllerType { get; init; }
+
+        [CommandOption("--ui-builder")]
+        [System.ComponentModel.Description("Also generate <Name>UIBuilder (extends SrsReportDataContractUIBuilder), bound on the contract via SysOperationContractProcessing — for custom dialog lookups and dependent fields. Requires --parameter (the binding lives on the contract).")]
+        public bool UiBuilder { get; init; }
+
         [CommandOption("--no-tmp-table")]
         [System.ComponentModel.Description("Skip the TempDB table each DP fills. The DP references it either way, so the model will not compile without one.")]
         public bool NoTmpTable { get; init; }
@@ -1036,6 +1048,20 @@ public sealed class GenerateReportCommand : Command<GenerateReportCommand.Settin
             }).ToList();
         }
 
+        var controllerType = (settings.ControllerType ?? "simple").Trim().ToLowerInvariant();
+        if (controllerType is not ("simple" or "print-mgmt" or "printmgmt"))
+            return RenderHelpers.Render(kind, ToolResult<object>.Fail(D365FoErrorCodes.BadInput,
+                $"Unknown --controller-type '{settings.ControllerType}'. Expected simple | print-mgmt."));
+        var printMgmt = controllerType is "print-mgmt" or "printmgmt";
+        if (printMgmt && settings.NoController)
+            return RenderHelpers.Render(kind, ToolResult<object>.Fail(D365FoErrorCodes.BadInput,
+                "--controller-type print-mgmt and --no-controller contradict each other."));
+        if (settings.UiBuilder && (settings.Parameters is not { Length: > 0 }))
+            return RenderHelpers.Render(kind, ToolResult<object>.Fail(D365FoErrorCodes.BadInput,
+                "--ui-builder requires --parameter: the builder is bound on the DataContract via " +
+                "SysOperationContractProcessing, and without parameters no contract is generated.",
+                "Add at least one --parameter, or drop --ui-builder."));
+
         var spec = new ReportSpec(
             settings.Name,
             settings.DpClass,
@@ -1049,7 +1075,12 @@ public sealed class GenerateReportCommand : Command<GenerateReportCommand.Settin
                     settings.Fields), .. extraDatasets]
                 : null,
             settings.Fields,
-            paramSpecs);
+            paramSpecs)
+        {
+            PreProcess = settings.PreProcess,
+            PrintMgmtController = printMgmt,
+            UiBuilder = settings.UiBuilder,
+        };
 
         var hasContract = spec.Parameters is { Count: > 0 };
 
@@ -1142,6 +1173,15 @@ public sealed class GenerateReportCommand : Command<GenerateReportCommand.Settin
                     settings.Overwrite);
             }
 
+            ScaffoldFileWriter.WriteResult? uiBuilderResult = null;
+            if (spec.UiBuilder && XppScaffolder.ReportUiBuilder(spec) is { } uiBuilderDoc)
+            {
+                uiBuilderResult = GenerateInstaller.Write(gate,
+                    uiBuilderDoc,
+                    SiblingOf(dpPath!, spec.UiBuilderClass, Folders.Class),
+                    settings.Overwrite);
+            }
+
             ScaffoldFileWriter.WriteResult? menuItemResult = null;
             if (!settings.NoMenuItem)
             {
@@ -1162,6 +1202,8 @@ public sealed class GenerateReportCommand : Command<GenerateReportCommand.Settin
                 kind        = "AxReport",
                 name        = spec.Name,
                 dpClass     = spec.EffectiveDpClass,
+                dpBase      = spec.PreProcess ? "SrsReportDataProviderPreProcessTempDB" : "SrsReportDataProviderBase",
+                controllerType = settings.NoController ? null : (spec.PrintMgmtController ? "print-mgmt" : "simple"),
                 contractClass = spec.ContractClass,
                 datasets    = spec.EffectiveDatasets.Select(ds => new { ds.Name, ds.DpClass }).ToList(),
                 parameters  = spec.Parameters?.Select(p => new { p.Name, p.DataType }).ToList(),
@@ -1169,6 +1211,7 @@ public sealed class GenerateReportCommand : Command<GenerateReportCommand.Settin
                 dp          = new { path = dpResult.Path,       bytes = dpResult.Bytes,       backup = dpResult.BackupPath },
                 tmpTables,
                 controller  = controllerResult is null ? null : new { name = spec.EffectiveController, path = controllerResult.Path, bytes = controllerResult.Bytes },
+                uiBuilder   = uiBuilderResult is null ? null : new { name = spec.UiBuilderClass, path = uiBuilderResult.Path, bytes = uiBuilderResult.Bytes },
                 menuItem    = menuItemResult is null ? null : new { name = spec.EffectiveMenuItem, path = menuItemResult.Path, bytes = menuItemResult.Bytes },
                 contract    = contractResult is null ? null : new { path = contractResult.Path, bytes = contractResult.Bytes, backup = contractResult.BackupPath },
                 model       = settings.InstallTo,

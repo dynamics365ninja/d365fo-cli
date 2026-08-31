@@ -38,7 +38,8 @@ d365fo search report FmVehicleService --output json
 # 2. Inspect an existing report's datasets and designs before copying its shape
 d365fo get report SalesInvoice --output json
 
-# 3. Scaffold the report + its data provider (and a contract, when parameters are declared)
+# 3. Scaffold the whole stack in one command: report, DP, TempDB temp table(s),
+#    controller and output menu item — plus a contract when parameters are declared
 d365fo generate report FmVehicleServiceReport \
   --dp FmVehicleServiceDP \
   --tmp FmTmpVehicleService \
@@ -46,17 +47,23 @@ d365fo generate report FmVehicleServiceReport \
   --field VehicleId --field ServiceDate \
   --parameter VehicleGroupId:String \
   --install-to FleetManagement
-
-# 4. The temp table and the controller are separate objects — scaffold them too
-d365fo generate table FmTmpVehicleService --pattern main --table-type TempDB --install-to FleetManagement
-d365fo generate class FmVehicleServiceController --extends SrsReportRunController --install-to FleetManagement
 ```
 
-`generate report` emits the `AxReport` plus its DP class, and a `DataContract`
-class when `--parameter` is passed. The temp table and the controller are not
-part of that command today — scaffold them with `generate table` /
-`generate class` as shown, and check `d365fo generate report --help` rather than
-assuming a flag exists.
+`generate report` emits the `AxReport`, its DP class, one TempDB temp table per
+dataset, a controller and the output menu item — and a `DataContract` class when
+`--parameter` is passed. Depth options:
+
+- `--pre-process` — the DP extends `SrsReportDataProviderPreProcessTempDB`
+  (rows land in the TempDB table BEFORE SSRS renders; that base is the one
+  shipped code pairs a TempDB table with).
+- `--controller-type print-mgmt` — the controller extends
+  `SrsPrintMgmtController` with the abstract `runPrintMgmt()` implemented and
+  `initPrintMgmtReportRun()` placeholders for the hierarchy/node/document type.
+- `--ui-builder` — also emits `<Name>UIBuilder` (extends
+  `SrsReportDataContractUIBuilder`), bound on the contract via
+  `SysOperationContractProcessing`; requires `--parameter`.
+
+Check `d365fo generate report --help` rather than assuming any other flag exists.
 
 ## DP class rules
 
