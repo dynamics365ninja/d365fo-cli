@@ -127,6 +127,7 @@ public sealed class MetadataExtractor
         List<ExtractedMenuItem>          menuItems     = null!;
         List<ExtractedObjectExtension>   extensions    = null!;
         List<ExtractedLabel>             labels        = null!;
+        List<ExtractedLabelFile>         labelFiles    = null!;
         List<ExtractedSecurityRole>      roles         = null!;
         List<ExtractedSecurityDuty>      duties        = null!;
         List<ExtractedSecurityPrivilege> privileges    = null!;
@@ -186,6 +187,7 @@ public sealed class MetadataExtractor
                 // Label files: parallelize across individual *.label.txt files since
                 // each can be several MB and the files are fully independent.
                 var lbls = new List<ExtractedLabel>();
+                var lblFiles = new List<ExtractedLabelFile>();
                 var labelsDir = Path.Combine(modelRoot, Folder("labelfile"));
                 if (Directory.Exists(labelsDir))
                 {
@@ -196,18 +198,26 @@ public sealed class MetadataExtractor
                     if (labelTxts.Length > 0)
                     {
                         var labelBag = new System.Collections.Concurrent.ConcurrentBag<ExtractedLabel>();
+                        var fileBag = new System.Collections.Concurrent.ConcurrentBag<ExtractedLabelFile>();
                         Parallel.ForEach(labelTxts, txt =>
                         {
+                            // Record where the file physically lives even when no entry passes the
+                            // language filter — the disk check verifies existence across ALL
+                            // language variants of a label file.
+                            if (TryParseLabelFileName(txt, out var lf, out var lg))
+                                fileBag.Add(new ExtractedLabelFile(lf, lg, txt));
                             foreach (var entry in ReadLabelTxtFromPath(txt, labelLanguages))
                                 labelBag.Add(entry);
                         });
                         lbls.AddRange(labelBag);
+                        lblFiles.AddRange(fileBag);
                     }
                     // Inline <AxLabel> entries inside the XML manifest (rare).
                     foreach (var manifest in Directory.EnumerateFiles(labelsDir, "*.xml", SearchOption.TopDirectoryOnly))
                         lbls.AddRange(ParseLabelManifestInline(manifest, labelLanguages));
                 }
                 labels = lbls;
+                labelFiles = lblFiles;
             },
             () => roles        = ReadAll(Path.Combine(modelRoot, Folder("securityrole")),      ParseSecurityRole),
             () => duties       = ReadAll(Path.Combine(modelRoot, Folder("securityduty")),      ParseSecurityDuty),
@@ -252,6 +262,7 @@ public sealed class MetadataExtractor
             CocExtensions: coc,
             Labels: labels)
         {
+            LabelFiles = labelFiles,
             Forms = forms,
             Extensions = extensions,
             EventSubscribers = subscribers,
@@ -761,19 +772,31 @@ public sealed class MetadataExtractor
     /// Read a single <c>*.label.txt</c> file. The language and logical file
     /// name are derived from the filename: <c>&lt;File&gt;.&lt;lang&gt;.label.txt</c>.
     /// </summary>
-    private static IEnumerable<ExtractedLabel> ReadLabelTxtFromPath(string txt, IReadOnlyCollection<string>? langs)
+    /// <summary>
+    /// Derive the logical label-file id and language from a <c>&lt;File&gt;.&lt;lang&gt;.label.txt</c>
+    /// path, normalized the same way the label rows are ingested.
+    /// </summary>
+    private static bool TryParseLabelFileName(string txt, out string labelFile, out string language)
     {
+        labelFile = "";
+        language = "";
         var fileName = Path.GetFileName(txt); // e.g. SysLabel.en-us.label.txt
         var nameNoExt = fileName.EndsWith(".label.txt", StringComparison.OrdinalIgnoreCase)
             ? fileName.Substring(0, fileName.Length - ".label.txt".Length)
             : Path.GetFileNameWithoutExtension(fileName);
         var dotIdx = nameNoExt.LastIndexOf('.');
-        if (dotIdx < 0) yield break;
-        var labelFile = nameNoExt.Substring(0, dotIdx);
+        if (dotIdx < 0) return false;
+        labelFile = nameNoExt.Substring(0, dotIdx);
+        language = NormalizeLocale(nameNoExt.Substring(dotIdx + 1));
+        return labelFile.Length > 0 && language.Length > 0;
+    }
+
+    private static IEnumerable<ExtractedLabel> ReadLabelTxtFromPath(string txt, IReadOnlyCollection<string>? langs)
+    {
         // Normalize to BCP-47 canonical form: 'en-us' → 'en-US', 'es-mx' → 'es-MX'.
         // Microsoft packages on Linux store locale dirs as lowercase; custom packages
         // use mixed-case. Normalize on ingest so DB comparisons are consistent.
-        var language = NormalizeLocale(nameNoExt.Substring(dotIdx + 1));
+        if (!TryParseLabelFileName(txt, out var labelFile, out var language)) yield break;
         if (!LangPasses(langs, language)) yield break;
 
         foreach (var entry in ReadLabelTxt(txt, labelFile, language))

@@ -39,11 +39,26 @@ public sealed class ResolveLabelCommand : Command<ResolveLabelCommand.Settings>
         if (!settings.RawText)
             hits = hits.Select(h => h with { Value = StringSanitizer.Sanitize(h.Value) }).ToList();
 
-        return RenderHelpers.Render(kind, ToolResult<object>.Success(new { count = hits.Count, items = hits }), _ =>
+        // Resolve is the call an agent makes right before reusing a token — confirm
+        // against the physical .label.txt so a stale index row (rolled-back session,
+        // out-of-band change) is not presented as reusable.
+        var (phantoms, warnings) = D365FO.Core.Index.LabelDiskCheck.Annotate(repo, hits);
+
+        return RenderHelpers.Render(kind, ToolResult<object>.Success(new
+        {
+            count = hits.Count,
+            items = hits,
+            phantomLabels = phantoms.Count > 0 ? phantoms : null,
+        }, warnings), _ =>
         {
             var table = new Table().AddColumn("File").AddColumn("Lang").AddColumn("Key").AddColumn("Value");
             foreach (var h in hits)
-                table.AddRow(h.File, h.Language, h.Key, RenderHelpers.Escape(h.Value) ?? "-");
+            {
+                var key = phantoms.Contains($"@{h.File}:{h.Key}")
+                    ? $"[red]{RenderHelpers.Escape(h.Key)} (not on disk)[/]"
+                    : RenderHelpers.Escape(h.Key) ?? h.Key;
+                table.AddRow(h.File, h.Language, key, RenderHelpers.Escape(h.Value) ?? "-");
+            }
             AnsiConsole.Write(table);
         });
     }

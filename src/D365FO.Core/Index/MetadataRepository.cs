@@ -14,7 +14,8 @@ namespace D365FO.Core.Index;
 public sealed partial class MetadataRepository
 {
     /// <summary>Current schema version tracked in PRAGMA user_version.</summary>
-    public const int CurrentSchemaVersion = 16;
+    /// <remarks>v17: LabelFiles table (per-label-file source paths for the disk check).</remarks>
+    public const int CurrentSchemaVersion = 17;
 
     private static readonly Lazy<string> SchemaSql = new(LoadEmbeddedSchema);
 
@@ -518,6 +519,26 @@ public sealed partial class MetadataRepository
               AND (@method IS NULL OR c.TargetMethod = @method)
             ORDER BY c.TargetMethod, c.ExtensionClass";
         return conn.Query<CocExtensionInfo>(sql, new { cls = targetClass, method = targetMethod }).ToList();
+    }
+
+    /// <summary>
+    /// Disk paths of every language variant of <paramref name="labelFile"/> (v17). Empty on a
+    /// database extracted before v17 or when the table is absent — the disk check then reports
+    /// "could not verify" rather than a verdict.
+    /// </summary>
+    public IReadOnlyList<string> GetLabelFilePaths(string labelFile)
+    {
+        try
+        {
+            using var conn = OpenReadOnly();
+            return conn.Query<string>(
+                "SELECT SourcePath FROM LabelFiles WHERE LabelFile=@f COLLATE NOCASE",
+                new { f = labelFile }).ToList();
+        }
+        catch (Microsoft.Data.Sqlite.SqliteException)
+        {
+            return Array.Empty<string>();
+        }
     }
 
     public IReadOnlyList<LabelMatch> SearchLabels(string query, IReadOnlyCollection<string>? languages = null, int limit = 100)
@@ -2376,6 +2397,13 @@ public sealed partial class MetadataRepository
         // Labels are keyed by file+lang, not model; we delete by file instead.
         foreach (var file in batch.Labels.Select(l => l.File).Distinct(StringComparer.OrdinalIgnoreCase))
             conn.Execute("DELETE FROM Labels WHERE LabelFile=@f", new { f = file }, tx);
+        // LabelFiles mirrors that keying (v17). Replaced per physical file id so a
+        // re-extract never accumulates stale paths.
+        foreach (var file in batch.LabelFiles.Select(l => l.File).Distinct(StringComparer.OrdinalIgnoreCase))
+            conn.Execute("DELETE FROM LabelFiles WHERE LabelFile=@f", new { f = file }, tx);
+        foreach (var lf in batch.LabelFiles)
+            conn.Execute("INSERT INTO LabelFiles(LabelFile, Language, SourcePath) VALUES(@f, @lg, @p)",
+                new { f = lf.File, lg = lf.Language, p = lf.SourcePath }, tx);
 
         // TableFields and TableMethods are high-volume inserts. Use prepared
         // SqliteCommands with parameter rebinding for ~3-5x throughput vs

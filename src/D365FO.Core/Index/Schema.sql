@@ -147,6 +147,20 @@ CREATE TABLE IF NOT EXISTS Labels (
 CREATE INDEX IF NOT EXISTS IX_Labels_Key ON Labels(LabelFile, Language, Key);
 CREATE INDEX IF NOT EXISTS IX_Labels_Value ON Labels(Value);
 
+-- v17: where each indexed .label.txt physically lives, so label search/resolve
+-- can confirm a hit against the disk before recommending it. The index is a
+-- snapshot that is never invalidated on delete or rollback; a label row left
+-- behind by a rolled-back session reads as reusable and the failure only
+-- surfaces at build time as BPErrorUnknownLabel. Empty on databases extracted
+-- before v17 — the disk check then honestly reports "could not verify".
+CREATE TABLE IF NOT EXISTS LabelFiles (
+    LabelFileId INTEGER PRIMARY KEY AUTOINCREMENT,
+    LabelFile   TEXT NOT NULL,
+    Language    TEXT NOT NULL,
+    SourcePath  TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS IX_LabelFiles_File ON LabelFiles(LabelFile, Language);
+
 CREATE TABLE IF NOT EXISTS MenuItems (
     MenuItemId  INTEGER PRIMARY KEY AUTOINCREMENT,
     Name        TEXT NOT NULL,

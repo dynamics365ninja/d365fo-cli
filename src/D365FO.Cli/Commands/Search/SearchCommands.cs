@@ -76,13 +76,29 @@ public sealed class SearchLabelCommand : Command<SearchLabelCommand.Settings>
             matches = matches.Select(m => m with { Value = StringSanitizer.Sanitize(m.Value) }).ToList();
         }
 
-        var result = ToolResult<object>.Success(new { count = matches.Count, items = matches });
+        // Confirm every hit against the physical .label.txt before showing it as
+        // reusable — the index is a cache that is never invalidated on delete or
+        // rollback, and a phantom label passes the build (xppc does not check
+        // labels) only to fail BP later with BPErrorUnknownLabel.
+        var (phantoms, warnings) = D365FO.Core.Index.LabelDiskCheck.Annotate(repo, matches);
+
+        var result = ToolResult<object>.Success(new
+        {
+            count = matches.Count,
+            items = matches,
+            phantomLabels = phantoms.Count > 0 ? phantoms : null,
+        }, warnings);
 
         return RenderHelpers.Render(kind, result, _ =>
         {
             var table = new Table().AddColumn("File").AddColumn("Lang").AddColumn("Key").AddColumn("Value");
             foreach (var m in matches)
-                table.AddRow(m.File, m.Language, m.Key, RenderHelpers.Escape(m.Value) ?? "-");
+            {
+                var key = phantoms.Contains($"@{m.File}:{m.Key}")
+                    ? $"[red]{RenderHelpers.Escape(m.Key)} (not on disk)[/]"
+                    : RenderHelpers.Escape(m.Key) ?? m.Key;
+                table.AddRow(m.File, m.Language, key, RenderHelpers.Escape(m.Value) ?? "-");
+            }
             AnsiConsole.Write(table);
         });
     }

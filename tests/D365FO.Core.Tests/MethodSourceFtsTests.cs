@@ -31,7 +31,26 @@ public class MethodSourceFtsTests : IDisposable
         foreach (var ext in new[] { "", "-wal", "-shm" })
         {
             var p = _dbPath + ext;
-            if (File.Exists(p)) File.Delete(p);
+            // Windows can keep the handle alive for a moment after ClearAllPools
+            // (observed on CI: IOException "being used by another process").
+            // Temp-file cleanup is best-effort — retry briefly, then let the OS
+            // temp sweeper have it rather than failing the test run.
+            for (var attempt = 0; ; attempt++)
+            {
+                try
+                {
+                    if (File.Exists(p)) File.Delete(p);
+                    break;
+                }
+                catch (IOException) when (attempt < 5)
+                {
+                    Thread.Sleep(100);
+                }
+                catch (IOException)
+                {
+                    break;
+                }
+            }
         }
     }
 

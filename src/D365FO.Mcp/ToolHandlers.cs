@@ -116,7 +116,7 @@ public sealed class ToolHandlers
         var items = _repo.SearchLabels(query, langs, limit);
         if (!raw)
             items = items.Select(l => l with { Value = StringSanitizer.Sanitize(l.Value) }).ToList();
-        return ToolResult<object>.Success(new { count = items.Count, items });
+        return LabelResultWithDiskCheck(items);
     }
 
     public ToolResult<object> SearchLabelsFts(string query, string[]? langs = null, int limit = 100, bool raw = false)
@@ -124,7 +124,27 @@ public sealed class ToolHandlers
         var items = _repo.SearchLabelsFts(query, langs, limit);
         if (!raw)
             items = items.Select(l => l with { Value = StringSanitizer.Sanitize(l.Value) }).ToList();
-        return ToolResult<object>.Success(new { count = items.Count, items });
+        return LabelResultWithDiskCheck(items);
+    }
+
+    /// <summary>
+    /// Search/resolve results confirmed against the physical .label.txt before anything
+    /// recommends them. The index is a snapshot that is never invalidated on delete or
+    /// rollback; upstream watched a benchmark run take all three labels it needed from
+    /// phantom rows — xppc does not check labels, so the build passed and BP failed two
+    /// steps later (BPErrorUnknownLabel), costing a second build and a second BP run.
+    /// Only a positive "the file reads fine and the id is not in it" is reported; a
+    /// pre-v17 index (no LabelFiles rows) or an unreadable file says nothing.
+    /// </summary>
+    private ToolResult<object> LabelResultWithDiskCheck(IReadOnlyList<LabelMatch> items)
+    {
+        var (phantoms, warnings) = LabelDiskCheck.Annotate(_repo, items);
+        return ToolResult<object>.Success(new
+        {
+            count = items.Count,
+            items,
+            phantomLabels = phantoms.Count > 0 ? phantoms.OrderBy(x => x, StringComparer.OrdinalIgnoreCase).ToList() : null,
+        }, warnings);
     }
 
     public ToolResult<object> GetSecurity(string obj, string type)
@@ -296,7 +316,7 @@ public sealed class ToolHandlers
         var items = _repo.ResolveLabel(token, langs);
         if (!raw)
             items = items.Select(l => l with { Value = StringSanitizer.Sanitize(l.Value) }).ToList();
-        return ToolResult<object>.Success(new { count = items.Count, items });
+        return LabelResultWithDiskCheck(items);
     }
 
     // ---- Table details pieces ----
@@ -1953,7 +1973,17 @@ public sealed class ToolHandlers
 
         var words = System.Text.RegularExpressions.Regex.Replace(baseName, "([A-Z])", " $1").Trim();
         IReadOnlyList<LabelMatch> labels;
-        try { labels = _repo.SearchLabels(words, new[] { "en-us" }, 5); }
+        try
+        {
+            labels = _repo.SearchLabels(words, new[] { "en-us" }, 5);
+            // reusableLabels is a RECOMMENDATION — a phantom row (in the index, in no
+            // .label.txt on disk) must never be recommended for reuse: xppc does not
+            // check labels, so the mistake only surfaces at BP time as
+            // BPErrorUnknownLabel, two builds later.
+            var (phantoms, _) = LabelDiskCheck.Annotate(_repo, labels);
+            if (phantoms.Count > 0)
+                labels = labels.Where(l => !phantoms.Contains($"@{l.File}:{l.Key}")).ToList();
+        }
         catch { labels = Array.Empty<LabelMatch>(); }
 
         object? propertyDefaults = null;
