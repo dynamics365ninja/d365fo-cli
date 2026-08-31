@@ -86,6 +86,19 @@ d365fo generate event-handler MyClass_FormDsHandler \
 Attribute shapes: `[FormEventHandler(formStr(...), FormEventType::...)]`,
 `[FormDataSourceEventHandler(formDataSourceStr(form, ds), FormDataSourceEventType::...)]`.
 
+**Handler signatures the platform actually uses** (from its own shipped handlers;
+each verified against xppc by the upstream sibling repo):
+
+- The sender of a `[FormEventHandler]` is **`xFormRun`, not `FormRun`**:
+  `public static void MyForm_OnInitialized(xFormRun _sender, FormEventArgs _e)`.
+- A control lookup is cancelled by **narrowing the args first** —
+  `_e.CancelSuperCall()` on a plain `FormControlEventArgs` is a compile error
+  (*"Class 'FormControlEventArgs' does not contain a definition for
+  'CancelSuperCall'"*). Cast to `FormControlCancelableSuperEventArgs`, then call
+  `CancelSuperCall()` on that.
+- A data-source write is cancelled through its own args:
+  `FormDataSourceCancelEventArgs.cancel(true)`.
+
 ## Custom delegates on classes → `[SubscribesTo + delegateStr]`
 
 `delegateStr` is **only** for *custom* delegates (your own or a Microsoft-
@@ -107,6 +120,11 @@ Attribute: `[SubscribesTo(classStr(SalesFormLetter), delegateStr(SalesFormLetter
 - Standard data events use `[DataEventHandler]`, NEVER `[SubscribesTo + delegateStr]`.
 - `delegateStr` is for *custom* delegates only.
 - Handlers do NOT chain via `next` — they are notification-only.
+- **No firing-order guarantee** between subscribers of the same event — never
+  write a handler that depends on another handler having run first.
+- A custom delegate is *declared* as `delegate void myDelegate(...) { }` — void
+  return, empty body; it is raised with `this.myDelegate(...)` and subscribed
+  either with the attribute above or at runtime via `+= eventhandler(...)`.
 - Handler methods must be `public static` (the runtime invokes them
   reflectively).
 - Never create a parallel handler class when an existing target/model handler

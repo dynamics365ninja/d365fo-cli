@@ -31,11 +31,20 @@ they report in the same turn, re-run, and only then write.
 - Test methods are `public void` and **must start with `test`** (case-insensitive).
   `[SysTestMethod]` categorises them.
 - `setUp()` / `tearDown()` run before and after **each** test method.
-- Assertions: `this.assertEquals()`, `assertNotEquals()`, `assertTrue()`,
-  `assertFalse()`, `assertNull()`, `assertNotNull()`, `this.fail()`.
+- Assertions (inherited from `SysTestAssert`): `this.assertEquals()`,
+  `assertNotEqual()` (no trailing *s*), `assertTrue()`, `assertFalse()`,
+  `assertNull()`, `assertNotNull()`, `assertSame()`, `assertNotSame()`,
+  `assertRealEquals()`, `assertUTCDateTimeEquals()`, `this.fail()`.
+- **There is no `assertExpectedException`.** An expected exception is
+  *declared*, not asserted: call `this.parmExceptionExpected(true)` (optionally
+  with a message pattern) **before** the call that must throw;
+  `clearExceptionExpected()` resets it.
 - **Every test runs in a transaction that is always rolled back**, so database
-  state needs no cleanup.
-- `[SysTestTarget(classStr(X), methodStr(X, y))]` records what the class covers.
+  state needs no cleanup — and there is no rollback attribute to add.
+- `[SysTestTarget(classStr(X), UtilElementType::Class)]` records what the class
+  covers — the second argument is a `UtilElementType`, **not** a method name
+  (xppc: *"Cannot implicitly convert from type 'str' to type
+  'Enumeration(utilElementType)'"*).
 - `SysTestSuite` groups test classes for batch execution.
 - X++ has **no mocking framework**. Isolate dependencies by extracting an
   interface or by delegation, and inject the fake in `setUp()`.

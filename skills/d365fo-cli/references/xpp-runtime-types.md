@@ -132,8 +132,11 @@ swallowed, and the type is written fully qualified everywhere.
 - A CLR enum parameter needs
   `CLRInterop::parseClrEnum('System.StringComparison', 'OrdinalIgnoreCase')` — an
   X++ enum literal will not bind.
-- A CLR array is a `System.Array`: index with `get_Item()` / `set_Item()`.
-  Properties are `get_X()` / `set_X()`.
+- A CLR array is created with `new System.String[3]()` and read/written with
+  **`GetValue()` / `SetValue()`** — X++ `[]` indexing on a managed array is a
+  compile error whose message says exactly that (*"…Use the SetValue and
+  GetValue methods on managed array types"*). Properties are `get_X()` /
+  `set_X()`.
 - Null-check with `if (clrObject == null)`, never against an X++ empty value.
 - Reference the assembly from the model's References node. A GAC-only assembly
   compiles locally and breaks on a clean build machine.

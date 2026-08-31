@@ -54,6 +54,16 @@ public void salute(str message = "Hi")     // ← forbidden
 - **Wrapper must call `next` unconditionally** — exception: `[Replaceable]` methods may conditionally break the chain.
 - **`next` must sit at first-level statement scope** — NOT inside `if`, `while`, `for`, `do-while`, NOT after `return`, NOT inside a logical expression.
 - Platform Update 21+: `next` is permitted inside `try` / `catch` / `finally` (the only nested contexts allowed).
+- Platform Update 22+: table and data-entity **system methods** (`insert`,
+  `update`, `delete`, `validateWrite`, …) can be wrapped even when the target
+  never declared them — the wrapper implicitly wraps the kernel method.
+  `d365fo prepare test`/`prepare change` report their exact signatures.
+- **On a table wrapper, never re-read the row you already hold.** `this` IS the
+  record and `this.orig()` is its pre-image, already in memory — a
+  `select … where x.RecId == this.RecId` (or `MyTable::findRecId(this.RecId)`)
+  costs a database round trip on every write AND returns the CURRENT stored
+  state, not the values this buffer was fetched with. On an insert
+  `this.orig().RecId == 0` is the "new record" test (validator rule `COC006`).
 
 ```xpp
 // ✅ CORRECT

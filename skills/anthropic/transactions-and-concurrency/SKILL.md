@@ -12,10 +12,16 @@ applies_when: User intent mentions ttsbegin, ttscommit, ttsabort, transaction, c
 - `ttsbegin` and `ttscommit` are **reference-counted**: nesting is legal, and only
   the outermost `ttscommit` writes.
 - **Always pair them.** An unbalanced pair is a runtime crash, not a warning.
-- **Never put `try`/`catch` *inside* a `ttsbegin`…`ttscommit` block.** By the time
-  the `catch` runs the transaction has already been rolled back, so the handler
-  cannot repair anything and the following `ttscommit` fails on a tts-level
-  mismatch. The handler belongs **outside** the block.
+- **Inside an open transaction, exactly two exceptions can reach an inner
+  `catch`** — `Exception::UpdateConflict` and `Exception::DuplicateKeyException` —
+  and **only when named explicitly**; a bare catch-all inside tts does not catch
+  even those two. Every other exception aborts the transaction and unwinds to the
+  first `catch` **outside** the tts block, so a general handler inside the block
+  is dead code (validator rule `TTS002`).
+- `Exception::UpdateConflictNotRecovered` and `Exception::Timeout` cannot be
+  caught inside a transaction at all.
+- `throw` inside an open transaction implicitly aborts it before unwinding;
+  `finally` blocks still run on every path.
 - `ttsabort` is for unrecoverable situations, never for normal control flow.
 - `forUpdate` on the `select` before any `.update()` / `.delete()`.
 - Set-based operators run in an implicit transaction when not explicitly scoped.
@@ -39,7 +45,10 @@ catch (Exception::UpdateConflict)
 ```
 
 ```xpp
-// ❌ handler inside the transaction: the tts block is already broken
+// ❌ dead code: Exception::Error never reaches a catch inside an open
+// transaction — the exception aborts the tts block and unwinds to the first
+// catch OUTSIDE it. Only Exception::UpdateConflict and
+// Exception::DuplicateKeyException, named explicitly, reach an inner catch.
 ttsbegin;
 try
 {
@@ -47,9 +56,9 @@ try
 }
 catch (Exception::Error)
 {
-    // nothing to salvage here
+    // never runs
 }
-ttscommit;   // crashes on a tts-level mismatch
+ttscommit;
 ```
 
 ## 2. Optimistic concurrency (OCC)
@@ -123,6 +132,15 @@ uow.saveChanges();
   `ret = ret && this.checkX();`
 - Catch **specific** exceptions. A bare `catch` hides `UpdateConflict` and
   `CLRError`, both of which need different handling.
+- The `Exception` enum's members are: `Error`, `Warning`, `Info`, `Deadlock`,
+  `DuplicateKeyException`, `UpdateConflict` (each of the last two also has a
+  `…NotRecovered` variant), `CLRError`, `Numeric`, `Internal`, `Break`,
+  `Timeout`, `Sequence`. The duplicate-key literal is
+  **`Exception::DuplicateKeyException`** — there is no
+  `Exception::DuplicateKeyConflict`.
+- `retry` is valid only inside a `catch`, jumps back to the **start** of the
+  `try`, and **discards infolog messages** logged since try entry — always guard
+  it with a counter (`TTS003`).
 - `Exception::CLRError` is the only way to catch a .NET failure; pull the detail
   from `CLRInterop::getLastException()`. `Exception::Error` will not catch it.
 - **Never swallow an exception silently.** If you opted into batch retry
@@ -153,10 +171,19 @@ public boolean validateWrite()
 | Legacy | Replacement |
 |---|---|
 | `today()` | `DateTimeUtil::getToday(DateTimeUtil::getUserPreferredTimeZone())` — `BPUpgradeCodeToday` |
-| `infolog.add()` | `info()` / `warning()` / `error()` |
 | `RunBase` | SysOperation (`d365fo knowledge get sysoperation-batch-patterns`) |
 | AIF services | data entities + OData |
-| form `display`/`edit` methods | computed columns or entity virtual fields |
+
+**NOT deprecated** — APIs models most often hallucinate as obsolete:
+
+- `curExt()` — current, and the standard way to read the active company id.
+- Form/table `display` and `edit` methods — fully supported. Computed columns
+  replace them **on data entities and views only**, where a method body cannot
+  run in SQL.
+- `infolog.add()` — a real, current API; `info()`/`warning()`/`error()` are the
+  ordinary spellings, not replacements for a removed one.
+- `fieldNum()` — current; it is `fieldName2Id`-style *string* lookups that are
+  the smell, not the intrinsic.
 
 A method carrying `[SysObsolete]` names its replacement in the attribute message —
 read it, and **never call the obsolete method**. `d365fo get class <Name> --output json`
@@ -164,7 +191,9 @@ shows the attribute before you commit to a call.
 
 ## Hard rules
 
-- `try`/`catch` outside the tts block. Always.
+- A general `try`/`catch` goes outside the tts block. Inside one, only
+  `Exception::UpdateConflict` and `Exception::DuplicateKeyException` — named
+  explicitly — are catchable; everything else unwinds past it.
 - `forUpdate` before any write; `optimisticlock` plus retry as the default.
 - Never call a function inside a `where` clause — assign to a local first (`SEL005`).
 - Never nest `while select` (`SEL004`); use `join` / `exists join`.
