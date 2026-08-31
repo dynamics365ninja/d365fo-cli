@@ -93,3 +93,7 @@ availPhysical = inventOnHand.availPhysical();
   and never nest `while select` over `InventTrans`.
 - Ground the class names — `d365fo get class InventOnHand --output json` — before
   calling a method; this hierarchy has many near-identical names.
+- Mobile-device / scanner flows are their own discipline — the app is a
+  stateless container protocol, not a form: `d365fo knowledge get
+  warehouse-mobile-app`, and for scan resolution `d365fo knowledge get
+  barcode-scanning`.

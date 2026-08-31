@@ -84,7 +84,7 @@ whether it is taught and proven.
 | `generate duty` | AxSecurityDuty | ✅ | ✅ | `security-hierarchy-trace`, `security-modeling` | `L1-duty-basic` |
 | `generate role` | AxSecurityRole | ✅ | ✅ | `security-hierarchy-trace`, `security-modeling` | `L1-role-basic` |
 | `generate report` | AxReport, AxTable, AxClass, AxMenuItemOutput | ✅ | ✅ | `ssrs-report-authoring` | `L1-report-basic`, `L1-report-parameters` |
-| `generate report-extension` | AxClass | — | — | — | — |
+| `generate report-extension` | AxClass | ✅ | — | `ssrs-report-authoring` | — |
 | `generate sysoperation` | AxClass | ✅ | ✅ | `sysoperation-batch-patterns`, `x++-class-authoring` | `L1-sysoperation-basic` |
 | `generate number-sequence` | AxClass, AxEdt | ✅ | ✅ | `number-sequence-patterns`, `table-scaffolding` | `L2-numberseq-basic` |
 | `generate workflow` | AxWorkflowTemplate, AxWorkflowApproval, AxWorkflowTask, AxClass | ✅ | ✅ | `workflow-authoring` | `L1-workflow-basic` |
@@ -110,7 +110,7 @@ cannot build at all are omitted — they are a generation gap, not a coverage ga
 - **datasource-method** (capability) — no topic names it
 - **form-clone** (capability) — no topic names it
 - **map** (capability) — no topic names it
-- **report-extension** (capability) — no topic names it; no case with a reviewed golden
+- **report-extension** (capability) — no case with a reviewed golden
 - **simple-list** (capability) — no topic names it; no case with a reviewed golden
 - **systest** (capability) — no topic names it
 - **view** (capability) — no topic names it
