@@ -114,11 +114,18 @@ public sealed class GetEdtCommand : Command<GetEdtCommand.Settings>
             }
         }
         var repo = RepoFactory.Create();
-        var edt = repo.GetEdt(settings.Name);
-        var result = edt is null
+        var resolved = repo.GetEdtResolved(settings.Name);
+        var result = resolved is null
             ? ToolResult<object>.Fail("EDT_NOT_FOUND", $"EDT '{settings.Name}' not found.",
                 NameSuggester.HintFor(repo, NameSuggester.Kind.Edt, settings.Name))
-            : ToolResult<object>.Success(edt);
+            : ToolResult<object>.Success(
+                (object)resolved.Value.Edt,
+                resolved.Value.StringSizeInheritedFrom is null
+                    ? null
+                    : new List<string>
+                    {
+                        $"StringSize {resolved.Value.Edt.StringSize} is inherited from {resolved.Value.StringSizeInheritedFrom} — this EDT declares none of its own.",
+                    });
         return RenderHelpers.Render(kind, result);
     }
 }

@@ -59,6 +59,33 @@ public class NumberSequenceScaffolderTests
         Assert.Equal(xsi.NamespaceName, root.Attribute(XNamespace.Xmlns + "i")?.Value);
     }
 
+    /// <summary>
+    /// The old template contradicted the repo's own corpus (number-sequence-patterns §2/§3)
+    /// three times over: <c>newForm</c>'s second argument is the FormRun (it passed a scope
+    /// object), the fourth is a FieldId via <c>fieldNum</c> (it passed <c>fieldStr</c>), and
+    /// the <c>numRef</c> accessor lives on the module's parameters table (it named
+    /// <c>CompanyInfo</c>). It also called a <c>formRun.numberSeqFormHandler(...)</c> method
+    /// that does not exist on a stock FormRun, once, in an init handler — instead of driving
+    /// the datasource's create/write/delete cycle.
+    /// </summary>
+    [Fact]
+    public void FormHandler_follows_the_corpus_newForm_contract()
+    {
+        var doc = NumberSequenceScaffolder.FormHandler("ConDemoTable", "ConDemoNum", "ConDemoTable_NumberSeqHandler", "ConDemo");
+        var xml = doc.ToString();
+
+        Assert.Contains("ConDemoParameters::numRefConDemoNum().NumberSequenceId", xml);
+        Assert.DoesNotContain("CompanyInfo", xml);
+        Assert.Contains("fieldNum(ConDemoTable, ConDemoNum)", xml);
+        Assert.DoesNotContain("fieldStr(", xml);
+        Assert.DoesNotContain("FormNumberSeqScope", xml);
+        // The handler drives the datasource cycle, not a one-time init call.
+        Assert.Contains("formMethodDataSourceCreatePre", xml);
+        Assert.Contains("formMethodDataSourceWrite", xml);
+        Assert.Contains("formMethodDataSourceDelete", xml);
+        // One handler per open form instance, released on close.
+        Assert.Contains("FormEventType::Closing", xml);
+    }
 }
 
 /// <summary>
@@ -119,6 +146,51 @@ public class XppScaffolderExtensionTests
                 () => XppScaffolder.Extension(kind, "SomeTarget", "DSV", null, fields));
             Assert.Contains("no Fields member", ex.Message);
         }
+    }
+
+    /// <summary>
+    /// Caller-defined field groups and indexes must be honoured — upstream measured that a
+    /// silently dropped caller group surfaces later as "Field group 'X' does not exist" on
+    /// the FORM, pointing away from the table that lost it; and a create path that cannot
+    /// produce an index at all leaves no way back on an offline write.
+    /// </summary>
+    [Fact]
+    public void Table_honours_caller_field_groups_and_indexes()
+    {
+        var doc = XppScaffolder.Table(
+            "ConDemoTable",
+            fields: new[] { new TableFieldSpec("Price", "AmountCur", null, false), new TableFieldSpec("ValidFrom", "TransDate", null, false), new TableFieldSpec("ValidTo", "TransDate", null, false) },
+            fieldGroups: new[]
+            {
+                new D365FO.Core.Scaffolding.TableFieldGroupSpec("Pricing", ["Price"]),
+                // A collision with a built-in must be skipped, not duplicated.
+                new D365FO.Core.Scaffolding.TableFieldGroupSpec("Overview", ["Price"]),
+            },
+            indexes: new[]
+            {
+                new D365FO.Core.Scaffolding.TableIndexSpec("DateIdx", ["ValidFrom", "ValidTo"],
+                    ValidTimeStateKey: true, ValidTimeStateMode: "Gap"),
+                new D365FO.Core.Scaffolding.TableIndexSpec("PriceIdx", ["Price"], Unique: true),
+            });
+        var root = doc.Root!;
+
+        var groups = root.Element("FieldGroups")!.Elements("AxTableFieldGroup")
+            .Select(g => g.Element("Name")!.Value).ToList();
+        Assert.Contains("Pricing", groups);
+        Assert.Equal(1, groups.Count(g => g == "Overview"));
+
+        var indexes = root.Element("Indexes")!.Elements("AxTableIndex").ToList();
+        var dateIdx = indexes.Single(i => i.Element("Name")!.Value == "DateIdx");
+        Assert.Equal("Yes", dateIdx.Element("ValidTimeStateKey")!.Value);
+        Assert.Equal("Gap", dateIdx.Element("ValidTimeStateMode")!.Value);
+        var priceIdx = indexes.Single(i => i.Element("Name")!.Value == "PriceIdx");
+        Assert.Equal("No", priceIdx.Element("AllowDuplicates")!.Value);
+        // NoGap is the SDK default the serializer omits — never written explicitly.
+        var noGap = XppScaffolder.Table("T2",
+            fields: new[] { new TableFieldSpec("A", "Name", null, false) },
+            indexes: new[] { new D365FO.Core.Scaffolding.TableIndexSpec("VtsIdx", ["A"], ValidTimeStateKey: true, ValidTimeStateMode: "NoGap") });
+        Assert.Null(noGap.Root!.Element("Indexes")!.Elements("AxTableIndex")
+            .Single(i => i.Element("Name")!.Value == "VtsIdx").Element("ValidTimeStateMode"));
     }
 
     /// <summary>

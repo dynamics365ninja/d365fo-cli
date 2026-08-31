@@ -179,6 +179,7 @@ public static class CliApp
                 b.SetDescription("Single-round context aggregators: gather everything needed for a change/new object in ONE call and get a grounding token.");
                 b.AddCommand<D365FO.Cli.Commands.Prepare.PrepareChangeCommand>("change").WithDescription("Aggregate signature, CoC wrappers, eligibility, strategy, and naming for an extension change. Replaces 4–6 discovery calls.");
                 b.AddCommand<D365FO.Cli.Commands.Prepare.PrepareCreateCommand>("create").WithDescription("Aggregate collision check, naming, similar objects, EDT suggestions, labels, and property defaults for a NEW object.");
+                b.AddCommand<D365FO.Cli.Commands.Prepare.PrepareTestCommand>("test").WithDescription("Aggregate everything needed to WRITE a SysTest: methods worth covering, existing coverage, TestEssentials check, the scaffold call, and the red-first cycle.");
             });
 
             cfg.AddBranch("validate", b =>
@@ -234,6 +235,8 @@ public static class CliApp
             {
                 b.SetDescription("Scaffold AOT XML skeletons.");
                 b.AddCommand<GenerateTableCommand>("table").WithDescription("Create a new AxTable.");
+                b.AddCommand<GenerateTableRelationCommand>("table-relation").WithDescription("Derive explicit AxTableRelation fragments from a table's EDT references (BPErrorEDTNotMigrated); --apply-to merges them into the table XML.");
+                b.AddCommand<GenerateFindMethodsCommand>("find-methods").WithDescription("Generate the standard static find()/exists()/findRecId() for a table from its unique index; --apply-to merges them into the table XML.");
                 b.AddCommand<GenerateClassCommand>("class").WithDescription("Create a new AxClass.");
                 b.AddCommand<GenerateCocCommand>("coc").WithDescription("Create a Chain-of-Command extension class.");
                 b.AddCommand<GenerateFormCommand>("form").WithDescription("Create an AxForm with a chosen pattern (SimpleList, DetailsMaster, DetailsTransaction, Dialog, Lookup, ListPage, Workspace, …).");
@@ -248,6 +251,7 @@ public static class CliApp
                 b.AddCommand<GenerateDutyCommand>("duty").WithDescription("Create a security duty grouping privileges.");
                 b.AddCommand<GenerateRoleCommand>("role").WithDescription("Create an AxSecurityRole or merge duties/privileges into an existing role.");
                 b.AddCommand<GenerateReportCommand>("report").WithDescription("Create an AxReport + SrsReportDataProviderBase skeleton (DP class).");
+                b.AddCommand<GenerateReportExtensionCommand>("report-extension").WithDescription("Extend a SHIPPED report: dataset (PostHandlerFor/DataEventHandler), custom-design (controller + PrintMgmt delegate), or menu-redirect (post-handler on construct()).");
                 b.AddCommand<GenerateSysOperationCommand>("sysoperation").WithDescription("Create a SysOperation DataContract + Service + Controller triplet.");
                 b.AddCommand<GenerateNumberSequenceCommand>("number-sequence").WithDescription("Create a NumberSeq module extension, EDT, and form handler.");
                 b.AddCommand<GenerateWorkflowCommand>("workflow").WithDescription("Create an AxWorkflowTemplate (workflow type), its approval/task elements, a WorkflowDocument class, and a canSubmitToWorkflow stub.");

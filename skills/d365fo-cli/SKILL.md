@@ -245,6 +245,7 @@ Detailed rules are in `references/` (lazily loaded when relevant):
 | Resource file | Covers |
 |---|---|
 | `analytics-and-er` | Tiles/cues, KPIs, aggregate measurements, Electronic Reporting |
+| `barcode-scanning` | barcode printing vs scanning, GS1-128 parsing, item-barcode resolution |
 | `build-error-triage` | Compiler/BP/runtime message to the specific fix, via `explain-error` |
 | `business-events-authoring` | `BusinessEventsBase`, contract class, payload, catalog activation |
 | `coc-extension-authoring` | CoC wrapper rules, `next` placement, signature matching, `[Hookable]`/`[Wrappable]` |
@@ -271,12 +272,14 @@ Detailed rules are in `references/` (lazily loaded when relevant):
 | `table-scaffolding` | Table creation, EDTs, relations, indexes, `TableGroup` vs `TableType`, inheritance |
 | `testing-and-quality` | SysTestCase, ATL, and the offline validate/lint gates |
 | `transactions-and-concurrency` | tts scoping, OCC retry, `UnitOfWork`, error handling |
+| `warehouse-mobile-app` | warehouse-app screens, ProcessGuide flows, legacy WHSWorkExecuteDisplay, work execution |
 | `workflow-authoring` | `AxWorkflowTemplate`, document class, approvals and tasks |
 | `x++-class-authoring` | Class hierarchy, CoC, access modifiers, constructor patterns |
 | `xpp-best-practice-rules` | BP rules: `today()`, labels, nested loops, alternate keys, `[SysObsolete]` |
 | `xpp-class-and-method-rules` | Method modifiers, override visibility, optional params, `this` |
 | `xpp-data-access-apis` | `Query`/`QueryRun`, SysDa, direct SQL |
 | `xpp-database-queries` | `select` grammar, `crossCompany`, `in`, joins, aggregates |
+| `xpp-runtime-functions` | predefined function catalog, arities, gone/obsolete names |
 | `xpp-runtime-types` | Collections, date/time zones, .NET interop, `Dict*`, macros |
 | `xpp-statement-and-type-rules` | `switch`, ternary, null handling, `using`, casting, `is`/`as` |
 <!-- END references -->

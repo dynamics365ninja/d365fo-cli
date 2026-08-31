@@ -268,8 +268,9 @@ public static class ToolCatalog
 
         new Descriptor("validate",
             "Check an artifact before it is written. `mode`:\n" +
-            "• xpp — the offline X++/XML best-practice validator (XML001-XML013, BP rules). `codeType` " +
-            "xpp | xml-table | xml-any, auto-detected when omitted.\n" +
+            "• xpp — the offline X++/XML best-practice validator (SEL/COC/BP/FN/TTS/CS/ATTR/EXT/KW/RPT + " +
+            "XML001-XML013), 40+ compiler-grounded rules. `codeType` " +
+            "xpp | xml-table | xml-report | xml-any, auto-detected when omitted.\n" +
             "• references — every identifier in the code must exist in the index; the anti-hallucination gate. " +
             "Requires an index.\n" +
             "• form-pattern — structural AxForm pattern rules FP001-FP010, the same gate generate_object(form) enforces.\n" +
@@ -472,14 +473,20 @@ public static class ToolCatalog
             "`mode=change` (extend/modify an existing `object`): signature + CoC eligibility, existing wrappers, " +
             "strategy, naming check (`proposedName`/`prefix`), similar objects — set `method` for a specific method. " +
             "`mode=create` (new object `name` of `type`): collision check, naming, similar objects, EDT suggestions " +
-            "for `fields[]`, reusable labels, mined property defaults.",
+            "for `fields[]`, reusable labels, mined property defaults. " +
+            "`mode=test` (SysTest for class `object`): methods worth covering with real signatures, test classes " +
+            "already covering the target, TestEssentials reference check (`modelName`), the scaffold call and the " +
+            "red-first cycle.",
             Schema(("mode", "string", true), ("object", "string", false), ("name", "string", false),
                    ("type", "string", false), ("goal", "string", false), ("method", "string", false),
-                   ("proposedName", "string", false), ("prefix", "string", false), ("fields", "array", false)),
+                   ("proposedName", "string", false), ("prefix", "string", false), ("fields", "array", false),
+                   ("modelName", "string", false)),
             (h, p) => StrOr(p, "mode", "change").ToLowerInvariant() switch
             {
                 "create" => h.PrepareCreate(StrOr(p, "name", Str(p, "object")), StrOr(p, "type", "class"),
                                 StrOrNull(p, "goal"), StrArray(p, "fields"), StrOrNull(p, "prefix")),
+                "test"   => h.PrepareTest(StrOr(p, "object", Str(p, "name")), StrOrNull(p, "goal"),
+                                StrOrNull(p, "method"), StrOrNull(p, "modelName")),
                 _        => h.PrepareChange(StrOr(p, "object", Str(p, "name")), StrOrNull(p, "goal"),
                                 StrOrNull(p, "method"), StrOrNull(p, "type"), StrOrNull(p, "proposedName"), StrOrNull(p, "prefix")),
             }),

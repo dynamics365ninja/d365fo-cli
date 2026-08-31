@@ -39,6 +39,8 @@ public static class GenerateSurface
     private static readonly GenerateCapability[] AllCapabilities =
     [
         new("table", "AxTable from a business-role pattern preset", [Root.Table]),
+        new("table-relation", "Explicit AxTableRelation fragments from a table's EDT references, mergeable into the table XML", [Root.Table]),
+        new("find-methods", "Standard static find()/exists()/findRecId() from a table's unique index, mergeable into the table XML", [Root.Table]),
         new("class", "AxClass skeleton", [Root.Class]),
         new("coc", "Chain-of-Command wrapper class", [Root.Class]),
         new("form", "AxForm in one of nine patterns", [Root.Form]),
@@ -59,6 +61,7 @@ public static class GenerateSurface
         new("role", "Security role", [Root.SecurityRole]),
         new("report", "SSRS auto-design report stack: report, TempDB table, DP/contract/controller, output menu item",
             [Root.Report, Root.Table, Root.Class, Root.MenuItemOutput]),
+        new("report-extension", "Extend a shipped report: dataset post-handler, custom-design controller + PrintMgmt delegate, or menu redirect", [Root.Class]),
         new("sysoperation", "SysOperation contract + service + controller", [Root.Class]),
         new("number-sequence", "NumberSeq module extension class + EDT", [Root.Class, Root.Edt]),
         new("workflow", "Workflow template, its approval/task elements, and the document class",

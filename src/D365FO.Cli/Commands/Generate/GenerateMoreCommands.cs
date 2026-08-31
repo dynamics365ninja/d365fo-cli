@@ -416,7 +416,17 @@ public sealed class GenerateExtensionCommand : Command<GenerateExtensionCommand.
             return RenderHelpers.Render(kind, ToolResult<object>.Fail(D365FoErrorCodes.BadInput,
                 $"Unsupported extension kind: {settings.Kind}. Expected Table|Form|Edt|Enum|View|Query|DataEntityView|SecurityDuty|SecurityRole."));
 
-        var fullName = $"{settings.Target}.{suffix}";
+        // A dotted target already names an extension (AOT object names never contain a dot) —
+        // compose against its base so "CustTable.Ext" does not become "CustTable.Ext.Ext".
+        var targetBase = settings.Target;
+        var targetDot = targetBase.IndexOf('.');
+        string? targetRewriteNote = null;
+        if (targetDot > 0)
+        {
+            targetRewriteNote = $"Target \"{settings.Target}\" names an extension, not its base — composed against \"{targetBase[..targetDot]}\" instead.";
+            targetBase = targetBase[..targetDot];
+        }
+        var fullName = $"{targetBase}.{suffix}";
         var outPath = settings.Out;
         if (hasInstall && !hasOut)
         {
@@ -452,23 +462,23 @@ public sealed class GenerateExtensionCommand : Command<GenerateExtensionCommand.
 
         var doc = axFolder switch
         {
-            "AxSecurityDutyExtension" => XppScaffolder.SecurityDutyExtension(settings.Target, suffix, settings.Privileges, propertyMods),
-            "AxSecurityRoleExtension" => XppScaffolder.SecurityRoleExtension(settings.Target, suffix, settings.Duties, settings.Privileges, propertyMods),
+            "AxSecurityDutyExtension" => XppScaffolder.SecurityDutyExtension(targetBase, suffix, settings.Privileges, propertyMods),
+            "AxSecurityRoleExtension" => XppScaffolder.SecurityRoleExtension(targetBase, suffix, settings.Duties, settings.Privileges, propertyMods),
             // The scaffolder takes the base kind, not the type name — and the two differ for
             // queries, whose extension is AxQuerySimpleExtension.
-            "AxQuerySimpleExtension" => XppScaffolder.Extension("query", settings.Target, suffix),
+            "AxQuerySimpleExtension" => XppScaffolder.Extension("query", targetBase, suffix),
             // The EDT case needs the index-backed base-type resolver to pin the concrete
             // AxEdt*Extension subtype; for a table extension the same resolver picks the
             // concrete AxTableField* subtype per field. The other kinds ignore it.
-            _ => XppScaffolder.Extension(axFolder["Ax".Length..^"Extension".Length], settings.Target, suffix,
+            _ => XppScaffolder.Extension(axFolder["Ax".Length..^"Extension".Length], targetBase, suffix,
                      GenerateInstaller.BuildEdtBaseTypeResolver(), fieldSpecs),
         };
 
         // Grounding gate: the target object must exist in the index; fail
         // closed under D365FO_GROUNDING_ENFORCE=true. The EDTs a field names are
         // required too — a hallucinated EDT is the failure this gate exists for.
-        var gate = GenerateInstaller.Gate(settings, settings.Target, doc,
-            requiredSymbols: new[] { settings.Target }
+        var gate = GenerateInstaller.Gate(settings, targetBase, doc,
+            requiredSymbols: new[] { targetBase }
                 .Concat(fieldSpecs.Select(f => f.Edt!))
                 .ToArray());
         if (gate.Failure is not null) return RenderHelpers.Render(kind, gate.Failure);
@@ -480,7 +490,8 @@ public sealed class GenerateExtensionCommand : Command<GenerateExtensionCommand.
             {
                 kind = axFolder,
                 name = fullName,
-                target = settings.Target,
+                target = targetBase,
+                targetRewritten = targetRewriteNote,
                 suffix,
                 fields = fieldSpecs.Count == 0
                     ? null
@@ -960,6 +971,18 @@ public sealed class GenerateReportCommand : Command<GenerateReportCommand.Settin
         [System.ComponentModel.Description("Output path for the DataContract class XML. Auto-derived when --parameter is used.")]
         public string? OutContract { get; init; }
 
+        [CommandOption("--pre-process")]
+        [System.ComponentModel.Description("DP extends SrsReportDataProviderPreProcessTempDB: rows are written to the TempDB table BEFORE SSRS renders — the route for heavy computations. PreProcessTempDB is the base shipped code pairs a TempDB table with.")]
+        public bool PreProcess { get; init; }
+
+        [CommandOption("--controller-type <TYPE>")]
+        [System.ComponentModel.Description("simple (default, SrsReportRunController) | print-mgmt (SrsPrintMgmtController with the abstract runPrintMgmt() implemented and initPrintMgmtReportRun() placeholders — there is no parmPrintMgmtDocType).")]
+        public string? ControllerType { get; init; }
+
+        [CommandOption("--ui-builder")]
+        [System.ComponentModel.Description("Also generate <Name>UIBuilder (extends SrsReportDataContractUIBuilder), bound on the contract via SysOperationContractProcessing — for custom dialog lookups and dependent fields. Requires --parameter (the binding lives on the contract).")]
+        public bool UiBuilder { get; init; }
+
         [CommandOption("--no-tmp-table")]
         [System.ComponentModel.Description("Skip the TempDB table each DP fills. The DP references it either way, so the model will not compile without one.")]
         public bool NoTmpTable { get; init; }
@@ -1025,6 +1048,20 @@ public sealed class GenerateReportCommand : Command<GenerateReportCommand.Settin
             }).ToList();
         }
 
+        var controllerType = (settings.ControllerType ?? "simple").Trim().ToLowerInvariant();
+        if (controllerType is not ("simple" or "print-mgmt" or "printmgmt"))
+            return RenderHelpers.Render(kind, ToolResult<object>.Fail(D365FoErrorCodes.BadInput,
+                $"Unknown --controller-type '{settings.ControllerType}'. Expected simple | print-mgmt."));
+        var printMgmt = controllerType is "print-mgmt" or "printmgmt";
+        if (printMgmt && settings.NoController)
+            return RenderHelpers.Render(kind, ToolResult<object>.Fail(D365FoErrorCodes.BadInput,
+                "--controller-type print-mgmt and --no-controller contradict each other."));
+        if (settings.UiBuilder && (settings.Parameters is not { Length: > 0 }))
+            return RenderHelpers.Render(kind, ToolResult<object>.Fail(D365FoErrorCodes.BadInput,
+                "--ui-builder requires --parameter: the builder is bound on the DataContract via " +
+                "SysOperationContractProcessing, and without parameters no contract is generated.",
+                "Add at least one --parameter, or drop --ui-builder."));
+
         var spec = new ReportSpec(
             settings.Name,
             settings.DpClass,
@@ -1038,7 +1075,12 @@ public sealed class GenerateReportCommand : Command<GenerateReportCommand.Settin
                     settings.Fields), .. extraDatasets]
                 : null,
             settings.Fields,
-            paramSpecs);
+            paramSpecs)
+        {
+            PreProcess = settings.PreProcess,
+            PrintMgmtController = printMgmt,
+            UiBuilder = settings.UiBuilder,
+        };
 
         var hasContract = spec.Parameters is { Count: > 0 };
 
@@ -1131,6 +1173,15 @@ public sealed class GenerateReportCommand : Command<GenerateReportCommand.Settin
                     settings.Overwrite);
             }
 
+            ScaffoldFileWriter.WriteResult? uiBuilderResult = null;
+            if (spec.UiBuilder && XppScaffolder.ReportUiBuilder(spec) is { } uiBuilderDoc)
+            {
+                uiBuilderResult = GenerateInstaller.Write(gate,
+                    uiBuilderDoc,
+                    SiblingOf(dpPath!, spec.UiBuilderClass, Folders.Class),
+                    settings.Overwrite);
+            }
+
             ScaffoldFileWriter.WriteResult? menuItemResult = null;
             if (!settings.NoMenuItem)
             {
@@ -1151,6 +1202,8 @@ public sealed class GenerateReportCommand : Command<GenerateReportCommand.Settin
                 kind        = "AxReport",
                 name        = spec.Name,
                 dpClass     = spec.EffectiveDpClass,
+                dpBase      = spec.PreProcess ? "SrsReportDataProviderPreProcessTempDB" : "SrsReportDataProviderBase",
+                controllerType = settings.NoController ? null : (spec.PrintMgmtController ? "print-mgmt" : "simple"),
                 contractClass = spec.ContractClass,
                 datasets    = spec.EffectiveDatasets.Select(ds => new { ds.Name, ds.DpClass }).ToList(),
                 parameters  = spec.Parameters?.Select(p => new { p.Name, p.DataType }).ToList(),
@@ -1158,6 +1211,7 @@ public sealed class GenerateReportCommand : Command<GenerateReportCommand.Settin
                 dp          = new { path = dpResult.Path,       bytes = dpResult.Bytes,       backup = dpResult.BackupPath },
                 tmpTables,
                 controller  = controllerResult is null ? null : new { name = spec.EffectiveController, path = controllerResult.Path, bytes = controllerResult.Bytes },
+                uiBuilder   = uiBuilderResult is null ? null : new { name = spec.UiBuilderClass, path = uiBuilderResult.Path, bytes = uiBuilderResult.Bytes },
                 menuItem    = menuItemResult is null ? null : new { name = spec.EffectiveMenuItem, path = menuItemResult.Path, bytes = menuItemResult.Bytes },
                 contract    = contractResult is null ? null : new { path = contractResult.Path, bytes = contractResult.Bytes, backup = contractResult.BackupPath },
                 model       = settings.InstallTo,

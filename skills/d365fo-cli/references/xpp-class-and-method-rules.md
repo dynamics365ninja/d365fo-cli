@@ -24,6 +24,9 @@
 ```
 
 - `static final` is permitted; `abstract` cannot mix with `final` / `static`.
+- `display` / `edit` cannot mix with `static` — xppc: *"Conflicting modifiers 'static display'"*.
+- `protected internal` **compiles**; `private protected` does **not** (*"Conflicting modifiers"*). X++ has no `override` / `virtual` keywords — redeclaring the signature overrides, `final` forbids further overriding.
+- No method or constructor **overloading**, no generics of your own, no lambdas — one method per name; optional parameters are the overloading substitute.
 - **Override visibility rule:** an override must be at least as accessible as the base method. `public` → `public` only; `protected` → `public` or `protected`; `private` → not overridable.
 
 ## Parameters

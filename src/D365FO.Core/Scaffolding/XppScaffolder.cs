@@ -57,6 +57,18 @@ public static class XppScaffolder
     /// is null or returns null, a heuristic over well-known system EDTs is used,
     /// defaulting to <c>AxTableFieldString</c>.
     /// </param>
+    /// <param name="fieldGroups">
+    /// Caller-defined field groups, appended after the scaffold's built-ins. A group whose
+    /// name collides with a built-in (Auto*, Overview, General) is skipped rather than
+    /// duplicated — upstream measured that a silently dropped caller group surfaces later as
+    /// "Field group 'X' does not exist" on the FORM, pointing away from the table that lost it.
+    /// </param>
+    /// <param name="indexes">
+    /// Caller-defined indexes, appended after the derived primary-key index. Supports the
+    /// valid-time-state properties (<c>ValidTimeStateKey</c>/<c>Mode</c>) the AOT accepts on
+    /// an index; <c>NoGap</c> is the SDK default the serializer omits, so only <c>Gap</c> is
+    /// written explicitly.
+    /// </param>
     public static XDocument Table(
         string name,
         string? label = null,
@@ -66,7 +78,9 @@ public static class XppScaffolder
         IEnumerable<string>? primaryKeyFields = null,
         string? configurationKey = null,
         string? formRef = null,
-        Func<string, string?>? edtBaseTypeResolver = null)
+        Func<string, string?>? edtBaseTypeResolver = null,
+        IEnumerable<TableFieldGroupSpec>? fieldGroups = null,
+        IEnumerable<TableIndexSpec>? indexes = null)
     {
         // Resolve effective field list: caller-supplied wins; otherwise use the
         // pattern preset (if any). When neither is supplied, emit nothing —
@@ -100,18 +114,34 @@ public static class XppScaffolder
             pkNames = new List<string> { effectiveFields[0].Name };
         }
 
-        XElement? indexesEl = null;
+        var indexEls = new List<XElement>();
         if (pkNames.Count > 0)
         {
-            indexesEl = new XElement("Indexes",
-                new XElement("AxTableIndex",
-                    new XElement("Name", "PrimaryIdx"),
-                    new XElement("AlternateKey", "Yes"),
-                    new XElement("AllowDuplicates", "No"),
-                    new XElement("Fields",
-                        pkNames.Select(n => new XElement("AxTableIndexField",
-                            new XElement("DataField", n))))));
+            indexEls.Add(new XElement("AxTableIndex",
+                new XElement("Name", "PrimaryIdx"),
+                new XElement("AlternateKey", "Yes"),
+                new XElement("AllowDuplicates", "No"),
+                new XElement("Fields",
+                    pkNames.Select(n => new XElement("AxTableIndexField",
+                        new XElement("DataField", n))))));
         }
+        foreach (var idx in indexes ?? Enumerable.Empty<TableIndexSpec>())
+        {
+            if (string.IsNullOrWhiteSpace(idx.Name) || idx.Fields.Count == 0) continue;
+            if (indexEls.Any(e => string.Equals(e.Element("Name")?.Value, idx.Name, StringComparison.OrdinalIgnoreCase))) continue;
+            indexEls.Add(new XElement("AxTableIndex",
+                new XElement("Name", idx.Name),
+                idx.AlternateKey ? new XElement("AlternateKey", "Yes") : null,
+                idx.Unique || idx.AlternateKey ? new XElement("AllowDuplicates", "No") : null,
+                // NoGap is the SDK default the serializer omits — only Gap is written.
+                idx.ValidTimeStateKey ? new XElement("ValidTimeStateKey", "Yes") : null,
+                idx.ValidTimeStateKey && string.Equals(idx.ValidTimeStateMode, "Gap", StringComparison.OrdinalIgnoreCase)
+                    ? new XElement("ValidTimeStateMode", "Gap") : null,
+                new XElement("Fields",
+                    idx.Fields.Select(n => new XElement("AxTableIndexField",
+                        new XElement("DataField", n))))));
+        }
+        XElement? indexesEl = indexEls.Count > 0 ? new XElement("Indexes", indexEls) : null;
 
         // TableGroup / TableType: only emit when the caller asked for them.
         // An absent element means the AOT default applies (Miscellaneous /
@@ -164,7 +194,15 @@ public static class XppScaffolder
                     BuildEmptyFieldGroup("AutoSummary"),
                     BuildEmptyFieldGroup("AutoBrowse"),
                     BuildFieldGroup("Overview", effectiveFields),
-                    BuildFieldGroup("General", effectiveFields)),
+                    BuildFieldGroup("General", effectiveFields),
+                    (fieldGroups ?? Enumerable.Empty<TableFieldGroupSpec>())
+                        .Where(g => !string.IsNullOrWhiteSpace(g.Name))
+                        .Where(g => !ReservedFieldGroupNames.Contains(g.Name))
+                        .Select(g => new XElement("AxTableFieldGroup",
+                            new XElement("Name", g.Name),
+                            new XElement("Fields",
+                                g.Fields.Select(f => new XElement("AxTableFieldGroupField",
+                                    new XElement("DataField", f))))))),
                 indexesEl));
     }
 
@@ -202,6 +240,12 @@ public static class XppScaffolder
             new XElement("Name", name),
             autoPopulate ? new XElement("AutoPopulate", "Yes") : null,
             new XElement("Fields"));
+
+    /// <summary>Group names the scaffold always emits itself — a caller group by one of these names would be a duplicate.</summary>
+    private static readonly HashSet<string> ReservedFieldGroupNames = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "AutoReport", "AutoLookup", "AutoIdentification", "AutoSummary", "AutoBrowse", "Overview", "General",
+    };
 
     private static XElement BuildFieldGroup(string name, IReadOnlyList<TableFieldSpec> fields) =>
         new XElement("AxTableFieldGroup",
@@ -276,6 +320,14 @@ public static class XppScaffolder
     /// Field name → form control type (issue #164 / R5). Without it every bound field is
     /// rendered as a string control, whatever the field really is.
     /// </param>
+    /// <param name="omitDataGroups">
+    /// Field groups the bound table has been POSITIVELY established not to declare. The
+    /// templates bind grids/groups to <c>Overview</c>/<c>General</c> the way shipped forms do,
+    /// but naming a group the table does not declare is a build error that an incremental
+    /// build passes silently — so a caller that has read the table's XML and proven the group
+    /// absent passes it here and the binding is omitted. A table that could not be read passes
+    /// nothing: absence of evidence is not evidence of absence.
+    /// </param>
     public static string Form(
         string formName,
         string? dataSourceTable = null,
@@ -284,7 +336,8 @@ public static class XppScaffolder
         IReadOnlyList<string>? gridFields = null,
         IReadOnlyList<FormSectionSpec>? sections = null,
         string? linesTable = null,
-        Func<string, (string AxType, string TypeElement)>? controlTypeResolver = null)
+        Func<string, (string AxType, string TypeElement)>? controlTypeResolver = null,
+        IReadOnlyCollection<string>? omitDataGroups = null)
     {
         var opt = new FormTemplateOptions
         {
@@ -298,7 +351,22 @@ public static class XppScaffolder
             LinesDsTable = linesTable,
             ControlTypeResolver = controlTypeResolver,
         };
-        return FormPatternTemplates.Build(pattern, opt);
+        var xml = FormPatternTemplates.Build(pattern, opt);
+        if (omitDataGroups is { Count: > 0 })
+        {
+            var doc = System.Xml.Linq.XDocument.Parse(xml, System.Xml.Linq.LoadOptions.PreserveWhitespace);
+            var drop = doc.Descendants("DataGroup")
+                .Where(e => omitDataGroups.Contains(e.Value.Trim(), StringComparer.OrdinalIgnoreCase))
+                .ToList();
+            if (drop.Count > 0)
+            {
+                foreach (var e in drop) e.Remove();
+                xml = doc.Declaration is not null
+                    ? doc.Declaration + Environment.NewLine + doc.ToString(System.Xml.Linq.SaveOptions.DisableFormatting)
+                    : doc.ToString(System.Xml.Linq.SaveOptions.DisableFormatting);
+            }
+        }
+        return xml;
     }
 
     /// <summary>
@@ -1231,30 +1299,131 @@ public static class XppScaffolder
         ArgumentNullException.ThrowIfNull(spec);
 
         var controller = spec.EffectiveController;
+        var baseClass = spec.PrintMgmtController ? "SrsPrintMgmtController" : "SrsReportRunController";
         var declaration =
-            $"public class {controller} extends SrsReportRunController\n" +
+            $"public class {controller} extends {baseClass}\n" +
             "{\n" +
             "}\n";
 
-        var main =
-            "public static void main(Args _args)\n" +
-            "{\n" +
-            $"    {controller} controller = new {controller}();\n" +
-            "\n" +
-            $"    controller.parmReportName(ssrsReportStr({spec.Name}, AutoDesign));\n" +
-            "    controller.parmArgs(_args);\n" +
-            "    controller.startOperation();\n" +
-            "}\n";
+        var main = spec.PrintMgmtController
+            ? "public static void main(Args _args)\n" +
+              "{\n" +
+              $"    {controller} controller = new {controller}();\n" +
+              "\n" +
+              "    controller.parmArgs(_args);\n" +
+              $"    controller.parmReportName(ssrsReportStr({spec.Name}, AutoDesign));\n" +
+              "    controller.startOperation();\n" +
+              "}\n"
+            : "public static void main(Args _args)\n" +
+              "{\n" +
+              $"    {controller} controller = new {controller}();\n" +
+              "\n" +
+              $"    controller.parmReportName(ssrsReportStr({spec.Name}, AutoDesign));\n" +
+              "    controller.parmArgs(_args);\n" +
+              "    controller.startOperation();\n" +
+              "}\n";
+
+        var methods = new List<XElement>
+        {
+            new("Method",
+                new XElement("Name", "main"),
+                new XElement("Source", main)),
+        };
+
+        if (spec.PrintMgmtController)
+        {
+            // SrsPrintMgmtController declares runPrintMgmt() abstract — a subclass that does
+            // not implement it does not compile. initPrintMgmtReportRun() is where shipped
+            // subclasses construct the PrintMgmtReportRun for their hierarchy/node/document
+            // type and hand the controller to it before super(); the placeholders are the
+            // ones to replace. There is NO parmPrintMgmtDocType (xppc: "does not contain a
+            // definition for method 'parmPrintMgmtDocType'").
+            var initPrintMgmt =
+                "/// <summary>\n" +
+                "/// Creates the print-management run for this document type and hands it the controller.\n" +
+                "/// </summary>\n" +
+                "protected void initPrintMgmtReportRun()\n" +
+                "{\n" +
+                "    // TODO: replace the hierarchy, node and document type with the ones this document belongs to\n" +
+                "    printMgmtReportRun = PrintMgmtReportRun::construct(\n" +
+                "        PrintMgmtHierarchyType::Sales,\n" +
+                "        PrintMgmtNodeType::SalesTable,\n" +
+                "        PrintMgmtDocumentType::SalesOrderConfirmation);\n" +
+                "    printMgmtReportRun.parmReportRunController(this);\n" +
+                "\n" +
+                "    super();\n" +
+                "}\n";
+            var runPrintMgmt =
+                "/// <summary>\n" +
+                "/// Loads the print-management settings for the record being printed and outputs the report.\n" +
+                "/// </summary>\n" +
+                "protected void runPrintMgmt()\n" +
+                "{\n" +
+                "    // TODO: pass the query buffer, the referenced buffer and the language the settings are resolved for\n" +
+                "    printMgmtReportRun.load(this.parmArgs().record(), this.parmArgs().record(), Global::currentUserLanguage());\n" +
+                "\n" +
+                "    this.outputReports();\n" +
+                "}\n";
+            methods.Add(new XElement("Method",
+                new XElement("Name", "initPrintMgmtReportRun"),
+                new XElement("Source", initPrintMgmt)));
+            methods.Add(new XElement("Method",
+                new XElement("Name", "runPrintMgmt"),
+                new XElement("Source", runPrintMgmt)));
+        }
 
         return new XDocument(
             new XElement("AxClass",
                 new XElement("Name", controller),
                 new XElement("SourceCode",
                     new XElement("Declaration", declaration),
+                    new XElement("Methods", methods))));
+    }
+
+    /// <summary>
+    /// Scaffolds the companion UI-builder class for a report whose dialog needs behaviour
+    /// the contract attributes cannot express — a custom lookup, a field that reacts to
+    /// another. Bound on the contract via <c>[SysOperationContractProcessing]</c>
+    /// (see <see cref="ReportContract"/>); returns null when the spec does not ask for one.
+    /// </summary>
+    public static XDocument? ReportUiBuilder(ReportSpec spec)
+    {
+        ArgumentNullException.ThrowIfNull(spec);
+        if (!spec.UiBuilder) return null;
+
+        var name = spec.UiBuilderClass;
+        var exampleParm = spec.Parameters is { Count: > 0 } ? $"parm{spec.Parameters[0].Name}" : "parmMyParameter";
+        var declaration =
+            "/// <summary>\n" +
+            $"/// UI builder for the {spec.Name} report dialog — custom lookups, dependent fields, events.\n" +
+            "/// </summary>\n" +
+            $"public class {name} extends SrsReportDataContractUIBuilder\n" +
+            "{\n" +
+            "}\n";
+
+        var build =
+            "/// <summary>\n" +
+            "/// Builds the dialog and customizes its fields.\n" +
+            "/// </summary>\n" +
+            "public void build()\n" +
+            "{\n" +
+            "    super();\n" +
+            "\n" +
+            "    // TODO: customize dialog fields, e.g.:\n" +
+            $"    // {spec.ContractClass} contract = this.dataContractObject() as {spec.ContractClass};\n" +
+            $"    // DialogField df = this.bindInfo().getDialogField(contract, methodStr({spec.ContractClass}, {exampleParm}));\n" +
+            $"    // df.registerOverrideMethod(methodStr(FormStringControl, lookup), methodStr({name}, myParameterLookup), this);\n" +
+            "}\n";
+
+        return new XDocument(
+            new XElement("AxClass",
+                new XElement("Name", name),
+                new XElement("SourceCode",
+                    new XElement("Declaration", declaration),
                     new XElement("Methods",
                         new XElement("Method",
-                            new XElement("Name", "main"),
-                            new XElement("Source", main))))));
+                            new XElement("Name", "build"),
+                            new XElement("Source", build))))));
     }
 
     /// <summary>
@@ -1292,9 +1461,13 @@ public static class XppScaffolder
         var memberDecls = string.Join("\n", datasets.Select(ds =>
             $"    {ds.DpClass + "Tmp"} {char.ToLower(ds.DpClass[0]) + ds.DpClass[1..]}Tmp;"));
 
+        // PreProcessTempDB, not PreProcess: the scaffolded tmp table is TempDB, and that is
+        // the base shipped code pairs it with (upstream measured 332 of 370 pre-processed
+        // DPs; xppc accepts either pairing, so the compiler is no guard here).
+        var dpBase = spec.PreProcess ? "SrsReportDataProviderPreProcessTempDB" : "SrsReportDataProviderBase";
         var declaration =
             $"[SRSReportDataContract(\"{spec.ContractClass}\")]\n" +
-            $"class {dp} extends SrsReportDataProviderBase\n" +
+            $"class {dp} extends {dpBase}\n" +
             "{\n" +
             memberDecls + "\n" +
             "}\n";
@@ -1379,8 +1552,13 @@ public static class XppScaffolder
         var memberDecls = string.Join("\n",
             spec.Parameters.Select(p => $"    {XppType(p.DataType)} {char.ToLower(p.Name[0])}{p.Name[1..]};"));
 
+        // With a UI builder the contract binds it via SysOperationContractProcessing —
+        // the framework instantiates the builder from this attribute; nothing else wires it.
+        var contractAttributes = spec.UiBuilder
+            ? "[\n    DataContractAttribute,\n    SysOperationContractProcessing(classStr(" + spec.UiBuilderClass + "))\n]\n"
+            : "[DataContractAttribute]\n";
         var declaration =
-            "[DataContractAttribute]\n" +
+            contractAttributes +
             $"class {contractName} extends SrsReportDataContractBase\n" +
             "{\n" +
             memberDecls + "\n" +
@@ -1731,11 +1909,56 @@ public sealed record ReportSpec(
     /// <summary>Name of the controller class that launches the report.</summary>
     public string EffectiveController => Name + "Controller";
 
+    /// <summary>
+    /// When true, the DP extends <c>SrsReportDataProviderPreProcessTempDB</c>: rows are
+    /// written to the TempDB table BEFORE SSRS renders, so the report session reads a
+    /// finished set — the route for heavy computations and multi-dataset consistency.
+    /// PreProcessTempDB, not PreProcess: the scaffolded tmp table is TempDB, and that is
+    /// the base shipped code pairs it with (upstream measured 332 of 370 pre-processed
+    /// DPs; xppc accepts either, so the compiler is no guard here).
+    /// </summary>
+    public bool PreProcess { get; init; }
+
+    /// <summary>
+    /// When true, the controller extends <c>SrsPrintMgmtController</c> and implements the
+    /// abstract <c>runPrintMgmt()</c> plus <c>initPrintMgmtReportRun()</c> — the shape every
+    /// shipped direct subclass uses. There is no <c>parmPrintMgmtDocType</c> on the
+    /// controller (xppc-verified upstream); the document type is fixed in
+    /// <c>initPrintMgmtReportRun()</c>.
+    /// </summary>
+    public bool PrintMgmtController { get; init; }
+
+    /// <summary>
+    /// When true, a <c>&lt;Name&gt;UIBuilder</c> class (extends
+    /// <c>SrsReportDataContractUIBuilder</c>) is emitted and bound on the contract via
+    /// <c>[SysOperationContractProcessing]</c> — for custom dialog lookups and dependent
+    /// fields the attribute set cannot express.
+    /// </summary>
+    public bool UiBuilder { get; init; }
+
+    /// <summary>Name of the companion UI-builder class.</summary>
+    public string UiBuilderClass => Name + "UIBuilder";
+
     /// <summary>Name of the output menu item that opens the report.</summary>
     public string EffectiveMenuItem => Name + "MenuItem";
 }
 
 public sealed record TableFieldSpec(string Name, string? Edt, string? Label, bool Mandatory);
+
+/// <summary>A caller-defined field group on a generated table.</summary>
+public sealed record TableFieldGroupSpec(string Name, IReadOnlyList<string> Fields);
+
+/// <summary>
+/// A caller-defined index on a generated table. <paramref name="ValidTimeStateMode"/> is
+/// <c>Gap</c> or <c>NoGap</c>; NoGap is the SDK default and is not written explicitly.
+/// </summary>
+public sealed record TableIndexSpec(
+    string Name,
+    IReadOnlyList<string> Fields,
+    bool Unique = false,
+    bool AlternateKey = false,
+    bool ValidTimeStateKey = false,
+    string? ValidTimeStateMode = null);
 
 /// <summary>One value within an <c>AxEnum</c>.</summary>
 public sealed record EnumValueSpec(string Name, int IntValue, string? Label = null);

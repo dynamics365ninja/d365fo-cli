@@ -585,6 +585,14 @@ public sealed class GenerateTableCommand : Command<GenerateTableCommand.Settings
         [CommandOption("--form-ref <MENUITEM>")]
         [System.ComponentModel.Description("Display menu item opened when drilling into a record of this table. Omitted when not set.")]
         public string? FormRef { get; init; }
+
+        [CommandOption("--field-group <SPEC>")]
+        [System.ComponentModel.Description("Repeatable: <Name>[[:<F1>,<F2>,…]]. Adds a caller-defined field group after the built-ins (Auto*, Overview, General). Example: --field-group Pricing:Price,Currency")]
+        public string[] FieldGroups { get; init; } = Array.Empty<string>();
+
+        [CommandOption("--index <SPEC>")]
+        [System.ComponentModel.Description("Repeatable: <Name>:<F1>,<F2>[[:unique]][[:alternate-key]][[:valid-time-state[[=Gap|NoGap]]]]. Adds an index after the derived PrimaryIdx. Example: --index DateIdx:ValidFrom,ValidTo:valid-time-state=Gap")]
+        public string[] Indexes { get; init; } = Array.Empty<string>();
     }
 
     public override int Execute(CommandContext ctx, Settings settings)
@@ -598,11 +606,15 @@ public sealed class GenerateTableCommand : Command<GenerateTableCommand.Settings
             return RenderHelpers.Render(kind, ToolResult<object>.Fail("BAD_INPUT", serr!));
 
         var fields2 = settings.Fields.Select(ParseField).ToList();
+        if (!TryParseFieldGroups(settings.FieldGroups, out var fieldGroupSpecs, out var fgErr))
+            return RenderHelpers.Render(kind, ToolResult<object>.Fail("BAD_INPUT", fgErr!));
+        if (!TryParseIndexes(settings.Indexes, out var indexSpecs, out var idxErr))
+            return RenderHelpers.Render(kind, ToolResult<object>.Fail("BAD_INPUT", idxErr!));
         // Resolve each field's EDT base type from the index so the scaffold
         // stamps the concrete i:type discriminator on every <AxTableField>.
         var edtResolver = GenerateInstaller.BuildEdtBaseTypeResolver();
         var doc = XppScaffolder.Table(settings.Name, settings.Label, fields2, pattern, storage, settings.PrimaryKey,
-            settings.ConfigurationKey, settings.FormRef, edtResolver);
+            settings.ConfigurationKey, settings.FormRef, edtResolver, fieldGroupSpecs, indexSpecs);
 
         var fieldCount = fields2.Count > 0 ? fields2.Count : TablePatternPresets.DefaultFieldsFor(pattern).Count;
         var patternStr = pattern == TablePattern.None ? null : pattern.ToString();
@@ -653,6 +665,74 @@ public sealed class GenerateTableCommand : Command<GenerateTableCommand.Settings
                 grounding = gate.Grounding,
             },
             warnings);
+    }
+
+    private static bool TryParseFieldGroups(string[] raw, out List<TableFieldGroupSpec> specs, out string? error)
+    {
+        specs = [];
+        error = null;
+        foreach (var spec in raw)
+        {
+            var parts = spec.Split(':', 2, StringSplitOptions.TrimEntries);
+            if (string.IsNullOrWhiteSpace(parts[0]))
+            {
+                error = $"--field-group '{spec}' has no name. Expected <Name>[:<F1>,<F2>,…].";
+                return false;
+            }
+            var groupFields = parts.Length > 1
+                ? parts[1].Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries)
+                : Array.Empty<string>();
+            specs.Add(new TableFieldGroupSpec(parts[0], groupFields));
+        }
+        return true;
+    }
+
+    private static bool TryParseIndexes(string[] raw, out List<TableIndexSpec> specs, out string? error)
+    {
+        specs = [];
+        error = null;
+        foreach (var spec in raw)
+        {
+            var parts = spec.Split(':', StringSplitOptions.TrimEntries);
+            if (parts.Length < 2 || string.IsNullOrWhiteSpace(parts[0]) || string.IsNullOrWhiteSpace(parts[1]))
+            {
+                error = $"--index '{spec}' needs a name and a field list: <Name>:<F1>,<F2>[:unique][:alternate-key][:valid-time-state[=Gap|NoGap]].";
+                return false;
+            }
+            var idxFields = parts[1].Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
+            bool unique = false, alternateKey = false, vts = false;
+            string? vtsMode = null;
+            foreach (var flag in parts.Skip(2))
+            {
+                var f = flag.ToLowerInvariant();
+                if (f == "unique") { unique = true; continue; }
+                if (f is "alternate-key" or "alternatekey") { alternateKey = true; continue; }
+                if (f.StartsWith("valid-time-state") || f.StartsWith("validtimestate"))
+                {
+                    vts = true;
+                    var eq = f.IndexOf('=');
+                    if (eq >= 0)
+                    {
+                        vtsMode = f[(eq + 1)..] switch
+                        {
+                            "gap" => "Gap",
+                            "nogap" => "NoGap",
+                            _ => null,
+                        };
+                        if (vtsMode is null)
+                        {
+                            error = $"--index '{spec}': valid-time-state mode must be Gap or NoGap.";
+                            return false;
+                        }
+                    }
+                    continue;
+                }
+                error = $"--index '{spec}': unknown flag '{flag}'. Expected unique | alternate-key | valid-time-state[=Gap|NoGap].";
+                return false;
+            }
+            specs.Add(new TableIndexSpec(parts[0], idxFields, unique, alternateKey, vts, vtsMode));
+        }
+        return true;
     }
 
     private static TableFieldSpec ParseField(string raw)
@@ -726,41 +806,46 @@ public sealed class GenerateCocCommand : Command<GenerateCocCommand.Settings>
         if (settings.Methods.Length == 0)
             return RenderHelpers.Render(kind, ToolResult<object>.Fail("BAD_INPUT", "At least one --method required."));
 
+        // A target spelled as the extension itself (Base.Suffix, Base_Extension) is
+        // rewritten to its base rather than suffixed twice.
+        var target = D365FO.Core.ObjectNamingRules.NormalizeExtensionTarget(settings.Target, out var renameNote);
+
         // Guardrail: warn if the target already has CoC wrappers, and resolve
         // the target's AOT kind so [ExtensionOf] uses the right intrinsic
         // (tableStr for tables, classStr for classes, …).
         var warnings = new List<string>();
+        if (renameNote is not null) warnings.Add(renameNote);
         var targetKind = "class";
         try
         {
             var repo = RepoFactory.Create();
-            var existing = repo.FindCocExtensions(settings.Target);
+            var existing = repo.FindCocExtensions(target);
             if (existing.Count > 0)
-                warnings.Add($"There are already {existing.Count} CoC extension(s) of {settings.Target}. Consider extending an existing one instead of stacking a new wrapper.");
-            var kinds = repo.SymbolKinds(settings.Target);
+                warnings.Add($"There are already {existing.Count} CoC extension(s) of {target}. Consider extending an existing one instead of stacking a new wrapper.");
+            var kinds = repo.SymbolKinds(target);
             targetKind = kinds.FirstOrDefault(k => k is "class" or "table" or "form" or "data-entity" or "map" or "view") ?? "class";
         }
         catch { /* index may be empty; not fatal */ }
 
-        var doc = XppScaffolder.CocExtension(settings.Target, targetKind, settings.Methods);
+        var doc = XppScaffolder.CocExtension(target, targetKind, settings.Methods);
 
         // Grounding gate: prove the target and every wrapped method against the
         // index; fail closed under D365FO_GROUNDING_ENFORCE=true.
         var gate = GenerateInstaller.Gate(
             settings,
-            settings.Target,
+            target,
             doc,
-            settings.Methods.Select(m => (settings.Target, m)));
+            settings.Methods.Select(m => (target, m)));
         if (gate.Failure is not null) return RenderHelpers.Render(kind, gate.Failure);
         warnings.AddRange(gate.Warnings);
 
         return GenerateInstaller.Emit(
-            kind, gate, settings, "class", Folders.Class, settings.Target + "_Extension",
+            kind, gate, settings, "class", Folders.Class, target + "_Extension",
             doc,
             r => new
             {
                 kind = "AxClass",
-                name = settings.Target + "_Extension",
+                name = target + "_Extension",
                 source = r.Source,
                 path = r.Path,
                 bytes = r.Bytes,
@@ -872,7 +957,24 @@ internal static class GenerateFormImpl
             return RenderHelpers.Render(kind, ToolResult<object>.Fail("BAD_INPUT", "Form name required."));
 
         if (!FormPatternNormalizer.TryNormalize(patternRaw, out var pattern, out var patternError))
-            return RenderHelpers.Render(kind, ToolResult<object>.Fail("BAD_INPUT", patternError!));
+        {
+            // Registry fallback (port of upstream formControlExpander): a pattern the
+            // catalog knows but no hand-written template covers is expanded from the
+            // AOT-derived pattern registry — the same data the validator enforces, so
+            // the skeleton is pattern-correct by construction. The nine templated
+            // patterns keep their proven templates.
+            var catalogSpec = D365FO.Core.FormPatterns.FormPatternCatalog.Resolve(patternRaw!);
+            string? expandBlocker = null;
+            if (catalogSpec is not null)
+            {
+                if (D365FO.Core.FormPatterns.FormPatternExpander.CanExpand(catalogSpec, out expandBlocker))
+                    return RunExpanded(settings, kind, formName, table, catalogSpec, caption, fields, sections, linesTable);
+            }
+            var blockerNote = expandBlocker is not null
+                ? $" Registry expansion is not possible either: {expandBlocker}."
+                : string.Empty;
+            return RenderHelpers.Render(kind, ToolResult<object>.Fail("BAD_INPUT", patternError! + blockerNote));
+        }
 
         // Patterns that need a datasource: everything except Dialog / TableOfContents (where it is optional).
         var dsRequired = pattern is not (FormPattern.Dialog or FormPattern.TableOfContents);
@@ -907,6 +1009,7 @@ internal static class GenerateFormImpl
         // back to no <Caption> element when neither is available.
         var effectiveCaption = caption;
         var preflightWarnings = new List<string>();
+        var absentFieldGroups = new List<string>();
         if (!string.IsNullOrWhiteSpace(table))
         {
             try
@@ -935,9 +1038,19 @@ internal static class GenerateFormImpl
                         foreach (var group in RequiredFieldGroups(pattern))
                         {
                             if (!TableDefinesFieldGroup(t.SourcePath!, group))
+                            {
+                                // Positively established absent (the table's XML was read) —
+                                // the binding is OMITTED from the emitted form, because naming
+                                // a group the table does not declare is a build error that an
+                                // incremental build passes silently. TableDefinesFieldGroup
+                                // returns true when it cannot read the table, so a group only
+                                // lands here on real evidence.
+                                absentFieldGroups.Add(group);
                                 preflightWarnings.Add(
-                                    $"Form pattern {pattern} references field group '{group}' but table '{table}' does not define it " +
-                                    "(extension-added groups are not checked). Add the field group to the table, or the bound controls will render empty.");
+                                    $"Form pattern {pattern} binds field group '{group}' but table '{table}' does not define it " +
+                                    "(extension-added groups are not checked). The <DataGroup> binding was omitted from the generated form; " +
+                                    "add the field group to the table and re-bind it for the shipped-form look.");
+                            }
                         }
                     }
                 }
@@ -956,7 +1069,8 @@ internal static class GenerateFormImpl
                 gridFields:      fields,
                 sections:        sectionSpecs,
                 linesTable:      linesTable,
-                controlTypeResolver: BuildControlTypeResolver(table, linesTable));
+                controlTypeResolver: BuildControlTypeResolver(table, linesTable),
+                omitDataGroups:  absentFieldGroups);
         }
         catch (Exception ex)
         {
@@ -1010,6 +1124,118 @@ internal static class GenerateFormImpl
                 patternCheck = new
                 {
                     enforced = FormPatternGate.EnforcementEnabled,
+                    errors   = patternReport.ErrorCount,
+                    warnings = patternReport.WarningCount,
+                },
+                grounding    = gate.Grounding,
+            },
+            patternWarnings);
+    }
+
+    /// <summary>
+    /// The registry-expansion path for patterns without a hand-written template (Wizard,
+    /// DropDialog, FormPart*, Task*, …). Emits the pattern's required skeleton from the
+    /// AOT-derived registry, self-tests it against the SAME validator that gates the
+    /// templates, and refuses on any structural error — the expander promises
+    /// pattern-correctness by construction, so an error means the pattern genuinely cannot
+    /// be materialised and hand-authoring is the honest answer.
+    /// </summary>
+    private static int RunExpanded(
+        GenerateSettings settings,
+        OutputMode.Kind kind,
+        string formName,
+        string? table,
+        D365FO.Core.FormPatterns.FormPatternSpec catalogSpec,
+        string? caption,
+        IReadOnlyList<string> fields,
+        IReadOnlyList<string> sections,
+        string? linesTable)
+    {
+        var patternXmlName = catalogSpec.XmlName;
+        if (sections.Count > 0 || !string.IsNullOrWhiteSpace(linesTable))
+        {
+            return RenderHelpers.Render(kind, ToolResult<object>.Fail("BAD_INPUT",
+                $"--section / --lines-table are template features; registry expansion of '{patternXmlName}' " +
+                "emits the pattern's required skeleton only.",
+                "Generate without them, then add sections by hand (`d365fo get form-pattern " + patternXmlName + "` shows the structure)."));
+        }
+
+        var hasInstall = !string.IsNullOrWhiteSpace(settings.InstallTo);
+        var hasOut     = !string.IsNullOrWhiteSpace(settings.Out);
+        if (!hasInstall && !hasOut)
+            return RenderHelpers.Render(kind, ToolResult<object>.Fail("BAD_INPUT", "--out or --install-to is required."));
+
+        // Caption: explicit wins; otherwise reuse the bound table's label, same as the
+        // template path — a raw-text caption trips BPErrorLabelIsText.
+        var effectiveCaption = caption;
+        if (!string.IsNullOrWhiteSpace(table) && string.IsNullOrWhiteSpace(effectiveCaption))
+        {
+            try
+            {
+                var label = RepoFactory.Create().GetTableDetails(table!)?.Table.Label;
+                if (!string.IsNullOrWhiteSpace(label)) effectiveCaption = label;
+            }
+            catch { /* index may be empty; not fatal */ }
+        }
+
+        var doc = D365FO.Core.FormPatterns.FormPatternExpander.Expand(catalogSpec, new D365FO.Core.FormPatterns.FormExpandOptions(
+            formName,
+            DsTable: table,
+            Caption: effectiveCaption,
+            GridFields: fields,
+            ControlTypeResolver: BuildControlTypeResolver(table, null)));
+        if (doc is null)
+        {
+            return RenderHelpers.Render(kind, ToolResult<object>.Fail("RENDER_FAILED",
+                $"Registry expansion of '{patternXmlName}' produced nothing.",
+                $"Author the form by hand — `d365fo get form-pattern {patternXmlName}` shows the required structure."));
+        }
+        doc.Declaration = new System.Xml.Linq.XDeclaration("1.0", "utf-8", null);
+        var xml = doc.Declaration + Environment.NewLine + doc.ToString();
+
+        // Self-test with the same gate the templates pass through. An error here is a
+        // refusal, not a bypassable warning: the expander's whole promise is structural
+        // correctness, and enforcement flags exist for hand-written XML, not for this.
+        var patternReport = D365FO.Core.FormPatterns.FormPatternValidator.ValidateXml(xml);
+        if (patternReport.HasErrors)
+        {
+            var errors = patternReport.Violations.Where(v => v.Severity == "error")
+                .Select(v => $"{v.Rule} {v.Path}: {v.Excerpt} → {v.Fix}");
+            return RenderHelpers.Render(kind, ToolResult<object>.Fail(
+                "FORM_PATTERN_VIOLATION",
+                $"Registry expansion of '{patternXmlName}' failed its own pattern self-test:\n" + string.Join("\n", errors),
+                $"Author the form by hand — `d365fo get form-pattern {patternXmlName}` shows the required structure."));
+        }
+        var patternWarnings = patternReport.Violations
+            .Select(v => $"form-pattern {v.Rule} [{v.Severity}] {v.Path}: {v.Excerpt}")
+            .ToList();
+        patternWarnings.Add(
+            $"'{patternXmlName}' was expanded from the AOT pattern registry (no hand-written template exists): the " +
+            "required skeleton is complete, but content — fields, parts, sub-patterns the registry leaves open — is yours to add.");
+
+        var gate = GenerateInstaller.Gate(
+            settings, formName, doc: null,
+            requiredSymbols: string.IsNullOrWhiteSpace(table) ? null : new[] { table! });
+        if (gate.Failure is not null) return RenderHelpers.Render(kind, gate.Failure);
+        patternWarnings.AddRange(gate.Warnings);
+
+        return GenerateInstaller.EmitString(
+            kind, gate, settings, "form", Folders.Form, formName,
+            xml,
+            r => new
+            {
+                kind         = "AxForm",
+                name         = formName,
+                pattern      = patternXmlName,
+                source       = r.Source,
+                expandedFromRegistry = true,
+                path         = r.Path,
+                bytes        = r.Bytes,
+                backup       = r.Backup,
+                model        = settings.InstallTo,
+                fieldCount   = fields.Count,
+                patternCheck = new
+                {
                     errors   = patternReport.ErrorCount,
                     warnings = patternReport.WarningCount,
                 },

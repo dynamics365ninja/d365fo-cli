@@ -14,6 +14,38 @@ public static class ObjectNamingRules
 {
     public readonly record struct Violation(string Code, string Severity, string Message);
 
+    /// <summary>
+    /// Normalise an extension TARGET a caller (or an LLM) spelled as the extension itself:
+    /// <c>Base.AnySuffix</c> → <c>Base</c> (AOT object names never contain a dot, so a dot
+    /// unambiguously marks an extension suffix) and <c>Base_Extension</c> → <c>Base</c>.
+    /// Without this, <c>generate coc SalesFormLetter_CtsoExtension</c> grew a second suffix
+    /// and a dotted target produced a class name with a dot in it — not a legal AOT class.
+    /// Idempotent; <paramref name="note"/> carries one line per rewrite for callers that
+    /// surface it.
+    /// </summary>
+    public static string NormalizeExtensionTarget(string target, out string? note)
+    {
+        note = null;
+        if (string.IsNullOrWhiteSpace(target)) return target;
+        var effective = target.Trim();
+
+        var dot = effective.IndexOf('.');
+        if (dot > 0)
+        {
+            effective = effective[..dot];
+            note = $"Target \"{target}\" names an extension, not its base — rewritten to \"{effective}\" (a dot unambiguously marks an extension suffix).";
+            return effective;
+        }
+
+        if (effective.EndsWith("_Extension", StringComparison.OrdinalIgnoreCase))
+        {
+            effective = effective[..^"_Extension".Length];
+            note = $"Target \"{target}\" already carries the _Extension suffix — rewritten to base \"{effective}\" so the suffix is not doubled.";
+        }
+
+        return effective;
+    }
+
     public static IReadOnlyList<Violation> Validate(string kind, string name, string? prefix = null)
     {
         var v = new List<Violation>();

@@ -23,7 +23,7 @@ public sealed class ValidateXppCommand : Command<ValidateXppCommand.Settings>
         public string? File { get; init; }
 
         [CommandOption("--code-type <TYPE>")]
-        [System.ComponentModel.Description("xpp (default) for X++ source, xml-table for AxTable XML, xml-any for other XML. Auto-detected from file extension/content when omitted.")]
+        [System.ComponentModel.Description("xpp (default) for X++ source, xml-table for AxTable XML, xml-report for AxReport XML, xml-any for other XML. Auto-detected from file extension/content when omitted.")]
         public string? CodeType { get; init; }
 
         [CommandOption("--context <NAME>")]
@@ -101,6 +101,9 @@ public sealed class ValidateXppCommand : Command<ValidateXppCommand.Settings>
         // Match the exact <AxTable> root tag, not other elements that merely start with
         // that prefix (e.g. <AxTableMapping> inside an AxMap, <AxTableExtension>).
         if (Regex.IsMatch(code, @"<AxTable[\s>]", RegexOptions.IgnoreCase)) return XppValidator.CodeTypeXmlTable;
+        // An AxReport embeds RDL in CDATA — the X++ keyword rules would only produce noise
+        // over it, so the report document routes to its own rule set (RPT101/RPT102).
+        if (Regex.IsMatch(code, @"<AxReport[\s>]", RegexOptions.IgnoreCase)) return XppValidator.CodeTypeXmlReport;
         var trimmed = code.TrimStart();
         if (trimmed.StartsWith("<?xml") || trimmed.StartsWith('<')) return XppValidator.CodeTypeXmlAny;
         if (file is not null && file.EndsWith(".xml", StringComparison.OrdinalIgnoreCase)) return XppValidator.CodeTypeXmlAny;

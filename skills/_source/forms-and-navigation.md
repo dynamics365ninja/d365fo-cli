@@ -115,10 +115,54 @@ d365fo generate menu-item FmVehicleListPageMenuItem --kind Display \
 d365fo validate metadata <path-to-menu-xml> --output json
 ```
 
+## 4. Args — the record, caller and parameters an object is opened with
+
+Every menu item, form and report is entered through an Args instance. Reading
+it wrongly is how a form silently opens on the wrong record.
+
+- Reach it from a form with `element.args()`, from a class via `main(Args _args)`.
+- **The record**: `_args.record()` returns the caller's cursor as a table
+  buffer — assign it to a typed buffer, and check `_args.dataset()` (the table
+  id) BEFORE trusting it, because any caller can pass any table.
+- **The caller**: `_args.caller()` returns an Object. Test with `is` and
+  downcast with `as` — Object and FormRun are late-bound, so a call on the
+  wrong type fails at RUNTIME, not compile time. Never assume the caller is a
+  form: a batch or a service reaches the same code with `caller()` null.
+- **Extra values**: `_args.parm()` carries one string, `_args.parmEnum()` one
+  enum value with `_args.parmEnumType()` naming its type (set via
+  `enumNum(MyEnum)`), `_args.parmObject()` any object. Each is get/set.
+- **Which entry point**: `_args.menuItemName()` / `_args.menuItemType()`;
+  `_args.openMode()` distinguishes New/Edit/View; `_args.lookupField()` /
+  `_args.lookupValue()` carry a lookup's field and value.
+- Opening something WITH arguments: build the Args (`args.record(myBuffer);
+  args.parm(myId);`), then run the menu function with it.
+
+## 5. display and edit methods (computed and writable columns)
+
+Neither is deprecated — they remain the supported way to show a computed value
+(computed columns replace them on data entities and views only).
+
+- `display <ReturnType> name()` — computed, READ-ONLY on the form/report. On
+  the table when every form should see it; on the form when only that one.
+- `edit <ReturnType> name(boolean _set, <ReturnType> _value)` — writable:
+  `_set` is false while painting and true when the user types; the method
+  returns the value to show. On a FORM the signature carries the datasource
+  buffer as well.
+- `display`/`edit` and `static` are **mutually exclusive** — xppc:
+  *"Conflicting modifiers 'static display'"*. The access modifier is free.
+- A display method runs **once per visible row, every refresh** — a query
+  inside one multiplies by the row count and is the usual cause of a slow grid.
+  Cache it when its inputs change only with the record:
+  `[SysClientCacheDataMethodAttribute(true)]` (the platform ships ~2,800 of
+  these); a method depending on anything beyond the record must NOT be cached.
+- A display method cannot be used in a select/where — it is X++, not SQL. For
+  filtering, add a real field or a view.
+
 ## Hard rules
 
 - Put logic at the lifecycle point that owns the concern. Validation that lives in
   `write()` runs after the record is already saved.
+- Never read `_args.record()` without checking `_args.dataset()` first.
 - `research(true)` to refresh, `executeQuery()` to re-shape.
 - Never guess a control or data source name — `d365fo get form <Name>` first.
 - Never hand-author menu XML without running `d365fo validate metadata` over it;

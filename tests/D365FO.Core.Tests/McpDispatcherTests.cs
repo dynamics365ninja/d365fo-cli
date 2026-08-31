@@ -320,4 +320,74 @@ public class McpDispatcherTests : IDisposable
         var code = payload.RootElement.GetProperty("error").GetProperty("code").GetString();
         Assert.EndsWith("_NOT_FOUND", code);
     }
+
+    [Fact]
+    public void PrepareChange_answers_for_kernel_declared_table_methods()
+    {
+        // Every table inherits validateWrite from xRecord — a kernel type with no AOT
+        // metadata, so the index has no row for the most common CoC target there is.
+        // "Not found" read as "does not exist"; the kernel catalog now answers instead.
+        var repo = new MetadataRepository(_dbPath);
+        repo.EnsureSchema();
+        repo.ApplyExtract(ExtractBatch.Empty("Fleet") with
+        {
+            Tables = new[] { new ExtractedTable("FmVehicle", null, "x", Array.Empty<ExtractedTableField>()) },
+        });
+
+        var result = new ToolHandlers(repo).PrepareChange("FmVehicle", null, "validateWrite", null, null, null);
+        Assert.True(result.Ok);
+
+        var json = JsonSerializer.Serialize(result.Data);
+        using var doc = JsonDocument.Parse(json);
+        var method = doc.RootElement.GetProperty("method");
+        Assert.True(method.GetProperty("found").GetBoolean());
+        Assert.Equal("public boolean validateWrite()", method.GetProperty("signature").GetString());
+        Assert.Contains("orig()", json);
+
+        // A method no kernel type declares still reports honestly as not found.
+        var missing = new ToolHandlers(repo).PrepareChange("FmVehicle", null, "noSuchMethodAnywhere", null, null, null);
+        var missingJson = JsonSerializer.Serialize(missing.Data);
+        Assert.Contains("\"found\":false", missingJson);
+    }
+
+    [Fact]
+    public async Task Prepare_test_aggregates_methods_coverage_and_red_first_cycle()
+    {
+        var repo = new MetadataRepository(_dbPath);
+        repo.EnsureSchema();
+        repo.ApplyExtract(ExtractBatch.Empty("Fleet") with
+        {
+            Classes = new[]
+            {
+                new ExtractedClass("FmVehicleService", null, false, false, "x",
+                    new[] { new ExtractedMethod("run", "public void run()", "void", false),
+                            new ExtractedMethod("new", "public void new()", "void", false) }),
+                new ExtractedClass("FmVehicleServiceTest", "SysTestCase", false, false, "x",
+                    Array.Empty<ExtractedMethod>()),
+            },
+        });
+
+        var dispatcher = new StdioDispatcher(new ToolHandlers(repo));
+        using var input = new StringReader(
+            """{"jsonrpc":"2.0","id":30,"method":"tools/call","params":{"name":"prepare","arguments":{"mode":"test","object":"FmVehicleService"}}}""" + "\n");
+        using var output = new StringWriter();
+        await dispatcher.RunAsync(input, output);
+
+        var doc = JsonDocument.Parse(output.ToString().Trim());
+        var payload = JsonDocument.Parse(doc.RootElement.GetProperty("result")
+            .GetProperty("content")[0].GetProperty("text").GetString()!);
+        var data = payload.RootElement.GetProperty("data");
+
+        Assert.True(payload.RootElement.GetProperty("ok").GetBoolean());
+        // `run` is worth a test; the `new` lifecycle member is not.
+        var methods = data.GetProperty("methodsWorthTesting").EnumerateArray().Select(m => m.GetProperty("name").GetString()).ToList();
+        Assert.Contains("run", methods);
+        Assert.DoesNotContain("new", methods);
+        // Existing coverage is surfaced so a second class is not started for the same target.
+        Assert.Contains("FmVehicleServiceTest", data.GetProperty("existingTests").EnumerateArray().Select(t => t.GetString()));
+        // The scaffold call and the red-first cycle are stated.
+        Assert.Contains("generate systest", data.GetProperty("scaffoldCall").GetString());
+        Assert.Contains("--method run", data.GetProperty("scaffoldCall").GetString());
+        Assert.False(string.IsNullOrEmpty(data.GetProperty("groundingToken").GetString()));
+    }
 }

@@ -38,7 +38,8 @@ d365fo search report FmVehicleService --output json
 # 2. Inspect an existing report's datasets and designs before copying its shape
 d365fo get report SalesInvoice --output json
 
-# 3. Scaffold the report + its data provider (and a contract, when parameters are declared)
+# 3. Scaffold the whole stack in one command: report, DP, TempDB temp table(s),
+#    controller and output menu item — plus a contract when parameters are declared
 d365fo generate report FmVehicleServiceReport \
   --dp FmVehicleServiceDP \
   --tmp FmTmpVehicleService \
@@ -46,17 +47,23 @@ d365fo generate report FmVehicleServiceReport \
   --field VehicleId --field ServiceDate \
   --parameter VehicleGroupId:String \
   --install-to FleetManagement
-
-# 4. The temp table and the controller are separate objects — scaffold them too
-d365fo generate table FmTmpVehicleService --pattern main --table-type TempDB --install-to FleetManagement
-d365fo generate class FmVehicleServiceController --extends SrsReportRunController --install-to FleetManagement
 ```
 
-`generate report` emits the `AxReport` plus its DP class, and a `DataContract`
-class when `--parameter` is passed. The temp table and the controller are not
-part of that command today — scaffold them with `generate table` /
-`generate class` as shown, and check `d365fo generate report --help` rather than
-assuming a flag exists.
+`generate report` emits the `AxReport`, its DP class, one TempDB temp table per
+dataset, a controller and the output menu item — and a `DataContract` class when
+`--parameter` is passed. Depth options:
+
+- `--pre-process` — the DP extends `SrsReportDataProviderPreProcessTempDB`
+  (rows land in the TempDB table BEFORE SSRS renders; that base is the one
+  shipped code pairs a TempDB table with).
+- `--controller-type print-mgmt` — the controller extends
+  `SrsPrintMgmtController` with the abstract `runPrintMgmt()` implemented and
+  `initPrintMgmtReportRun()` placeholders for the hierarchy/node/document type.
+- `--ui-builder` — also emits `<Name>UIBuilder` (extends
+  `SrsReportDataContractUIBuilder`), bound on the contract via
+  `SysOperationContractProcessing`; requires `--parameter`.
+
+Check `d365fo generate report --help` rather than assuming any other flag exists.
 
 ## DP class rules
 
@@ -107,6 +114,10 @@ public class FmVehicleServiceDP extends SrsReportDataProviderBase
 
 - Name the report with `ssrsReportStr(<Report>, <Design>)` — never a string
   literal, so a renamed design is a compile error rather than a runtime one.
+- A controller's `main()` uses **`parmArgs(_args)` + `parmReportName(...)` +
+  `startOperation()`** — there is **no `initArgs`** on `SrsReportRunController`
+  or anywhere in its hierarchy (verified against xppc; shipped controllers all
+  use the `parmArgs` shape).
 - `prePromptModifyContract()` is where you seed parameters from the caller's
   record; `preRunModifyContract()` is the last chance before execution.
 - The controller decides the execution mode (dialog, batch, direct print).
@@ -117,6 +128,9 @@ Use `SrsPrintMgmtController` **instead of** `SrsReportRunController` when the
 report should honour the Print management setup (destination per document type,
 original vs copy).
 
+- `SrsPrintMgmtController` declares **`runPrintMgmt()` abstract** — a subclass
+  that does not implement it does not compile. There is no
+  `parmPrintMgmtDocType` on the controller (verified against xppc).
 - Register the document type by extending the `PrintMgmtDocType` enum.
 - Override `getDocumentName()` and `getDocumentTitle()` on the controller.
 - Override `getOriginalPrintMgmtPrintSettingDetail()` for the default settings.
@@ -137,6 +151,27 @@ original vs copy).
   contracts and breaks caching.
 - Labels everywhere: report captions, parameter prompts and column headers are
   label tokens, never literals (`BPErrorLabelIsText`).
-- Extending a **standard** report: prefer a new design plus a `PrintMgmtReportFormat`
-  entry over modifying Microsoft's design; use CoC on the DP's `processReport()`
-  when you need extra rows.
+- Extending a **standard** report — three techniques, every shape
+  compiler-checked by the upstream sibling repo against real standard objects:
+  1. **Dataset extension** (add data to the shipped design's temp table):
+     subscribe after the DP with `[PostHandlerFor(classStr(<DP>),
+     methodStr(<DP>, processReport))]` taking `XppPrePostArgs`, get the DP
+     instance from the args, and — this is load-bearing —
+     **`linkPhysicalTableInstance`** your temp-table buffer to the DP's before
+     updating rows: a buffer merely declared in the handler is a *different,
+     empty* table, so the handler appears to work while updating nothing. The
+     DP's dataset accessor name is a fact to read off the DP, never derived
+     from the temp-table name (the platform ships the typo `geAssetBarCodeTmp`).
+     When no accessor exists, the per-row `[DataEventHandler(tableStr(<Tmp>),
+     DataEventType::Inserting)]` shape needs none.
+  2. **Custom design**: add a design to the report (or a copy), then a
+     subclassed controller whose `main()` uses `parmArgs` + `parmReportName
+     (ssrsReportStr(<Report>, <YourDesign>))` — for print-management reports a
+     `PrintMgmtReportFormat` entry selects the design per document type instead.
+  3. **Menu redirect**: repoint the shipped output menu item at your controller
+     with `[PostHandlerFor(classStr(<Controller>), staticMethodStr(<Controller>,
+     construct))]` when you cannot touch the menu item itself.
+  Never CoC the DP's `processReport()` for extra rows — the `[PostHandlerFor]`
+  subscription above is the verified route and needs no wrapper class.
+  All three are scaffolded by `d365fo generate report-extension
+  dataset|custom-design|menu-redirect` — see `--help` for the options each needs.

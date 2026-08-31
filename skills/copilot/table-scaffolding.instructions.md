@@ -121,6 +121,21 @@ needs a different caption.
 Treat the defaults as a *starting point* — always replace placeholder fields
 (e.g. `Key`, `Code`) with names that fit the domain.
 
+## Augmenting an existing table
+
+- **Explicit relations from EDT references** — a field whose EDT declares a
+  reference table needs an explicit `<AxTableRelation>` (`BPErrorEDTNotMigrated`;
+  the implicit EDT relation is not enough any more):
+  `d365fo generate table-relation <Table> [--field F] --apply-to <table-xml>`
+  derives them from the indexed EDT metadata and merges them into the table's
+  `<Relations>` block (atomic, `.bak` sibling, existing relations never
+  duplicated). Omit `--apply-to` to print the fragments.
+- **Standard find methods** — `d365fo generate find-methods <Table> --apply-to
+  <table-xml>` emits `find()`/`exists()`/`findRecId()` keyed on the table's
+  alternate-key (or first unique) index, in Microsoft's shipped shape
+  (selectForUpdate guard, `firstonly`, key null-guard), and merges them into
+  `<SourceCode>` without ever overwriting a method the table already declares.
+
 ## Related AOT objects
 
 ### AOT Query for joining related tables

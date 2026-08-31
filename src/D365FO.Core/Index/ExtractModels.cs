@@ -34,6 +34,10 @@ public sealed record ExtractBatch(
     public IReadOnlyList<string> Dependencies { get; init; } = Array.Empty<string>();
     /// <summary>AxMap objects found in the model's AxMap folder.</summary>
     public IReadOnlyList<ExtractedMap> Maps { get; init; } = Array.Empty<ExtractedMap>();
+    // v17: where each indexed .label.txt physically lives (per file+language),
+    // so label search/resolve can confirm a hit against the disk.
+    public IReadOnlyList<ExtractedLabelFile> LabelFiles { get; init; } = Array.Empty<ExtractedLabelFile>();
+
     // v11 additions
     public IReadOnlyList<ExtractedBusinessEvent>    BusinessEvents    { get; init; } = Array.Empty<ExtractedBusinessEvent>();
     public IReadOnlyList<ExtractedSecurityPolicy>   SecurityPolicies  { get; init; } = Array.Empty<ExtractedSecurityPolicy>();
@@ -123,6 +127,9 @@ public sealed record ExtractedEnumValue(string Name, int? Value, string? Label);
 public sealed record ExtractedMenuItem(string Name, string Kind, string? Object, string? ObjectType, string? Label);
 public sealed record ExtractedCoc(string TargetClass, string TargetMethod, string ExtensionClass);
 public sealed record ExtractedLabel(string File, string Language, string Key, string? Value);
+
+/// <summary>One physical <c>.label.txt</c> the extractor read: its logical file id, language, and disk path.</summary>
+public sealed record ExtractedLabelFile(string File, string Language, string SourcePath);
 
 /// <summary>A D365FO AxMap object — a shared field template mapped onto multiple tables.</summary>
 public sealed record ExtractedMap(string Name, string? Label, string? SourcePath, IReadOnlyList<ExtractedMapField> Fields)

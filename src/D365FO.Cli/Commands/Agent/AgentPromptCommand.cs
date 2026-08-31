@@ -143,6 +143,7 @@ not invent a name.
 |---|---|
 | Single-round change context + token | `d365fo prepare change <Object> --method <M> --goal "…"` |
 | Single-round new-object context + token | `d365fo prepare create <Name> --type <T> --goal "…"` |
+| Single-round SysTest context + token | `d365fo prepare test <Class> --goal "…"` |
 | Verify generated X++ vs index | `d365fo validate references --file <F>` |
 | Offline BP check of X++/XML | `d365fo validate xpp --file <F>` |
 | Class methods | `d365fo get class <Name> --output json` |

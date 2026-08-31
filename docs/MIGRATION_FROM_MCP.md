@@ -189,7 +189,7 @@ renaming `form_pattern` → `object_patterns`.
 | `extension_info` | `mode` (coc/events/table-merge/points/strategy) | `find_coc_extensions`, `find_event_handlers`, `find_extensions`, `get_table_extension_info`, `analyze_extension_points` (5 tools → 1) |
 | `analyze` | `mode` (integration/impact/report) | `analyze_integration`, `analyze_impact`, `report_integrations` |
 | `models` | `action` (list/deps/coupling) | `list_models`, `get_model_dependencies`, `models_coupling` |
-| `prepare` | `mode` (change/create) | single-round context aggregator + grounding token (was CLI-only) |
+| `prepare` | `mode` (change/create/test) | single-round context aggregator + grounding token (was CLI-only) |
 | `find_references` | — | reverse references via regex scan of indexed X++ source (was CLI-only) |
 | `validate_object_naming`, `get_workspace_info`, `suggest_edt`, `batch_get_info`, `lint`, `stats`, `index_status`, `index_history` | — | kept (parity names) |
 
@@ -239,6 +239,7 @@ commands. Both surfaces use the same discriminator-based naming.
 |---|---|
 | `prepare` (`mode=change`) | `d365fo prepare change <Object> --method <M> --goal "…"` → grounding token |
 | `prepare` (`mode=create`) | `d365fo prepare create <Name> --type <T> --goal "…"` → grounding token |
+| `prepare` (`mode=test`) | `d365fo prepare test <Class> --goal "…"` → SysTest context + grounding token |
 | `validate_xpp` | `d365fo validate xpp [FILE]` (offline BP rules, data-driven property stats) |
 | `validate_object_naming` | `d365fo validate name <KIND> <NAME>` |
 | `object_patterns` (`domain=form, action=validate`) | `d365fo form-pattern validate [FILE]` (FP001–FP010) |

@@ -53,4 +53,32 @@ public class ObjectNamingRulesTests
         var v = ObjectNamingRules.Validate("Coc", "CustTable_Extension");
         Assert.DoesNotContain(v, x => x.Code == "COC_SUFFIX");
     }
+
+    // A target spelled as the extension itself must be rewritten to its base rather than
+    // suffixed twice (upstream: SalesFormLetter_CtsoExtensionCtso_Extension), and a dotted
+    // target must never survive into a class name — a dot is not legal in an AOT class.
+
+    [Fact]
+    public void NormalizeExtensionTarget_strips_a_dotted_extension_suffix()
+    {
+        var result = ObjectNamingRules.NormalizeExtensionTarget("SalesFormLetter.Ctso", out var note);
+        Assert.Equal("SalesFormLetter", result);
+        Assert.NotNull(note);
+    }
+
+    [Fact]
+    public void NormalizeExtensionTarget_strips_an_existing_extension_class_suffix()
+    {
+        var result = ObjectNamingRules.NormalizeExtensionTarget("SalesFormLetter_Extension", out var note);
+        Assert.Equal("SalesFormLetter", result);
+        Assert.NotNull(note);
+    }
+
+    [Fact]
+    public void NormalizeExtensionTarget_is_idempotent_on_a_plain_base_name()
+    {
+        var result = ObjectNamingRules.NormalizeExtensionTarget("SalesFormLetter", out var note);
+        Assert.Equal("SalesFormLetter", result);
+        Assert.Null(note);
+    }
 }

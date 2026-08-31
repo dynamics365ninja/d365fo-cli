@@ -30,21 +30,26 @@ select custTable
     where …;
 ```
 
-Optional company filter: `select crossCompany : myContainer custTable …` — `myContainer` is a `container` literal `(['dat'] + ['dmo'])`. Empty container = scan all authorised companies.
+Optional company filter: `select crossCompany : myContainer custTable …` — the **colon is required**, and the operand may be a container variable, an inline literal (`['dat', 'dmo']`) or an expression. Empty container = scan all authorised companies.
 
-## `in` operator — any primitive type, not just enums
+## `in` operator — ENUM fields with a container VARIABLE
 
-Grammar: `where Expression in List`, where `List` is an X++ **`container`**, not a `Set`/`List`/`Map`/sub-query. Works with `str`, `int`, `int64`, `real`, `enum`, `boolean`, `date`, `utcDateTime`, `RecId`. One `in` clause per `where`; AND multiple set filters together.
+Grammar: `where EnumField in containerVariable`. Two limits xppc enforces (both
+verified against the compiler):
+
+- The **left side must be an enum field**. A `str`/`int64`/`real`/`date` field
+  answers `Types 'str(CustAccount)' and 'container' are not compatible with
+  operator 'in'` — for those, write the `||` chain.
+- The right side must be a **container variable**, never an inline literal:
+  `where t.Status in [MyStatus::A, MyStatus::B]` answers `Container literals in
+  'in' expression are not supported. Declare container variable instead.`
+  (validator rule `SEL009`).
 
 ```xpp
 container postingTypes = [LedgerPostingType::PurchStdProfit, LedgerPostingType::PurchStdLoss];
-container accounts     = ['1000', '2000', '3000'];
 select sum(CostAmountAdjustment) from inventSettlement
-    where inventSettlement.OperationsPosting in postingTypes
-       && inventSettlement.LedgerAccount     in accounts;
+    where inventSettlement.OperationsPosting in postingTypes;
 ```
-
-❌ Never expand `in` into `OR == OR ==` chains.
 
 ## Other Learn-confirmed rules
 
@@ -59,7 +64,7 @@ select sum(CostAmountAdjustment) from inventSettlement
   - `sum` / `avg` / `count` work only on integer/real fields.
   - When `sum` would return null (no rows), X++ returns NO row — guard with `if (buffer)` after.
   - Non-aggregated fields in the select list must be in `group by`.
-- **`forceLiterals`** is forbidden — SQL injection. Use `forcePlaceholders` (default for non-join selects) or omit.
+- **`forceLiterals`** reveals the where-clause values to the optimiser — avoid it, and never use it with values that come from user input (SQL injection). It is not *forbidden*: xppc accepts it and standard code uses it where the plan measurably needs the literal. The force* options are exactly `forceLiterals`, `forcePlaceholders`, `forceNestedLoop`, `forceSelectOrder` — "forceLaterals" is not a keyword.
 - **`validTimeState(dateFrom, dateTo)`** for date-effective tables (`ValidTimeStateFieldType ≠ None`). Don't query without it unless you specifically want all historical rows.
 - **Set-based ops** (`RecordInsertList`, `insert_recordset`, `update_recordset`, `delete_from`) over row-by-row loops for performance. They fall back to row-by-row only when an overridden table method, DB log, or alerts subscription forces it.
 - **SQL injection mitigation** — `executeQueryWithParameters` for dynamic queries; never concatenate strings into `where`.
@@ -163,7 +168,8 @@ One `in` per `where`. NEVER expand to `OR == OR ==`.
 - Outer join is LEFT only; no `on` keyword (use `where`).
 - `index hint` requires `myTable.allowIndexHint(true)` first.
 - Aggregates: int/real fields only; sum-with-no-rows returns no row.
-- `forceLiterals` FORBIDDEN. Use `forcePlaceholders`.
+- `forceLiterals` never with user-derived values (SQL injection); prefer
+  `forcePlaceholders` unless the plan measurably needs the literal.
 - `validTimeState(dateFrom, dateTo)` for date-effective tables.
 - Set-based ops over loops (`RecordInsertList`, `insert_recordset`,
   `update_recordset`, `delete_from`).

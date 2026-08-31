@@ -2,7 +2,8 @@
 <AxClass>
   <Name>ConFmVehicleServiceTest</Name>
   <SourceCode>
-    <Declaration>public class ConFmVehicleServiceTest extends SysTestCase
+    <Declaration>[SysTestTarget(classStr(FmVehicleService), UtilElementType::Class)]
+public class ConFmVehicleServiceTest extends SysTestCase
 {
 }
 </Declaration>
@@ -16,7 +17,12 @@ public void run_scenario_expectedResult()
 
     // Act
 
-    // Assert
+    // Assert — replace the fail with the assertion this test exists for,
+    // e.g. this.assertEquals(expected, actual, 'what should hold').
+    // Red-first: a scaffolded test that passes before the behaviour exists
+    // has proven nothing. An EXPECTED exception is declared, not asserted:
+    // this.parmExceptionExpected(true) before the call under test.
+    this.fail('run_scenario_expectedResult is not implemented yet.');
 }
 </Source>
       </Method>

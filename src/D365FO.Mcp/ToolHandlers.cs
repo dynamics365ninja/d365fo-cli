@@ -51,10 +51,17 @@ public sealed class ToolHandlers
 
     public ToolResult<object> GetEdt(string name)
     {
-        var e = _repo.GetEdt(name);
-        return e is null
+        var resolved = _repo.GetEdtResolved(name);
+        return resolved is null
             ? ToolResult<object>.Fail("EDT_NOT_FOUND", $"EDT '{name}' not found.")
-            : ToolResult<object>.Success(e);
+            : ToolResult<object>.Success(
+                (object)resolved.Value.Edt,
+                resolved.Value.StringSizeInheritedFrom is null
+                    ? null
+                    : new List<string>
+                    {
+                        $"StringSize {resolved.Value.Edt.StringSize} is inherited from {resolved.Value.StringSizeInheritedFrom} — this EDT declares none of its own.",
+                    });
     }
 
     public ToolResult<object> GetClass(string name)
@@ -109,7 +116,7 @@ public sealed class ToolHandlers
         var items = _repo.SearchLabels(query, langs, limit);
         if (!raw)
             items = items.Select(l => l with { Value = StringSanitizer.Sanitize(l.Value) }).ToList();
-        return ToolResult<object>.Success(new { count = items.Count, items });
+        return LabelResultWithDiskCheck(items);
     }
 
     public ToolResult<object> SearchLabelsFts(string query, string[]? langs = null, int limit = 100, bool raw = false)
@@ -117,7 +124,27 @@ public sealed class ToolHandlers
         var items = _repo.SearchLabelsFts(query, langs, limit);
         if (!raw)
             items = items.Select(l => l with { Value = StringSanitizer.Sanitize(l.Value) }).ToList();
-        return ToolResult<object>.Success(new { count = items.Count, items });
+        return LabelResultWithDiskCheck(items);
+    }
+
+    /// <summary>
+    /// Search/resolve results confirmed against the physical .label.txt before anything
+    /// recommends them. The index is a snapshot that is never invalidated on delete or
+    /// rollback; upstream watched a benchmark run take all three labels it needed from
+    /// phantom rows — xppc does not check labels, so the build passed and BP failed two
+    /// steps later (BPErrorUnknownLabel), costing a second build and a second BP run.
+    /// Only a positive "the file reads fine and the id is not in it" is reported; a
+    /// pre-v17 index (no LabelFiles rows) or an unreadable file says nothing.
+    /// </summary>
+    private ToolResult<object> LabelResultWithDiskCheck(IReadOnlyList<LabelMatch> items)
+    {
+        var (phantoms, warnings) = LabelDiskCheck.Annotate(_repo, items);
+        return ToolResult<object>.Success(new
+        {
+            count = items.Count,
+            items,
+            phantomLabels = phantoms.Count > 0 ? phantoms.OrderBy(x => x, StringComparer.OrdinalIgnoreCase).ToList() : null,
+        }, warnings);
     }
 
     public ToolResult<object> GetSecurity(string obj, string type)
@@ -289,7 +316,7 @@ public sealed class ToolHandlers
         var items = _repo.ResolveLabel(token, langs);
         if (!raw)
             items = items.Select(l => l with { Value = StringSanitizer.Sanitize(l.Value) }).ToList();
-        return ToolResult<object>.Success(new { count = items.Count, items });
+        return LabelResultWithDiskCheck(items);
     }
 
     // ---- Table details pieces ----
@@ -1251,8 +1278,13 @@ public sealed class ToolHandlers
         if (methods is null || methods.Length == 0)
             return ToolResult<object>.Fail("BAD_INPUT", "At least one method is required.");
 
+        // A target spelled as the extension itself (Base.Suffix, Base_Extension) is
+        // rewritten to its base rather than suffixed twice.
+        target = D365FO.Core.ObjectNamingRules.NormalizeExtensionTarget(target, out var renameNote);
+
         // Guardrail: warn if CoC wrappers already exist.
         var warnings = new List<string>();
+        if (renameNote is not null) warnings.Add(renameNote);
         try
         {
             var existing = _repo.FindCocExtensions(target);
@@ -1502,7 +1534,7 @@ public sealed class ToolHandlers
     private ToolResult<object> ValidateXppCode(string code, string? context, string? codeType)
     {
         var normalized = D365FO.Core.Validation.XppValidator.NormalizeCodeType(
-            codeType ?? (code.TrimStart().StartsWith('<') ? "xml-any" : "xpp"));
+            codeType ?? DetectCodeType(code));
 
         D365FO.Core.Validation.IPropertyStatsProvider? stats = null;
         try { if (_repo.HasPropertyStats()) stats = _repo; }
@@ -1513,6 +1545,20 @@ public sealed class ToolHandlers
             (object)new { rule = v.Rule, severity = v.Severity, line = v.Line, excerpt = v.Excerpt, fix = v.Fix }),
             violations.Count(v => v.Severity == "error"),
             violations.Count(v => v.Severity == "warning"));
+    }
+
+    /// <summary>
+    /// Mirror of the CLI's ValidateXppCommand.DetectCodeType: an AxTable routes to the table
+    /// rules, an AxReport to the report-only rules (its RDL lives in CDATA and the X++
+    /// keyword rules would only produce noise over it), any other XML to xml-any.
+    /// </summary>
+    private static string DetectCodeType(string code)
+    {
+        if (System.Text.RegularExpressions.Regex.IsMatch(code, @"<AxTable[\s>]", System.Text.RegularExpressions.RegexOptions.IgnoreCase))
+            return D365FO.Core.Validation.XppValidator.CodeTypeXmlTable;
+        if (System.Text.RegularExpressions.Regex.IsMatch(code, @"<AxReport[\s>]", System.Text.RegularExpressions.RegexOptions.IgnoreCase))
+            return D365FO.Core.Validation.XppValidator.CodeTypeXmlReport;
+        return code.TrimStart().StartsWith('<') ? "xml-any" : "xpp";
     }
 
     private ToolResult<object> ValidateReferences(string code, string? context)
@@ -1771,13 +1817,37 @@ public sealed class ToolHandlers
             var m = _repo.FindMethod(objectName, method!);
             if (m is null)
             {
-                methodInfo = new
-                {
-                    name = method,
-                    found = false,
-                    eligibility = $"Method \"{method}\" not found on {objectName} (checked inheritance chain and extensions). " +
-                                  $"Use get_object_info (objectType={(objectType == "table" ? "table" : "class")}) for {objectName} to list real methods.",
-                };
+                // Kernel fallback: every table inherits its data methods (validateWrite,
+                // insert, modifiedField, …) from xRecord/Common — kernel types with no AOT
+                // metadata, so the index has no row for the most common CoC target there
+                // is. "Not found" would read as "does not exist" and leave the caller to
+                // invent the wrapper unaided.
+                var kernel = D365FO.Core.Knowledge.TableDataMethods.AppliesTo(objectType)
+                    ? D365FO.Core.Knowledge.TableDataMethods.Lookup(method!)
+                    : null;
+                methodInfo = kernel is not null
+                    ? (object)new
+                    {
+                        name = kernel.Name,
+                        found = true,
+                        signature = kernel.Signature,
+                        inherited = new
+                        {
+                            declaredOn = kernel.DeclaredOn,
+                            note = $"{objectName} does not declare {kernel.Name}; every table gets it from " +
+                                   $"{kernel.DeclaredOn}, a kernel type with no AOT metadata, which is why the " +
+                                   "symbol index has no row for it. The signature above is the one a CoC wrapper must match exactly.",
+                        },
+                        eligibility = $"CoC-eligible — [ExtensionOf(tableStr({objectName}))] final class … wrapping {kernel.Signature}. {kernel.Purpose}",
+                        contract = kernel.Contract,
+                    }
+                    : new
+                    {
+                        name = method,
+                        found = false,
+                        eligibility = $"Method \"{method}\" not found on {objectName} (checked inheritance chain and extensions). " +
+                                      $"Use get_object_info (objectType={(objectType == "table" ? "table" : "class")}) for {objectName} to list real methods.",
+                    };
             }
             else
             {
@@ -1903,7 +1973,17 @@ public sealed class ToolHandlers
 
         var words = System.Text.RegularExpressions.Regex.Replace(baseName, "([A-Z])", " $1").Trim();
         IReadOnlyList<LabelMatch> labels;
-        try { labels = _repo.SearchLabels(words, new[] { "en-us" }, 5); }
+        try
+        {
+            labels = _repo.SearchLabels(words, new[] { "en-us" }, 5);
+            // reusableLabels is a RECOMMENDATION — a phantom row (in the index, in no
+            // .label.txt on disk) must never be recommended for reuse: xppc does not
+            // check labels, so the mistake only surfaces at BP time as
+            // BPErrorUnknownLabel, two builds later.
+            var (phantoms, _) = LabelDiskCheck.Annotate(_repo, labels);
+            if (phantoms.Count > 0)
+                labels = labels.Where(l => !phantoms.Contains($"@{l.File}:{l.Key}")).ToList();
+        }
         catch { labels = Array.Empty<LabelMatch>(); }
 
         object? propertyDefaults = null;
@@ -1947,6 +2027,128 @@ public sealed class ToolHandlers
             propertyDefaults,
             groundingToken = token,
         });
+    }
+
+    /// <summary>
+    /// Aggregate context for WRITING A SYSTEST — <c>prepare</c> mode <c>test</c> (port of the
+    /// upstream MCP server's <c>prepare(mode="test")</c>). The other two modes answer "how do
+    /// I change this" and "how do I create this"; this one answers "how do I TEST this": the
+    /// method list worth covering lives in the index, the tests that already cover the target
+    /// live in the index too, and the one thing that reliably breaks a first test run — the
+    /// model not referencing TestEssentials — is visible in the descriptor and nowhere else
+    /// until the build fails. It deliberately states the RED-first order: a test written after
+    /// the code, that passes on its first run, has proven nothing about the assertion inside it.
+    /// </summary>
+    public ToolResult<object> PrepareTest(string objectName, string? goal, string? methodName, string? modelName)
+    {
+        if (string.IsNullOrWhiteSpace(objectName))
+            return ToolResult<object>.Fail("BAD_INPUT", "Object name (the class under test) required.");
+
+        var target = objectName.Trim();
+        var testClass = $"{target}Test";
+        var details = _repo.GetClassDetails(target);
+
+        // Lifecycle and serialisation members are not what a unit test pins down.
+        var skip = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+            { "new", "finalize", "typenew", "pack", "unpack", "classdeclaration" };
+        var focus = methodName?.Trim();
+        var methods = details?.Methods ?? Array.Empty<MethodInfo>();
+        var suggested = methods
+            .Where(m => !skip.Contains(m.Name))
+            .Where(m => focus is null || string.Equals(m.Name, focus, StringComparison.OrdinalIgnoreCase))
+            .Take(8)
+            .Select(m => new { m.Name, m.Signature })
+            .ToList();
+
+        // Classes that look like tests and mention the target — the coverage that exists.
+        var existingTests = new List<string>();
+        try
+        {
+            existingTests = _repo.SearchClasses(target + "Test", limit: 5)
+                .Concat(_repo.SearchClasses("Test" + target, limit: 5))
+                .Select(c => c.Name)
+                .Where(n => !string.Equals(n, target, StringComparison.OrdinalIgnoreCase))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .OrderBy(n => n, StringComparer.OrdinalIgnoreCase)
+                .Take(10)
+                .ToList();
+        }
+        catch { /* index hiccup — coverage listing is best-effort */ }
+
+        var testEssentials = TestEssentialsReferenced(modelName);
+
+        var scaffold = $"d365fo generate systest {testClass} --class {target}"
+            + string.Join("", suggested.Select(m => $" --method {m.Name}"))
+            + " --install-to <Model>";
+
+        var token = ProvenanceStore.CreateToken(new ProvenanceContext(
+            goal ?? $"unit tests for {target}", target, focus, "class", testClass));
+
+        return ToolResult<object>.Success(new
+        {
+            target,
+            testClass = $"{testClass} extends SysTestCase (the platform's own convention: <Target>Test)",
+            targetIndexed = details is not null,
+            targetHint = details is null
+                ? $"\"{target}\" is not in the index as a class — check the name (`d365fo search any {target}`), or re-extract if it was written outside this session. The rest of this answer is generic."
+                : null,
+            methodsWorthTesting = suggested,
+            scaffoldCall = scaffold,
+            existingTests = existingTests.Count > 0 ? existingTests : null,
+            existingTestsVerdict = existingTests.Count > 0
+                ? "Extend one of those rather than starting a second class for the same target."
+                : "No existing test class found for this target.",
+            testEssentials = testEssentials switch
+            {
+                true => $"Model references TestEssentials — the filtering attributes ([SysTestCategory], [SysTestOwner], …) are available.",
+                false => "🚨 Model does not reference TestEssentials. [SysTestMethod] comes from ApplicationFoundation and compiles, but " +
+                         "[SysTestCategory], [SysTestOwner], [SysTestPriority] and [SysTestAreaPath] are in TestEssentials and will not — " +
+                         "add the reference to the model descriptor BEFORE the first build if you plan to use them.",
+                null => "(TestEssentials reference not checked — pass modelName and configure D365FO_PACKAGES_PATH to enable it.)",
+            },
+            redFirstCycle = new[]
+            {
+                "1. Scaffold + write the test class (every scaffolded method ends in this.fail — red on purpose).",
+                "2. Build — it must COMPILE. Red means a failing assertion, not a broken file.",
+                $"3. d365fo test run {testClass} — expect failures. If it passes here, the assertion is empty and the test is worthless.",
+                "4. Implement the behaviour.",
+                "5. Build, then run again — expect green.",
+                "6. d365fo validate xpp on the class you changed.",
+            },
+            frameworkApi =
+                "Asserts come from SysTestAssert — assertEquals, assertNotEqual, assertTrue, assertFalse, assertNull, " +
+                "assertNotNull, assertSame, assertNotSame, assertRealEquals, assertUTCDateTimeEquals, fail. There is " +
+                "no assertExpectedException: declare it with this.parmExceptionExpected(true) before the call that " +
+                "must throw. Every test runs in its own transaction and is rolled back, so created records need no " +
+                "cleanup and there is no rollback attribute to add.",
+            groundingToken = token,
+        });
+    }
+
+    /// <summary>Does the model that will hold the test reference TestEssentials? Null when unknowable here.</summary>
+    private static bool? TestEssentialsReferenced(string? modelName)
+    {
+        if (string.IsNullOrWhiteSpace(modelName)) return null;
+        try
+        {
+            var packages = D365FoSettings.FromEnvironment().PackagesPath;
+            if (string.IsNullOrWhiteSpace(packages)) return null;
+            var descriptorDir = Path.Combine(packages!, modelName!, "Descriptor");
+            if (!Directory.Exists(descriptorDir)) return null;
+            foreach (var file in Directory.EnumerateFiles(descriptorDir, "*.xml"))
+            {
+                var xml = File.ReadAllText(file);
+                if (System.Text.RegularExpressions.Regex.IsMatch(
+                        xml, "<d2p1:string>TestEssentials</d2p1:string>",
+                        System.Text.RegularExpressions.RegexOptions.IgnoreCase))
+                    return true;
+            }
+            return false;
+        }
+        catch
+        {
+            return null;
+        }
     }
 
     internal static string LastToken(string name)

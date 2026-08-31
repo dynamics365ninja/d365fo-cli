@@ -121,10 +121,27 @@ public static class ReferenceResolver
         "fileiopermission", "runaspermission", "datetimeutil", "timezone", "random",
         "runbase", "image", "clrinterop", "clrobject", "thread", "webrequest",
         "webresponse", "gc", "session", "infolog", "debug", "global",
-        // Kernel enums (not in metadata XML)
+        // Kernel enums (not in metadata XML). `noyes` and `exception` are the two
+        // commonest names in shipped X++, and precisely the two an index-only check
+        // used to fail as hallucinations — `d365fo search any NoYes` then offers
+        // NoYesBlank / NoYesCombo / DefaultNoYes, which are different types.
+        "noyes", "exception",
         "types", "tablescope", "utcdatetimeorder", "dateorder", "dateday",
         "datemonth", "dateyear", "statementtype", "concurrencymodel", "isolationlevel",
+        // More kernel enums shipped metadata and attributes use (upstream measured 44 such
+        // names in a real install; this list is known-incomplete, which is why unknown
+        // DECLARED types degrade to warnings rather than errors).
+        "utilelementtype", "tablegroup", "accessright", "accesstype", "sortorder",
+        "joinmode", "menuitemtype", "messageseverity", "openmode", "units",
     };
+
+    /// <summary>
+    /// True when <paramref name="name"/> is a kernel (binary) type or kernel enum. Those are
+    /// NOT present in PackagesLocalDirectory metadata XML, so an index-only existence check is
+    /// in no position to judge them — callers must treat a hit here as verified, never as a
+    /// hallucination.
+    /// </summary>
+    public static bool IsKernelType(string name) => KernelTypes.Contains(name);
 
     /// <summary>Methods available on every table buffer via the kernel xRecord/Common base.</summary>
     private static readonly HashSet<string> TableBuiltinMethods = new(StringComparer.OrdinalIgnoreCase)

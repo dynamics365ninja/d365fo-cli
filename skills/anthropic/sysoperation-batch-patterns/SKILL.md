@@ -54,6 +54,34 @@ d365fo generate sysoperation FmInvoiceBatch \
 
 The `SysOperationExecutionMode` enum in the platform also has a fourth member, `ReliableAsynchronous` (runs on a batch-server thread with a tracked client poll — commonly used for "fire off and keep a Batch Job History record"), but this CLI's `--execution-mode` flag does not currently emit it; passing it is rejected. If you need `ReliableAsynchronous`, scaffold with `Synchronous` and hand-edit the generated `mainOperation`/`new` code afterward.
 
+**Dialog layout from the contract — attributes, not dialog code** (all
+xppc-verified together, stacked comma-separated in one bracket on the parm
+method):
+
+- Every dialog field is a parm method carrying `[DataMemberAttribute('Name')]`
+  — without it the property is not on the contract and not in the dialog.
+- Caption/tooltip: `[SysOperationLabelAttribute(literalStr("@MyModel:FromDate"))]`
+  and `[SysOperationHelpTextAttribute(literalStr("@MyModel:FromDateHelp"))]` —
+  `literalStr` passes the label id through without resolving it at compile time.
+- Grouping: declare the group on the CLASS with
+  `[SysOperationGroupAttribute('Dates', "@MyModel:Dates", '1')]` (name, label,
+  sequence) and put fields in it with
+  `[SysOperationGroupMemberAttribute('Dates')]` on each parm method.
+- Order within a group: `[SysOperationDisplayOrderAttribute('1')]` — a
+  **string**, not an int.
+- Visibility: `[SysOperationControlVisibilityAttribute(false)]` hides a
+  contract member that must exist but not be shown (a value the caller sets in
+  code).
+- Validation belongs in the contract's `validate()` — return false after
+  `checkFailed(...)` and the dialog will not close. Implement
+  SysOperationInitializable when the contract needs defaults before the dialog
+  is shown; its `initialize()` runs first.
+- Reach for a UI builder (`[SysOperationContractProcessing(classStr(MyUIBuilder))]`)
+  only when the attributes cannot express it — a custom lookup, a field that
+  reacts to another.
+- Do NOT put a SysEntryPoint attribute on the service method — xppc reports it
+  as *obsolete: "This attribute is deprecated in AX7."*
+
 **Hard rules:**
 
 - The `process()` method on the Service class is the only method that should contain business logic.
