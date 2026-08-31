@@ -1,4 +1,4 @@
-using D365FO.Core.Scaffolding;
+﻿using D365FO.Core.Scaffolding;
 using D365FO.Cli.Commands.Generate;
 using System.Xml.Linq;
 using Xunit;
@@ -774,6 +774,48 @@ public class ScaffoldingSnapshotTests
 
         var methods = doc.Root.Element("SourceCode")!.Element("Methods")!.Elements("Method");
         Assert.DoesNotContain(methods, m => m.Element("Name")!.Value == "setUpTestCase");
+    }
+
+    // Every AxClass file the platform ships wraps <Declaration>/<Source> in
+    // CDATA, so X++ doc comments (<summary>, <param>) can be written with
+    // literal angle brackets. Without it a later hand-edit has to XML-escape
+    // them, and D365FO does not decode the entities back — the literal
+    // &lt;summary&gt; ends up in Visual Studio and in the compiled source.
+    // XElement.Value is identical for CDATA and text, so the other snapshot
+    // tests here cannot see the difference: this one asserts the node type.
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void SysTest_wraps_declaration_and_every_method_source_in_CDATA(bool atl)
+    {
+        var doc = SysTestScaffolder.TestClass("CustServiceTest", atl: atl);
+        var sourceCode = doc.Root!.Element("SourceCode")!;
+
+        Assert.IsType<XCData>(Assert.Single(sourceCode.Element("Declaration")!.Nodes()));
+
+        var methods = sourceCode.Element("Methods")!.Elements("Method").ToList();
+        Assert.NotEmpty(methods);
+        foreach (var method in methods)
+        {
+            Assert.IsType<XCData>(Assert.Single(method.Element("Source")!.Nodes()));
+        }
+    }
+
+    // The CDATA wrapping must not change the X++ text itself — a round-trip
+    // through the serializer has to return exactly what the scaffolder built.
+    [Fact]
+    public void SysTest_CDATA_round_trips_the_source_text_unchanged()
+    {
+        var doc = SysTestScaffolder.TestClass("CustServiceTest", atl: true);
+        var reparsed = XDocument.Parse(doc.ToString());
+
+        var original = doc.Root!.Element("SourceCode")!;
+        var actual = reparsed.Root!.Element("SourceCode")!;
+
+        Assert.Equal(original.Element("Declaration")!.Value, actual.Element("Declaration")!.Value);
+        Assert.Equal(
+            original.Element("Methods")!.Elements("Method").Select(m => m.Element("Source")!.Value),
+            actual.Element("Methods")!.Elements("Method").Select(m => m.Element("Source")!.Value));
     }
 
     [Fact]

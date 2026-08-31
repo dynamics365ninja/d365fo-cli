@@ -94,7 +94,7 @@ public static class SysTestScaffolder
                 "}\n";
             methodElements.Add(new XElement("Method",
                 new XElement("Name", "setUpTestCase"),
-                new XElement("Source", setUpTestCaseSrc)));
+                new XElement("Source", new XCData(setUpTestCaseSrc))));
         }
 
         foreach (var subject in effectiveSubjects)
@@ -117,14 +117,14 @@ public static class SysTestScaffolder
                 "}\n";
             methodElements.Add(new XElement("Method",
                 new XElement("Name", testMethodName),
-                new XElement("Source", testMethodSrc)));
+                new XElement("Source", new XCData(testMethodSrc))));
         }
 
         return new XDocument(
             new XElement("AxClass",
                 new XElement("Name", className),
                 new XElement("SourceCode",
-                    new XElement("Declaration", declaration),
+                    new XElement("Declaration", new XCData(declaration)),
                     new XElement("Methods", methodElements))));
     }
 }

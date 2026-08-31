@@ -27,8 +27,16 @@ they report in the same turn, re-run, and only then write.
 
 - The test class **extends `SysTestCase`** and lives in the same model as the code
   under test, or a dedicated test model.
-- Test methods are `public void` and **must start with `test`** (case-insensitive).
-  `[SysTestMethod]` categorises them.
+- Test methods are `public void`, take **no parameters**, and are discovered two
+  ways: the name starts with `test` (case-insensitive) **or** the method carries
+  an attribute deriving from `SysTestFilterAttribute` — `[SysTestMethod]`, or
+  `[SysTestCheckInTest]` for a test that creates real records. Either is enough,
+  so the `test` prefix is **not** required when the attribute is present — the
+  discovery loop in `SysTestCase.testMethods()` tries `strStartsWith` on the
+  name first and falls back to the attribute. Prefer the attribute plus an
+  intention-revealing `<memberUnderTest>_<scenario>_<expectedResult>` name, e.g.
+  `calculateDiscount_zeroRate_returnsZero` — which is also what
+  `d365fo generate systest` emits.
 - `setUp()` / `tearDown()` run before and after **each** test method.
 - Assertions (inherited from `SysTestAssert`): `this.assertEquals()`,
   `assertNotEqual()` (no trailing *s*), `assertTrue()`, `assertFalse()`,
@@ -45,6 +53,21 @@ they report in the same turn, re-run, and only then write.
   (xppc: *"Cannot implicitly convert from type 'str' to type
   'Enumeration(utilElementType)'"*).
 - `SysTestSuite` groups test classes for batch execution.
+- `d365fo generate systest <Name> [--table T | --class C] [--method M] [--atl]
+  [--install-to <Model>]` scaffolds the `SysTestCase` skeleton: an
+  Arrange/Act/Assert body per subject that opens red with
+  `this.fail(...)`, the `[SysTestTarget]` attribute for the resolved
+  table/class, and — with `--atl` — an `AtlDataRootNode` field plus the
+  `setUpTestCase()` that constructs it. `<Declaration>` and every `<Source>`
+  are emitted as CDATA, matching every AxClass file the platform ships, so
+  X++ doc comments (`<summary>`, `<param>`) can be written inside them with
+  literal angle brackets.
+- Edit an already-generated method body with `d365fo modify method` rather than
+  a plain text editor: it writes through the Bridge and preserves the CDATA
+  wrapper. Hand-editing the raw XML is fine too, but keep the
+  `<![CDATA[ ... ]]>` in place — replacing it with XML-escaped text puts a
+  literal `&lt;summary&gt;` into Visual Studio and into the compiled X++,
+  because D365FO does not decode those entities back.
 - X++ has **no mocking framework**. Isolate dependencies by extracting an
   interface or by delegation, and inject the fake in `setUp()`.
 - Naming: `<TestedClass>Test` (for example `FmVehicleServiceTest`). Pick one
@@ -68,14 +91,14 @@ class FmVehicleServiceTest extends SysTestCase
     }
 
     [SysTestMethod]
-    public void testCalculateDiscountIsZeroAtZeroRate()
+    public void calculateDiscount_zeroRate_returnsZero()
     {
         AmountMST discount = service.calculateDiscount(1000, 0);
         this.assertEquals(0, discount, 'Discount must be 0 when the rate is 0');
     }
 
     [SysTestMethod]
-    public void testCalculateDiscountRejectsNegativeAmount()
+    public void calculateDiscount_negativeAmount_throwsError()
     {
         try
         {
@@ -101,6 +124,10 @@ For integration-level tests that need realistic master data.
 - **There is no `AtlScenario` and no `AtlDataHelper` class.** Both are plausible
   and neither exists.
 - Create transient test data through the ATL data-root creators or in `setUp()`.
+- Check whether the model already has a shared base test class that wraps
+  `AtlDataRootNode::construct()` and exposes the common nodes as members (e.g.
+  `invent`, `purch`, `sales`). Extend that base instead of calling
+  `AtlDataRootNode::construct()` again in every new test class.
 
 ## 4. Where the eval loop fits
 

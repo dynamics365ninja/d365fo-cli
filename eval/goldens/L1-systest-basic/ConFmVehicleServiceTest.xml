@@ -2,15 +2,15 @@
 <AxClass>
   <Name>ConFmVehicleServiceTest</Name>
   <SourceCode>
-    <Declaration>[SysTestTarget(classStr(FmVehicleService), UtilElementType::Class)]
+    <Declaration><![CDATA[[SysTestTarget(classStr(FmVehicleService), UtilElementType::Class)]
 public class ConFmVehicleServiceTest extends SysTestCase
 {
 }
-</Declaration>
+]]></Declaration>
     <Methods>
       <Method>
         <Name>run_scenario_expectedResult</Name>
-        <Source>[SysTestMethod]
+        <Source><![CDATA[[SysTestMethod]
 public void run_scenario_expectedResult()
 {
     // Arrange
@@ -24,7 +24,7 @@ public void run_scenario_expectedResult()
     // this.parmExceptionExpected(true) before the call under test.
     this.fail('run_scenario_expectedResult is not implemented yet.');
 }
-</Source>
+]]></Source>
       </Method>
     </Methods>
   </SourceCode>
