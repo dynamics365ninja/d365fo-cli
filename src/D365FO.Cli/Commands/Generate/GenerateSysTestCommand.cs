@@ -40,8 +40,8 @@ public sealed class GenerateSysTestCommand : Command<GenerateSysTestCommand.Sett
         public string? Table { get; init; }
 
         [CommandOption("--method <METHOD>")]
-        [System.ComponentModel.Description("Method on --class or --table. Resolved against the index (must exist); becomes the generated test method's subject.")]
-        public string? Method { get; init; }
+        [System.ComponentModel.Description("Method on --class or --table (repeatable — one red-first test method is emitted per value). Resolved against the index (must exist); becomes the generated test method's subject.")]
+        public string[]? Method { get; init; }
     }
 
     public override int Execute(CommandContext ctx, Settings settings)
@@ -51,14 +51,16 @@ public sealed class GenerateSysTestCommand : Command<GenerateSysTestCommand.Sett
         if (string.IsNullOrWhiteSpace(settings.Name))
             return RenderHelpers.Render(kind, ToolResult<object>.Fail(D365FoErrorCodes.BadInput, "Test class name required."));
 
+        var methods = (settings.Method ?? Array.Empty<string>())
+            .Where(m => !string.IsNullOrWhiteSpace(m)).ToArray();
+
         var hasClass = !string.IsNullOrWhiteSpace(settings.Class);
         var hasTable = !string.IsNullOrWhiteSpace(settings.Table);
         if (hasClass && hasTable)
             return RenderHelpers.Render(kind, ToolResult<object>.Fail(D365FoErrorCodes.BadInput, "Specify only one of --class or --table."));
-        if (!hasClass && !hasTable && !string.IsNullOrWhiteSpace(settings.Method))
+        if (!hasClass && !hasTable && methods.Length > 0)
             return RenderHelpers.Render(kind, ToolResult<object>.Fail(D365FoErrorCodes.BadInput, "--method requires --class or --table."));
 
-        string? subject = null;
         string? sourceKind = null;
         string? sourceName = null;
 
@@ -90,15 +92,14 @@ public sealed class GenerateSysTestCommand : Command<GenerateSysTestCommand.Sett
                 }
             }
 
-            if (!string.IsNullOrWhiteSpace(settings.Method))
+            foreach (var method in methods)
             {
-                if (repo.FindMethod(owner, settings.Method!) is null)
+                if (repo.FindMethod(owner, method) is null)
                 {
                     return RenderHelpers.Render(kind, ToolResult<object>.Fail(D365FoErrorCodes.MethodNotFound,
-                        $"Method '{settings.Method}' not found on {sourceKind} '{owner}' in index.",
+                        $"Method '{method}' not found on {sourceKind} '{owner}' in index.",
                         $"Use 'd365fo get {sourceKind} {owner}' to see the real method list."));
                 }
-                subject = settings.Method;
             }
         }
 
@@ -116,13 +117,16 @@ public sealed class GenerateSysTestCommand : Command<GenerateSysTestCommand.Sett
 
         try
         {
-            var doc = SysTestScaffolder.TestClass(settings.Name, settings.DataAreaId, settings.Atl, subject);
+            var doc = SysTestScaffolder.TestClass(settings.Name, settings.DataAreaId, settings.Atl,
+                subjects: methods.Length > 0 ? methods : null,
+                targetName: sourceName, targetIsTable: hasTable);
             // Grounding gate (issue #161): uniform across every generate subcommand.
             var gate = GenerateInstaller.Gate(settings, settings.Name, doc);
             if (gate.Failure is not null) return RenderHelpers.Render(kind, gate.Failure);
 
             var res = GenerateInstaller.Write(gate, doc, outPath!, settings.Overwrite);
-            var testMethodName = $"{subject ?? "subject"}_scenario_expectedResult";
+            var testMethodNames = (methods.Length > 0 ? methods : new[] { "subject" })
+                .Select(m => $"{m}_scenario_expectedResult").ToArray();
 
             return GenerateInstaller.Done(kind, gate, settings, new
             {
@@ -131,8 +135,11 @@ public sealed class GenerateSysTestCommand : Command<GenerateSysTestCommand.Sett
                 extends    = "SysTestCase",
                 dataAreaId = settings.DataAreaId,
                 atl        = settings.Atl,
-                source     = sourceKind is null ? null : new { kind = sourceKind, name = sourceName, method = settings.Method },
-                testMethod = testMethodName,
+                source     = sourceKind is null ? null : new { kind = sourceKind, name = sourceName, methods },
+                testMethods = testMethodNames,
+                // Red-first: every emitted method ends in this.fail(...) so the first run
+                // is red on purpose — write the assertion, then make it green.
+                redFirst   = true,
                 path       = res.Path,
                 bytes      = res.Bytes,
                 backup     = res.BackupPath,

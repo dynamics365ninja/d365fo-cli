@@ -779,7 +779,7 @@ public class ScaffoldingSnapshotTests
     [Fact]
     public void SysTest_subject_from_resolved_method_names_the_test_method()
     {
-        var doc = SysTestScaffolder.TestClass("CustServiceCreateCustomerTest", subject: "createCustomer");
+        var doc = SysTestScaffolder.TestClass("CustServiceCreateCustomerTest", subjects: new[] { "createCustomer" });
         var methods = doc.Root!.Element("SourceCode")!.Element("Methods")!.Elements("Method").ToList();
         var testMethod = Assert.Single(methods);
         Assert.Equal("createCustomer_scenario_expectedResult", testMethod.Element("Name")!.Value);
@@ -838,7 +838,7 @@ public class ScaffoldingSnapshotTests
         var settings = new GenerateSysTestCommand.Settings
         {
             Name = "CustServiceTest",
-            Method = "createCustomer",
+            Method = new[] { "createCustomer" },
             Out = System.IO.Path.Combine(System.IO.Path.GetTempPath(), $"d365fo-cli-test-systest-{System.Guid.NewGuid():N}.xml"),
         };
         var exit = cmd.Execute(null!, settings);

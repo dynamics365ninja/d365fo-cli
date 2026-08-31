@@ -59,6 +59,33 @@ public class NumberSequenceScaffolderTests
         Assert.Equal(xsi.NamespaceName, root.Attribute(XNamespace.Xmlns + "i")?.Value);
     }
 
+    /// <summary>
+    /// The old template contradicted the repo's own corpus (number-sequence-patterns §2/§3)
+    /// three times over: <c>newForm</c>'s second argument is the FormRun (it passed a scope
+    /// object), the fourth is a FieldId via <c>fieldNum</c> (it passed <c>fieldStr</c>), and
+    /// the <c>numRef</c> accessor lives on the module's parameters table (it named
+    /// <c>CompanyInfo</c>). It also called a <c>formRun.numberSeqFormHandler(...)</c> method
+    /// that does not exist on a stock FormRun, once, in an init handler — instead of driving
+    /// the datasource's create/write/delete cycle.
+    /// </summary>
+    [Fact]
+    public void FormHandler_follows_the_corpus_newForm_contract()
+    {
+        var doc = NumberSequenceScaffolder.FormHandler("ConDemoTable", "ConDemoNum", "ConDemoTable_NumberSeqHandler", "ConDemo");
+        var xml = doc.ToString();
+
+        Assert.Contains("ConDemoParameters::numRefConDemoNum().NumberSequenceId", xml);
+        Assert.DoesNotContain("CompanyInfo", xml);
+        Assert.Contains("fieldNum(ConDemoTable, ConDemoNum)", xml);
+        Assert.DoesNotContain("fieldStr(", xml);
+        Assert.DoesNotContain("FormNumberSeqScope", xml);
+        // The handler drives the datasource cycle, not a one-time init call.
+        Assert.Contains("formMethodDataSourceCreatePre", xml);
+        Assert.Contains("formMethodDataSourceWrite", xml);
+        Assert.Contains("formMethodDataSourceDelete", xml);
+        // One handler per open form instance, released on close.
+        Assert.Contains("FormEventType::Closing", xml);
+    }
 }
 
 /// <summary>

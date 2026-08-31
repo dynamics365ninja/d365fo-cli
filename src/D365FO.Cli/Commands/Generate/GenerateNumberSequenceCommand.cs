@@ -112,7 +112,7 @@ public sealed class GenerateNumberSequenceCommand : Command<GenerateNumberSequen
             if (handlerClass is not null && handlerPath is not null)
             {
                 handlerResult = GenerateInstaller.Write(gate,
-                    NumberSequenceScaffolder.FormHandler(settings.TableName!, edtName, handlerClass),
+                    NumberSequenceScaffolder.FormHandler(settings.TableName!, edtName, handlerClass, settings.ModuleName),
                     handlerPath, settings.Overwrite);
             }
 

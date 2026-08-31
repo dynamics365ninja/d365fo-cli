@@ -116,29 +116,73 @@ public static class NumberSequenceScaffolder
     }
 
     /// <summary>
-    /// Scaffolds a form event-handler class that wires <c>NumberSeqFormHandler</c>
-    /// into the form's <c>Initialized</c> event so the field auto-generates its value.
+    /// Scaffolds a form event-handler class that wires <c>NumberSeqFormHandler</c> into the
+    /// form's datasource events so the field auto-generates its value.
     /// </summary>
-    public static XDocument FormHandler(string tableName, string edtName, string className)
+    /// <remarks>
+    /// The emitted shape follows the corpus (number-sequence-patterns §3), adapted to the
+    /// event-handler route for a form the caller may not own:
+    /// <list type="bullet">
+    /// <item><c>newForm</c>'s arguments are (RefRecId from <c>.NumberSequenceId</c>, the
+    /// <b>FormRun</b>, the <b>FormDataSource</b>, <c>fieldNum(...)</c>) — the earlier template
+    /// passed a scope object for the FormRun and <c>fieldStr</c> for the FieldId, neither of
+    /// which compiles.</item>
+    /// <item>The <c>numRef&lt;Edt&gt;()</c> accessor lives on the <b>module's parameters
+    /// table</b> — never on <c>CompanyInfo</c> (the corpus says so in as many words).</item>
+    /// <item>The handler must drive the datasource's create/write/delete cycle, not a one-time
+    /// call in an init handler — one <c>NumberSeqFormHandler</c> per open form instance, held
+    /// in a Map keyed by the FormRun object and released when the form closes.</item>
+    /// </list>
+    /// </remarks>
+    public static XDocument FormHandler(string tableName, string edtName, string className, string? moduleName = null)
     {
+        // The module's parameters table (CustParameters, FMParameters, …) owns the
+        // numRef accessor. The conventional name is <Module>Parameters; the caller
+        // must repoint it when the module spells its table differently.
+        var parametersTable = (moduleName ?? tableName) + "Parameters";
+        var formName = tableName + "Form";
+
         var declaration =
             $"public static class {className}\n" +
             "{\n" +
+            "    // One NumberSeqFormHandler per open form instance, keyed by the FormRun\n" +
+            "    // object itself. Released in the Closing handler below.\n" +
+            "    private static Map formHandlers = new Map(Types::Class, Types::Class);\n" +
             "}\n";
 
-        var handlerMethod = $"{tableName}Form_OnInitialized";
-
-        var initSrc =
-            $"[FormEventHandler(formStr({tableName}Form), FormEventType::Initialized)]\n" +
-            $"public static void {handlerMethod}(xFormRun _sender, FormEventArgs _e)\n" +
+        string HandlerSource(string method, string eventType, string call) =>
+            $"[FormDataSourceEventHandler(formDataSourceStr({formName}, {tableName}), FormDataSourceEventType::{eventType})]\n" +
+            $"public static void {method}(FormDataSource _sender, FormDataSourceEventArgs _e)\n" +
             "{\n" +
-            "    FormRun formRun = _sender;\n" +
-            $"    formRun.numberSeqFormHandler(\n" +
-            $"        NumberSeqFormHandler::newForm(\n" +
-            $"            CompanyInfo::numRef{edtName}().NumberSequenceId,\n" +
-            "            new FormNumberSeqScope(),\n" +
-            $"            formRun.dataSource(tableStr({tableName})),\n" +
-            $"            fieldStr({tableName}, {edtName})));\n" +
+            $"    {className}::formHandler(_sender).{call}();\n" +
+            "}\n";
+
+        var lookupSrc =
+            "/// <summary>\n" +
+            $"/// Lazily builds the handler that drives auto-numbering of {tableName}.{edtName}.\n" +
+            "/// </summary>\n" +
+            "private static NumberSeqFormHandler formHandler(FormDataSource _ds)\n" +
+            "{\n" +
+            "    FormRun formRun = _ds.formRun();\n\n" +
+            "    if (!formHandlers.exists(formRun))\n" +
+            "    {\n" +
+            "        formHandlers.insert(formRun, NumberSeqFormHandler::newForm(\n" +
+            $"            {parametersTable}::numRef{edtName}().NumberSequenceId, // RefRecId, not a string\n" +
+            "            formRun,\n" +
+            "            _ds,\n" +
+            $"            fieldNum({tableName}, {edtName})));\n" +
+            "    }\n\n" +
+            "    return formHandlers.lookup(formRun);\n" +
+            "}\n";
+
+        var closeSrc =
+            $"[FormEventHandler(formStr({formName}), FormEventType::Closing)]\n" +
+            $"public static void {formName}_OnClosing(xFormRun _sender, FormEventArgs _e)\n" +
+            "{\n" +
+            "    if (formHandlers.exists(_sender))\n" +
+            "    {\n" +
+            "        formHandlers.remove(_sender);\n" +
+            "    }\n" +
             "}\n";
 
         return new XDocument(
@@ -148,7 +192,22 @@ public static class NumberSequenceScaffolder
                     new XElement("Declaration", declaration),
                     new XElement("Methods",
                         new XElement("Method",
-                            new XElement("Name", handlerMethod),
-                            new XElement("Source", initSrc))))));
+                            new XElement("Name", "formHandler"),
+                            new XElement("Source", lookupSrc)),
+                        new XElement("Method",
+                            new XElement("Name", $"{tableName}_OnCreating"),
+                            new XElement("Source", HandlerSource($"{tableName}_OnCreating", "Creating", "formMethodDataSourceCreatePre"))),
+                        new XElement("Method",
+                            new XElement("Name", $"{tableName}_OnCreated"),
+                            new XElement("Source", HandlerSource($"{tableName}_OnCreated", "Created", "formMethodDataSourceCreate"))),
+                        new XElement("Method",
+                            new XElement("Name", $"{tableName}_OnWritten"),
+                            new XElement("Source", HandlerSource($"{tableName}_OnWritten", "Written", "formMethodDataSourceWrite"))),
+                        new XElement("Method",
+                            new XElement("Name", $"{tableName}_OnDeleting"),
+                            new XElement("Source", HandlerSource($"{tableName}_OnDeleting", "Deleting", "formMethodDataSourceDelete"))),
+                        new XElement("Method",
+                            new XElement("Name", $"{formName}_OnClosing"),
+                            new XElement("Source", closeSrc))))));
     }
 }

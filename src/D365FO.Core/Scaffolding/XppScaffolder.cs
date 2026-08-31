@@ -276,6 +276,14 @@ public static class XppScaffolder
     /// Field name → form control type (issue #164 / R5). Without it every bound field is
     /// rendered as a string control, whatever the field really is.
     /// </param>
+    /// <param name="omitDataGroups">
+    /// Field groups the bound table has been POSITIVELY established not to declare. The
+    /// templates bind grids/groups to <c>Overview</c>/<c>General</c> the way shipped forms do,
+    /// but naming a group the table does not declare is a build error that an incremental
+    /// build passes silently — so a caller that has read the table's XML and proven the group
+    /// absent passes it here and the binding is omitted. A table that could not be read passes
+    /// nothing: absence of evidence is not evidence of absence.
+    /// </param>
     public static string Form(
         string formName,
         string? dataSourceTable = null,
@@ -284,7 +292,8 @@ public static class XppScaffolder
         IReadOnlyList<string>? gridFields = null,
         IReadOnlyList<FormSectionSpec>? sections = null,
         string? linesTable = null,
-        Func<string, (string AxType, string TypeElement)>? controlTypeResolver = null)
+        Func<string, (string AxType, string TypeElement)>? controlTypeResolver = null,
+        IReadOnlyCollection<string>? omitDataGroups = null)
     {
         var opt = new FormTemplateOptions
         {
@@ -298,7 +307,22 @@ public static class XppScaffolder
             LinesDsTable = linesTable,
             ControlTypeResolver = controlTypeResolver,
         };
-        return FormPatternTemplates.Build(pattern, opt);
+        var xml = FormPatternTemplates.Build(pattern, opt);
+        if (omitDataGroups is { Count: > 0 })
+        {
+            var doc = System.Xml.Linq.XDocument.Parse(xml, System.Xml.Linq.LoadOptions.PreserveWhitespace);
+            var drop = doc.Descendants("DataGroup")
+                .Where(e => omitDataGroups.Contains(e.Value.Trim(), StringComparer.OrdinalIgnoreCase))
+                .ToList();
+            if (drop.Count > 0)
+            {
+                foreach (var e in drop) e.Remove();
+                xml = doc.Declaration is not null
+                    ? doc.Declaration + Environment.NewLine + doc.ToString(System.Xml.Linq.SaveOptions.DisableFormatting)
+                    : doc.ToString(System.Xml.Linq.SaveOptions.DisableFormatting);
+            }
+        }
+        return xml;
     }
 
     /// <summary>

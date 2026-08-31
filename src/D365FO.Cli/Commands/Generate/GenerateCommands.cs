@@ -907,6 +907,7 @@ internal static class GenerateFormImpl
         // back to no <Caption> element when neither is available.
         var effectiveCaption = caption;
         var preflightWarnings = new List<string>();
+        var absentFieldGroups = new List<string>();
         if (!string.IsNullOrWhiteSpace(table))
         {
             try
@@ -935,9 +936,19 @@ internal static class GenerateFormImpl
                         foreach (var group in RequiredFieldGroups(pattern))
                         {
                             if (!TableDefinesFieldGroup(t.SourcePath!, group))
+                            {
+                                // Positively established absent (the table's XML was read) —
+                                // the binding is OMITTED from the emitted form, because naming
+                                // a group the table does not declare is a build error that an
+                                // incremental build passes silently. TableDefinesFieldGroup
+                                // returns true when it cannot read the table, so a group only
+                                // lands here on real evidence.
+                                absentFieldGroups.Add(group);
                                 preflightWarnings.Add(
-                                    $"Form pattern {pattern} references field group '{group}' but table '{table}' does not define it " +
-                                    "(extension-added groups are not checked). Add the field group to the table, or the bound controls will render empty.");
+                                    $"Form pattern {pattern} binds field group '{group}' but table '{table}' does not define it " +
+                                    "(extension-added groups are not checked). The <DataGroup> binding was omitted from the generated form; " +
+                                    "add the field group to the table and re-bind it for the shipped-form look.");
+                            }
                         }
                     }
                 }
@@ -956,7 +967,8 @@ internal static class GenerateFormImpl
                 gridFields:      fields,
                 sections:        sectionSpecs,
                 linesTable:      linesTable,
-                controlTypeResolver: BuildControlTypeResolver(table, linesTable));
+                controlTypeResolver: BuildControlTypeResolver(table, linesTable),
+                omitDataGroups:  absentFieldGroups);
         }
         catch (Exception ex)
         {

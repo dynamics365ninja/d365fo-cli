@@ -202,7 +202,17 @@ internal static class GroundingGate
             {
                 try
                 {
-                    if (repo.SymbolKinds(symbol).Count == 0)
+                    // Kernel types and kernel enums (NoYes, Exception, Types, …) have no AOT
+                    // artifact, so the index cannot prove them — an index-only check is in no
+                    // position to fail the call. Without this, `d365fo generate edt MyFlag
+                    // --extends NoYesId` derived NoYes itself and then refused it as a
+                    // hallucination, and the advised search offered NoYesBlank/NoYesCombo —
+                    // different types.
+                    if (D365FO.Core.Validation.ReferenceResolver.IsKernelType(symbol))
+                    {
+                        verified++;
+                    }
+                    else if (repo.SymbolKinds(symbol).Count == 0)
                     {
                         refErrors++;
                         violationDetails.Add($"[unknown-type] {symbol} — not found in the index. " +
