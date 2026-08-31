@@ -235,7 +235,6 @@ public class FormPatternScaffoldingTests
     [Theory]
     [InlineData("Wizard")]
     [InlineData("DropDialog")]
-    [InlineData("operational")]
     [InlineData("FormPartFactboxGrid")]
     [InlineData("TaskSingle")]
     public void Normalizer_rejects_catalog_only_patterns(string raw)
@@ -243,6 +242,18 @@ public class FormPatternScaffoldingTests
         Assert.False(FormPatternNormalizer.TryNormalize(raw, out _, out var error));
         Assert.Contains("cannot scaffold it", error);
         Assert.Contains("get form-pattern", error);
+    }
+
+    [Fact]
+    public void Normalizer_routes_a_second_spelling_of_the_same_AOS_pattern_to_its_template()
+    {
+        // "operational" resolves to the catalog's WorkspaceOperational entry, which writes
+        // the same <Pattern>WorkspaceOperational</Pattern> as the templated Workspace entry.
+        // Sending it to the generic expander instead produced a form the metadata reader
+        // rejected, so a name that names an AOS pattern a template covers gets the template.
+        Assert.True(FormPatternNormalizer.TryNormalize("operational", out var pattern, out var error));
+        Assert.Null(error);
+        Assert.Equal(D365FO.Core.Scaffolding.FormPattern.Workspace, pattern);
     }
 
     [Fact]

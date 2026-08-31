@@ -1,0 +1,21 @@
+{
+  "runId": "20260831T195406687Z__L2-security-duty-extension__808a971b019b4947a7d9b0bcddbc45c2",
+  "caseId": "L2-security-duty-extension",
+  "tier": 2,
+  "timestampUtc": "2026-08-31T19:54:06.6879809+00:00",
+  "source": "build-oracle",
+  "score": {
+    "xppErrors": 0,
+    "referenceErrors": 0,
+    "goldenMatch": true,
+    "goldenDiff": {
+      "missing": [],
+      "extra": [],
+      "changed": [],
+      "isMatch": true
+    },
+    "buildClean": true,
+    "buildErrors": 0,
+    "runtimeFailures": 0
+  }
+}

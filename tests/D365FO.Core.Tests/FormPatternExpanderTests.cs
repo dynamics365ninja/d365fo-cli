@@ -89,17 +89,43 @@ public class FormPatternExpanderTests
     }
 
     [Fact]
-    public void A_pattern_whose_mandatory_sub_pattern_is_unmodelled_is_refused()
+    public void A_container_the_AOS_wants_a_sub_pattern_on_gets_one_and_its_skeleton()
     {
-        // The AOS knows this pattern as "Task" and insists on the one sub-pattern its
-        // registry entry allows there ("Pattern 'Task Single' requires a sub-pattern
-        // specified on control …/OverviewTab"). That sub-pattern — ToolbarList — is not in
-        // this repo's catalog, so the form cannot be built correctly and is not built at all.
+        // The AOS knows this pattern as "Task" and insists on a sub-pattern on its tab page
+        // ("Pattern 'Task Single' requires a sub-pattern specified on control …/OverviewTab").
+        // Declaring one is not enough either — the tab page then has to hold what that
+        // sub-pattern requires, which for ToolbarList is a grid.
         var task = Resolve("TaskSingle");
         Assert.Equal("Task", task.XmlName);
-        Assert.False(FormPatternExpander.CanExpand(task, out var reason));
-        Assert.Contains("sub-pattern", reason);
-        Assert.Null(FormPatternExpander.Expand(task, new FormExpandOptions("ConDemoTaskForm")));
+
+        var doc = FormPatternExpander.Expand(task, new FormExpandOptions(
+            "ConDemoTaskForm", DsTable: "ConDemoTable", GridFields: ["VehicleId"]))!;
+
+        Assert.Contains("ToolbarList", Values(doc, "Pattern"));
+        Assert.Contains("Grid", Values(doc, "Type"));
+        Assert.False(FormPatternValidator.ValidateXml(doc.ToString()).HasErrors);
+    }
+
+    [Fact]
+    public void A_pattern_the_AOS_does_not_have_is_refused()
+    {
+        // Whatever the catalog says, a <Pattern> the AOT registry has no active version of
+        // fails the build with "Pattern 'X 1.1' not found" — the catalog's own
+        // "SimpleDetails" was exactly that until it was mapped onto the variant the platform
+        // ships. So a name the registry does not carry is never expanded.
+        var invented = new FormPatternSpec
+        {
+            Id = "ConDemoInvented",
+            XmlName = "ConDemoInvented",
+            DisplayName = "Invented",
+            Versions = ["1.0"],
+            Purpose = "test",
+            Root = [new NodeSpec { Id = "MainGrid", ControlTypes = ["Grid"], NameHint = "MainGrid" }],
+        };
+
+        Assert.False(FormPatternExpander.CanExpand(invented, out var reason));
+        Assert.Contains("no active pattern", reason);
+        Assert.Null(FormPatternExpander.Expand(invented, new FormExpandOptions("ConDemoX")));
     }
 
     [Fact]
@@ -128,32 +154,38 @@ public class FormPatternExpanderTests
     [Fact]
     public void Grid_slots_bind_the_datasource_and_render_columns()
     {
-        var spec = new FormPatternSpec
-        {
-            Id = "ConDemoSynthetic",
-            XmlName = "ConDemoSynthetic",
-            DisplayName = "Synthetic",
-            Versions = ["1.0"],
-            Purpose = "test",
-            DesignProperties = new Dictionary<string, string> { ["Style"] = "SimpleList" },
-            Root =
-            [
-                new NodeSpec { Id = "MainGrid", ControlTypes = ["Grid"], NameHint = "MainGrid" },
-            ],
-        };
-
-        var doc = FormPatternExpander.Expand(spec, new FormExpandOptions(
+        var doc = FormPatternExpander.Expand(Resolve("FormPartSectionList"), new FormExpandOptions(
             "ConDemoGridForm",
             DsTable: "ConDemoTable",
             GridFields: ["VehicleId", "AcquiredDate"],
-            ControlTypeResolver: f => f == "AcquiredDate" ? ("AxFormDateControl", "Date") : ("AxFormStringControl", "String")));
+            ControlTypeResolver: f => f == "AcquiredDate" ? ("AxFormDateControl", "Date") : ("AxFormStringControl", "String")))!;
 
-        var xml = doc!.ToString();
-        Assert.Contains("<DataSource>ConDemoTable</DataSource>", xml);
-        Assert.Contains("<Table>ConDemoTable</Table>", xml);
+        var xml = doc.ToString();
+        Assert.Contains("ConDemoTable", Values(doc, "DataSource"));
+        Assert.Equal("ConDemoTable", Value(doc, "Table"));
         // Columns come out typed through the resolver, the same way the templates do it.
         Assert.Contains("i:type=\"AxFormDateControl\"", xml);
-        Assert.Contains("<DataField>VehicleId</DataField>", xml);
-        Assert.Contains("<DataField>AcquiredDate</DataField>", xml);
+        Assert.Contains("VehicleId", Values(doc, "DataField"));
+        Assert.Contains("AcquiredDate", Values(doc, "DataField"));
+    }
+
+    [Fact]
+    public void Control_names_are_unique_across_the_whole_form()
+    {
+        // Both the catalog skeleton and the registry parts call a filter control
+        // "QuickFilter", and DetailsMasterTabs has two of them in different branches. The
+        // metadata provider refuses the file over it: "Element named: 'QuickFilter' of type
+        // 'AxFormControl' already exists".
+        var doc = FormPatternExpander.Expand(
+            Resolve("DetailsMasterTabs"), new FormExpandOptions("ConDemoTabsForm", DsTable: "ConDemoTable"))!;
+
+        var names = doc.Descendants()
+            .Where(e => e.Name.LocalName == "AxFormControl")
+            .Select(e => e.Element(e.Name.Namespace + "Name")?.Value)
+            .Where(n => !string.IsNullOrEmpty(n))
+            .ToList();
+
+        Assert.NotEmpty(names);
+        Assert.Equal(names.Count, names.Distinct(StringComparer.OrdinalIgnoreCase).Count());
     }
 }

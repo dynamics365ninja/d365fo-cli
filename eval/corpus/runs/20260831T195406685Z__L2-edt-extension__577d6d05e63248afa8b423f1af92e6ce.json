@@ -1,0 +1,21 @@
+{
+  "runId": "20260831T195406685Z__L2-edt-extension__577d6d05e63248afa8b423f1af92e6ce",
+  "caseId": "L2-edt-extension",
+  "tier": 2,
+  "timestampUtc": "2026-08-31T19:54:06.6853768+00:00",
+  "source": "build-oracle",
+  "score": {
+    "xppErrors": 0,
+    "referenceErrors": 0,
+    "goldenMatch": true,
+    "goldenDiff": {
+      "missing": [],
+      "extra": [],
+      "changed": [],
+      "isMatch": true
+    },
+    "buildClean": true,
+    "buildErrors": 0,
+    "runtimeFailures": 0
+  }
+}

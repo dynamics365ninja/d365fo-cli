@@ -1,0 +1,21 @@
+{
+  "runId": "20260831T195406687Z__L2-form-extension-basic__82c28a44bc91421f8871adb7a408f49d",
+  "caseId": "L2-form-extension-basic",
+  "tier": 2,
+  "timestampUtc": "2026-08-31T19:54:06.6871891+00:00",
+  "source": "build-oracle",
+  "score": {
+    "xppErrors": 0,
+    "referenceErrors": 0,
+    "goldenMatch": true,
+    "goldenDiff": {
+      "missing": [],
+      "extra": [],
+      "changed": [],
+      "isMatch": true
+    },
+    "buildClean": true,
+    "buildErrors": 0,
+    "runtimeFailures": 0
+  }
+}

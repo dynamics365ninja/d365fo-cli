@@ -100,49 +100,13 @@ public static class FormPatternExpander
             reason = $"'{spec.XmlName}' has sibling slots sharing a control type — expansion would be ambiguous";
             return false;
         }
-        if (UndeclarableSubPattern(spec) is { } slot)
+        if (FormPatternRegistry.VersionsOf(spec.XmlName).Count == 0)
         {
-            reason = $"'{spec.XmlName}' requires a sub-pattern on its {slot} that this tool cannot choose " +
-                     "— the AOS rejects the form without one";
+            reason = $"the AOS has no active pattern named '{spec.XmlName}' — a form declaring it " +
+                     "fails the build with \"Pattern not found\", whatever this catalog says";
             return false;
         }
         return true;
-    }
-
-    /// <summary>
-    /// The first required container the AOT pattern demands a sub-pattern on that cannot be
-    /// filled in here: the registry allows exactly one there — which the AOS then insists on —
-    /// and it is a pattern this repo's catalog does not model, so declaring it would only fail
-    /// the self-test. A slot with several allowed sub-patterns is a free choice, not a demand
-    /// (DropDialog's dialog content lists seven and compiles with none), so it does not block.
-    /// Null when the pattern has no such slot.
-    /// </summary>
-    /// <remarks>
-    /// A form emitted without the sub-pattern compiles no better: the AOS fails it with
-    /// "Pattern 'Task Single' requires a sub-pattern specified on control …". Refusing with a
-    /// reason is the honest answer until the catalog and the AOT registry are reconciled.
-    /// </remarks>
-    private static string? UndeclarableSubPattern(FormPatternSpec spec)
-    {
-        var versions = FormPatternRegistry.VersionsOf(spec.XmlName);
-        if (versions.Count == 0) return null;
-        var design = FormPatternRegistry.Find(spec.XmlName, versions[0])?.Design;
-        return design is null ? null : Walk(design.Children);
-
-        static string? Walk(IReadOnlyList<RegisteredPart> parts)
-        {
-            foreach (var part in parts)
-            {
-                if (!part.Count.StartsWith('1')) continue;
-                if (part.SubPatterns is { Count: 1 } &&
-                    FormPatternCatalog.ResolveSubPattern(part.SubPatterns[0]) is null)
-                {
-                    return $"{part.Type} \"{part.Part}\"";
-                }
-                if (Walk(part.Children) is { } deeper) return deeper;
-            }
-            return null;
-        }
     }
 
     /// <summary>
@@ -169,7 +133,7 @@ public static class FormPatternExpander
         var dsName = string.IsNullOrWhiteSpace(opt.DsTable) ? null : opt.DsTable;
 
         var controls = new XElement("Controls",
-            root.Where(IsRequired).Select(n => EmitNode(n, opt, dsName)).Where(e => e is not null)!);
+            root.Where(IsRequired).Select(n => EmitNode(n, opt, dsName, spec.Id)).Where(e => e is not null)!);
 
         var design = new XElement("Design");
         foreach (var (key, value) in (designProps ?? new Dictionary<string, string>()).OrderBy(p => p.Key, StringComparer.Ordinal))
@@ -192,7 +156,7 @@ public static class FormPatternExpander
         if (registered?.Design is { } registeredDesign)
         {
             ApplyProperties(design, registeredDesign.Properties);
-            ConformChildren(controls, registeredDesign.Children, registeredDesign.ExtraChildrenAllowed);
+            ConformChildren(controls, registeredDesign.Children, registeredDesign.ExtraChildrenAllowed, opt, dsName, spec.Id);
         }
 
         var dataSources = new XElement("DataSources");
@@ -240,24 +204,67 @@ public static class FormPatternExpander
         foreach (var el in form.Elements())
             el.Name = Ax + el.Name.LocalName;
 
+        EnsureUniqueControlNames(design);
+
         var doc = new XDocument(form);
         ContractOrderCanonicalizer.Apply(doc);
         return doc;
     }
 
     /// <summary>
-    /// Add the property values the registry requires on <paramref name="target"/>, without
-    /// touching one the skeleton already set (the caller's caption, datasource and pattern
-    /// are its own). A required value the registry leaves empty is not a value — the AOS
-    /// only checks the ones it spells out.
+    /// Control names are unique per FORM, not per container. Both the catalog skeleton and
+    /// the registry parts name a filter control "QuickFilter", and DetailsMasterTabs has two
+    /// of them in different branches — which the metadata provider rejects outright:
+    /// "Element named: 'QuickFilter' of type 'AxFormControl' already exists". The first
+    /// keeps the plain name; a later one is qualified with its parent control, and only
+    /// numbered if that still collides.
+    /// </summary>
+    private static void EnsureUniqueControlNames(XElement design)
+    {
+        var used = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var control in design.Descendants(XNamespace.None + "AxFormControl"))
+        {
+            var nameEl = control.Element(XNamespace.None + "Name");
+            if (nameEl is null || string.IsNullOrWhiteSpace(nameEl.Value)) continue;
+            if (used.Add(nameEl.Value)) continue;
+
+            var parent = control.Parent?.Parent?.Element(XNamespace.None + "Name")?.Value;
+            var candidate = string.IsNullOrWhiteSpace(parent) ? nameEl.Value : parent + nameEl.Value;
+            for (var i = 2; !used.Add(candidate); i++) candidate = $"{nameEl.Value}{i}";
+            nameEl.Value = candidate;
+        }
+    }
+
+    /// <summary>
+    /// Identity and binding: what the caller or the skeleton decided, which no pattern gets
+    /// to overwrite. Everything else on a patterned control is layout the pattern dictates.
+    /// </summary>
+    private static readonly IReadOnlySet<string> CallerOwnedProperties =
+        new HashSet<string>(StringComparer.Ordinal)
+        {
+            "Name", "Type", "Caption", "Pattern", "PatternVersion", "DataSource", "TitleDataSource",
+            "DataField", "DataGroup", "FormControlExtension", "Controls", "Table",
+        };
+
+    /// <summary>
+    /// Put the property values the registry requires on <paramref name="target"/>. A value the
+    /// skeleton already set is REPLACED — the AOS checks these against the pattern and reports
+    /// a mismatch as an error ("Property 'Style' … must have value 'CustomFilter' per pattern
+    /// …"), so the catalog's guess cannot be allowed to stand where the registry is explicit.
+    /// A required value the registry leaves empty is not a value: it only checks what it spells
+    /// out.
     /// </summary>
     private static void ApplyProperties(XElement target, IReadOnlyDictionary<string, string> properties)
     {
         foreach (var (key, value) in properties.OrderBy(p => p.Key, StringComparer.Ordinal))
         {
-            if (string.IsNullOrEmpty(value)) continue;
-            if (target.Elements().Any(e => string.Equals(e.Name.LocalName, key, StringComparison.Ordinal))) continue;
-            target.Add(new XElement(XNamespace.None + key, value));
+            if (string.IsNullOrEmpty(value) || CallerOwnedProperties.Contains(key)) continue;
+
+            var existing = target.Elements()
+                .FirstOrDefault(e => string.Equals(e.Name.LocalName, key, StringComparison.Ordinal));
+            if (existing is null) target.Add(new XElement(XNamespace.None + key, value));
+            else existing.Value = value;
         }
     }
 
@@ -267,16 +274,43 @@ public static class FormPatternExpander
     /// the skeleton already built are matched by control type — the same way the validator
     /// matches them — rather than duplicated.
     /// </summary>
-    private static void ConformChildren(XElement container, IReadOnlyList<RegisteredPart> parts, bool extraAllowed)
+    private static void ConformChildren(
+        XElement container,
+        IReadOnlyList<RegisteredPart> parts,
+        bool extraAllowed,
+        FormExpandOptions opt,
+        string? dsName,
+        string topPatternId)
     {
         var claimed = new HashSet<XElement>();
         var ordered = new List<XElement>();
 
         foreach (var part in parts)
         {
-            // A choice slot (OneOf) names several types; which one belongs here is the
-            // author's call, so it is left to them exactly as the catalog path leaves it.
-            if (part.IsChoice || string.IsNullOrEmpty(part.Type)) continue;
+            if (string.IsNullOrEmpty(part.Type)) continue;
+
+            // A choice slot (OneOf) names several types and which one belongs here is the
+            // author's call, so none is created — but the control already filling it is
+            // claimed, or the prune at the end of this method would take it for an extra.
+            if (part.IsChoice)
+            {
+                var alternatives = part.Type.Split('|', StringSplitOptions.RemoveEmptyEntries);
+                var filled = container.Elements().FirstOrDefault(e => !claimed.Contains(e)
+                    && alternatives.Any(a => string.Equals(
+                        e.Element(XNamespace.None + "Type")?.Value, a, StringComparison.OrdinalIgnoreCase)));
+                if (filled is not null)
+                {
+                    claimed.Add(filled);
+                    ordered.Add(filled);
+                    // The properties belong to the slot, and the AOS demands them of whatever
+                    // fills it — "Property 'DefaultAction' on control …/MainGrid must have
+                    // value … per pattern 'Details Master w/Standard Tabs'".
+                    ApplyProperties(filled, part.Properties);
+                    if (string.Equals(filled.Element(XNamespace.None + "Type")?.Value, "Grid", StringComparison.OrdinalIgnoreCase))
+                        BindGrid(filled, NameFor(part), opt, dsName);
+                }
+                continue;
+            }
 
             // A "$"-prefixed type ($Button, $Container) is a family marker, not a control
             // type: materialising it literally produced an AxForm$ButtonControl the metadata
@@ -308,11 +342,11 @@ public static class FormPatternExpander
                 container.Add(existing);
             }
 
-            // A container the pattern wants a sub-pattern on, where more than one is allowed,
-            // cannot be filled in for the author — and the AOS refuses the form rather than
-            // warning about it. An OPTIONAL slot like that is better left out entirely than
-            // emitted unspecified (FormPartSectionList's header group is the live case).
-            if (!required && part.SubPatterns is { Count: > 1 }
+            // A container the pattern wants a sub-pattern on and none can be chosen for it is
+            // better left out than emitted unspecified, when the slot is optional: the AOS
+            // refuses the form over it rather than warning ("requires a sub-pattern specified
+            // on control …"). FormPartSectionList's header group is the live case.
+            if (!required && part.SubPatterns.Count > 0 && ChooseSubPattern(part, topPatternId) is null
                 && existing.Element(XNamespace.None + "Pattern") is null)
             {
                 existing.Remove();
@@ -322,25 +356,26 @@ public static class FormPatternExpander
             claimed.Add(existing);
             ordered.Add(existing);
             ApplyProperties(existing, part.Properties);
+            if (string.Equals(part.Type, "Grid", StringComparison.OrdinalIgnoreCase))
+                BindGrid(existing, NameFor(part), opt, dsName);
 
-            // A container the pattern requires a sub-pattern on must declare one, or the
-            // AOS refuses the form ("requires a sub-pattern specified on control …"). Only
-            // an unambiguous choice is made here — the same rule the catalog path follows.
-            // Only a sub-pattern this repo's catalog also knows: declaring one it does not
-            // (the registry's Task tab pages ask for "ToolbarList") turns the expansion into
-            // an FP001 self-test failure, i.e. a refusal, which helps nobody.
-            if (part.SubPatterns is { Count: 1 } && existing.Element(XNamespace.None + "Pattern") is null
-                && FormPatternCatalog.ResolveSubPattern(part.SubPatterns[0]) is not null)
+            // A container the pattern allows sub-patterns on must declare one, or the AOS
+            // refuses the form ("requires a sub-pattern specified on control …") — that is
+            // true whether one is allowed there or seven. The first one this repo's catalog
+            // also models is taken: declaring a name the catalog does not know (the registry
+            // offers several it has never heard of) turns the expansion into an FP001
+            // self-test failure, i.e. a refusal, which helps nobody.
+            if (existing.Element(XNamespace.None + "Pattern") is null && ChooseSubPattern(part, topPatternId) is { } sub)
             {
-                var sub = part.SubPatterns[0];
                 var subVersions = FormPatternRegistry.VersionsOf(sub);
                 existing.AddFirst(new XElement(XNamespace.None + "PatternVersion",
                     subVersions.Count > 0 ? subVersions[0] : "1.0"));
                 existing.AddFirst(new XElement(XNamespace.None + "Pattern", sub));
+                ExpandSubPattern(existing, sub, opt, dsName, topPatternId);
             }
 
             if (part.Children is { Count: > 0 } && existing.Element(XNamespace.None + "Controls") is { } inner)
-                ConformChildren(inner, part.Children, part.ExtraChildrenAllowed);
+                ConformChildren(inner, part.Children, part.ExtraChildrenAllowed, opt, dsName, topPatternId);
         }
 
         // The pattern allows nothing but its own parts here, so a control the skeleton added
@@ -350,6 +385,24 @@ public static class FormPatternExpander
         {
             foreach (var extra in container.Elements().Where(e => !claimed.Contains(e)).ToList())
                 extra.Remove();
+        }
+
+        // A grid the pattern pairs with a default-action button has to name it: "Property
+        // 'DefaultAction' on control …/MainGrid cannot be empty per pattern 'Details Master
+        // w/Standard Tabs'". The registry models the button as a sibling part named after the
+        // grid, which is exactly the wiring the AOS is asking for.
+        foreach (var grid in ordered.Where(e =>
+                     string.Equals(e.Element(XNamespace.None + "Type")?.Value, "Grid", StringComparison.OrdinalIgnoreCase)))
+        {
+            if (grid.Elements().Any(e => e.Name.LocalName == "DefaultAction")) continue;
+            var gridName = grid.Element(XNamespace.None + "Name")?.Value;
+            if (string.IsNullOrEmpty(gridName)) continue;
+
+            var action = container.Elements().FirstOrDefault(e =>
+                string.Equals(e.Element(XNamespace.None + "Name")?.Value, gridName + "DefaultAction",
+                    StringComparison.OrdinalIgnoreCase));
+            if (action is not null)
+                grid.Add(new XElement(XNamespace.None + "DefaultAction", gridName + "DefaultAction"));
         }
 
         // The AOS checks the order of the parts it knows, and a control created here lands at
@@ -365,6 +418,69 @@ public static class FormPatternExpander
     }
 
     /// <summary>
+    /// Bind a grid to the form's datasource and render the caller's <c>--field</c>s as
+    /// columns, the way the hand-written templates do. Reached from both paths: the grid a
+    /// pattern requires is as often created from the registry part tree as from the catalog
+    /// skeleton, and a grid the caller asked for columns on has to get them either way.
+    /// </summary>
+    private static void BindGrid(XElement grid, string namePrefix, FormExpandOptions opt, string? dsName)
+    {
+        if (dsName is null) return;
+        var controls = grid.Element(XNamespace.None + "Controls");
+        if (controls is null) return;
+
+        if (!grid.Elements().Any(e => e.Name.LocalName == "DataSource"))
+            controls.AddBeforeSelf(new XElement(XNamespace.None + "DataSource", dsName));
+
+        if (opt.GridFields is not { Count: > 0 } || controls.HasElements) return;
+
+        foreach (var field in opt.GridFields)
+        {
+            var normalized = "String";
+            if (opt.ControlTypeResolver is not null)
+            {
+                var (_, typeElement) = opt.ControlTypeResolver(field);
+                if (!string.IsNullOrWhiteSpace(typeElement)) normalized = typeElement;
+            }
+            controls.Add(FormControlFactory.CreateBoundField(normalized, $"{namePrefix}_{field}", dsName, field));
+        }
+    }
+
+    /// <summary>
+    /// Fill a container that has just been given a sub-pattern with what that sub-pattern
+    /// requires. Declaring one is not free: the AOS — and this repo's own FP003 — then hold
+    /// the container to the sub-pattern's structure, so ToolbarList without its grid is as
+    /// broken as no sub-pattern at all.
+    /// </summary>
+    private static void ExpandSubPattern(
+        XElement control, string subPatternName, FormExpandOptions opt, string? dsName, string topPatternId)
+    {
+        if (control.Element(XNamespace.None + "Controls") is not { } slot) return;
+        if (FormPatternCatalog.ResolveSubPattern(subPatternName) is not { } spec) return;
+
+        foreach (var node in spec.Root.Where(IsRequired))
+        {
+            if (!IsConcrete(node)) continue;
+            if (slot.Elements().Any(e => string.Equals(
+                    e.Element(XNamespace.None + "Type")?.Value, node.ControlTypes[0], StringComparison.OrdinalIgnoreCase)))
+            {
+                continue;
+            }
+            if (EmitNode(node, opt, dsName, topPatternId) is { } emitted) slot.Add(emitted);
+        }
+
+        // …then hold that skeleton to the registry's own definition of the sub-pattern, the
+        // same way the design root is conformed — including the property values the
+        // sub-pattern requires of the CONTAINER itself ("Property 'ColumnsMode' on control …
+        // must have value 'Fill' per pattern 'Fields and Field Groups'").
+        if (RegistrySpecFactory.Newest(subPatternName)?.Design is { } subDesign)
+        {
+            ApplyProperties(control, subDesign.Properties);
+            ConformChildren(slot, subDesign.Children, subDesign.ExtraChildrenAllowed, opt, dsName, topPatternId);
+        }
+    }
+
+    /// <summary>
     /// Does <paramref name="control"/> belong to the control family a <c>$</c>-marker part
     /// names? <c>$Button</c> covers every button control the AOT has; the marker's own name
     /// (minus the sigil) is the family, matched against the control's type.
@@ -374,6 +490,48 @@ public static class FormPatternExpander
         var family = markerType.TrimStart('$');
         var type = control.Element(XNamespace.None + "Type")?.Value;
         return type is not null && type.Contains(family, StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// The sub-pattern to declare on a container, or null when none of the ones the AOS
+    /// allows there can be declared here. A candidate has to clear every gate the result is
+    /// then held to: this repo's catalog has to model it (FP001), it has to apply to this
+    /// control type and be legal under this form's pattern (FP007), and its own required
+    /// children have to be things the expander can materialise (FP003) — declaring one and
+    /// leaving its skeleton half-built is a refusal, not a feature.
+    /// </summary>
+    private static string? ChooseSubPattern(RegisteredPart part, string topPatternId) =>
+        ChooseSubPattern(part.SubPatterns, part.Type, topPatternId);
+
+    /// <inheritdoc cref="ChooseSubPattern(RegisteredPart, string)"/>
+    private static string? ChooseSubPattern(
+        IReadOnlyList<string>? allowed, string controlType, string topPatternId)
+    {
+        if (allowed is not { Count: > 0 }) return null;
+        var candidates = allowed
+            .Select(FormPatternCatalog.ResolveSubPattern)
+            .Where(sub => sub is not null)
+            .Select(sub => sub!)
+            .Where(sub => sub.AppliesToControlTypes.Contains(controlType, StringComparer.OrdinalIgnoreCase))
+            .Where(sub => sub.ParentPatterns is null ||
+                          sub.ParentPatterns.Contains(topPatternId, StringComparer.OrdinalIgnoreCase))
+            .Where(sub => sub.Root.Where(IsRequired).All(Materialisable))
+            // Least constraining first: a container the author still has to fill is better
+            // served by the sub-pattern that demands the least of it. Registry order decides
+            // ties, so the choice stays deterministic.
+            .OrderBy(sub => sub.Root.Count(IsRequired))
+            .ToList();
+
+        return candidates.Count > 0 ? candidates[0].XmlName : null;
+
+        // A required slot the expander can emit AND the validator can then match. A wildcard
+        // slot has no control type to create — that is how the Wizard body picked up
+        // DimensionEntryControl (required "Control/*") and then failed its own FP003. A named
+        // extension control is fine: QuickFilterControl is emitted from its own name, which is
+        // what CustomAndQuickFilters — the sub-pattern every custom-filter group needs — asks
+        // for.
+        static bool Materialisable(NodeSpec node) =>
+            IsConcrete(node) && !node.ControlTypes.Contains("*");
     }
 
     /// <summary>Control name for a registry part: its stable part id, else its alias with the spaces removed.</summary>
@@ -386,39 +544,35 @@ public static class FormPatternExpander
     /// Emit one control node and its required descendants. GridFields are rendered as
     /// column controls when the node is a Grid and a datasource is bound.
     /// </summary>
-    private static XElement? EmitNode(NodeSpec spec, FormExpandOptions opt, string? dsName)
+    private static XElement? EmitNode(NodeSpec spec, FormExpandOptions opt, string? dsName, string topPatternId)
     {
         if (!IsConcrete(spec)) return null;
 
         var el = FormControlFactory.CreateForSpec(spec);
         var type = spec.ControlTypes[0];
 
-        if (string.Equals(type, "Grid", StringComparison.OrdinalIgnoreCase) && dsName is not null)
+        // CreateForSpec only declares a sub-pattern when exactly one is allowed. The AOS does
+        // not soften for the ambiguous case — a custom-filter group with two candidates still
+        // fails the build with "requires a sub-pattern specified on control …" — so one is
+        // chosen here, by the same rules the result is validated against.
+        if (spec.RequiresSubPattern && el.Element(XNamespace.None + "Pattern") is null
+            && ChooseSubPattern(spec.AllowedSubPatterns, type, topPatternId) is { } chosen)
         {
-            // Bind the grid and render the caller's fields as columns, the same way the
-            // hand-written templates do.
-            el.Element("Controls")?.AddBeforeSelf(new XElement("DataSource", dsName));
-            if (opt.GridFields is { Count: > 0 } && el.Element("Controls") is { } gridControls)
-            {
-                foreach (var field in opt.GridFields)
-                {
-                    var normalized = "String";
-                    if (opt.ControlTypeResolver is not null)
-                    {
-                        var (_, typeElement) = opt.ControlTypeResolver(field);
-                        if (!string.IsNullOrWhiteSpace(typeElement)) normalized = typeElement;
-                    }
-                    gridControls.Add(FormControlFactory.CreateBoundField(
-                        normalized, $"{spec.NameHint ?? spec.Id}_{field}", dsName, field));
-                }
-            }
+            var chosenVersions = FormPatternRegistry.VersionsOf(chosen);
+            el.AddFirst(new XElement(XNamespace.None + "PatternVersion",
+                chosenVersions.Count > 0 ? chosenVersions[0] : "1.0"));
+            el.AddFirst(new XElement(XNamespace.None + "Pattern", chosen));
+            ExpandSubPattern(el, chosen, opt, dsName, topPatternId);
         }
+
+        if (string.Equals(type, "Grid", StringComparison.OrdinalIgnoreCase))
+            BindGrid(el, spec.NameHint ?? spec.Id, opt, dsName);
 
         if (spec.Children is { Count: > 0 } && el.Element("Controls") is { } container)
         {
             foreach (var child in spec.Children.Where(IsRequired))
             {
-                if (EmitNode(child, opt, dsName) is { } childEl) container.Add(childEl);
+                if (EmitNode(child, opt, dsName, topPatternId) is { } childEl) container.Add(childEl);
             }
         }
 
