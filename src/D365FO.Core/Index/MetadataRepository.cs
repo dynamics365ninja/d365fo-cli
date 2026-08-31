@@ -2070,21 +2070,43 @@ public sealed partial class MetadataRepository
     }
 
     /// <summary>
-    /// Resolve a label token like "@SYS12345" (the '@' is optional). Tries to
-    /// split the alphabetic prefix (= label file) from the remainder (= key)
-    /// and return one row per requested language.
+    /// Resolve a label token like "@SYS12345" or "@AccountsPayableMobile:Amount"
+    /// (the '@' is optional). Tries to split the label file from the key and return
+    /// one row per requested language.
     /// </summary>
+    /// <remarks>
+    /// Both token shapes ship in the AOT. The legacy one packs the file into the
+    /// alphabetic prefix ("@SYS12345"); the current one separates the two with a colon
+    /// ("@AccountsPayableMobile:Amount") and its key need contain no digit at all — the
+    /// prefix-then-digits split alone resolved <em>nothing</em> for it, which is what the
+    /// shipped packages are almost entirely written in (every &lt;Label&gt; element of
+    /// AccountsPayableMobile, for one).
+    /// </remarks>
     public IReadOnlyList<LabelMatch> ResolveLabel(string token, IReadOnlyCollection<string>? languages = null)
     {
         if (string.IsNullOrWhiteSpace(token)) return Array.Empty<LabelMatch>();
         var raw = token.TrimStart('@').Trim();
         if (raw.Length == 0) return Array.Empty<LabelMatch>();
 
-        // Split on first digit: "SYS12345" -> prefix="SYS", suffix="12345".
-        int splitIdx = 0;
-        while (splitIdx < raw.Length && char.IsLetter(raw[splitIdx])) splitIdx++;
-        var prefix = splitIdx > 0 ? raw.Substring(0, splitIdx) : raw;
-        var suffix = splitIdx < raw.Length ? raw.Substring(splitIdx) : string.Empty;
+        string prefix, suffix;
+        var colon = raw.IndexOf(':');
+        if (colon > 0 && colon < raw.Length - 1)
+        {
+            // "AccountsPayableMobile:Amount" -> file="AccountsPayableMobile", key="Amount".
+            // The key half is only ever looked up inside its own file: a bare "Amount"
+            // matches a dozen label files, and answering with the wrong file's text is
+            // worse than not answering.
+            prefix = raw.Substring(0, colon);
+            suffix = raw.Substring(colon + 1);
+        }
+        else
+        {
+            // Split on first digit: "SYS12345" -> prefix="SYS", suffix="12345".
+            int splitIdx = 0;
+            while (splitIdx < raw.Length && char.IsLetter(raw[splitIdx])) splitIdx++;
+            prefix = splitIdx > 0 ? raw.Substring(0, splitIdx) : raw;
+            suffix = splitIdx < raw.Length ? raw.Substring(splitIdx) : string.Empty;
+        }
 
         // Normalize to lowercase so both 'en-US' (Windows filesystem) and 'en-us'
         // (Linux filesystem, Microsoft packages) match the caller's request.

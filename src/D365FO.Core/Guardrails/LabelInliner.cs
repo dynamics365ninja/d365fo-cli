@@ -12,14 +12,20 @@ using D365FO.Core.Index;
 namespace D365FO.Core.Guardrails;
 
 /// <summary>
-/// Post-processes a rendered object by replacing <c>@File12345</c> label
-/// tokens with their resolved text (first available language). Works on the
-/// JSON tree so it composes with any CLI command's response shape.
+/// Post-processes a rendered object by replacing <c>@File12345</c> and
+/// <c>@LabelFile:LabelId</c> label tokens with their resolved text (first available
+/// language). Works on the JSON tree so it composes with any CLI command's response shape.
 /// </summary>
 public static class LabelInliner
 {
+    /// <summary>
+    /// Both shapes the AOT writes. The colon form is matched first so a file id that
+    /// itself ends in digits (<c>@Foo123:Bar</c>) is not chopped by the legacy branch.
+    /// A token that resolves to nothing is left exactly as it was, so widening the
+    /// pattern can add a resolution but never mangle text.
+    /// </summary>
     private static readonly Regex TokenRegex = new(
-        @"@([A-Za-z]+)(\d+)",
+        @"@[A-Za-z][A-Za-z0-9_]*:[A-Za-z0-9_]+|@[A-Za-z]+\d+",
         RegexOptions.Compiled);
 
     /// <summary>
