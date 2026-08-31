@@ -149,6 +149,51 @@ public class XppScaffolderExtensionTests
     }
 
     /// <summary>
+    /// Caller-defined field groups and indexes must be honoured — upstream measured that a
+    /// silently dropped caller group surfaces later as "Field group 'X' does not exist" on
+    /// the FORM, pointing away from the table that lost it; and a create path that cannot
+    /// produce an index at all leaves no way back on an offline write.
+    /// </summary>
+    [Fact]
+    public void Table_honours_caller_field_groups_and_indexes()
+    {
+        var doc = XppScaffolder.Table(
+            "ConDemoTable",
+            fields: new[] { new TableFieldSpec("Price", "AmountCur", null, false), new TableFieldSpec("ValidFrom", "TransDate", null, false), new TableFieldSpec("ValidTo", "TransDate", null, false) },
+            fieldGroups: new[]
+            {
+                new D365FO.Core.Scaffolding.TableFieldGroupSpec("Pricing", ["Price"]),
+                // A collision with a built-in must be skipped, not duplicated.
+                new D365FO.Core.Scaffolding.TableFieldGroupSpec("Overview", ["Price"]),
+            },
+            indexes: new[]
+            {
+                new D365FO.Core.Scaffolding.TableIndexSpec("DateIdx", ["ValidFrom", "ValidTo"],
+                    ValidTimeStateKey: true, ValidTimeStateMode: "Gap"),
+                new D365FO.Core.Scaffolding.TableIndexSpec("PriceIdx", ["Price"], Unique: true),
+            });
+        var root = doc.Root!;
+
+        var groups = root.Element("FieldGroups")!.Elements("AxTableFieldGroup")
+            .Select(g => g.Element("Name")!.Value).ToList();
+        Assert.Contains("Pricing", groups);
+        Assert.Equal(1, groups.Count(g => g == "Overview"));
+
+        var indexes = root.Element("Indexes")!.Elements("AxTableIndex").ToList();
+        var dateIdx = indexes.Single(i => i.Element("Name")!.Value == "DateIdx");
+        Assert.Equal("Yes", dateIdx.Element("ValidTimeStateKey")!.Value);
+        Assert.Equal("Gap", dateIdx.Element("ValidTimeStateMode")!.Value);
+        var priceIdx = indexes.Single(i => i.Element("Name")!.Value == "PriceIdx");
+        Assert.Equal("No", priceIdx.Element("AllowDuplicates")!.Value);
+        // NoGap is the SDK default the serializer omits — never written explicitly.
+        var noGap = XppScaffolder.Table("T2",
+            fields: new[] { new TableFieldSpec("A", "Name", null, false) },
+            indexes: new[] { new D365FO.Core.Scaffolding.TableIndexSpec("VtsIdx", ["A"], ValidTimeStateKey: true, ValidTimeStateMode: "NoGap") });
+        Assert.Null(noGap.Root!.Element("Indexes")!.Elements("AxTableIndex")
+            .Single(i => i.Element("Name")!.Value == "VtsIdx").Element("ValidTimeStateMode"));
+    }
+
+    /// <summary>
     /// The offline path must produce the same field element the live path does — otherwise
     /// `generate extension --field` and `modify add-field` disagree about the same edit.
     /// </summary>

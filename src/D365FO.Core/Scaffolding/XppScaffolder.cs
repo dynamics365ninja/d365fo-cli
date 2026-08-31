@@ -57,6 +57,18 @@ public static class XppScaffolder
     /// is null or returns null, a heuristic over well-known system EDTs is used,
     /// defaulting to <c>AxTableFieldString</c>.
     /// </param>
+    /// <param name="fieldGroups">
+    /// Caller-defined field groups, appended after the scaffold's built-ins. A group whose
+    /// name collides with a built-in (Auto*, Overview, General) is skipped rather than
+    /// duplicated — upstream measured that a silently dropped caller group surfaces later as
+    /// "Field group 'X' does not exist" on the FORM, pointing away from the table that lost it.
+    /// </param>
+    /// <param name="indexes">
+    /// Caller-defined indexes, appended after the derived primary-key index. Supports the
+    /// valid-time-state properties (<c>ValidTimeStateKey</c>/<c>Mode</c>) the AOT accepts on
+    /// an index; <c>NoGap</c> is the SDK default the serializer omits, so only <c>Gap</c> is
+    /// written explicitly.
+    /// </param>
     public static XDocument Table(
         string name,
         string? label = null,
@@ -66,7 +78,9 @@ public static class XppScaffolder
         IEnumerable<string>? primaryKeyFields = null,
         string? configurationKey = null,
         string? formRef = null,
-        Func<string, string?>? edtBaseTypeResolver = null)
+        Func<string, string?>? edtBaseTypeResolver = null,
+        IEnumerable<TableFieldGroupSpec>? fieldGroups = null,
+        IEnumerable<TableIndexSpec>? indexes = null)
     {
         // Resolve effective field list: caller-supplied wins; otherwise use the
         // pattern preset (if any). When neither is supplied, emit nothing —
@@ -100,18 +114,34 @@ public static class XppScaffolder
             pkNames = new List<string> { effectiveFields[0].Name };
         }
 
-        XElement? indexesEl = null;
+        var indexEls = new List<XElement>();
         if (pkNames.Count > 0)
         {
-            indexesEl = new XElement("Indexes",
-                new XElement("AxTableIndex",
-                    new XElement("Name", "PrimaryIdx"),
-                    new XElement("AlternateKey", "Yes"),
-                    new XElement("AllowDuplicates", "No"),
-                    new XElement("Fields",
-                        pkNames.Select(n => new XElement("AxTableIndexField",
-                            new XElement("DataField", n))))));
+            indexEls.Add(new XElement("AxTableIndex",
+                new XElement("Name", "PrimaryIdx"),
+                new XElement("AlternateKey", "Yes"),
+                new XElement("AllowDuplicates", "No"),
+                new XElement("Fields",
+                    pkNames.Select(n => new XElement("AxTableIndexField",
+                        new XElement("DataField", n))))));
         }
+        foreach (var idx in indexes ?? Enumerable.Empty<TableIndexSpec>())
+        {
+            if (string.IsNullOrWhiteSpace(idx.Name) || idx.Fields.Count == 0) continue;
+            if (indexEls.Any(e => string.Equals(e.Element("Name")?.Value, idx.Name, StringComparison.OrdinalIgnoreCase))) continue;
+            indexEls.Add(new XElement("AxTableIndex",
+                new XElement("Name", idx.Name),
+                idx.AlternateKey ? new XElement("AlternateKey", "Yes") : null,
+                idx.Unique || idx.AlternateKey ? new XElement("AllowDuplicates", "No") : null,
+                // NoGap is the SDK default the serializer omits — only Gap is written.
+                idx.ValidTimeStateKey ? new XElement("ValidTimeStateKey", "Yes") : null,
+                idx.ValidTimeStateKey && string.Equals(idx.ValidTimeStateMode, "Gap", StringComparison.OrdinalIgnoreCase)
+                    ? new XElement("ValidTimeStateMode", "Gap") : null,
+                new XElement("Fields",
+                    idx.Fields.Select(n => new XElement("AxTableIndexField",
+                        new XElement("DataField", n))))));
+        }
+        XElement? indexesEl = indexEls.Count > 0 ? new XElement("Indexes", indexEls) : null;
 
         // TableGroup / TableType: only emit when the caller asked for them.
         // An absent element means the AOT default applies (Miscellaneous /
@@ -164,7 +194,15 @@ public static class XppScaffolder
                     BuildEmptyFieldGroup("AutoSummary"),
                     BuildEmptyFieldGroup("AutoBrowse"),
                     BuildFieldGroup("Overview", effectiveFields),
-                    BuildFieldGroup("General", effectiveFields)),
+                    BuildFieldGroup("General", effectiveFields),
+                    (fieldGroups ?? Enumerable.Empty<TableFieldGroupSpec>())
+                        .Where(g => !string.IsNullOrWhiteSpace(g.Name))
+                        .Where(g => !ReservedFieldGroupNames.Contains(g.Name))
+                        .Select(g => new XElement("AxTableFieldGroup",
+                            new XElement("Name", g.Name),
+                            new XElement("Fields",
+                                g.Fields.Select(f => new XElement("AxTableFieldGroupField",
+                                    new XElement("DataField", f))))))),
                 indexesEl));
     }
 
@@ -202,6 +240,12 @@ public static class XppScaffolder
             new XElement("Name", name),
             autoPopulate ? new XElement("AutoPopulate", "Yes") : null,
             new XElement("Fields"));
+
+    /// <summary>Group names the scaffold always emits itself — a caller group by one of these names would be a duplicate.</summary>
+    private static readonly HashSet<string> ReservedFieldGroupNames = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "AutoReport", "AutoLookup", "AutoIdentification", "AutoSummary", "AutoBrowse", "Overview", "General",
+    };
 
     private static XElement BuildFieldGroup(string name, IReadOnlyList<TableFieldSpec> fields) =>
         new XElement("AxTableFieldGroup",
@@ -1760,6 +1804,21 @@ public sealed record ReportSpec(
 }
 
 public sealed record TableFieldSpec(string Name, string? Edt, string? Label, bool Mandatory);
+
+/// <summary>A caller-defined field group on a generated table.</summary>
+public sealed record TableFieldGroupSpec(string Name, IReadOnlyList<string> Fields);
+
+/// <summary>
+/// A caller-defined index on a generated table. <paramref name="ValidTimeStateMode"/> is
+/// <c>Gap</c> or <c>NoGap</c>; NoGap is the SDK default and is not written explicitly.
+/// </summary>
+public sealed record TableIndexSpec(
+    string Name,
+    IReadOnlyList<string> Fields,
+    bool Unique = false,
+    bool AlternateKey = false,
+    bool ValidTimeStateKey = false,
+    string? ValidTimeStateMode = null);
 
 /// <summary>One value within an <c>AxEnum</c>.</summary>
 public sealed record EnumValueSpec(string Name, int IntValue, string? Label = null);

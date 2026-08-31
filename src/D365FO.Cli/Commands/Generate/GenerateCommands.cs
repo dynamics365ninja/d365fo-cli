@@ -585,6 +585,14 @@ public sealed class GenerateTableCommand : Command<GenerateTableCommand.Settings
         [CommandOption("--form-ref <MENUITEM>")]
         [System.ComponentModel.Description("Display menu item opened when drilling into a record of this table. Omitted when not set.")]
         public string? FormRef { get; init; }
+
+        [CommandOption("--field-group <SPEC>")]
+        [System.ComponentModel.Description("Repeatable: <Name>[[:<F1>,<F2>,…]]. Adds a caller-defined field group after the built-ins (Auto*, Overview, General). Example: --field-group Pricing:Price,Currency")]
+        public string[] FieldGroups { get; init; } = Array.Empty<string>();
+
+        [CommandOption("--index <SPEC>")]
+        [System.ComponentModel.Description("Repeatable: <Name>:<F1>,<F2>[[:unique]][[:alternate-key]][[:valid-time-state[[=Gap|NoGap]]]]. Adds an index after the derived PrimaryIdx. Example: --index DateIdx:ValidFrom,ValidTo:valid-time-state=Gap")]
+        public string[] Indexes { get; init; } = Array.Empty<string>();
     }
 
     public override int Execute(CommandContext ctx, Settings settings)
@@ -598,11 +606,15 @@ public sealed class GenerateTableCommand : Command<GenerateTableCommand.Settings
             return RenderHelpers.Render(kind, ToolResult<object>.Fail("BAD_INPUT", serr!));
 
         var fields2 = settings.Fields.Select(ParseField).ToList();
+        if (!TryParseFieldGroups(settings.FieldGroups, out var fieldGroupSpecs, out var fgErr))
+            return RenderHelpers.Render(kind, ToolResult<object>.Fail("BAD_INPUT", fgErr!));
+        if (!TryParseIndexes(settings.Indexes, out var indexSpecs, out var idxErr))
+            return RenderHelpers.Render(kind, ToolResult<object>.Fail("BAD_INPUT", idxErr!));
         // Resolve each field's EDT base type from the index so the scaffold
         // stamps the concrete i:type discriminator on every <AxTableField>.
         var edtResolver = GenerateInstaller.BuildEdtBaseTypeResolver();
         var doc = XppScaffolder.Table(settings.Name, settings.Label, fields2, pattern, storage, settings.PrimaryKey,
-            settings.ConfigurationKey, settings.FormRef, edtResolver);
+            settings.ConfigurationKey, settings.FormRef, edtResolver, fieldGroupSpecs, indexSpecs);
 
         var fieldCount = fields2.Count > 0 ? fields2.Count : TablePatternPresets.DefaultFieldsFor(pattern).Count;
         var patternStr = pattern == TablePattern.None ? null : pattern.ToString();
@@ -653,6 +665,74 @@ public sealed class GenerateTableCommand : Command<GenerateTableCommand.Settings
                 grounding = gate.Grounding,
             },
             warnings);
+    }
+
+    private static bool TryParseFieldGroups(string[] raw, out List<TableFieldGroupSpec> specs, out string? error)
+    {
+        specs = [];
+        error = null;
+        foreach (var spec in raw)
+        {
+            var parts = spec.Split(':', 2, StringSplitOptions.TrimEntries);
+            if (string.IsNullOrWhiteSpace(parts[0]))
+            {
+                error = $"--field-group '{spec}' has no name. Expected <Name>[:<F1>,<F2>,…].";
+                return false;
+            }
+            var groupFields = parts.Length > 1
+                ? parts[1].Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries)
+                : Array.Empty<string>();
+            specs.Add(new TableFieldGroupSpec(parts[0], groupFields));
+        }
+        return true;
+    }
+
+    private static bool TryParseIndexes(string[] raw, out List<TableIndexSpec> specs, out string? error)
+    {
+        specs = [];
+        error = null;
+        foreach (var spec in raw)
+        {
+            var parts = spec.Split(':', StringSplitOptions.TrimEntries);
+            if (parts.Length < 2 || string.IsNullOrWhiteSpace(parts[0]) || string.IsNullOrWhiteSpace(parts[1]))
+            {
+                error = $"--index '{spec}' needs a name and a field list: <Name>:<F1>,<F2>[:unique][:alternate-key][:valid-time-state[=Gap|NoGap]].";
+                return false;
+            }
+            var idxFields = parts[1].Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
+            bool unique = false, alternateKey = false, vts = false;
+            string? vtsMode = null;
+            foreach (var flag in parts.Skip(2))
+            {
+                var f = flag.ToLowerInvariant();
+                if (f == "unique") { unique = true; continue; }
+                if (f is "alternate-key" or "alternatekey") { alternateKey = true; continue; }
+                if (f.StartsWith("valid-time-state") || f.StartsWith("validtimestate"))
+                {
+                    vts = true;
+                    var eq = f.IndexOf('=');
+                    if (eq >= 0)
+                    {
+                        vtsMode = f[(eq + 1)..] switch
+                        {
+                            "gap" => "Gap",
+                            "nogap" => "NoGap",
+                            _ => null,
+                        };
+                        if (vtsMode is null)
+                        {
+                            error = $"--index '{spec}': valid-time-state mode must be Gap or NoGap.";
+                            return false;
+                        }
+                    }
+                    continue;
+                }
+                error = $"--index '{spec}': unknown flag '{flag}'. Expected unique | alternate-key | valid-time-state[=Gap|NoGap].";
+                return false;
+            }
+            specs.Add(new TableIndexSpec(parts[0], idxFields, unique, alternateKey, vts, vtsMode));
+        }
+        return true;
     }
 
     private static TableFieldSpec ParseField(string raw)
