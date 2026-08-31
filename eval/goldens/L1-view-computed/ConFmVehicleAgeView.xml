@@ -10,17 +10,17 @@ public class ConFmVehicleAgeView extends common
     <Methods>
       <Method>
         <Name>computeServiceCount</Name>
-        <Source>/// &lt;summary&gt;
+        <Source><![CDATA[/// <summary>
 /// Computed column backing the view field that names this method.
-/// &lt;/summary&gt;
-/// &lt;returns&gt;The SQL expression evaluated when the view is synchronised.&lt;/returns&gt;
+/// </summary>
+/// <returns>The SQL expression evaluated when the view is synchronised.</returns>
 private static server str computeServiceCount()
 {
     // TODO: replace the placeholder literal with the real expression, e.g.
     // SysComputedColumn::returnField(tableStr(MyView), identifierStr(MyDataSource), fieldStr(MyTable, MyField))
     return SysComputedColumn::returnLiteral(0);
 }
-</Source>
+]]></Source>
       </Method>
     </Methods>
   </SourceCode>

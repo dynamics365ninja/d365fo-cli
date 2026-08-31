@@ -2,15 +2,15 @@
 <AxClass>
   <Name>NumberSeqModuleCustomer_Extension</Name>
   <SourceCode>
-    <Declaration>[ExtensionOf(classStr(NumberSeqModuleCustomer))]
+    <Declaration><![CDATA[[ExtensionOf(classStr(NumberSeqModuleCustomer))]
 final class NumberSeqModuleCustomer_Extension
 {
 }
-</Declaration>
+]]></Declaration>
     <Methods>
       <Method>
         <Name>loadModule</Name>
-        <Source>protected void loadModule()
+        <Source><![CDATA[protected void loadModule()
 {
     next loadModule();
 
@@ -25,7 +25,7 @@ final class NumberSeqModuleCustomer_Extension
     datatype.addParameterType(NumberSeqParameterType::DataArea, true, false);
     this.create(datatype);
 }
-</Source>
+]]></Source>
       </Method>
     </Methods>
   </SourceCode>

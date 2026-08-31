@@ -2,19 +2,19 @@
 <AxClass>
   <Name>ConFmVehicleServiceRunHandler</Name>
   <SourceCode>
-    <Declaration>public static class ConFmVehicleServiceRunHandler
+    <Declaration><![CDATA[public static class ConFmVehicleServiceRunHandler
 {
 }
-</Declaration>
+]]></Declaration>
     <Methods>
       <Method>
         <Name>run</Name>
-        <Source>    [SubscribesTo(classStr(FmVehicleService), delegateStr(FmVehicleService, OnInitialized))]
+        <Source><![CDATA[    [SubscribesTo(classStr(FmVehicleService), delegateStr(FmVehicleService, OnInitialized))]
     public static void run(XppPrePostArgs args)
     {
         // handler logic here
     }
-</Source>
+]]></Source>
       </Method>
     </Methods>
   </SourceCode>

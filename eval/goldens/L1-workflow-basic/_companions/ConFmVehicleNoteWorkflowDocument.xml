@@ -2,18 +2,18 @@
 <AxClass>
   <Name>ConFmVehicleNoteWorkflowDocument</Name>
   <SourceCode>
-    <Declaration>class ConFmVehicleNoteWorkflowDocument extends WorkflowDocument
+    <Declaration><![CDATA[class ConFmVehicleNoteWorkflowDocument extends WorkflowDocument
 {
 }
-</Declaration>
+]]></Declaration>
     <Methods>
       <Method>
         <Name>getQueryName</Name>
-        <Source>public QueryName getQueryName()
+        <Source><![CDATA[public QueryName getQueryName()
 {
     return queryStr(ConFmVehicleNoteWorkflowQuery);
 }
-</Source>
+]]></Source>
       </Method>
     </Methods>
   </SourceCode>

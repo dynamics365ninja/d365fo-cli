@@ -2,22 +2,22 @@
 <AxClass>
   <Name>ConFmVehicleNoteAddedContract</Name>
   <SourceCode>
-    <Declaration>[DataContractAttribute]
+    <Declaration><![CDATA[[DataContractAttribute]
 public class ConFmVehicleNoteAddedContract extends BusinessEventsContract
 {
     Name noteId;
 }
-</Declaration>
+]]></Declaration>
     <Methods>
       <Method>
         <Name>parmNoteId</Name>
-        <Source>[DataMember]
+        <Source><![CDATA[[DataMember]
 public Name parmNoteId(Name _noteId = noteId)
 {
     noteId = _noteId;
     return noteId;
 }
-</Source>
+]]></Source>
       </Method>
     </Methods>
   </SourceCode>

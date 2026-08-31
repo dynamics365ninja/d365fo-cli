@@ -274,7 +274,7 @@ public static class TableAugmentScaffolder
         {
             sourceCode = new XElement("SourceCode",
                 new XElement("Declaration",
-                    $"public class {tableName} extends common\n{{\n}}\n"));
+                    new XCData($"public class {tableName} extends common\n{{\n}}\n")));
             root.Add(sourceCode);
         }
 
@@ -296,7 +296,7 @@ public static class TableAugmentScaffolder
             if (existing.Contains(name)) continue;
             methodsEl.Add(new XElement("Method",
                 new XElement("Name", name),
-                new XElement("Source", source)));
+                new XElement("Source", new XCData(source))));
             added.Add(name);
         }
 

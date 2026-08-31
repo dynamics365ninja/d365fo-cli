@@ -217,9 +217,9 @@ public static class ReportExtensionScaffolder
             new XElement("AxClass",
                 new XElement("Name", className),
                 new XElement("SourceCode",
-                    new XElement("Declaration", declaration),
+                    new XElement("Declaration", new XCData(declaration)),
                     new XElement("Methods",
                         methods.Select(m => new XElement("Method",
                             new XElement("Name", m.Name),
-                            new XElement("Source", m.Source)))))));
+                            new XElement("Source", new XCData(m.Source))))))));
 }

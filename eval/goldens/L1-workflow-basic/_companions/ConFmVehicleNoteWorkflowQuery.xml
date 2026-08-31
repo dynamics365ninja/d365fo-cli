@@ -5,11 +5,11 @@
     <Methods>
       <Method>
         <Name>classDeclaration</Name>
-        <Source>[Query]
+        <Source><![CDATA[[Query]
 public class ConFmVehicleNoteWorkflowQuery extends QueryRun
 {
 }
-</Source>
+]]></Source>
       </Method>
     </Methods>
   </SourceCode>

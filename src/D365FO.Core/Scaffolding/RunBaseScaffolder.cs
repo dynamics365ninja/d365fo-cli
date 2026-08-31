@@ -107,10 +107,10 @@ public static class RunBaseScaffolder
 
         var methodElements = new List<XElement>
         {
-            new XElement("Method", new XElement("Name", "dialog"),        new XElement("Source", dialogSrc)),
-            new XElement("Method", new XElement("Name", "getFromDialog"), new XElement("Source", getFromDialogSrc)),
-            new XElement("Method", new XElement("Name", "pack"),          new XElement("Source", packSrc)),
-            new XElement("Method", new XElement("Name", "unpack"),        new XElement("Source", unpackSrc)),
+            new XElement("Method", new XElement("Name", "dialog"),        new XElement("Source", new XCData(dialogSrc))),
+            new XElement("Method", new XElement("Name", "getFromDialog"), new XElement("Source", new XCData(getFromDialogSrc))),
+            new XElement("Method", new XElement("Name", "pack"),          new XElement("Source", new XCData(packSrc))),
+            new XElement("Method", new XElement("Name", "unpack"),        new XElement("Source", new XCData(unpackSrc))),
         };
 
         if (isBatch)
@@ -120,17 +120,17 @@ public static class RunBaseScaffolder
                 "{\n" +
                 "    return true;\n" +
                 "}\n";
-            methodElements.Add(new XElement("Method", new XElement("Name", "canGoBatch"), new XElement("Source", canGoBatchSrc)));
+            methodElements.Add(new XElement("Method", new XElement("Name", "canGoBatch"), new XElement("Source", new XCData(canGoBatchSrc))));
         }
 
-        methodElements.Add(new XElement("Method", new XElement("Name", "run"),  new XElement("Source", runSrc)));
-        methodElements.Add(new XElement("Method", new XElement("Name", "main"), new XElement("Source", mainSrc)));
+        methodElements.Add(new XElement("Method", new XElement("Name", "run"),  new XElement("Source", new XCData(runSrc))));
+        methodElements.Add(new XElement("Method", new XElement("Name", "main"), new XElement("Source", new XCData(mainSrc))));
 
         return new XDocument(
             new XElement("AxClass",
                 new XElement("Name", className),
                 new XElement("SourceCode",
-                    new XElement("Declaration", declaration),
+                    new XElement("Declaration", new XCData(declaration)),
                     new XElement("Methods", methodElements))));
     }
 

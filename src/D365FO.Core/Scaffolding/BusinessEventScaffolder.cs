@@ -115,17 +115,17 @@ public static class BusinessEventScaffolder
             new XElement("AxClass",
                 new XElement("Name", className),
                 new XElement("SourceCode",
-                    new XElement("Declaration", declaration),
+                    new XElement("Declaration", new XCData(declaration)),
                     new XElement("Methods",
                         new XElement("Method",
                             new XElement("Name", factory),
-                            new XElement("Source", factorySrc)),
+                            new XElement("Source", new XCData(factorySrc))),
                         new XElement("Method",
                             new XElement("Name", $"parm{tableType}"),
-                            new XElement("Source", parmSrc)),
+                            new XElement("Source", new XCData(parmSrc))),
                         new XElement("Method",
                             new XElement("Name", "buildContract"),
-                            new XElement("Source", buildContractSrc))))));
+                            new XElement("Source", new XCData(buildContractSrc)))))));
     }
 
     /// <summary>
@@ -163,11 +163,11 @@ public static class BusinessEventScaffolder
                 "}\n";
             return new XElement("Method",
                 new XElement("Name", $"parm{p.Name}"),
-                new XElement("Source", src));
+                new XElement("Source", new XCData(src)));
         }).ToList();
 
         var sourceEl = new XElement("SourceCode",
-            new XElement("Declaration", declaration));
+            new XElement("Declaration", new XCData(declaration)));
         if (methods.Count > 0)
             sourceEl.Add(new XElement("Methods", methods));
 

@@ -2,19 +2,19 @@
 <AxClass>
   <Name>FmVehicleService_Extension</Name>
   <SourceCode>
-    <Declaration>[ExtensionOf(classStr(FmVehicleService))]
+    <Declaration><![CDATA[[ExtensionOf(classStr(FmVehicleService))]
 final class FmVehicleService_Extension
 {
-}</Declaration>
+}]]></Declaration>
     <Methods>
       <Method>
         <Name>run</Name>
-        <Source>public void run()
+        <Source><![CDATA[public void run()
 {
     next run();
     // extension logic here
 }
-</Source>
+]]></Source>
       </Method>
     </Methods>
   </SourceCode>

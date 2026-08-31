@@ -2,19 +2,19 @@
 <AxClass>
   <Name>ConFmVehicleQueryServiceService</Name>
   <SourceCode>
-    <Declaration>public class ConFmVehicleQueryServiceService
+    <Declaration><![CDATA[public class ConFmVehicleQueryServiceService
 {
 }
-</Declaration>
+]]></Declaration>
     <Methods>
       <Method>
         <Name>lookup</Name>
-        <Source>public str lookup()
+        <Source><![CDATA[public str lookup()
 {
     // TODO: implement
     return '';
 }
-</Source>
+]]></Source>
       </Method>
     </Methods>
   </SourceCode>

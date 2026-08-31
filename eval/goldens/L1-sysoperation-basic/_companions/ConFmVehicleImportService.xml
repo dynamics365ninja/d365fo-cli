@@ -2,20 +2,20 @@
 <AxClass>
   <Name>ConFmVehicleImportService</Name>
   <SourceCode>
-    <Declaration>class ConFmVehicleImportService extends SysOperationServiceBase
+    <Declaration><![CDATA[class ConFmVehicleImportService extends SysOperationServiceBase
 {
 }
-</Declaration>
+]]></Declaration>
     <Methods>
       <Method>
         <Name>process</Name>
-        <Source>public void process(ConFmVehicleImportContract _contract)
+        <Source><![CDATA[public void process(ConFmVehicleImportContract _contract)
 {
     Name vehicleNote = _contract.parmVehicleNote();
 
     // service logic here
 }
-</Source>
+]]></Source>
       </Method>
     </Methods>
   </SourceCode>

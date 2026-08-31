@@ -1,4 +1,4 @@
-using System.Xml.Linq;
+﻿using System.Xml.Linq;
 using D365FO.Core.Index;
 using D365FO.Core.Scaffolding;
 using Xunit;
@@ -192,5 +192,25 @@ public class TableAugmentScaffolderTests
         var again = TableAugmentScaffolder.MergeMethods(doc, "ConDemoOrderLine", methods);
         Assert.Empty(again);
         Assert.Equal(3, doc.Root.Element("SourceCode")!.Element("Methods")!.Elements("Method").Count());
+    }
+
+    // These two merge into a real AxTable file on disk, and no eval case covers them, so
+    // the golden CDATA gate cannot see them. XElement.Value is identical for CDATA and
+    // text, which is what let the gap survive elsewhere — assert the node type directly.
+    [Fact]
+    public void MergeMethods_wraps_the_declaration_and_every_method_source_in_CDATA()
+    {
+        var doc = new XDocument(new XElement("AxTable",
+            new XElement("Name", "ConDemoOrderLine"),
+            new XElement("Fields")));
+
+        TableAugmentScaffolder.MergeMethods(doc, "ConDemoOrderLine",
+            TableAugmentScaffolder.BuildFindMethods(
+                "ConDemoOrderLine", [new FindKeyField("OrderId", "ConDemoOrderId")]));
+
+        var sourceCode = doc.Root!.Element("SourceCode")!;
+        Assert.IsType<XCData>(Assert.Single(sourceCode.Element("Declaration")!.Nodes()));
+        foreach (var method in sourceCode.Element("Methods")!.Elements("Method"))
+            Assert.IsType<XCData>(Assert.Single(method.Element("Source")!.Nodes()));
     }
 }

@@ -51,11 +51,11 @@ public static class WorkflowScaffolder
             new XElement("AxClass",
                 new XElement("Name", documentClassName),
                 new XElement("SourceCode",
-                    new XElement("Declaration", declaration),
+                    new XElement("Declaration", new XCData(declaration)),
                     new XElement("Methods",
                         new XElement("Method",
                             new XElement("Name", "getQueryName"),
-                            new XElement("Source", getQuerySrc))))));
+                            new XElement("Source", new XCData(getQuerySrc)))))));
     }
 
     /// <summary>
@@ -211,11 +211,11 @@ public static class WorkflowScaffolder
             new XElement("AxClass",
                 new XElement("Name", extensionName),
                 new XElement("SourceCode",
-                    new XElement("Declaration", declaration),
+                    new XElement("Declaration", new XCData(declaration)),
                     new XElement("Methods",
                         new XElement("Method",
                             new XElement("Name", "canSubmitToWorkflow"),
-                            new XElement("Source", canSubmitSrc))))));
+                            new XElement("Source", new XCData(canSubmitSrc)))))));
     }
 
     /// <summary>

@@ -77,11 +77,11 @@ public static class NumberSequenceScaffolder
             new XElement("AxClass",
                 new XElement("Name", extensionName),
                 new XElement("SourceCode",
-                    new XElement("Declaration", declaration),
+                    new XElement("Declaration", new XCData(declaration)),
                     new XElement("Methods",
                         new XElement("Method",
                             new XElement("Name", "loadModule"),
-                            new XElement("Source", loadModuleSrc))))));
+                            new XElement("Source", new XCData(loadModuleSrc)))))));
     }
 
     /// <summary>
@@ -189,25 +189,25 @@ public static class NumberSequenceScaffolder
             new XElement("AxClass",
                 new XElement("Name", className),
                 new XElement("SourceCode",
-                    new XElement("Declaration", declaration),
+                    new XElement("Declaration", new XCData(declaration)),
                     new XElement("Methods",
                         new XElement("Method",
                             new XElement("Name", "formHandler"),
-                            new XElement("Source", lookupSrc)),
+                            new XElement("Source", new XCData(lookupSrc))),
                         new XElement("Method",
                             new XElement("Name", $"{tableName}_OnCreating"),
-                            new XElement("Source", HandlerSource($"{tableName}_OnCreating", "Creating", "formMethodDataSourceCreatePre"))),
+                            new XElement("Source", new XCData(HandlerSource($"{tableName}_OnCreating", "Creating", "formMethodDataSourceCreatePre")))),
                         new XElement("Method",
                             new XElement("Name", $"{tableName}_OnCreated"),
-                            new XElement("Source", HandlerSource($"{tableName}_OnCreated", "Created", "formMethodDataSourceCreate"))),
+                            new XElement("Source", new XCData(HandlerSource($"{tableName}_OnCreated", "Created", "formMethodDataSourceCreate")))),
                         new XElement("Method",
                             new XElement("Name", $"{tableName}_OnWritten"),
-                            new XElement("Source", HandlerSource($"{tableName}_OnWritten", "Written", "formMethodDataSourceWrite"))),
+                            new XElement("Source", new XCData(HandlerSource($"{tableName}_OnWritten", "Written", "formMethodDataSourceWrite")))),
                         new XElement("Method",
                             new XElement("Name", $"{tableName}_OnDeleting"),
-                            new XElement("Source", HandlerSource($"{tableName}_OnDeleting", "Deleting", "formMethodDataSourceDelete"))),
+                            new XElement("Source", new XCData(HandlerSource($"{tableName}_OnDeleting", "Deleting", "formMethodDataSourceDelete")))),
                         new XElement("Method",
                             new XElement("Name", $"{formName}_OnClosing"),
-                            new XElement("Source", closeSrc))))));
+                            new XElement("Source", new XCData(closeSrc)))))));
     }
 }

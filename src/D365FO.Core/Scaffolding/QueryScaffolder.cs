@@ -63,7 +63,7 @@ public static class QueryScaffolder
                         new XElement("Method",
                             new XElement("Name", ClassDeclarationMethod),
                             new XElement("Source",
-                                $"[Query]\npublic class {name} extends QueryRun\n{{\n}}\n")))),
+                                new XCData($"[Query]\npublic class {name} extends QueryRun\n{{\n}}\n"))))),
                 new XElement("DataSources",
                     roots.Select(r => BuildRoot(r, joins)))));
     }
