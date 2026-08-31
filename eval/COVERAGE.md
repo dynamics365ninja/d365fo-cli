@@ -14,14 +14,14 @@ Every column is derived — families from `ObjectTypeRegistry`, capabilities fro
 file cannot claim coverage that no longer exists. Regenerate with
 `d365fo eval coverage --write`; CI runs `--check`.
 
-**41 of 74 leaves complete.**
+**42 of 74 leaves complete.**
 
 ## AOT families
 
 | Root element | Kind | K | E | T | Topics | Cases | Built by |
 |---|---|:-:|:-:|:-:|---|---|---|
 | `AxAggregateDataEntity` | aggregatedataentity | — | — | — | — | — | — |
-| `AxClass` | class | ✅ | ✅ | ✅ | `analytics-and-er`, `business-events-authoring`, `coc-extension-authoring`, `custom-service-authoring`, `data-entity-scaffolding`, `event-handler-authoring`, `form-pattern-scaffolding`, `integration-patterns`, `label-translation`, `model-dependency-and-coupling`, `object-extension-authoring`, `review-and-checkpoint-workflow`, `security-hierarchy-trace`, `ssrs-report-authoring`, `table-scaffolding`, `x++-class-authoring`, `xpp-best-practice-rules`, `xpp-class-and-method-rules`, `xpp-database-queries`, `xpp-statement-and-type-rules` | `L1-business-event-basic`, `L1-class-basic`, `L1-migration-script-basic`, `L1-runbase-basic`, `L1-sysoperation-basic`, `L1-systest-basic`, `L2-coc-extension`, `L2-event-handler-basic`, `L2-numberseq-basic` | generate class |
+| `AxClass` | class | ✅ | ✅ | ✅ | `analytics-and-er`, `business-events-authoring`, `coc-extension-authoring`, `custom-service-authoring`, `data-entity-scaffolding`, `event-handler-authoring`, `form-pattern-scaffolding`, `integration-patterns`, `label-translation`, `model-dependency-and-coupling`, `object-extension-authoring`, `review-and-checkpoint-workflow`, `security-hierarchy-trace`, `ssrs-report-authoring`, `table-scaffolding`, `testing-and-quality`, `x++-class-authoring`, `xpp-best-practice-rules`, `xpp-class-and-method-rules`, `xpp-database-queries`, `xpp-statement-and-type-rules` | `L1-business-event-basic`, `L1-class-basic`, `L1-migration-script-basic`, `L1-runbase-basic`, `L1-sysoperation-basic`, `L1-systest-basic`, `L2-coc-extension`, `L2-event-handler-basic`, `L2-numberseq-basic` | generate class |
 | `AxCompositeDataEntityView` | compositedataentityview | — | — | — | — | — | — |
 | `AxConfigurationKey` | configurationkey | — | — | — | — | — | — |
 | `AxDataEntityView` | dataentityview | ✅ | ✅ | ✅ | `data-entity-scaffolding`, `integration-dmf-dualwrite`, `integration-patterns` | `L2-virtual-entity-basic` | generate entity |
@@ -101,7 +101,7 @@ whether it is taught and proven.
 | `generate migration-script` | AxClass | ✅ | ✅ | `sysoperation-batch-patterns` | `L1-migration-script-basic` |
 | `generate runbase` | AxClass | ✅ | ✅ | `sysoperation-batch-patterns`, `x++-class-authoring` | `L1-runbase-basic` |
 | `generate security-policy` | AxSecurityPolicy | ✅ | ✅ | `object-extension-authoring`, `security-modeling` | `L2-security-policy-basic` |
-| `generate systest` | AxClass | — | ✅ | — | `L1-systest-basic` |
+| `generate systest` | AxClass | ✅ | ✅ | `testing-and-quality` | `L1-systest-basic` |
 
 ## Open gaps
 
@@ -116,7 +116,6 @@ cannot build at all are omitted — they are a generation gap, not a coverage ga
 - **map** (capability) — no topic names it
 - **report-extension** (capability) — no case with a reviewed golden
 - **simple-list** (capability) — no topic names it; no case with a reviewed golden
-- **systest** (capability) — no topic names it
 - **table-relation** (capability) — no case with a reviewed golden
 - **view** (capability) — no topic names it
 - **AxEdtExtension** (family) — no topic names it
