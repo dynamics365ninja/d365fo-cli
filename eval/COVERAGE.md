@@ -14,7 +14,7 @@ Every column is derived — families from `ObjectTypeRegistry`, capabilities fro
 file cannot claim coverage that no longer exists. Regenerate with
 `d365fo eval coverage --write`; CI runs `--check`.
 
-**42 of 72 leaves complete.**
+**41 of 72 leaves complete.**
 
 ## AOT families
 
@@ -69,8 +69,8 @@ whether it is taught and proven.
 
 | Subcommand | Emits | K | E | Topics | Cases |
 |---|---|:-:|:-:|---|---|
-| `generate table` | AxTable | ✅ | ✅ | `label-translation`, `performance-and-caching`, `ssrs-report-authoring`, `table-scaffolding`, `xpp-best-practice-rules` | `L1-table-basic`, `L1-table-tempdb` |
-| `generate class` | AxClass | ✅ | ✅ | `ssrs-report-authoring` | `L1-class-basic` |
+| `generate table` | AxTable | ✅ | ✅ | `label-translation`, `performance-and-caching`, `table-scaffolding`, `xpp-best-practice-rules` | `L1-table-basic`, `L1-table-tempdb` |
+| `generate class` | AxClass | — | ✅ | — | `L1-class-basic` |
 | `generate coc` | AxClass | ✅ | ✅ | `coc-extension-authoring`, `object-extension-authoring` | `L2-coc-extension` |
 | `generate form` | AxForm | ✅ | ✅ | `form-pattern-scaffolding` | `L1-form-basic`, `L1-form-details-master`, `L1-form-details-transaction`, `L1-form-dialog`, `L1-form-list-page`, `L1-form-lookup`, `L1-form-simplelist-details`, `L1-form-table-of-contents`, `L1-form-workspace` |
 | `generate datasource-method` | AxForm | — | ✅ | — | `L2-datasource-method-basic` |
@@ -106,6 +106,7 @@ whether it is taught and proven.
 Leaves the tool builds but knowledge or evals do not yet cover. Families the tool
 cannot build at all are omitted — they are a generation gap, not a coverage gap.
 
+- **class** (capability) — no topic names it
 - **control-method** (capability) — no topic names it
 - **datasource-method** (capability) — no topic names it
 - **form-clone** (capability) — no topic names it
