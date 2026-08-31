@@ -591,9 +591,9 @@ d365fo-mcp --http --port 8080
 
 ## Copilot Skills
 
-The `d365fo-cli` agent skill (`skills/d365fo-cli/`) covers the full X++ authoring and review canon: `SKILL.md` holds the rule canon and tool mapping, and 35 topic files in `references/` are loaded on demand. Deploy to an X++ project with the `Install-D365FoCopilotSkills.ps1` script (see [SETUP.md](SETUP.md)), which installs it to `.github/skills/d365fo-cli/`.
+The `d365fo-cli` agent skill (`skills/d365fo-cli/`) covers the full X++ authoring and review canon: `SKILL.md` holds the rule canon and tool mapping, and 38 topic files in `references/` are loaded on demand. Deploy to an X++ project with the `Install-D365FoCopilotSkills.ps1` script (see [SETUP.md](SETUP.md)), which installs it to `.github/skills/d365fo-cli/`.
 
-The same 35 topics are also emitted as `skills/copilot/*.instructions.md` (legacy `applyTo` format) and `skills/anthropic/<id>/SKILL.md` (Claude Code / Claude Desktop).
+The same 38 topics are also emitted as `skills/copilot/*.instructions.md` (legacy `applyTo` format) and `skills/anthropic/<id>/SKILL.md` (Claude Code / Claude Desktop).
 
 | Skill | Covers |
 |-------|--------|
