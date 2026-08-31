@@ -83,10 +83,11 @@ public class FormTemplatePatternRegistryTests
     }
 
     /// <summary>
-    /// The sub-pattern names this repo's catalog does not have. Four of them are ours
-    /// spelled wrong (`ToolbarAndList` for the registry's `ToolbarList`, and friends) —
-    /// and the shipped-form census backs the registry: real forms declare
-    /// `ToolbarList 1.2`. The rest are sub-patterns the catalog never covered.
+    /// The sub-pattern names this repo's catalog does not have. It used to hold four more,
+    /// which were ours spelled wrong (`ToolbarAndList` for the registry's `ToolbarList`, and
+    /// friends); those were renamed onto the registry's spelling after the AOS rejected forms
+    /// that declared the catalog's — the shipped-form census agrees, real forms declare
+    /// `ToolbarList 1.2`. What is left is what the catalog never covered.
     /// Recorded rather than silently tolerated: <c>RegistrySpecFactory</c> drops
     /// unknown names from <c>AllowedSubPatterns</c>, so FP007 would otherwise quietly
     /// stop checking them.
@@ -98,12 +99,12 @@ public class FormTemplatePatternRegistryTests
 
         Assert.Equal(
             [
+                // Not a sub-pattern at all — the registry's escape hatch for "anything goes
+                // here", which this repo models as ExtraChildren rather than as a name.
                 "Custom",
-                "HorizontalFieldsButtonsGroup", // ours drops the plural: HorizontalFieldsButtonGroup
+                // The tab-page-scoped twin of TabularFields; the catalog carries the generic
+                // one, which is what its slots resolve to.
                 "TabPageTabularFields",
-                "ToolbarFields",               // ours: ToolbarAndFields
-                "ToolbarList",                 // ours: ToolbarAndList
-                "ToolbarListDouble",           // ours: ToolbarAndListDouble
             ],
             missing);
     }

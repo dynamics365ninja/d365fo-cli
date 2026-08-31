@@ -750,8 +750,13 @@ public static class FormPatternCatalog
         new FormPatternSpec
         {
             Id = "SimpleDetails",
-            XmlName = "SimpleDetails",
-            XmlAliases = new[] { "SimpleDetailsToolbarFields", "SimpleDetailsWToolbar" },
+            // The AOS has no plain "SimpleDetails": it ships one pattern per body variant,
+            // and this entry is the Toolbar-and-Fields one (its own DisplayName says so).
+            // A form declaring <Pattern>SimpleDetails</Pattern> fails the build with
+            // "Pattern 'SimpleDetails 1.1' not found" — the "exact xmlNames to be confirmed
+            // by mining" note under this entry, now settled against the AOT registry.
+            XmlName = "SimpleDetails-ToolbarFields",
+            XmlAliases = new[] { "SimpleDetails", "SimpleDetailsToolbarFields", "SimpleDetailsWToolbar" },
             DisplayName = "Simple Details w/ Toolbar and Fields",
             Versions = new[] { "1.1", "1.0" },
             Purpose = "Shows fields for a single base record with an optional toolbar — the default Simple Details variant.",
@@ -799,8 +804,12 @@ public static class FormPatternCatalog
         new FormPatternSpec
         {
             Id = "TaskSingle",
-            XmlName = "TaskSingle",
-            XmlAliases = new[] { "Task", "SimpleTask" },
+            // The AOS knows this pattern as "Task" (alias "Task Single"): a form declaring
+            // <Pattern>TaskSingle</Pattern> fails the build with "Pattern 'TaskSingle 1.1'
+            // not found". Confirmed against the AOT registry and xppc 7.0.7996.33 — the
+            // "xmlName to be confirmed by mining" note below is now settled.
+            XmlName = "Task",
+            XmlAliases = new[] { "TaskSingle", "SimpleTask" },
             DisplayName = "Task Single (legacy)",
             Versions = new[] { "1.1", "1.0" },
             Purpose = "Legacy AX 2012-style entity form (Overview + General tabs). MIGRATION ONLY — do not use for new forms.",
@@ -819,7 +828,10 @@ public static class FormPatternCatalog
         new FormPatternSpec
         {
             Id = "TaskDouble",
-            XmlName = "TaskDouble",
+            // Registry name: "TaskParentChild" (alias "Task Double"). Same finding as
+            // TaskSingle above.
+            XmlName = "TaskParentChild",
+            XmlAliases = new[] { "TaskDouble" },
             VariantOf = "TaskSingle",
             DisplayName = "Task Double (legacy)",
             Versions = new[] { "1.1", "1.0" },
@@ -1006,8 +1018,8 @@ public static class FormPatternCatalog
         new SubPatternSpec
         {
             Id = "HorizontalFieldsButtonGroup",
-            XmlName = "HorizontalFieldsButtonGroup",
-            XmlAliases = new[] { "HorizontalFieldsAndButtonGroup", "FieldsAndButtonGroup" },
+            XmlName = "HorizontalFieldsButtonsGroup",
+            XmlAliases = new[] { "HorizontalFieldsButtonGroup", "HorizontalFieldsAndButtonGroup", "FieldsAndButtonGroup" },
             DisplayName = "Horizontal Fields and Button Group",
             Versions = new[] { "1.0" },
             AppliesToControlTypes = new[] { "Group" },
@@ -1085,7 +1097,8 @@ public static class FormPatternCatalog
         new SubPatternSpec
         {
             Id = "ToolbarAndList",
-            XmlName = "ToolbarAndList",
+            XmlName = "ToolbarList",
+            XmlAliases = new[] { "ToolbarAndList" },
             DisplayName = "Toolbar and List",
             Versions = new[] { "1.1", "1.0" },
             AppliesToControlTypes = new[] { "Group", "TabPage" },
@@ -1101,8 +1114,8 @@ public static class FormPatternCatalog
         new SubPatternSpec
         {
             Id = "ToolbarAndListDouble",
-            XmlName = "ToolbarAndListDouble",
-            XmlAliases = new[] { "ToolbarAndList2", "ToolbarAndListsDouble" },
+            XmlName = "ToolbarListDouble",
+            XmlAliases = new[] { "ToolbarAndListDouble", "ToolbarAndList2", "ToolbarAndListsDouble" },
             DisplayName = "Toolbar and List - Double",
             Versions = new[] { "1.0" },
             AppliesToControlTypes = new[] { "Group", "TabPage" },
@@ -1123,7 +1136,8 @@ public static class FormPatternCatalog
         new SubPatternSpec
         {
             Id = "ToolbarAndFields",
-            XmlName = "ToolbarAndFields",
+            XmlName = "ToolbarFields",
+            XmlAliases = new[] { "ToolbarAndFields" },
             DisplayName = "Toolbar and Fields",
             Versions = new[] { "1.1", "1.0" },
             AppliesToControlTypes = new[] { "Group", "TabPage" },

@@ -88,6 +88,24 @@ public static class FormPatternNormalizer
             return true;
         }
 
+        // Two catalog entries can describe the SAME AOS pattern — `Workspace` and
+        // `WorkspaceOperational` both write <Pattern>WorkspaceOperational</Pattern>, one as
+        // the templated entry and one as a catalog-only variant. Asking for either must reach
+        // the template: it is the emitter the compiler has signed off, and routing the second
+        // spelling to the generic expander produced a form the metadata reader rejected.
+        if (spec is not null)
+        {
+            var templated = FormPatterns.FormPatternCatalog.Patterns.FirstOrDefault(p =>
+                !ReferenceEquals(p, spec)
+                && string.Equals(p.XmlName, spec.XmlName, StringComparison.OrdinalIgnoreCase)
+                && Enum.TryParse<FormPattern>(p.Id, ignoreCase: false, out _));
+            if (templated is not null && Enum.TryParse<FormPattern>(templated.Id, ignoreCase: false, out var sameAosPattern))
+            {
+                pattern = sameAosPattern;
+                return true;
+            }
+        }
+
         var generatableList = string.Join("|", GeneratableNames);
         if (spec is null)
         {

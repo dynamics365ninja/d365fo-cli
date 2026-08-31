@@ -77,7 +77,8 @@ public static class FormPatternValidator
         IReadOnlyList<string> knownVersions,
         string patternLabel,
         string path,
-        List<FormPatternViolation> violations)
+        List<FormPatternViolation> violations,
+        string? registryPatternName = null)
     {
         if (string.IsNullOrEmpty(declared))
         {
@@ -95,6 +96,21 @@ public static class FormPatternValidator
             return;
         }
         var newest = knownVersions[0];
+
+        // A version the AOT registry declares ACTIVE for this pattern is not unknown, whatever
+        // the catalog lists — the AOS is the authority on which versions exist, and it is the
+        // AOS that rejects the form at build time. FormPartFactboxCard is the live example:
+        // the only version the platform accepts is "UX7 1.0", which the catalog does not list,
+        // so blocking on it would refuse the one spelling that compiles.
+        if (registryPatternName is not null &&
+            FormPatternRegistry.Exists(registryPatternName, declared))
+        {
+            violations.Add(new("FP002", "warning", path,
+                $"{patternLabel}: version {declared} is not in the catalog but IS an active AOT pattern version",
+                $"Catalog drift — add {declared} to the catalog's versions list after verifying."));
+            return;
+        }
+
         if (CompareVersions(declared, newest) > 0)
         {
             // Likely platform-update drift — the catalog lags behind, don't block
@@ -294,7 +310,7 @@ public static class FormPatternValidator
                             $"Sub-pattern \"{sp.XmlName}\" is only valid inside {string.Join("/", sp.ParentPatterns)} forms (this form: {topPatternId})",
                             "Choose a sub-pattern supported by this form pattern."));
 
-                    CheckVersion(node.PatternVersion, sp.Versions, $"sub-pattern {sp.XmlName}", path, violations);
+                    CheckVersion(node.PatternVersion, sp.Versions, $"sub-pattern {sp.XmlName}", path, violations, sp.XmlName);
 
                     var matched = MatchChildren(
                         node.Children, sp.Root, sp.ExtraRoot, ordered: true, path,
@@ -352,7 +368,7 @@ public static class FormPatternValidator
         if (spec is not null)
         {
             var label = $"pattern {spec.XmlName}";
-            CheckVersion(design.PatternVersion, spec.Versions, label, "Design", violations);
+            CheckVersion(design.PatternVersion, spec.Versions, label, "Design", violations, spec.XmlName);
 
             // FP009 — Design-level property defaults
             if (spec.DesignProperties is not null)

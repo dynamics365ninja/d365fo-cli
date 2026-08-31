@@ -75,4 +75,52 @@ public class ReportScaffoldDepthTests
         Assert.Null(XppScaffolder.ReportUiBuilder(Spec()));
         Assert.DoesNotContain("SysOperationContractProcessing", XppScaffolder.ReportContract(Spec())!.ToString());
     }
+
+    [Fact]
+    public void Dp_binds_its_contract_the_way_shipped_DPs_do()
+    {
+        // Compiled against xppc 7.0.7996.33: [SRSReportDataContract("Name")] fails with
+        // "The name 'SRSReportDataContract' denotes a class that is not derived from the
+        // 'SysAttribute' class". Every shipped DP (AssetCardDP, AgreementFollowUpDP, …)
+        // spells it SRSReportParameterAttribute(classStr(<Contract>)).
+        var xml = XppScaffolder.ReportDp(Spec(preProcess: true)).ToString();
+
+        Assert.Contains("SRSReportParameterAttribute(classStr(ConDemoReportDPContract))", xml);
+        Assert.DoesNotContain("SRSReportDataContract(", xml);
+    }
+
+    [Fact]
+    public void Dp_without_parameters_names_no_contract_class()
+    {
+        // ReportContract() returns null when there are no parameters, so a contract
+        // attribute here would point at a class the command never wrote.
+        var xml = XppScaffolder.ReportDp(new ReportSpec("ConDemoReport")).ToString();
+
+        Assert.DoesNotContain("SRSReportParameterAttribute", xml);
+        Assert.DoesNotContain("Contract", xml);
+    }
+
+    [Fact]
+    public void Dp_skeleton_comment_names_the_buffer_it_declared()
+    {
+        // `char | 0x20` promoted the char to int: the hint read "99onDemoReportDPTmp.insert();".
+        var xml = XppScaffolder.ReportDp(Spec()).ToString();
+
+        Assert.Contains("conDemoReportDPTmp.insert();", xml);
+        Assert.DoesNotContain("99", xml);
+    }
+
+    [Fact]
+    public void Contract_extends_nothing()
+    {
+        // "extends SrsReportDataContractBase" named a class that is in no model — xppc failed
+        // the file with "The class or interface 'SrsReportDataContractBase' does not exist",
+        // and every dependent cast in the DP failed after it. Shipped contracts carry the
+        // DataContract attribute and no base class.
+        var xml = XppScaffolder.ReportContract(Spec())!.ToString();
+
+        Assert.Contains("public class ConDemoReportDPContract", xml);
+        Assert.DoesNotContain("extends", xml);
+        Assert.Contains("DataContractAttribute", xml);
+    }
 }

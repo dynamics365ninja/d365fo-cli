@@ -1465,8 +1465,17 @@ public static class XppScaffolder
         // the base shipped code pairs it with (upstream measured 332 of 370 pre-processed
         // DPs; xppc accepts either pairing, so the compiler is no guard here).
         var dpBase = spec.PreProcess ? "SrsReportDataProviderPreProcessTempDB" : "SrsReportDataProviderBase";
+        // The contract is bound with SRSReportParameterAttribute(classStr(...)) — the shape
+        // every shipped DP uses (AssetCardDP, AgreementFollowUpDP, …). There is no
+        // SRSReportDataContract attribute: xppc rejects the name outright ("denotes a class
+        // that is not derived from the 'SysAttribute' class"). It is emitted only when
+        // ReportContract() actually produces a contract, or the DP would name a class that
+        // was never generated.
+        var contractAttribute = spec.Parameters is { Count: > 0 }
+            ? $"[SRSReportParameterAttribute(classStr({spec.ContractClass}))]\n"
+            : string.Empty;
         var declaration =
-            $"[SRSReportDataContract(\"{spec.ContractClass}\")]\n" +
+            contractAttribute +
             $"class {dp} extends {dpBase}\n" +
             "{\n" +
             memberDecls + "\n" +
@@ -1508,8 +1517,10 @@ public static class XppScaffolder
             "        // MyTable src = qr.get(tableNum(MyTable));\n" +
             "\n" +
             "        // Populate the staging table and insert:\n" +
-            "        // " + (datasets[0].DpClass[0] | 0x20) + datasets[0].DpClass[1..] + "Tmp.Field1 = src.Field1;\n" +
-            "        // " + (datasets[0].DpClass[0] | 0x20) + datasets[0].DpClass[1..] + "Tmp.insert();\n" +
+            // char.ToLower, not `| 0x20`: the bitwise form promotes the char to int, so the
+            // comment rendered as "99onFooTmp.insert();" instead of "conFooTmp.insert();".
+            "        // " + char.ToLower(datasets[0].DpClass[0]) + datasets[0].DpClass[1..] + "Tmp.Field1 = src.Field1;\n" +
+            "        // " + char.ToLower(datasets[0].DpClass[0]) + datasets[0].DpClass[1..] + "Tmp.insert();\n" +
             "    }\n" +
             "    ttscommit;\n" +
             "}\n";
@@ -1527,7 +1538,7 @@ public static class XppScaffolder
     }
 
     /// <summary>
-    /// Scaffolds the companion <c>SrsReportDataContractBase</c> class for
+    /// Scaffolds the companion <c>[DataContract]</c> class for
     /// <see cref="ReportDp"/>. Emits one <c>parm*()</c> accessor per entry in
     /// <see cref="ReportSpec.Parameters"/>. Returns <see langword="null"/> when the
     /// spec has no parameters (no contract class needed).
@@ -1559,7 +1570,11 @@ public static class XppScaffolder
             : "[DataContractAttribute]\n";
         var declaration =
             contractAttributes +
-            $"class {contractName} extends SrsReportDataContractBase\n" +
+            // Shipped report contracts (AgreementConfirmationRDPContract,
+            // JmgWorkPlannerEmployeeRDPContract, …) extend nothing — the DataContract
+            // attribute is the whole contract. "extends SrsReportDataContractBase" named a
+            // class that is in no model, and xppc failed the file outright.
+            $"public class {contractName}\n" +
             "{\n" +
             memberDecls + "\n" +
             "}\n";
