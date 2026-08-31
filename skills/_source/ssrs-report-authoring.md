@@ -166,3 +166,5 @@ original vs copy).
      construct))]` when you cannot touch the menu item itself.
   Never CoC the DP's `processReport()` for extra rows — the `[PostHandlerFor]`
   subscription above is the verified route and needs no wrapper class.
+  All three are scaffolded by `d365fo generate report-extension
+  dataset|custom-design|menu-redirect` — see `--help` for the options each needs.

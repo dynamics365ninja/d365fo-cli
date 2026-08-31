@@ -249,6 +249,7 @@ public static class CliApp
                 b.AddCommand<GenerateDutyCommand>("duty").WithDescription("Create a security duty grouping privileges.");
                 b.AddCommand<GenerateRoleCommand>("role").WithDescription("Create an AxSecurityRole or merge duties/privileges into an existing role.");
                 b.AddCommand<GenerateReportCommand>("report").WithDescription("Create an AxReport + SrsReportDataProviderBase skeleton (DP class).");
+                b.AddCommand<GenerateReportExtensionCommand>("report-extension").WithDescription("Extend a SHIPPED report: dataset (PostHandlerFor/DataEventHandler), custom-design (controller + PrintMgmt delegate), or menu-redirect (post-handler on construct()).");
                 b.AddCommand<GenerateSysOperationCommand>("sysoperation").WithDescription("Create a SysOperation DataContract + Service + Controller triplet.");
                 b.AddCommand<GenerateNumberSequenceCommand>("number-sequence").WithDescription("Create a NumberSeq module extension, EDT, and form handler.");
                 b.AddCommand<GenerateWorkflowCommand>("workflow").WithDescription("Create an AxWorkflowTemplate (workflow type), its approval/task elements, a WorkflowDocument class, and a canSubmitToWorkflow stub.");
