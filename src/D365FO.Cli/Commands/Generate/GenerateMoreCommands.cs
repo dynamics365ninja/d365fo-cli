@@ -416,7 +416,17 @@ public sealed class GenerateExtensionCommand : Command<GenerateExtensionCommand.
             return RenderHelpers.Render(kind, ToolResult<object>.Fail(D365FoErrorCodes.BadInput,
                 $"Unsupported extension kind: {settings.Kind}. Expected Table|Form|Edt|Enum|View|Query|DataEntityView|SecurityDuty|SecurityRole."));
 
-        var fullName = $"{settings.Target}.{suffix}";
+        // A dotted target already names an extension (AOT object names never contain a dot) —
+        // compose against its base so "CustTable.Ext" does not become "CustTable.Ext.Ext".
+        var targetBase = settings.Target;
+        var targetDot = targetBase.IndexOf('.');
+        string? targetRewriteNote = null;
+        if (targetDot > 0)
+        {
+            targetRewriteNote = $"Target \"{settings.Target}\" names an extension, not its base — composed against \"{targetBase[..targetDot]}\" instead.";
+            targetBase = targetBase[..targetDot];
+        }
+        var fullName = $"{targetBase}.{suffix}";
         var outPath = settings.Out;
         if (hasInstall && !hasOut)
         {
@@ -452,23 +462,23 @@ public sealed class GenerateExtensionCommand : Command<GenerateExtensionCommand.
 
         var doc = axFolder switch
         {
-            "AxSecurityDutyExtension" => XppScaffolder.SecurityDutyExtension(settings.Target, suffix, settings.Privileges, propertyMods),
-            "AxSecurityRoleExtension" => XppScaffolder.SecurityRoleExtension(settings.Target, suffix, settings.Duties, settings.Privileges, propertyMods),
+            "AxSecurityDutyExtension" => XppScaffolder.SecurityDutyExtension(targetBase, suffix, settings.Privileges, propertyMods),
+            "AxSecurityRoleExtension" => XppScaffolder.SecurityRoleExtension(targetBase, suffix, settings.Duties, settings.Privileges, propertyMods),
             // The scaffolder takes the base kind, not the type name — and the two differ for
             // queries, whose extension is AxQuerySimpleExtension.
-            "AxQuerySimpleExtension" => XppScaffolder.Extension("query", settings.Target, suffix),
+            "AxQuerySimpleExtension" => XppScaffolder.Extension("query", targetBase, suffix),
             // The EDT case needs the index-backed base-type resolver to pin the concrete
             // AxEdt*Extension subtype; for a table extension the same resolver picks the
             // concrete AxTableField* subtype per field. The other kinds ignore it.
-            _ => XppScaffolder.Extension(axFolder["Ax".Length..^"Extension".Length], settings.Target, suffix,
+            _ => XppScaffolder.Extension(axFolder["Ax".Length..^"Extension".Length], targetBase, suffix,
                      GenerateInstaller.BuildEdtBaseTypeResolver(), fieldSpecs),
         };
 
         // Grounding gate: the target object must exist in the index; fail
         // closed under D365FO_GROUNDING_ENFORCE=true. The EDTs a field names are
         // required too — a hallucinated EDT is the failure this gate exists for.
-        var gate = GenerateInstaller.Gate(settings, settings.Target, doc,
-            requiredSymbols: new[] { settings.Target }
+        var gate = GenerateInstaller.Gate(settings, targetBase, doc,
+            requiredSymbols: new[] { targetBase }
                 .Concat(fieldSpecs.Select(f => f.Edt!))
                 .ToArray());
         if (gate.Failure is not null) return RenderHelpers.Render(kind, gate.Failure);
@@ -480,7 +490,8 @@ public sealed class GenerateExtensionCommand : Command<GenerateExtensionCommand.
             {
                 kind = axFolder,
                 name = fullName,
-                target = settings.Target,
+                target = targetBase,
+                targetRewritten = targetRewriteNote,
                 suffix,
                 fields = fieldSpecs.Count == 0
                     ? null

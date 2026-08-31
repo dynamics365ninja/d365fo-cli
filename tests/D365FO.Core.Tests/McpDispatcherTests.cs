@@ -320,4 +320,33 @@ public class McpDispatcherTests : IDisposable
         var code = payload.RootElement.GetProperty("error").GetProperty("code").GetString();
         Assert.EndsWith("_NOT_FOUND", code);
     }
+
+    [Fact]
+    public void PrepareChange_answers_for_kernel_declared_table_methods()
+    {
+        // Every table inherits validateWrite from xRecord — a kernel type with no AOT
+        // metadata, so the index has no row for the most common CoC target there is.
+        // "Not found" read as "does not exist"; the kernel catalog now answers instead.
+        var repo = new MetadataRepository(_dbPath);
+        repo.EnsureSchema();
+        repo.ApplyExtract(ExtractBatch.Empty("Fleet") with
+        {
+            Tables = new[] { new ExtractedTable("FmVehicle", null, "x", Array.Empty<ExtractedTableField>()) },
+        });
+
+        var result = new ToolHandlers(repo).PrepareChange("FmVehicle", null, "validateWrite", null, null, null);
+        Assert.True(result.Ok);
+
+        var json = JsonSerializer.Serialize(result.Data);
+        using var doc = JsonDocument.Parse(json);
+        var method = doc.RootElement.GetProperty("method");
+        Assert.True(method.GetProperty("found").GetBoolean());
+        Assert.Equal("public boolean validateWrite()", method.GetProperty("signature").GetString());
+        Assert.Contains("orig()", json);
+
+        // A method no kernel type declares still reports honestly as not found.
+        var missing = new ToolHandlers(repo).PrepareChange("FmVehicle", null, "noSuchMethodAnywhere", null, null, null);
+        var missingJson = JsonSerializer.Serialize(missing.Data);
+        Assert.Contains("\"found\":false", missingJson);
+    }
 }

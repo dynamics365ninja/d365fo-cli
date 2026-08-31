@@ -444,6 +444,36 @@ public sealed partial class MetadataRepository
     }
 
     /// <summary>
+    /// <see cref="GetEdt"/>, with an inherited <c>StringSize</c> resolved. The AOT stores an
+    /// EDT exactly as its own XML declares it and fills in nothing it inherits, so a derived
+    /// string EDT that declares no size used to read back as unset — while the real answer is
+    /// up the extends chain (<c>ItemId</c> is really 20, <c>ItemFreeTxt</c> 1000; upstream
+    /// measured 310 of 564 string fields (55%) wrong across ten core tables). A derived EDT
+    /// that DECLARES its own size is authoritative and is left untouched; only the unset case
+    /// is filled in, and <c>InheritedFrom</c> names the ancestor that supplied it.
+    /// </summary>
+    public (EdtInfo Edt, string? StringSizeInheritedFrom)? GetEdtResolved(string name)
+    {
+        var edt = GetEdt(name);
+        if (edt is null) return null;
+        if (edt.StringSize is not null) return (edt, null);
+
+        var current = edt.Extends;
+        var visited = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { edt.Name };
+        for (var depth = 0; depth < InheritanceWalkLimit && !string.IsNullOrWhiteSpace(current); depth++)
+        {
+            if (!visited.Add(current!)) break;
+            var ancestor = GetEdt(current!);
+            if (ancestor is null) break;
+            if (ancestor.StringSize is not null)
+                return (edt with { StringSize = ancestor.StringSize }, ancestor.Name);
+            current = ancestor.Extends;
+        }
+
+        return (edt, null);
+    }
+
+    /// <summary>
     /// Every EDT named exactly <paramref name="name"/> (case-insensitive),
     /// across all models. Served by <c>IX_Edts_Name_NoCase</c> — the BINARY
     /// <c>IX_Edts_Name</c> cannot answer a <c>COLLATE NOCASE</c> comparison.

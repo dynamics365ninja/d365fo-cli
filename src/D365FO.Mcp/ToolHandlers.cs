@@ -51,10 +51,17 @@ public sealed class ToolHandlers
 
     public ToolResult<object> GetEdt(string name)
     {
-        var e = _repo.GetEdt(name);
-        return e is null
+        var resolved = _repo.GetEdtResolved(name);
+        return resolved is null
             ? ToolResult<object>.Fail("EDT_NOT_FOUND", $"EDT '{name}' not found.")
-            : ToolResult<object>.Success(e);
+            : ToolResult<object>.Success(
+                (object)resolved.Value.Edt,
+                resolved.Value.StringSizeInheritedFrom is null
+                    ? null
+                    : new List<string>
+                    {
+                        $"StringSize {resolved.Value.Edt.StringSize} is inherited from {resolved.Value.StringSizeInheritedFrom} — this EDT declares none of its own.",
+                    });
     }
 
     public ToolResult<object> GetClass(string name)
@@ -1251,8 +1258,13 @@ public sealed class ToolHandlers
         if (methods is null || methods.Length == 0)
             return ToolResult<object>.Fail("BAD_INPUT", "At least one method is required.");
 
+        // A target spelled as the extension itself (Base.Suffix, Base_Extension) is
+        // rewritten to its base rather than suffixed twice.
+        target = D365FO.Core.ObjectNamingRules.NormalizeExtensionTarget(target, out var renameNote);
+
         // Guardrail: warn if CoC wrappers already exist.
         var warnings = new List<string>();
+        if (renameNote is not null) warnings.Add(renameNote);
         try
         {
             var existing = _repo.FindCocExtensions(target);
@@ -1785,13 +1797,37 @@ public sealed class ToolHandlers
             var m = _repo.FindMethod(objectName, method!);
             if (m is null)
             {
-                methodInfo = new
-                {
-                    name = method,
-                    found = false,
-                    eligibility = $"Method \"{method}\" not found on {objectName} (checked inheritance chain and extensions). " +
-                                  $"Use get_object_info (objectType={(objectType == "table" ? "table" : "class")}) for {objectName} to list real methods.",
-                };
+                // Kernel fallback: every table inherits its data methods (validateWrite,
+                // insert, modifiedField, …) from xRecord/Common — kernel types with no AOT
+                // metadata, so the index has no row for the most common CoC target there
+                // is. "Not found" would read as "does not exist" and leave the caller to
+                // invent the wrapper unaided.
+                var kernel = D365FO.Core.Knowledge.TableDataMethods.AppliesTo(objectType)
+                    ? D365FO.Core.Knowledge.TableDataMethods.Lookup(method!)
+                    : null;
+                methodInfo = kernel is not null
+                    ? (object)new
+                    {
+                        name = kernel.Name,
+                        found = true,
+                        signature = kernel.Signature,
+                        inherited = new
+                        {
+                            declaredOn = kernel.DeclaredOn,
+                            note = $"{objectName} does not declare {kernel.Name}; every table gets it from " +
+                                   $"{kernel.DeclaredOn}, a kernel type with no AOT metadata, which is why the " +
+                                   "symbol index has no row for it. The signature above is the one a CoC wrapper must match exactly.",
+                        },
+                        eligibility = $"CoC-eligible — [ExtensionOf(tableStr({objectName}))] final class … wrapping {kernel.Signature}. {kernel.Purpose}",
+                        contract = kernel.Contract,
+                    }
+                    : new
+                    {
+                        name = method,
+                        found = false,
+                        eligibility = $"Method \"{method}\" not found on {objectName} (checked inheritance chain and extensions). " +
+                                      $"Use get_object_info (objectType={(objectType == "table" ? "table" : "class")}) for {objectName} to list real methods.",
+                    };
             }
             else
             {

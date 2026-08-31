@@ -726,41 +726,46 @@ public sealed class GenerateCocCommand : Command<GenerateCocCommand.Settings>
         if (settings.Methods.Length == 0)
             return RenderHelpers.Render(kind, ToolResult<object>.Fail("BAD_INPUT", "At least one --method required."));
 
+        // A target spelled as the extension itself (Base.Suffix, Base_Extension) is
+        // rewritten to its base rather than suffixed twice.
+        var target = D365FO.Core.ObjectNamingRules.NormalizeExtensionTarget(settings.Target, out var renameNote);
+
         // Guardrail: warn if the target already has CoC wrappers, and resolve
         // the target's AOT kind so [ExtensionOf] uses the right intrinsic
         // (tableStr for tables, classStr for classes, …).
         var warnings = new List<string>();
+        if (renameNote is not null) warnings.Add(renameNote);
         var targetKind = "class";
         try
         {
             var repo = RepoFactory.Create();
-            var existing = repo.FindCocExtensions(settings.Target);
+            var existing = repo.FindCocExtensions(target);
             if (existing.Count > 0)
-                warnings.Add($"There are already {existing.Count} CoC extension(s) of {settings.Target}. Consider extending an existing one instead of stacking a new wrapper.");
-            var kinds = repo.SymbolKinds(settings.Target);
+                warnings.Add($"There are already {existing.Count} CoC extension(s) of {target}. Consider extending an existing one instead of stacking a new wrapper.");
+            var kinds = repo.SymbolKinds(target);
             targetKind = kinds.FirstOrDefault(k => k is "class" or "table" or "form" or "data-entity" or "map" or "view") ?? "class";
         }
         catch { /* index may be empty; not fatal */ }
 
-        var doc = XppScaffolder.CocExtension(settings.Target, targetKind, settings.Methods);
+        var doc = XppScaffolder.CocExtension(target, targetKind, settings.Methods);
 
         // Grounding gate: prove the target and every wrapped method against the
         // index; fail closed under D365FO_GROUNDING_ENFORCE=true.
         var gate = GenerateInstaller.Gate(
             settings,
-            settings.Target,
+            target,
             doc,
-            settings.Methods.Select(m => (settings.Target, m)));
+            settings.Methods.Select(m => (target, m)));
         if (gate.Failure is not null) return RenderHelpers.Render(kind, gate.Failure);
         warnings.AddRange(gate.Warnings);
 
         return GenerateInstaller.Emit(
-            kind, gate, settings, "class", Folders.Class, settings.Target + "_Extension",
+            kind, gate, settings, "class", Folders.Class, target + "_Extension",
             doc,
             r => new
             {
                 kind = "AxClass",
-                name = settings.Target + "_Extension",
+                name = target + "_Extension",
                 source = r.Source,
                 path = r.Path,
                 bytes = r.Bytes,

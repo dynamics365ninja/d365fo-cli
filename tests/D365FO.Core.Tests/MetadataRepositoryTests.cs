@@ -386,4 +386,53 @@ public class MetadataRepositoryTests : IDisposable
         // first, so the answer depended on insertion order.
         Assert.Equal("Contoso", repo.GetEdt("sharedid")!.Model);
     }
+
+    [Fact]
+    public void GetEdtResolved_fills_inherited_StringSize_from_the_extends_chain()
+    {
+        // The AOT stores an EDT exactly as declared; a derived string EDT with no size
+        // of its own inherits it (ItemId is really 20). Only the unset case is filled.
+        var repo = new MetadataRepository(_dbPath);
+        repo.EnsureSchema();
+        repo.ApplyExtract(ExtractBatch.Empty("Foundation") with
+        {
+            Edts = new[]
+            {
+                new ExtractedEdt("SysGroup", null, "String", null, 20),
+                new ExtractedEdt("ItemIdBase", "SysGroup", "String", null, null),
+                new ExtractedEdt("ItemId", "ItemIdBase", "String", null, null),
+                new ExtractedEdt("ItemFreeTxt", "SysGroup", "String", null, 1000),
+            },
+        });
+
+        var resolved = repo.GetEdtResolved("ItemId");
+        Assert.NotNull(resolved);
+        Assert.Equal(20, resolved!.Value.Edt.StringSize);
+        Assert.Equal("SysGroup", resolved.Value.StringSizeInheritedFrom);
+
+        // A declared size is authoritative — no walk, no inheritance marker.
+        var declared = repo.GetEdtResolved("ItemFreeTxt");
+        Assert.Equal(1000, declared!.Value.Edt.StringSize);
+        Assert.Null(declared.Value.StringSizeInheritedFrom);
+    }
+
+    [Fact]
+    public void GetEdtResolved_survives_a_cycle_and_a_missing_ancestor()
+    {
+        var repo = new MetadataRepository(_dbPath);
+        repo.EnsureSchema();
+        repo.ApplyExtract(ExtractBatch.Empty("Foundation") with
+        {
+            Edts = new[]
+            {
+                new ExtractedEdt("LoopA", "LoopB", "String", null, null),
+                new ExtractedEdt("LoopB", "LoopA", "String", null, null),
+                new ExtractedEdt("Orphan", "NotIndexedAnywhere", "String", null, null),
+            },
+        });
+
+        Assert.Null(repo.GetEdtResolved("LoopA")!.Value.Edt.StringSize);
+        Assert.Null(repo.GetEdtResolved("Orphan")!.Value.Edt.StringSize);
+        Assert.Null(repo.GetEdtResolved("NoSuchEdt"));
+    }
 }
