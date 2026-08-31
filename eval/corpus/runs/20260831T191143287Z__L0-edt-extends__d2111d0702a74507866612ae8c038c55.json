@@ -1,0 +1,21 @@
+{
+  "runId": "20260831T191143287Z__L0-edt-extends__d2111d0702a74507866612ae8c038c55",
+  "caseId": "L0-edt-extends",
+  "tier": 0,
+  "timestampUtc": "2026-08-31T19:11:43.2873641+00:00",
+  "source": "build-oracle",
+  "score": {
+    "xppErrors": 0,
+    "referenceErrors": 0,
+    "goldenMatch": true,
+    "goldenDiff": {
+      "missing": [],
+      "extra": [],
+      "changed": [],
+      "isMatch": true
+    },
+    "buildClean": true,
+    "buildErrors": 0,
+    "runtimeFailures": 0
+  }
+}

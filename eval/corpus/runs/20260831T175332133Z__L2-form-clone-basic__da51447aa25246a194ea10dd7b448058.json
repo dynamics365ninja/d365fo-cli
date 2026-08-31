@@ -1,0 +1,21 @@
+{
+  "runId": "20260831T175332133Z__L2-form-clone-basic__da51447aa25246a194ea10dd7b448058",
+  "caseId": "L2-form-clone-basic",
+  "tier": 2,
+  "timestampUtc": "2026-08-31T17:53:32.1331062+00:00",
+  "source": "build-oracle",
+  "score": {
+    "xppErrors": 0,
+    "referenceErrors": 0,
+    "goldenMatch": true,
+    "goldenDiff": {
+      "missing": [],
+      "extra": [],
+      "changed": [],
+      "isMatch": true
+    },
+    "buildClean": true,
+    "buildErrors": 0,
+    "runtimeFailures": 0
+  }
+}

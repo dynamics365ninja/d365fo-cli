@@ -1,0 +1,21 @@
+{
+  "runId": "20260831T175331962Z__L0-enum-non-extensible__d1f88d92a6764bcfa1c3df4324e180c1",
+  "caseId": "L0-enum-non-extensible",
+  "tier": 0,
+  "timestampUtc": "2026-08-31T17:53:31.9627043+00:00",
+  "source": "build-oracle",
+  "score": {
+    "xppErrors": 0,
+    "referenceErrors": 0,
+    "goldenMatch": true,
+    "goldenDiff": {
+      "missing": [],
+      "extra": [],
+      "changed": [],
+      "isMatch": true
+    },
+    "buildClean": true,
+    "buildErrors": 0,
+    "runtimeFailures": 0
+  }
+}

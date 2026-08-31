@@ -1,0 +1,21 @@
+{
+  "runId": "20260831T175332149Z__L2-table-extension__bc7ed1b5eecb40dca4f3a7cb3d4719df",
+  "caseId": "L2-table-extension",
+  "tier": 2,
+  "timestampUtc": "2026-08-31T17:53:32.1492255+00:00",
+  "source": "build-oracle",
+  "score": {
+    "xppErrors": 0,
+    "referenceErrors": 0,
+    "goldenMatch": true,
+    "goldenDiff": {
+      "missing": [],
+      "extra": [],
+      "changed": [],
+      "isMatch": true
+    },
+    "buildClean": true,
+    "buildErrors": 0,
+    "runtimeFailures": 0
+  }
+}

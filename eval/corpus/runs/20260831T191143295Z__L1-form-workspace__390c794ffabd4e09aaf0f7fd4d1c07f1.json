@@ -1,0 +1,21 @@
+{
+  "runId": "20260831T191143295Z__L1-form-workspace__390c794ffabd4e09aaf0f7fd4d1c07f1",
+  "caseId": "L1-form-workspace",
+  "tier": 1,
+  "timestampUtc": "2026-08-31T19:11:43.2951896+00:00",
+  "source": "build-oracle",
+  "score": {
+    "xppErrors": 0,
+    "referenceErrors": 0,
+    "goldenMatch": true,
+    "goldenDiff": {
+      "missing": [],
+      "extra": [],
+      "changed": [],
+      "isMatch": true
+    },
+    "buildClean": true,
+    "buildErrors": 0,
+    "runtimeFailures": 0
+  }
+}

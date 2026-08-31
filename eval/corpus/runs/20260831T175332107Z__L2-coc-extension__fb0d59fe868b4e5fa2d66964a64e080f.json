@@ -1,0 +1,21 @@
+{
+  "runId": "20260831T175332107Z__L2-coc-extension__fb0d59fe868b4e5fa2d66964a64e080f",
+  "caseId": "L2-coc-extension",
+  "tier": 2,
+  "timestampUtc": "2026-08-31T17:53:32.1078768+00:00",
+  "source": "build-oracle",
+  "score": {
+    "xppErrors": 0,
+    "referenceErrors": 0,
+    "goldenMatch": true,
+    "goldenDiff": {
+      "missing": [],
+      "extra": [],
+      "changed": [],
+      "isMatch": true
+    },
+    "buildClean": true,
+    "buildErrors": 0,
+    "runtimeFailures": 0
+  }
+}

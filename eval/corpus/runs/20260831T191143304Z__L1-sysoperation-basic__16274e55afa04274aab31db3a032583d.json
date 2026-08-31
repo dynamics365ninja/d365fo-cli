@@ -1,0 +1,21 @@
+{
+  "runId": "20260831T191143304Z__L1-sysoperation-basic__16274e55afa04274aab31db3a032583d",
+  "caseId": "L1-sysoperation-basic",
+  "tier": 1,
+  "timestampUtc": "2026-08-31T19:11:43.3046191+00:00",
+  "source": "build-oracle",
+  "score": {
+    "xppErrors": 0,
+    "referenceErrors": 0,
+    "goldenMatch": true,
+    "goldenDiff": {
+      "missing": [],
+      "extra": [],
+      "changed": [],
+      "isMatch": true
+    },
+    "buildClean": true,
+    "buildErrors": 0,
+    "runtimeFailures": 0
+  }
+}

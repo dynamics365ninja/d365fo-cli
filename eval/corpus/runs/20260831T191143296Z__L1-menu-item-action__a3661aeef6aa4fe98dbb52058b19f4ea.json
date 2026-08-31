@@ -1,0 +1,21 @@
+{
+  "runId": "20260831T191143296Z__L1-menu-item-action__a3661aeef6aa4fe98dbb52058b19f4ea",
+  "caseId": "L1-menu-item-action",
+  "tier": 1,
+  "timestampUtc": "2026-08-31T19:11:43.2966037+00:00",
+  "source": "build-oracle",
+  "score": {
+    "xppErrors": 0,
+    "referenceErrors": 0,
+    "goldenMatch": true,
+    "goldenDiff": {
+      "missing": [],
+      "extra": [],
+      "changed": [],
+      "isMatch": true
+    },
+    "buildClean": true,
+    "buildErrors": 0,
+    "runtimeFailures": 0
+  }
+}
