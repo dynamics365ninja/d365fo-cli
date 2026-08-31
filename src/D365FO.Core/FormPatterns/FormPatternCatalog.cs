@@ -799,8 +799,12 @@ public static class FormPatternCatalog
         new FormPatternSpec
         {
             Id = "TaskSingle",
-            XmlName = "TaskSingle",
-            XmlAliases = new[] { "Task", "SimpleTask" },
+            // The AOS knows this pattern as "Task" (alias "Task Single"): a form declaring
+            // <Pattern>TaskSingle</Pattern> fails the build with "Pattern 'TaskSingle 1.1'
+            // not found". Confirmed against the AOT registry and xppc 7.0.7996.33 — the
+            // "xmlName to be confirmed by mining" note below is now settled.
+            XmlName = "Task",
+            XmlAliases = new[] { "TaskSingle", "SimpleTask" },
             DisplayName = "Task Single (legacy)",
             Versions = new[] { "1.1", "1.0" },
             Purpose = "Legacy AX 2012-style entity form (Overview + General tabs). MIGRATION ONLY — do not use for new forms.",
@@ -819,7 +823,10 @@ public static class FormPatternCatalog
         new FormPatternSpec
         {
             Id = "TaskDouble",
-            XmlName = "TaskDouble",
+            // Registry name: "TaskParentChild" (alias "Task Double"). Same finding as
+            // TaskSingle above.
+            XmlName = "TaskParentChild",
+            XmlAliases = new[] { "TaskDouble" },
             VariantOf = "TaskSingle",
             DisplayName = "Task Double (legacy)",
             Versions = new[] { "1.1", "1.0" },
