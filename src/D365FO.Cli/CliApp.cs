@@ -235,6 +235,8 @@ public static class CliApp
             {
                 b.SetDescription("Scaffold AOT XML skeletons.");
                 b.AddCommand<GenerateTableCommand>("table").WithDescription("Create a new AxTable.");
+                b.AddCommand<GenerateTableRelationCommand>("table-relation").WithDescription("Derive explicit AxTableRelation fragments from a table's EDT references (BPErrorEDTNotMigrated); --apply-to merges them into the table XML.");
+                b.AddCommand<GenerateFindMethodsCommand>("find-methods").WithDescription("Generate the standard static find()/exists()/findRecId() for a table from its unique index; --apply-to merges them into the table XML.");
                 b.AddCommand<GenerateClassCommand>("class").WithDescription("Create a new AxClass.");
                 b.AddCommand<GenerateCocCommand>("coc").WithDescription("Create a Chain-of-Command extension class.");
                 b.AddCommand<GenerateFormCommand>("form").WithDescription("Create an AxForm with a chosen pattern (SimpleList, DetailsMaster, DetailsTransaction, Dialog, Lookup, ListPage, Workspace, …).");

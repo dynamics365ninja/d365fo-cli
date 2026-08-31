@@ -14,7 +14,7 @@ Every column is derived — families from `ObjectTypeRegistry`, capabilities fro
 file cannot claim coverage that no longer exists. Regenerate with
 `d365fo eval coverage --write`; CI runs `--check`.
 
-**41 of 72 leaves complete.**
+**41 of 74 leaves complete.**
 
 ## AOT families
 
@@ -70,6 +70,8 @@ whether it is taught and proven.
 | Subcommand | Emits | K | E | Topics | Cases |
 |---|---|:-:|:-:|---|---|
 | `generate table` | AxTable | ✅ | ✅ | `label-translation`, `performance-and-caching`, `table-scaffolding`, `xpp-best-practice-rules` | `L1-table-basic`, `L1-table-tempdb` |
+| `generate table-relation` | AxTable | ✅ | — | `table-scaffolding` | — |
+| `generate find-methods` | AxTable | ✅ | — | `table-scaffolding` | — |
 | `generate class` | AxClass | — | ✅ | — | `L1-class-basic` |
 | `generate coc` | AxClass | ✅ | ✅ | `coc-extension-authoring`, `object-extension-authoring` | `L2-coc-extension` |
 | `generate form` | AxForm | ✅ | ✅ | `form-pattern-scaffolding` | `L1-form-basic`, `L1-form-details-master`, `L1-form-details-transaction`, `L1-form-dialog`, `L1-form-list-page`, `L1-form-lookup`, `L1-form-simplelist-details`, `L1-form-table-of-contents`, `L1-form-workspace` |
@@ -109,11 +111,13 @@ cannot build at all are omitted — they are a generation gap, not a coverage ga
 - **class** (capability) — no topic names it
 - **control-method** (capability) — no topic names it
 - **datasource-method** (capability) — no topic names it
+- **find-methods** (capability) — no case with a reviewed golden
 - **form-clone** (capability) — no topic names it
 - **map** (capability) — no topic names it
 - **report-extension** (capability) — no case with a reviewed golden
 - **simple-list** (capability) — no topic names it; no case with a reviewed golden
 - **systest** (capability) — no topic names it
+- **table-relation** (capability) — no case with a reviewed golden
 - **view** (capability) — no topic names it
 - **AxEdtExtension** (family) — no topic names it
 - **AxEnumExtension** (family) — no topic names it

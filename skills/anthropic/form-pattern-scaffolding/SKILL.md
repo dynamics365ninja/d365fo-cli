@@ -79,6 +79,17 @@ generation even if the XML is well-formed.
 Aliases recognised: `master`, `transaction`, `toc`, `panorama`,
 `drop-dialog`, `dropdialog`, `simplelist-details`, etc.
 
+Beyond the nine templates, catalog patterns without a hand-written template
+(`Wizard`, `DropDialog`, `TaskSingle`, `FormPartSectionList`,
+`FormPartFactboxCard`, `FormPartFactboxGrid`, …) are **expanded from the same
+pattern spec the validator enforces**: the required skeleton comes out
+structurally pattern-correct by construction and self-tests before writing. A
+pattern the expander cannot faithfully build (a required wildcard slot, or
+sibling slots sharing a control type — e.g. `TaskDouble`) is refused with the
+reason; author those by hand from `d365fo get form-pattern <NAME>`. Expanded
+forms carry the required containers only — content and sub-patterns are yours
+to add.
+
 ## Scaffolding examples
 
 ```sh

@@ -957,7 +957,24 @@ internal static class GenerateFormImpl
             return RenderHelpers.Render(kind, ToolResult<object>.Fail("BAD_INPUT", "Form name required."));
 
         if (!FormPatternNormalizer.TryNormalize(patternRaw, out var pattern, out var patternError))
-            return RenderHelpers.Render(kind, ToolResult<object>.Fail("BAD_INPUT", patternError!));
+        {
+            // Registry fallback (port of upstream formControlExpander): a pattern the
+            // catalog knows but no hand-written template covers is expanded from the
+            // AOT-derived pattern registry — the same data the validator enforces, so
+            // the skeleton is pattern-correct by construction. The nine templated
+            // patterns keep their proven templates.
+            var catalogSpec = D365FO.Core.FormPatterns.FormPatternCatalog.Resolve(patternRaw!);
+            string? expandBlocker = null;
+            if (catalogSpec is not null)
+            {
+                if (D365FO.Core.FormPatterns.FormPatternExpander.CanExpand(catalogSpec, out expandBlocker))
+                    return RunExpanded(settings, kind, formName, table, catalogSpec, caption, fields, sections, linesTable);
+            }
+            var blockerNote = expandBlocker is not null
+                ? $" Registry expansion is not possible either: {expandBlocker}."
+                : string.Empty;
+            return RenderHelpers.Render(kind, ToolResult<object>.Fail("BAD_INPUT", patternError! + blockerNote));
+        }
 
         // Patterns that need a datasource: everything except Dialog / TableOfContents (where it is optional).
         var dsRequired = pattern is not (FormPattern.Dialog or FormPattern.TableOfContents);
@@ -1107,6 +1124,118 @@ internal static class GenerateFormImpl
                 patternCheck = new
                 {
                     enforced = FormPatternGate.EnforcementEnabled,
+                    errors   = patternReport.ErrorCount,
+                    warnings = patternReport.WarningCount,
+                },
+                grounding    = gate.Grounding,
+            },
+            patternWarnings);
+    }
+
+    /// <summary>
+    /// The registry-expansion path for patterns without a hand-written template (Wizard,
+    /// DropDialog, FormPart*, Task*, …). Emits the pattern's required skeleton from the
+    /// AOT-derived registry, self-tests it against the SAME validator that gates the
+    /// templates, and refuses on any structural error — the expander promises
+    /// pattern-correctness by construction, so an error means the pattern genuinely cannot
+    /// be materialised and hand-authoring is the honest answer.
+    /// </summary>
+    private static int RunExpanded(
+        GenerateSettings settings,
+        OutputMode.Kind kind,
+        string formName,
+        string? table,
+        D365FO.Core.FormPatterns.FormPatternSpec catalogSpec,
+        string? caption,
+        IReadOnlyList<string> fields,
+        IReadOnlyList<string> sections,
+        string? linesTable)
+    {
+        var patternXmlName = catalogSpec.XmlName;
+        if (sections.Count > 0 || !string.IsNullOrWhiteSpace(linesTable))
+        {
+            return RenderHelpers.Render(kind, ToolResult<object>.Fail("BAD_INPUT",
+                $"--section / --lines-table are template features; registry expansion of '{patternXmlName}' " +
+                "emits the pattern's required skeleton only.",
+                "Generate without them, then add sections by hand (`d365fo get form-pattern " + patternXmlName + "` shows the structure)."));
+        }
+
+        var hasInstall = !string.IsNullOrWhiteSpace(settings.InstallTo);
+        var hasOut     = !string.IsNullOrWhiteSpace(settings.Out);
+        if (!hasInstall && !hasOut)
+            return RenderHelpers.Render(kind, ToolResult<object>.Fail("BAD_INPUT", "--out or --install-to is required."));
+
+        // Caption: explicit wins; otherwise reuse the bound table's label, same as the
+        // template path — a raw-text caption trips BPErrorLabelIsText.
+        var effectiveCaption = caption;
+        if (!string.IsNullOrWhiteSpace(table) && string.IsNullOrWhiteSpace(effectiveCaption))
+        {
+            try
+            {
+                var label = RepoFactory.Create().GetTableDetails(table!)?.Table.Label;
+                if (!string.IsNullOrWhiteSpace(label)) effectiveCaption = label;
+            }
+            catch { /* index may be empty; not fatal */ }
+        }
+
+        var doc = D365FO.Core.FormPatterns.FormPatternExpander.Expand(catalogSpec, new D365FO.Core.FormPatterns.FormExpandOptions(
+            formName,
+            DsTable: table,
+            Caption: effectiveCaption,
+            GridFields: fields,
+            ControlTypeResolver: BuildControlTypeResolver(table, null)));
+        if (doc is null)
+        {
+            return RenderHelpers.Render(kind, ToolResult<object>.Fail("RENDER_FAILED",
+                $"Registry expansion of '{patternXmlName}' produced nothing.",
+                $"Author the form by hand — `d365fo get form-pattern {patternXmlName}` shows the required structure."));
+        }
+        doc.Declaration = new System.Xml.Linq.XDeclaration("1.0", "utf-8", null);
+        var xml = doc.Declaration + Environment.NewLine + doc.ToString();
+
+        // Self-test with the same gate the templates pass through. An error here is a
+        // refusal, not a bypassable warning: the expander's whole promise is structural
+        // correctness, and enforcement flags exist for hand-written XML, not for this.
+        var patternReport = D365FO.Core.FormPatterns.FormPatternValidator.ValidateXml(xml);
+        if (patternReport.HasErrors)
+        {
+            var errors = patternReport.Violations.Where(v => v.Severity == "error")
+                .Select(v => $"{v.Rule} {v.Path}: {v.Excerpt} → {v.Fix}");
+            return RenderHelpers.Render(kind, ToolResult<object>.Fail(
+                "FORM_PATTERN_VIOLATION",
+                $"Registry expansion of '{patternXmlName}' failed its own pattern self-test:\n" + string.Join("\n", errors),
+                $"Author the form by hand — `d365fo get form-pattern {patternXmlName}` shows the required structure."));
+        }
+        var patternWarnings = patternReport.Violations
+            .Select(v => $"form-pattern {v.Rule} [{v.Severity}] {v.Path}: {v.Excerpt}")
+            .ToList();
+        patternWarnings.Add(
+            $"'{patternXmlName}' was expanded from the AOT pattern registry (no hand-written template exists): the " +
+            "required skeleton is complete, but content — fields, parts, sub-patterns the registry leaves open — is yours to add.");
+
+        var gate = GenerateInstaller.Gate(
+            settings, formName, doc: null,
+            requiredSymbols: string.IsNullOrWhiteSpace(table) ? null : new[] { table! });
+        if (gate.Failure is not null) return RenderHelpers.Render(kind, gate.Failure);
+        patternWarnings.AddRange(gate.Warnings);
+
+        return GenerateInstaller.EmitString(
+            kind, gate, settings, "form", Folders.Form, formName,
+            xml,
+            r => new
+            {
+                kind         = "AxForm",
+                name         = formName,
+                pattern      = patternXmlName,
+                source       = r.Source,
+                expandedFromRegistry = true,
+                path         = r.Path,
+                bytes        = r.Bytes,
+                backup       = r.Backup,
+                model        = settings.InstallTo,
+                fieldCount   = fields.Count,
+                patternCheck = new
+                {
                     errors   = patternReport.ErrorCount,
                     warnings = patternReport.WarningCount,
                 },
