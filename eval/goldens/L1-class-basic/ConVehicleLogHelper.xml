@@ -2,8 +2,8 @@
 <AxClass>
   <Name>ConVehicleLogHelper</Name>
   <SourceCode>
-    <Declaration>public final class ConVehicleLogHelper
+    <Declaration><![CDATA[public final class ConVehicleLogHelper
 {
-}</Declaration>
+}]]></Declaration>
   </SourceCode>
 </AxClass>

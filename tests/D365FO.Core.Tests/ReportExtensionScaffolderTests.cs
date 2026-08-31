@@ -1,3 +1,4 @@
+﻿using System.Xml.Linq;
 using D365FO.Core.Scaffolding;
 using Xunit;
 
@@ -74,5 +75,35 @@ public class ReportExtensionScaffolderTests
         Assert.Contains("[PostHandlerFor(classStr(SalesInvoiceController), staticMethodStr(SalesInvoiceController, construct))]", xml);
         Assert.Contains("_args.getReturnValue() as SrsReportRunController", xml);
         Assert.Contains("controller.parmReportName(ssrsReportStr(CtsoSalesInvoice, Report))", xml);
+    }
+
+    // No eval case builds a report extension, so the golden CDATA gate cannot reach these
+    // four shapes. They are still AxClass files written into a model, and the X++ they
+    // carry is doc-comment-bearing handler code — assert the node type on each of them.
+    public static TheoryData<string, XDocument> AllShapes() => new()
+    {
+        { "DatasetExtension", ReportExtensionScaffolder.DatasetExtension(
+            "AssetBarCodeDP", "AssetBarCodeTmp", "AssetBarCodeDPCtso_EventHandler", null) },
+        { "CustomDesignController", ReportExtensionScaffolder.CustomDesignController(
+            "CtsoSalesInvoice", "Report", "SalesInvoiceController") },
+        { "CustomDesignPrintMgmtHandler", ReportExtensionScaffolder.CustomDesignPrintMgmtHandler(
+            "CtsoSalesInvoice", "Report", "SalesOrderInvoice") },
+        { "MenuRedirect", ReportExtensionScaffolder.MenuRedirect(
+            "SalesInvoiceController", "CtsoSalesInvoice", "Report", "SalesInvoiceControllerCtso_EventHandler") },
+    };
+
+    [Theory]
+    [MemberData(nameof(AllShapes))]
+    public void Every_shape_wraps_its_X_plus_plus_payload_in_CDATA(string shape, XDocument doc)
+    {
+        var payloads = doc.Descendants()
+            .Where(e => e.Name.LocalName is "Declaration" or "Source")
+            .Where(e => !string.IsNullOrWhiteSpace(e.Value))
+            .ToList();
+
+        Assert.NotEmpty(payloads);
+        foreach (var el in payloads)
+            Assert.IsType<XCData>(Assert.Single(el.Nodes()));
+        Assert.NotNull(shape);
     }
 }

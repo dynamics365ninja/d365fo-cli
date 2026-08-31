@@ -2,41 +2,41 @@
 <AxClass>
   <Name>ConFmVehicleRun</Name>
   <SourceCode>
-    <Declaration>public class ConFmVehicleRun extends RunBase
+    <Declaration><![CDATA[public class ConFmVehicleRun extends RunBase
 {
         // Packing version constant
     private static int currentVersion = 1;
 }
-</Declaration>
+]]></Declaration>
     <Methods>
       <Method>
         <Name>dialog</Name>
-        <Source>public Object dialog()
+        <Source><![CDATA[public Object dialog()
 {
     DialogRunbase dialog = super();
     return dialog;
 }
-</Source>
+]]></Source>
       </Method>
       <Method>
         <Name>getFromDialog</Name>
-        <Source>public boolean getFromDialog()
+        <Source><![CDATA[public boolean getFromDialog()
 {
     return super();
 }
-</Source>
+]]></Source>
       </Method>
       <Method>
         <Name>pack</Name>
-        <Source>public container pack()
+        <Source><![CDATA[public container pack()
 {
     return [currentVersion];
 }
-</Source>
+]]></Source>
       </Method>
       <Method>
         <Name>unpack</Name>
-        <Source>public boolean unpack(container _packedClass)
+        <Source><![CDATA[public boolean unpack(container _packedClass)
 {
     int version = RunBase::getVersion(_packedClass);
     if (version == currentVersion)
@@ -46,25 +46,25 @@
     }
     return false;
 }
-</Source>
+]]></Source>
       </Method>
       <Method>
         <Name>run</Name>
-        <Source>public void run()
+        <Source><![CDATA[public void run()
 {
     // TODO: implement
 }
-</Source>
+]]></Source>
       </Method>
       <Method>
         <Name>main</Name>
-        <Source>public static void main(Args _args)
+        <Source><![CDATA[public static void main(Args _args)
 {
     ConFmVehicleRun runObject = new ConFmVehicleRun();
     if (runObject.prompt())
         runObject.runOperationNow();
 }
-</Source>
+]]></Source>
       </Method>
     </Methods>
   </SourceCode>

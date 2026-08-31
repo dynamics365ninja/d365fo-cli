@@ -263,7 +263,7 @@ public static class XppScaffolder
                 new XElement("Name", name),
                 new XElement("SourceCode",
                     new XElement("Declaration",
-                        $"{decl} {name}{extendsClause}\n{{\n}}"))));
+                        new XCData($"{decl} {name}{extendsClause}\n{{\n}}")))));
     }
 
     public static XDocument CocExtension(string targetClass, params string[] wrappedMethods)
@@ -288,7 +288,7 @@ public static class XppScaffolder
         var methodEls = wrappedMethods.Select(m => new XElement("Method",
             new XElement("Name", m),
             new XElement("Source",
-                $"public void {m}()\n{{\n    next {m}();\n    // extension logic here\n}}\n")));
+                new XCData($"public void {m}()\n{{\n    next {m}();\n    // extension logic here\n}}\n"))));
 
         // <Methods> MUST be nested inside <SourceCode> (after <Declaration>) —
         // this is the canonical AxClass shape the metadata deserializer expects.
@@ -299,7 +299,7 @@ public static class XppScaffolder
                 new XElement("Name", name),
                 new XElement("SourceCode",
                     new XElement("Declaration",
-                        $"[ExtensionOf({intrinsic}({targetClass}))]\nfinal class {name}\n{{\n}}"),
+                        new XCData($"[ExtensionOf({intrinsic}({targetClass}))]\nfinal class {name}\n{{\n}}")),
                     new XElement("Methods", methodEls))));
     }
 
@@ -820,14 +820,14 @@ public static class XppScaffolder
                 new XElement("Name", className),
                 new XElement("SourceCode",
                     new XElement("Declaration",
-                        $"public static class {className}\n{{\n}}\n"),
+                        new XCData($"public static class {className}\n{{\n}}\n")),
                     new XElement("Methods",
                         new XElement("Method",
                             new XElement("Name", handlerMethod),
                             new XElement("Source",
-                                $"    [{attr}]\n" +
+                                new XCData($"    [{attr}]\n" +
                                 $"    public static void {handlerMethod}(XppPrePostArgs args)\n" +
-                                "    {\n        // handler logic here\n    }\n"))))));
+                                "    {\n        // handler logic here\n    }\n")))))));
     }
 
     /// <summary>
@@ -1327,7 +1327,7 @@ public static class XppScaffolder
         {
             new("Method",
                 new XElement("Name", "main"),
-                new XElement("Source", main)),
+                new XElement("Source", new XCData(main))),
         };
 
         if (spec.PrintMgmtController)
@@ -1366,17 +1366,17 @@ public static class XppScaffolder
                 "}\n";
             methods.Add(new XElement("Method",
                 new XElement("Name", "initPrintMgmtReportRun"),
-                new XElement("Source", initPrintMgmt)));
+                new XElement("Source", new XCData(initPrintMgmt))));
             methods.Add(new XElement("Method",
                 new XElement("Name", "runPrintMgmt"),
-                new XElement("Source", runPrintMgmt)));
+                new XElement("Source", new XCData(runPrintMgmt))));
         }
 
         return new XDocument(
             new XElement("AxClass",
                 new XElement("Name", controller),
                 new XElement("SourceCode",
-                    new XElement("Declaration", declaration),
+                    new XElement("Declaration", new XCData(declaration)),
                     new XElement("Methods", methods))));
     }
 
@@ -1419,11 +1419,11 @@ public static class XppScaffolder
             new XElement("AxClass",
                 new XElement("Name", name),
                 new XElement("SourceCode",
-                    new XElement("Declaration", declaration),
+                    new XElement("Declaration", new XCData(declaration)),
                     new XElement("Methods",
                         new XElement("Method",
                             new XElement("Name", "build"),
-                            new XElement("Source", build))))));
+                            new XElement("Source", new XCData(build)))))));
     }
 
     /// <summary>
@@ -1487,7 +1487,7 @@ public static class XppScaffolder
                 "}\n";
             return new XElement("Method",
                 new XElement("Name",   dsGetter),
-                new XElement("Source", src));
+                new XElement("Source", new XCData(src)));
         }).ToList();
 
         // processReport — contract cast only when parameters are defined.
@@ -1516,13 +1516,13 @@ public static class XppScaffolder
 
         getterMethods.Add(new XElement("Method",
             new XElement("Name",   "processReport"),
-            new XElement("Source", processReportSrc)));
+            new XElement("Source", new XCData(processReportSrc))));
 
         return new XDocument(
             new XElement("AxClass",
                 new XElement("Name",    dp),
                 new XElement("SourceCode",
-                    new XElement("Declaration", declaration),
+                    new XElement("Declaration", new XCData(declaration)),
                     new XElement("Methods", getterMethods))));
     }
 
@@ -1577,14 +1577,14 @@ public static class XppScaffolder
                 "}\n";
             return new XElement("Method",
                 new XElement("Name",   $"parm{p.Name}"),
-                new XElement("Source", src));
+                new XElement("Source", new XCData(src)));
         }).ToList();
 
         return new XDocument(
             new XElement("AxClass",
                 new XElement("Name",    contractName),
                 new XElement("SourceCode",
-                    new XElement("Declaration", declaration),
+                    new XElement("Declaration", new XCData(declaration)),
                     new XElement("Methods", parmMethods))));
     }
 

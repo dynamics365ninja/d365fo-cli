@@ -87,8 +87,8 @@ public static class ViewScaffolder
             .Distinct(StringComparer.Ordinal)
             .Select(m => new XElement("Method",
                 new XElement("Name", m),
-                new XElement("Source", BuildComputedMethodSource(
-                    m, fieldList.First(f => f.IsComputed && f.ViewMethod == m).ComputedType))))
+                new XElement("Source", new XCData(BuildComputedMethodSource(
+                    m, fieldList.First(f => f.IsComputed && f.ViewMethod == m).ComputedType)))))
             .ToList();
 
         var sourceCode = new XElement("SourceCode",

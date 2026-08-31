@@ -2,24 +2,24 @@
 <AxClass>
   <Name>FmVehicle_Workflow_Extension</Name>
   <SourceCode>
-    <Declaration>[ExtensionOf(tableStr(FmVehicle))]
+    <Declaration><![CDATA[[ExtensionOf(tableStr(FmVehicle))]
 final class FmVehicle_Workflow_Extension
 {
 }
-</Declaration>
+]]></Declaration>
     <Methods>
       <Method>
         <Name>canSubmitToWorkflow</Name>
-        <Source>public boolean canSubmitToWorkflow(str _workflowType)
+        <Source><![CDATA[public boolean canSubmitToWorkflow(str _workflowType)
 {
     boolean canSubmit = next canSubmitToWorkflow(_workflowType);
 
     // Add conditions under which this record can be submitted:
-    // canSubmit = canSubmit &amp;&amp; this.Status == MyStatus::Draft;
+    // canSubmit = canSubmit && this.Status == MyStatus::Draft;
 
     return canSubmit;
 }
-</Source>
+]]></Source>
       </Method>
     </Methods>
   </SourceCode>

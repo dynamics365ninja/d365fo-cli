@@ -2,42 +2,42 @@
 <AxClass>
   <Name>ConFmVehicleNoteAdded</Name>
   <SourceCode>
-    <Declaration>[BusinessEvents(classStr(ConFmVehicleNoteAddedContract), 'ConFmVehicleNoteAdded', 'ConFmVehicleNoteAdded', ModuleAxapta::NotApplicable)]
+    <Declaration><![CDATA[[BusinessEvents(classStr(ConFmVehicleNoteAddedContract), 'ConFmVehicleNoteAdded', 'ConFmVehicleNoteAdded', ModuleAxapta::NotApplicable)]
 public final class ConFmVehicleNoteAdded extends BusinessEventsBase
 {
     private Common common;
 }
-</Declaration>
+]]></Declaration>
     <Methods>
       <Method>
         <Name>newFromTable</Name>
-        <Source>public static ConFmVehicleNoteAdded newFromTable(Common _common)
+        <Source><![CDATA[public static ConFmVehicleNoteAdded newFromTable(Common _common)
 {
     ConFmVehicleNoteAdded businessEvent = new ConFmVehicleNoteAdded();
     businessEvent.parmCommon(_common);
 
     return businessEvent;
 }
-</Source>
+]]></Source>
       </Method>
       <Method>
         <Name>parmCommon</Name>
-        <Source>private Common parmCommon(Common _common = common)
+        <Source><![CDATA[private Common parmCommon(Common _common = common)
 {
     common = _common;
 
     return common;
 }
-</Source>
+]]></Source>
       </Method>
       <Method>
         <Name>buildContract</Name>
-        <Source>[Wrappable(false), Replaceable(false)]
+        <Source><![CDATA[[Wrappable(false), Replaceable(false)]
 public BusinessEventsContract buildContract()
 {
     return new ConFmVehicleNoteAddedContract();
 }
-</Source>
+]]></Source>
       </Method>
     </Methods>
   </SourceCode>

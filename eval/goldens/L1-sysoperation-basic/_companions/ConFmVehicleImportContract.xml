@@ -2,22 +2,22 @@
 <AxClass>
   <Name>ConFmVehicleImportContract</Name>
   <SourceCode>
-    <Declaration>[DataContractAttribute]
+    <Declaration><![CDATA[[DataContractAttribute]
 class ConFmVehicleImportContract
 {
     Name vehicleNote;
 }
-</Declaration>
+]]></Declaration>
     <Methods>
       <Method>
         <Name>parmVehicleNote</Name>
-        <Source>[DataMemberAttribute('VehicleNote')]
+        <Source><![CDATA[[DataMemberAttribute('VehicleNote')]
 public Name parmVehicleNote(Name _vehicleNote = vehicleNote)
 {
     vehicleNote = _vehicleNote;
     return vehicleNote;
 }
-</Source>
+]]></Source>
       </Method>
     </Methods>
   </SourceCode>

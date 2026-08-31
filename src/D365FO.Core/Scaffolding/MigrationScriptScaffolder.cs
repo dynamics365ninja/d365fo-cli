@@ -93,13 +93,13 @@ public static class MigrationScriptScaffolder
             new XElement("AxClass",
                 new XElement("Name", className),
                 new XElement("SourceCode",
-                    new XElement("Declaration", declaration),
+                    new XElement("Declaration", new XCData(declaration)),
                     new XElement("Methods",
                         new XElement("Method",
                             new XElement("Name", "run"),
-                            new XElement("Source", runSrc)),
+                            new XElement("Source", new XCData(runSrc))),
                         new XElement("Method",
                             new XElement("Name", "main"),
-                            new XElement("Source", mainSrc))))));
+                            new XElement("Source", new XCData(mainSrc)))))));
     }
 }

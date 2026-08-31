@@ -39,11 +39,11 @@ public static class SysOperationScaffolder
                 "}\n";
             return new XElement("Method",
                 new XElement("Name", $"parm{p.Name}"),
-                new XElement("Source", src));
+                new XElement("Source", new XCData(src)));
         }).ToList();
 
         var sourceEl = new XElement("SourceCode",
-            new XElement("Declaration", declaration));
+            new XElement("Declaration", new XCData(declaration)));
         if (methods.Count > 0)
             sourceEl.Add(new XElement("Methods", methods));
 
@@ -82,11 +82,11 @@ public static class SysOperationScaffolder
             new XElement("AxClass",
                 new XElement("Name", serviceName),
                 new XElement("SourceCode",
-                    new XElement("Declaration", declaration),
+                    new XElement("Declaration", new XCData(declaration)),
                     new XElement("Methods",
                         new XElement("Method",
                             new XElement("Name", serviceMethod),
-                            new XElement("Source", methodSrc))))));
+                            new XElement("Source", new XCData(methodSrc)))))));
     }
 
     public static XDocument Controller(
@@ -124,14 +124,14 @@ public static class SysOperationScaffolder
             new XElement("AxClass",
                 new XElement("Name", controllerName),
                 new XElement("SourceCode",
-                    new XElement("Declaration", declaration),
+                    new XElement("Declaration", new XCData(declaration)),
                     new XElement("Methods",
                         new XElement("Method",
                             new XElement("Name", "new"),
-                            new XElement("Source", newSrc)),
+                            new XElement("Source", new XCData(newSrc))),
                         new XElement("Method",
                             new XElement("Name", "main"),
-                            new XElement("Source", mainSrc))))));
+                            new XElement("Source", new XCData(mainSrc)))))));
     }
 
     private static string LowerFirst(string s) => s.Length == 0 ? s : char.ToLower(s[0]) + s[1..];

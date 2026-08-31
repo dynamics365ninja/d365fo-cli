@@ -2,20 +2,20 @@
 <AxClass>
   <Name>ConFmVehicleMigration</Name>
   <SourceCode>
-    <Declaration>/// &lt;summary&gt;
+    <Declaration><![CDATA[/// <summary>
 /// Data migration: FmVehicle → FmVehicle.
 /// Run once as a runnable class (right-click the class, Set as startup object) or
 /// from a batch job; uses doInsert/doUpdate (permitted exception).
-/// &lt;/summary&gt;
+/// </summary>
 public class ConFmVehicleMigration
 {
     private static int BatchSize = 1000;
 }
-</Declaration>
+]]></Declaration>
     <Methods>
       <Method>
         <Name>run</Name>
-        <Source>public void run()
+        <Source><![CDATA[public void run()
 {
     FmVehicle source;
     FmVehicle target;
@@ -39,16 +39,16 @@ public class ConFmVehicleMigration
     ttscommit;
     info(strFmt("Migration complete. Total: %1", migratedCount));
 }
-</Source>
+]]></Source>
       </Method>
       <Method>
         <Name>main</Name>
-        <Source>public static void main(Args _args)
+        <Source><![CDATA[public static void main(Args _args)
 {
     ConFmVehicleMigration runObject = new ConFmVehicleMigration();
     runObject.run();
 }
-</Source>
+]]></Source>
       </Method>
     </Methods>
   </SourceCode>

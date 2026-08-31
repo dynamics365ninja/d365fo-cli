@@ -53,14 +53,14 @@ public static class CustomServiceScaffolder
 
             return new XElement("Method",
                 new XElement("Name", op.Name),
-                new XElement("Source", src));
+                new XElement("Source", new XCData(src)));
         }).ToList();
 
         return new XDocument(
             new XElement("AxClass",
                 new XElement("Name", className),
                 new XElement("SourceCode",
-                    new XElement("Declaration", declaration),
+                    new XElement("Declaration", new XCData(declaration)),
                     new XElement("Methods", methods))));
     }
 
