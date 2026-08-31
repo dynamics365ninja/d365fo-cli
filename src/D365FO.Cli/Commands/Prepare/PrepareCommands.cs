@@ -117,3 +117,53 @@ public sealed class PrepareCreateCommand : Command<PrepareCreateCommand.Settings
         return RenderHelpers.Render(kind, result);
     }
 }
+
+/// <summary>
+/// <c>prepare test</c> — single-round context aggregator for WRITING A SYSTEST.
+/// The CLI surface of the unified <c>prepare</c> MCP tool (<c>mode=test</c>):
+/// methods worth covering with their real signatures, test classes that already
+/// cover the target, whether the model references TestEssentials, the scaffold
+/// call, the red-first order and a grounding token. The aggregation lives in
+/// <see cref="D365FO.Mcp.ToolHandlers.PrepareTest"/>.
+/// </summary>
+public sealed class PrepareTestCommand : Command<PrepareTestCommand.Settings>
+{
+    public sealed class Settings : D365OutputSettings
+    {
+        [CommandArgument(0, "<CLASS>")]
+        [System.ComponentModel.Description("The class under test. Example: FmVehicleService.")]
+        public string ObjectName { get; init; } = "";
+
+        [CommandOption("--goal <TEXT>")]
+        [System.ComponentModel.Description("One-sentence description of the behaviour the tests should pin down.")]
+        public string? Goal { get; init; }
+
+        [CommandOption("--method <NAME>")]
+        [System.ComponentModel.Description("Focus the suggestions on one method of the target.")]
+        public string? Method { get; init; }
+
+        [CommandOption("--model <NAME>")]
+        [System.ComponentModel.Description("Model that will hold the test — enables the TestEssentials descriptor check (needs D365FO_PACKAGES_PATH).")]
+        public string? Model { get; init; }
+    }
+
+    public override int Execute(CommandContext ctx, Settings settings)
+    {
+        var kind = OutputMode.Resolve(settings.Output);
+        if (string.IsNullOrWhiteSpace(settings.ObjectName))
+            return RenderHelpers.Render(kind, ToolResult<object>.Fail("BAD_INPUT", "Class name required."));
+
+        MetadataRepository repo;
+        try { repo = RepoFactory.Create(); }
+        catch (Exception ex)
+        {
+            return RenderHelpers.Render(kind, ToolResult<object>.Fail("NO_INDEX",
+                $"prepare test requires the SQLite index: {ex.Message}",
+                "Run `d365fo index build` then `d365fo index extract` first."));
+        }
+
+        var result = new D365FO.Mcp.ToolHandlers(repo).PrepareTest(
+            settings.ObjectName, settings.Goal, settings.Method, settings.Model);
+        return RenderHelpers.Render(kind, result);
+    }
+}

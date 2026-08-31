@@ -179,6 +179,7 @@ public static class CliApp
                 b.SetDescription("Single-round context aggregators: gather everything needed for a change/new object in ONE call and get a grounding token.");
                 b.AddCommand<D365FO.Cli.Commands.Prepare.PrepareChangeCommand>("change").WithDescription("Aggregate signature, CoC wrappers, eligibility, strategy, and naming for an extension change. Replaces 4–6 discovery calls.");
                 b.AddCommand<D365FO.Cli.Commands.Prepare.PrepareCreateCommand>("create").WithDescription("Aggregate collision check, naming, similar objects, EDT suggestions, labels, and property defaults for a NEW object.");
+                b.AddCommand<D365FO.Cli.Commands.Prepare.PrepareTestCommand>("test").WithDescription("Aggregate everything needed to WRITE a SysTest: methods worth covering, existing coverage, TestEssentials check, the scaffold call, and the red-first cycle.");
             });
 
             cfg.AddBranch("validate", b =>

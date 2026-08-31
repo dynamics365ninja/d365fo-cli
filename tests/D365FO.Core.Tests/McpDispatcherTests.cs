@@ -349,4 +349,45 @@ public class McpDispatcherTests : IDisposable
         var missingJson = JsonSerializer.Serialize(missing.Data);
         Assert.Contains("\"found\":false", missingJson);
     }
+
+    [Fact]
+    public async Task Prepare_test_aggregates_methods_coverage_and_red_first_cycle()
+    {
+        var repo = new MetadataRepository(_dbPath);
+        repo.EnsureSchema();
+        repo.ApplyExtract(ExtractBatch.Empty("Fleet") with
+        {
+            Classes = new[]
+            {
+                new ExtractedClass("FmVehicleService", null, false, false, "x",
+                    new[] { new ExtractedMethod("run", "public void run()", "void", false),
+                            new ExtractedMethod("new", "public void new()", "void", false) }),
+                new ExtractedClass("FmVehicleServiceTest", "SysTestCase", false, false, "x",
+                    Array.Empty<ExtractedMethod>()),
+            },
+        });
+
+        var dispatcher = new StdioDispatcher(new ToolHandlers(repo));
+        using var input = new StringReader(
+            """{"jsonrpc":"2.0","id":30,"method":"tools/call","params":{"name":"prepare","arguments":{"mode":"test","object":"FmVehicleService"}}}""" + "\n");
+        using var output = new StringWriter();
+        await dispatcher.RunAsync(input, output);
+
+        var doc = JsonDocument.Parse(output.ToString().Trim());
+        var payload = JsonDocument.Parse(doc.RootElement.GetProperty("result")
+            .GetProperty("content")[0].GetProperty("text").GetString()!);
+        var data = payload.RootElement.GetProperty("data");
+
+        Assert.True(payload.RootElement.GetProperty("ok").GetBoolean());
+        // `run` is worth a test; the `new` lifecycle member is not.
+        var methods = data.GetProperty("methodsWorthTesting").EnumerateArray().Select(m => m.GetProperty("name").GetString()).ToList();
+        Assert.Contains("run", methods);
+        Assert.DoesNotContain("new", methods);
+        // Existing coverage is surfaced so a second class is not started for the same target.
+        Assert.Contains("FmVehicleServiceTest", data.GetProperty("existingTests").EnumerateArray().Select(t => t.GetString()));
+        // The scaffold call and the red-first cycle are stated.
+        Assert.Contains("generate systest", data.GetProperty("scaffoldCall").GetString());
+        Assert.Contains("--method run", data.GetProperty("scaffoldCall").GetString());
+        Assert.False(string.IsNullOrEmpty(data.GetProperty("groundingToken").GetString()));
+    }
 }

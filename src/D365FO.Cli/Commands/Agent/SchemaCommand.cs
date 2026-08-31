@@ -109,6 +109,7 @@ public sealed class SchemaCommand : Command<SchemaCommand.Settings>
         C("get batch", "Fetch up to 10 objects (<kind>:<name> specs) in one call.", ["<SPEC>..."], ["--output"], ["batch_get_info"], true),
         C("prepare change", "Single-round change context + grounding token.", ["<OBJECT>"], ["--method", "--goal", "--output"], ["prepare (mode=change)"], true),
         C("prepare create", "Single-round new-object context + grounding token.", ["<NAME>"], ["--type", "--field", "--goal", "--output"], ["prepare (mode=create)"], true),
+        C("prepare test", "Single-round SysTest context: methods worth covering, existing coverage, TestEssentials check, scaffold call, red-first cycle + grounding token.", ["<CLASS>"], ["--method", "--goal", "--model", "--output"], ["prepare (mode=test)"], true),
         C("validate xpp", "Offline X++/XML best-practice validator.", ["[FILE]"], ["--code-type", "--context", "--output"], [], true),
         C("validate references", "Verify every identifier in X++ code against the index.", ["[FILE]"], ["--output"], [], true),
         C("form-pattern validate", "Structural form-pattern validator (FP001-FP010) over AxForm XML.", ["[FILE]"], ["--output"], ["object_patterns (domain=form, action=validate)"], true),
