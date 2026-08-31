@@ -1502,7 +1502,7 @@ public sealed class ToolHandlers
     private ToolResult<object> ValidateXppCode(string code, string? context, string? codeType)
     {
         var normalized = D365FO.Core.Validation.XppValidator.NormalizeCodeType(
-            codeType ?? (code.TrimStart().StartsWith('<') ? "xml-any" : "xpp"));
+            codeType ?? DetectCodeType(code));
 
         D365FO.Core.Validation.IPropertyStatsProvider? stats = null;
         try { if (_repo.HasPropertyStats()) stats = _repo; }
@@ -1513,6 +1513,20 @@ public sealed class ToolHandlers
             (object)new { rule = v.Rule, severity = v.Severity, line = v.Line, excerpt = v.Excerpt, fix = v.Fix }),
             violations.Count(v => v.Severity == "error"),
             violations.Count(v => v.Severity == "warning"));
+    }
+
+    /// <summary>
+    /// Mirror of the CLI's ValidateXppCommand.DetectCodeType: an AxTable routes to the table
+    /// rules, an AxReport to the report-only rules (its RDL lives in CDATA and the X++
+    /// keyword rules would only produce noise over it), any other XML to xml-any.
+    /// </summary>
+    private static string DetectCodeType(string code)
+    {
+        if (System.Text.RegularExpressions.Regex.IsMatch(code, @"<AxTable[\s>]", System.Text.RegularExpressions.RegexOptions.IgnoreCase))
+            return D365FO.Core.Validation.XppValidator.CodeTypeXmlTable;
+        if (System.Text.RegularExpressions.Regex.IsMatch(code, @"<AxReport[\s>]", System.Text.RegularExpressions.RegexOptions.IgnoreCase))
+            return D365FO.Core.Validation.XppValidator.CodeTypeXmlReport;
+        return code.TrimStart().StartsWith('<') ? "xml-any" : "xpp";
     }
 
     private ToolResult<object> ValidateReferences(string code, string? context)

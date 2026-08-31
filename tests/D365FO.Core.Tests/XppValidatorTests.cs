@@ -13,8 +13,9 @@ public class XppValidatorTests
     [Fact]
     public void Sel001_flags_today()
     {
+        // xppc compiles today() — a best-practice finding (BPUpgradeCodeToday), not an error.
         var v = Run("transDate d = today();");
-        Assert.Contains(v, x => x.Rule == "SEL001" && x.Severity == "error");
+        Assert.Contains(v, x => x.Rule == "SEL001" && x.Severity == "warning");
     }
 
     [Fact]
@@ -27,8 +28,9 @@ public class XppValidatorTests
     [Fact]
     public void Sel002_flags_forceLiterals()
     {
+        // xppc accepts the keyword and the platform ships 57 uses — warning, not error.
         var v = Run("select forceLiterals custTable;");
-        Assert.Contains(v, x => x.Rule == "SEL002" && x.Severity == "error");
+        Assert.Contains(v, x => x.Rule == "SEL002" && x.Severity == "warning");
     }
 
     [Fact]
@@ -216,8 +218,9 @@ public class XppValidatorTests
     [Fact]
     public void Bp001_flags_hardcoded_info_string()
     {
+        // xppc compiles a hardcoded string; xppbp reports BPErrorLabelIsText — warning.
         var v = Run("info(\"Customer was created.\");");
-        Assert.Contains(v, x => x.Rule == "BP001" && x.Severity == "error");
+        Assert.Contains(v, x => x.Rule == "BP001" && x.Severity == "warning");
     }
 
     [Fact]
@@ -252,9 +255,11 @@ public class XppValidatorTests
     [Fact]
     public void Xml001_flags_missing_alternate_key()
     {
+        // xppbp raises BPCheckAlternateKeyAbsent as a warning and the table still builds;
+        // as an error this rule made a legitimately single-index table unsatisfiable.
         var xml = "<AxTable><Name>MyTable</Name><Indexes/></AxTable>";
         var v = Run(xml, "xml-table");
-        Assert.Contains(v, x => x.Rule == "XML001" && x.Severity == "error");
+        Assert.Contains(v, x => x.Rule == "XML001" && x.Severity == "warning");
     }
 
     [Fact]
@@ -291,7 +296,7 @@ public class XppValidatorTests
         var xml = "<AxTableExtension><Name>FmVehicle.Extension</Name>" +
                    "<Indexes><AxTableIndex><Name>NewIdx</Name></AxTableIndex></Indexes></AxTableExtension>";
         var v = Run(xml, "xml-any");
-        Assert.Contains(v, x => x.Rule == "XML001" && x.Severity == "error");
+        Assert.Contains(v, x => x.Rule == "XML001" && x.Severity == "warning");
     }
 
     [Fact]

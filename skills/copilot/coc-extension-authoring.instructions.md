@@ -48,6 +48,9 @@ final class APerson_Extension
 
 // ❌ WRONG — copying the default does not compile
 public void salute(str message = "Hi")     // ← forbidden
+{
+    next salute(message);
+}
 ```
 
 ## `next` placement rules

@@ -268,8 +268,9 @@ public static class ToolCatalog
 
         new Descriptor("validate",
             "Check an artifact before it is written. `mode`:\n" +
-            "• xpp — the offline X++/XML best-practice validator (XML001-XML013, BP rules). `codeType` " +
-            "xpp | xml-table | xml-any, auto-detected when omitted.\n" +
+            "• xpp — the offline X++/XML best-practice validator (SEL/COC/BP/FN/TTS/CS/ATTR/EXT/KW/RPT + " +
+            "XML001-XML013), 40+ compiler-grounded rules. `codeType` " +
+            "xpp | xml-table | xml-report | xml-any, auto-detected when omitted.\n" +
             "• references — every identifier in the code must exist in the index; the anti-hallucination gate. " +
             "Requires an index.\n" +
             "• form-pattern — structural AxForm pattern rules FP001-FP010, the same gate generate_object(form) enforces.\n" +
