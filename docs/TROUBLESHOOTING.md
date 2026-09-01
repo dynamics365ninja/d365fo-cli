@@ -18,6 +18,23 @@ D365FO VMs are Windows Server, where `winget` is often missing. The installer fa
 
 The installer probes `$env:D365FO_CLI_DIR` / `$D365FO_CLI_DIR`, then `K:\d365fo-cli` (Windows) or `~/d365fo-cli`, and updates in place (`git pull --ff-only`) whichever it finds first. If you have a checkout elsewhere, set that env var before running the installer so it targets the right directory instead of cloning a second copy.
 
+### `The type initializer for 'Microsoft.Data.Sqlite.SqliteConnection' threw an exception`
+
+Also seen as `A parameterless default constructor ... is required for ... materialization`,
+`Must add values for the following parameters: @v, @t`, or a `journal list` that reports zero
+entries on a journal that plainly has some. All four are the same thing: a binary published
+before the fix for [#182](https://github.com/dynamics365ninja/d365fo-cli/issues/182), where
+trimming removed the reflection the SQLite provider, Dapper and `System.Text.Json` need, and
+`PublishSingleFile` left the native `e_sqlite3` library outside the executable.
+
+**Fix:** re-run the installer, or re-publish from a checkout that includes the fix. Nothing
+about the publish command changes — the settings live in `src/D365FO.Cli/D365FO.Cli.csproj`
+and `src/D365FO.Cli/TrimmerRootDescriptor.xml`, and CI now diffs a published build against an
+ordinary one on every push (`scripts/smoke-published-cli.ps1`).
+
+To confirm which one you are running, `d365fo models list --output json` on the fixed build
+returns models rather than an error.
+
 ### `git pull --ff-only` failed
 
 Local commits or a detached `HEAD` in the install directory diverge from `origin/main`. The installer won't merge or discard anything for you — resolve it yourself (`git status` in that directory), then re-run the installer.

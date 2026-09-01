@@ -4,19 +4,44 @@
     type arguments at runtime.  The .NET trimmer cannot see these reflection-based
     lookups statically, so it silently removes the Settings inner classes, which
     causes CommandRuntimeException: "could not get settings type for command of
-    type …" when the trimmed binary starts.
+    type ..." when the trimmed binary starts.
 
     Preserving the whole CLI assembly ensures every Command<TSettings> and its
     nested Settings class survives trimming regardless of which /p:PublishTrimmed
-    flag the caller passes.  Core and Bridge are untouched — they are plain data
-    libraries whose referenced members the trimmer can track statically.
+    flag the caller passes.
 
     Spectre.Console.Cli also registers internal built-in commands (ExplainCommand,
     VersionCommand) whose Settings constructors are resolved by the framework at
     startup.  The trimmer strips those constructors because it cannot trace the
     reflection path inside the library.  Preserving the entire Spectre.Console.Cli
     assembly keeps all framework-internal types intact.
+
+    Issue #182: the same class of failure hits the data layer, which is not
+    statically trackable either.  Dapper materializes rows by reflecting over the
+    target type's constructor and binds parameters by reflecting over anonymous
+    types declared in D365FO.Core; System.Text.Json reflects over the same records.
+    Trimming those away produced, in a published build, "A parameterless default
+    constructor or one matching signature ... is required for ModelInfo
+    materialization" and "Must add values for the following parameters: @name" on
+    `models list`, `search`, `get` and `prepare`.  Microsoft.Data.Sqlite in turn
+    reaches SQLitePCLRaw through Type.GetType, so those three assemblies have no
+    static reference to keep them alive either, so when the trimmer drops them the
+    symptom is "The type initializer for 'Microsoft.Data.Sqlite.SqliteConnection'
+    threw an exception".
+
+    d365fo-mcp is rooted for the same reason: the CLI's `prepare`, `find` and
+    friends return the MCP tool handlers' anonymous-type payloads, and a trimmed
+    build that drops those properties serialized them as an empty {} object.
+
+    Root all of them.
   -->
   <assembly fullname="d365fo" preserve="all" />
   <assembly fullname="Spectre.Console.Cli" preserve="all" />
+  <assembly fullname="D365FO.Core" preserve="all" />
+  <assembly fullname="d365fo-mcp" preserve="all" />
+  <assembly fullname="Dapper" preserve="all" />
+  <assembly fullname="Microsoft.Data.Sqlite" preserve="all" />
+  <assembly fullname="SQLitePCLRaw.core" preserve="all" />
+  <assembly fullname="SQLitePCLRaw.batteries_v2" preserve="all" />
+  <assembly fullname="SQLitePCLRaw.provider.e_sqlite3" preserve="all" />
 </linker>

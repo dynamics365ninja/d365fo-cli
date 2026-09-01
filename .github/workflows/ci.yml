@@ -41,6 +41,30 @@ jobs:
           name: test-results-${{ matrix.os }}
           path: "**/TestResults/**"
 
+  # What `dotnet test` builds is not what anybody installs. install.ps1/install.sh publish
+  # self-contained, single-file and TRIMMED, and issue #182 showed that shape failing on
+  # every SQLite query, on the native SQLite load, and - worst - returning an empty journal
+  # instead of an error, all while the suite above stayed green. So publish the installed
+  # shape here and diff it against an ordinary build: see scripts/smoke-published-cli.ps1.
+  published-cli:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            rid: win-x64
+          - os: ubuntu-latest
+            rid: linux-x64
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+      - name: Published build must match an ordinary build
+        shell: pwsh
+        run: ./scripts/smoke-published-cli.ps1 -Rid ${{ matrix.rid }}
+
   # The knowledge corpus is gated the same fail-closed way generated code is: every named
   # AOT type/API must be covered by the snapshot captured against a real standard index, and
   # every X++/XML example must pass the offline BP validator. CI has no index, so this is the
