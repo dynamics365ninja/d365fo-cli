@@ -31,6 +31,12 @@
          embedded to make that checkable without an installation. -->
     <EmbeddedResource Include="FormPatterns\form-patterns.json" />
     <EmbeddedResource Include="Scaffolding\FormTemplates\*.template.xml" />
+
+    <!-- Best-Practice rule monikers, extracted from a real installation by
+         `d365fo bp-moniker extract`. Shipped so the catalog can answer "is this a real
+         rule?" on a machine with no D365FO install; D365FO_BP_CATALOG_PATH overrides it
+         with a snapshot matching that instance's own D365FO version. -->
+    <EmbeddedResource Include="Knowledge\Data\bp-monikers.json" />
     <!-- Knowledge topics served by `d365fo knowledge` / the MCP `get_knowledge`
          tool. Embedded straight from the single-source skill corpus so a fact is
          corrected in exactly one place (see D365FO.Core/Knowledge/KnowledgeBase.cs). -->
