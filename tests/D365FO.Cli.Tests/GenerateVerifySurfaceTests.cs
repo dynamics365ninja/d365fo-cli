@@ -1,7 +1,8 @@
-using System.Text.Json;
+﻿using System.Text.Json;
 using System.Text.RegularExpressions;
 using System.Xml.Linq;
 using D365FO.Cli.Commands.Generate;
+using D365FO.Core.Scaffolding;
 using Xunit;
 
 namespace D365FO.Cli.Tests;

@@ -12,7 +12,7 @@ namespace D365FO.Mcp;
 /// operations that back the CLI. Every method returns a <see cref="ToolResult{T}"/>
 /// so MCP tool handlers and CLI commands produce byte-identical envelopes.
 /// </summary>
-public sealed class ToolHandlers
+public sealed partial class ToolHandlers
 {
     private readonly MetadataRepository _repo;
 
@@ -1125,10 +1125,28 @@ public sealed class ToolHandlers
         return writeRoot is null ? null : Path.Combine(writeRoot, model, model, "AxLabelFile", "LabelResources", lang, $"{lf}.{lang}.label.txt");
     }
 
-    private static ToolResult<object> WriteScaffold(
+    /// <summary>
+    /// Run the grounding gate, then write. Both halves, in that order, for the same reason the
+    /// CLI does it: a write that reaches disk without the gate is one that
+    /// <c>D365FO_GROUNDING_ENFORCE=true</c> did not enforce, and this path used to be exactly
+    /// that — the flag was honoured on the shell surface and silently inert here.
+    /// </summary>
+    /// <param name="targetObject">
+    /// What the write is bound to, and what a <c>prepare</c> token is checked against: the
+    /// extension or CoC target for extension-shaped scaffolds, the artefact's own name otherwise.
+    /// </param>
+    private ToolResult<object> WriteScaffold(
         System.Xml.Linq.XDocument doc, string name, string kind, string axSubfolder,
-        string? installTo, string? outPath, bool overwrite, object extra)
+        string? installTo, string? outPath, bool overwrite, object extra,
+        string? groundingToken = null, string? targetObject = null,
+        IEnumerable<string>? requiredSymbols = null)
     {
+        var gate = D365FO.Core.Scaffolding.GroundingGate.Check(
+            groundingToken, targetObject ?? name, doc,
+            requiredMethods: null, requiredSymbols: requiredSymbols,
+            requested: null, repository: _repo);
+        if (gate.Failure is not null) return gate.Failure;
+
         var path = outPath;
         if (string.IsNullOrWhiteSpace(path) && !string.IsNullOrWhiteSpace(installTo))
         {
@@ -1144,6 +1162,7 @@ public sealed class ToolHandlers
         try
         {
             var res = D365FO.Core.Scaffolding.ScaffoldFileWriter.Write(doc, path!, overwrite);
+            gate.Observe(doc.ToString());
             return ToolResult<object>.Success(new
             {
                 kind,
@@ -1152,8 +1171,9 @@ public sealed class ToolHandlers
                 bytes = res.Bytes,
                 backup = res.BackupPath,
                 model = installTo,
+                grounding = gate.Grounding,
                 extra,
-            });
+            }, gate.Warnings.Count > 0 ? gate.Warnings : null);
         }
         catch (Exception ex)
         {
@@ -1161,10 +1181,19 @@ public sealed class ToolHandlers
         }
     }
 
-    private static ToolResult<object> WriteScaffoldString(
+    /// <summary>String-rendered counterpart of <see cref="WriteScaffold"/> (used for forms).</summary>
+    private ToolResult<object> WriteScaffoldString(
         string xml, string name, string kind, string axSubfolder,
-        string? installTo, string? outPath, bool overwrite, object extra)
+        string? installTo, string? outPath, bool overwrite, object extra,
+        string? groundingToken = null, string? targetObject = null)
     {
+        System.Xml.Linq.XDocument? parsed = null;
+        try { parsed = System.Xml.Linq.XDocument.Parse(xml); } catch { /* the writer reports it */ }
+
+        var gate = D365FO.Core.Scaffolding.GroundingGate.Check(
+            groundingToken, targetObject ?? name, parsed, repository: _repo);
+        if (gate.Failure is not null) return gate.Failure;
+
         var path = outPath;
         if (string.IsNullOrWhiteSpace(path) && !string.IsNullOrWhiteSpace(installTo))
         {
@@ -1180,6 +1209,7 @@ public sealed class ToolHandlers
         try
         {
             var res = D365FO.Core.Scaffolding.ScaffoldFileWriter.Write(xml, path!, overwrite);
+            gate.Observe(xml);
             return ToolResult<object>.Success(new
             {
                 kind,
@@ -1188,8 +1218,9 @@ public sealed class ToolHandlers
                 bytes = res.Bytes,
                 backup = res.BackupPath,
                 model = installTo,
+                grounding = gate.Grounding,
                 extra,
-            });
+            }, gate.Warnings.Count > 0 ? gate.Warnings : null);
         }
         catch (Exception ex)
         {
@@ -1208,7 +1239,7 @@ public sealed class ToolHandlers
 
     public ToolResult<object> GenerateTable(
         string name, string? label, string[]? fields, string? pattern,
-        string? installTo, string? outPath, bool overwrite)
+        string? installTo, string? outPath, bool overwrite, string? groundingToken = null)
     {
         if (string.IsNullOrWhiteSpace(name))
             return ToolResult<object>.Fail("BAD_INPUT", "name is required.");
@@ -1243,7 +1274,8 @@ public sealed class ToolHandlers
         var doc = D365FO.Core.Scaffolding.XppScaffolder.Table(name, label, fieldSpecs, pat,
             D365FO.Core.Scaffolding.TableStorage.RegularTable, null, edtBaseTypeResolver: edtResolver);
         var extra = new { fieldCount = fieldSpecs.Count > 0 ? fieldSpecs.Count : (int?)null, pattern = pat == D365FO.Core.Scaffolding.TablePattern.None ? null : pat.ToString() };
-        return WriteScaffold(doc, name, "AxTable", "AxTable", installTo, outPath, overwrite, extra);
+        return WriteScaffold(doc, name, "AxTable", "AxTable", installTo, outPath, overwrite, extra,
+            groundingToken);
     }
 
     /// <summary>
@@ -1281,17 +1313,18 @@ public sealed class ToolHandlers
 
     public ToolResult<object> GenerateClass(
         string name, string? extends, bool nonFinal,
-        string? installTo, string? outPath, bool overwrite)
+        string? installTo, string? outPath, bool overwrite, string? groundingToken = null)
     {
         if (string.IsNullOrWhiteSpace(name))
             return ToolResult<object>.Fail("BAD_INPUT", "name is required.");
         var doc = D365FO.Core.Scaffolding.XppScaffolder.Class(name, extends, !nonFinal);
-        return WriteScaffold(doc, name, "AxClass", "AxClass", installTo, outPath, overwrite, new { extends });
+        return WriteScaffold(doc, name, "AxClass", "AxClass", installTo, outPath, overwrite, new { extends },
+            groundingToken);
     }
 
     public ToolResult<object> GenerateCoc(
         string target, string[] methods,
-        string? installTo, string? outPath, bool overwrite)
+        string? installTo, string? outPath, bool overwrite, string? groundingToken = null)
     {
         if (string.IsNullOrWhiteSpace(target))
             return ToolResult<object>.Fail("BAD_INPUT", "target is required.");
@@ -1316,7 +1349,8 @@ public sealed class ToolHandlers
         var extensionName = target + "_Extension";
         var doc = D365FO.Core.Scaffolding.XppScaffolder.CocExtension(target, methods);
         var result = WriteScaffold(doc, extensionName, "AxClass", "AxClass", installTo, outPath, overwrite,
-            new { target, methodCount = methods.Length });
+            new { target, methodCount = methods.Length },
+            groundingToken: groundingToken, targetObject: target, requiredSymbols: [target]);
 
         // Attach warnings to a successful result envelope.
         if (warnings.Count > 0 && result.Ok)
@@ -1337,7 +1371,7 @@ public sealed class ToolHandlers
     public ToolResult<object> GenerateForm(
         string name, string? table, string? pattern, string? caption,
         string[]? fields, string? linesTable,
-        string? installTo, string? outPath, bool overwrite)
+        string? installTo, string? outPath, bool overwrite, string? groundingToken = null)
     {
         if (string.IsNullOrWhiteSpace(name))
             return ToolResult<object>.Fail("BAD_INPUT", "name is required.");
@@ -1363,7 +1397,7 @@ public sealed class ToolHandlers
         }
 
         return WriteScaffoldString(xml, name, "AxForm", "AxForm", installTo, outPath, overwrite,
-            new { table, pattern = fp.ToString() });
+            new { table, pattern = fp.ToString() }, groundingToken: groundingToken);
     }
 
     private static bool FormPatternEnforced() =>

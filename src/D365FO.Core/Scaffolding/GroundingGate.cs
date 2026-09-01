@@ -1,16 +1,19 @@
-using D365FO.Core;
 using D365FO.Core.Guardrails;
 using D365FO.Core.Index;
-using D365FO.Core.Scaffolding;
 using D365FO.Core.Validation;
 using System.Xml.Linq;
 
-namespace D365FO.Cli.Commands.Generate;
+namespace D365FO.Core.Scaffolding;
 
 /// <summary>
-/// Write-side grounding enforcement for extension-shaped generate commands —
+/// Write-side grounding enforcement for every generated artefact, on either surface —
 /// port of the upstream MCP server's fail-closed gate (provenance token +
 /// <c>gateOnReferenceErrors</c>).
+///
+/// It lived beside the CLI's generate commands, so it ran on every CLI write and on no MCP
+/// write at all: setting <c>D365FO_GROUNDING_ENFORCE=true</c> enforced nothing over MCP, and a
+/// deployment that believed it had turned grounding on had turned it on for one of its two
+/// front doors.
 ///
 /// Behaviour:
 ///   - Default: checks run, problems surface as warnings, the write proceeds.
@@ -22,7 +25,7 @@ namespace D365FO.Cli.Commands.Generate;
 /// errors degrade to warnings, mirroring upstream ("resolver failure must
 /// never block writes").
 /// </summary>
-internal static class GroundingGate
+public static class GroundingGate
 {
     /// <summary>
     /// The verdict of one gate run, and the handle a command writes through.
@@ -41,7 +44,7 @@ internal static class GroundingGate
         private readonly List<string> _honestyWarnings = [];
 
         /// <summary>What the caller asked for, as option/value pairs.</summary>
-        internal IReadOnlyList<(string Option, string Value)> Requested { get; init; } = [];
+        public IReadOnlyList<(string Option, string Value)> Requested { get; init; } = [];
 
         /// <summary>Every document this gate has seen written, in order.</summary>
         public IReadOnlyList<string> WrittenDocuments => _written;
@@ -68,7 +71,7 @@ internal static class GroundingGate
         public IReadOnlyList<Artefact> Artefacts => _artefacts;
 
         /// <summary>Record an artefact as emitted. Duplicate paths collapse to one entry.</summary>
-        internal void RecordArtefact(string? axKind, string? name, string? path)
+        public void RecordArtefact(string? axKind, string? name, string? path)
         {
             if (path is not null && _artefacts.Any(a => string.Equals(a.Path, path, StringComparison.OrdinalIgnoreCase)))
                 return;
@@ -90,7 +93,7 @@ internal static class GroundingGate
         /// <see cref="Warnings"/> before the new ones go in, so the list never accumulates
         /// superseded findings.
         /// </remarks>
-        internal void Observe(string xml)
+        public void Observe(string xml)
         {
             if (string.IsNullOrWhiteSpace(xml)) return;
             _written.Add(xml);
@@ -120,7 +123,8 @@ internal static class GroundingGate
         XDocument? doc,
         IEnumerable<(string Owner, string Method)>? requiredMethods = null,
         IEnumerable<string>? requiredSymbols = null,
-        IReadOnlyList<(string Option, string Value)>? requested = null)
+        IReadOnlyList<(string Option, string Value)>? requested = null,
+        MetadataRepository? repository = null)
     {
         var enforce = ProvenanceStore.EnforcementEnabled;
         var warnings = new List<string>();
@@ -150,8 +154,7 @@ internal static class GroundingGate
         int refErrors = 0, refWarnings = 0, bpErrors = 0, bpWarnings = 0, verified = 0;
         var violationDetails = new List<string>();
         var xpp = ExtractXppSource(doc);
-        MetadataRepository? repo = null;
-        try { repo = RepoFactory.Create(); } catch { /* no index — checks degrade below */ }
+        var repo = repository;
 
         if (repo is not null)
         {
@@ -263,7 +266,7 @@ internal static class GroundingGate
     }
 
     /// <summary>Concatenate X++ from Declaration/Source elements of a scaffolded AOT XML.</summary>
-    internal static string ExtractXppSource(XDocument? doc)
+    public static string ExtractXppSource(XDocument? doc)
     {
         if (doc?.Root is null) return "";
         var parts = doc.Root.Descendants()

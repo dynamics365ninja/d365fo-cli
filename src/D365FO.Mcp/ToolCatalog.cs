@@ -401,7 +401,11 @@ public static class ToolCatalog
         // ---- Generation ----
 
         new Descriptor("generate_object",
-            "Scaffold an AOT object from `objectType`. Two families share this one tool:\n" +
+            "Scaffold an AOT object from `objectType`. Every objectType that WRITES runs the same grounding "
+            + "gate the CLI runs: the generated X++ is proved against the index and checked by the offline BP "
+            + "validator, findings come back in `grounding`, and under D365FO_GROUNDING_ENFORCE=true a write "
+            + "needs a valid `groundingToken` (from `prepare`, bound to this object) and is refused when an "
+            + "identifier cannot be proved. Two families share this one tool:\n" +
             "• WRITE to disk (requires `installTo` model name — resolves the path from the configured packages " +
             "paths — or `out` explicit path): table (pattern-aware, `fields` \"<name>:<edt>[:mandatory]\", " +
             "`pattern` main|transaction|parameter|group|reference|miscellaneous) · class (`extends`, `nonFinal`) · " +
@@ -415,7 +419,28 @@ public static class ToolCatalog
             "Form|Class|Report|Query, `neededPermission`) · privilege (`entryPoint` + `entryKind`, or `dataEntity`; " +
             "`access` Read|Update|Create|Correct|Delete) · duty (`privileges`) · role (`duties`, `privileges`) · " +
             "entity (`table`, `fields` \"<entityField>[:<tableField>]\", `entityCategory`) · extension " +
-            "(`extensionKind` table|form|edt|enum|view|query|dataEntityView, `target`, `suffix`).",
+            "(`extensionKind` table|form|edt|enum|view|query|dataEntityView, `target`, `suffix`) · " +
+            "event-handler (`sourceKind` Form|FormDataSource|FormControl|Table|Class, `sourceObject`, `event`, " +
+            "`method`) · view (`query` — a view projects an AxQuery — plus `fields` \"<name>:<dataSource>" +
+            "[:<dataField>]\" and `computed` \"<name>:<viewMethod>:<type>\", `configurationKey`) · map " +
+            "(`fields` \"<name>:<edt>[:<label>]\", `mapTo` \"<table>[:<mapField>=<tableField>,…]\") · systest " +
+            "(`targetClass` or `targetTable`, `methods`, `dataAreaId`, `atl` — the scaffold fails on purpose so " +
+            "the first run is red) · migration-script (`sourceTable`, `targetTable`, `mode` insert|update|upsert, " +
+            "`batchSize`) · custom-service (`className`, `externalName`, `groupName`, `operationSpecs` " +
+            "\"<name>[:<returnType>]\", `contractParam`; returns class + AxService + AxServiceGroup) · " +
+            "number-sequence (`name` is the module, `edt`, `scope` company|shared, `table` to also get the form " +
+            "handler) · workflow (`table`, `approvalName`, `taskName`, `category`, `documentMenuItem`, " +
+            "`submitMenuItem`, `documentClass`, `query`) · report (the whole SSRS stack — AxReport + DP + " +
+            "contract + TmpTable + controller; `dpClass`, `tmpTable`, `datasetName`, `fields`, `parameters` " +
+            "\"<name>[:<dataType>]\", `preProcess`, `controllerType` standard|print-mgmt, `uiBuilder`. The RDL " +
+            "design is authored in Visual Studio — nothing here produces it) · report-extension (`pattern` " +
+            "dataset|custom-design|menu-redirect, with `dpClass`+`tmpTable`, or `report`+`design`, or " +
+            "`controller`+`report`+`design`) · find-methods (`table` — static find/exists/findRecId keyed on its " +
+            "unique index; returns method bodies to merge, not a document) · table-relation (`table`, `fields` — " +
+            "AxTableRelation fragments derived from the EDTs the fields use) · form-clone (`from` an indexed form " +
+            "name or an XML path, `rebind` \"<OldTable>=<NewTable>\") · datasource-method / control-method " +
+            "(`form` plus `dataSource`/`control`; omit `method` to list what is overridable, pass it to get the " +
+            "whole form back with the method injected).",
             Schema(("objectType", "string", true), ("name", "string", false), ("label", "string", false),
                    ("fields", "array", false), ("pattern", "string", false),
                    ("extends", "string", false), ("nonFinal", "boolean", false),
@@ -430,19 +455,45 @@ public static class ToolCatalog
                    ("access", "string", false), ("dataEntity", "string", false), ("privileges", "array", false),
                    ("duties", "array", false), ("entityCategory", "string", false),
                    ("extensionKind", "string", false), ("suffix", "string", false),
-                   ("installTo", "string", false), ("out", "string", false), ("overwrite", "boolean", false)),
+                   ("sourceKind", "string", false), ("sourceObject", "string", false), ("event", "string", false),
+                   ("method", "string", false), ("computed", "array", false), ("configurationKey", "string", false),
+                   ("mapTo", "array", false), ("dataAreaId", "string", false), ("atl", "boolean", false),
+                   ("targetClass", "string", false), ("targetTable", "string", false), ("methods", "array", false),
+                   ("sourceTable", "string", false), ("mode", "string", false), ("batchSize", "integer", false),
+                   ("className", "string", false), ("externalName", "string", false), ("groupName", "string", false),
+                   ("operationSpecs", "array", false), ("contractParam", "string", false),
+                   ("edt", "string", false), ("edtLabel", "string", false), ("scope", "string", false),
+                   ("approvalName", "string", false), ("taskName", "string", false),
+                   ("documentMenuItem", "string", false), ("submitMenuItem", "string", false),
+                   ("documentClass", "string", false), ("query", "string", false),
+                   ("dpClass", "string", false), ("tmpTable", "string", false), ("datasetName", "string", false),
+                   ("parameters", "array", false), ("preProcess", "boolean", false),
+                   ("controllerType", "string", false), ("uiBuilder", "boolean", false),
+                   ("datasetAccessor", "string", false), ("report", "string", false), ("design", "string", false),
+                   ("documentType", "string", false), ("baseController", "string", false),
+                   ("controller", "string", false), ("keys", "array", false),
+                   ("noExists", "boolean", false), ("noFindRecId", "boolean", false),
+                   ("from", "string", false), ("rebind", "array", false), ("form", "string", false),
+                   ("dataSource", "string", false), ("control", "string", false), ("returnType", "string", false),
+                   ("body", "string", false),
+                   ("installTo", "string", false), ("out", "string", false), ("overwrite", "boolean", false),
+                   ("groundingToken", "string", false)),
             (h, p) => StrOr(p, "objectType", "").ToLowerInvariant() switch
             {
                 // Write-to-disk objectTypes.
                 "class" => h.GenerateClass(Str(p, "name"), StrOrNull(p, "extends"), Bool(p, "nonFinal"),
-                            StrOrNull(p, "installTo"), StrOrNull(p, "out"), Bool(p, "overwrite")),
+                            StrOrNull(p, "installTo"), StrOrNull(p, "out"), Bool(p, "overwrite"),
+                            StrOrNull(p, "groundingToken")),
                 "coc"   => h.GenerateCoc(Str(p, "target"), StrArray(p, "methods") ?? Array.Empty<string>(),
-                            StrOrNull(p, "installTo"), StrOrNull(p, "out"), Bool(p, "overwrite")),
+                            StrOrNull(p, "installTo"), StrOrNull(p, "out"), Bool(p, "overwrite"),
+                            StrOrNull(p, "groundingToken")),
                 "form"  => h.GenerateForm(Str(p, "name"), StrOrNull(p, "table"), StrOrNull(p, "pattern"),
                             StrOrNull(p, "caption"), StrArray(p, "fields"), StrOrNull(p, "linesTable"),
-                            StrOrNull(p, "installTo"), StrOrNull(p, "out"), Bool(p, "overwrite")),
+                            StrOrNull(p, "installTo"), StrOrNull(p, "out"), Bool(p, "overwrite"),
+                            StrOrNull(p, "groundingToken")),
                 "table" => h.GenerateTable(Str(p, "name"), StrOrNull(p, "label"), StrArray(p, "fields"),
-                            StrOrNull(p, "pattern"), StrOrNull(p, "installTo"), StrOrNull(p, "out"), Bool(p, "overwrite")),
+                            StrOrNull(p, "pattern"), StrOrNull(p, "installTo"), StrOrNull(p, "out"), Bool(p, "overwrite"),
+                            StrOrNull(p, "groundingToken")),
                 // XML-only objectTypes.
                 "edt"             => h.GenerateEdt(Str(p, "name"), StrOrNull(p, "extends"), StrOrNull(p, "label"), Int(p, "size", 0)),
                 "enum"            => h.GenerateEnum(Str(p, "name"), StrOrNull(p, "label"), StrArray(p, "values")),
@@ -459,10 +510,45 @@ public static class ToolCatalog
                 "role"            => h.GenerateRole(Str(p, "name"), StrArray(p, "duties"), StrArray(p, "privileges"), StrOrNull(p, "label")),
                 "entity"          => h.GenerateEntity(Str(p, "name"), Str(p, "table"), StrArray(p, "fields"), StrOrNull(p, "entityCategory")),
                 "extension"       => h.GenerateExtension(Str(p, "extensionKind"), Str(p, "target"), StrOrNull(p, "suffix")),
+                "event-handler"   => h.GenerateEventHandler(Str(p, "name"), StrOrNull(p, "sourceKind"),
+                                        StrOrNull(p, "sourceObject"), StrOrNull(p, "event"), StrOrNull(p, "method")),
+                "view"            => h.GenerateView(Str(p, "name"), StrOrNull(p, "query"), StrArray(p, "fields"),
+                                        StrArray(p, "computed"), StrOrNull(p, "label"), StrOrNull(p, "configurationKey")),
+                "map"             => h.GenerateMap(Str(p, "name"), StrArray(p, "fields"), StrArray(p, "mapTo"), StrOrNull(p, "label")),
+                "systest"         => h.GenerateSysTest(Str(p, "name"), StrOrNull(p, "dataAreaId"), Bool(p, "atl"),
+                                        StrOrNull(p, "targetClass"), StrOrNull(p, "targetTable"), StrArray(p, "methods")),
+                "migration-script" => h.GenerateMigrationScript(Str(p, "name"), StrOrNull(p, "sourceTable"),
+                                        StrOrNull(p, "targetTable"), StrOrNull(p, "mode"), Int(p, "batchSize", 0)),
+                "custom-service"  => h.GenerateCustomService(Str(p, "name"), StrOrNull(p, "className"),
+                                        StrOrNull(p, "externalName"), StrOrNull(p, "groupName"),
+                                        StrArray(p, "operationSpecs"), StrOrNull(p, "contractParam")),
+                "number-sequence" => h.GenerateNumberSequence(Str(p, "name"), StrOrNull(p, "edt"), StrOrNull(p, "edtLabel"),
+                                        StrOrNull(p, "scope"), StrOrNull(p, "table")),
+                "workflow"        => h.GenerateWorkflow(Str(p, "name"), StrOrNull(p, "table"), StrOrNull(p, "approvalName"),
+                                        StrOrNull(p, "taskName"), StrOrNull(p, "category"), StrOrNull(p, "documentMenuItem"),
+                                        StrOrNull(p, "submitMenuItem"), StrOrNull(p, "documentClass"), StrOrNull(p, "query")),
+                "report"          => h.GenerateReport(Str(p, "name"), StrOrNull(p, "dpClass"), StrOrNull(p, "tmpTable"),
+                                        StrOrNull(p, "datasetName"), StrOrNull(p, "caption"), StrArray(p, "fields"),
+                                        StrArray(p, "parameters"), Bool(p, "preProcess"), StrOrNull(p, "controllerType"),
+                                        Bool(p, "uiBuilder")),
+                "report-extension" => h.GenerateReportExtension(StrOr(p, "pattern", ""), StrOrNull(p, "dpClass"),
+                                        StrOrNull(p, "tmpTable"), StrOrNull(p, "datasetAccessor"), StrOrNull(p, "report"),
+                                        StrOrNull(p, "design"), StrOrNull(p, "documentType"), StrOrNull(p, "baseController"),
+                                        StrOrNull(p, "controller"), StrOrNull(p, "suffix")),
+                "find-methods"    => h.GenerateFindMethods(StrOr(p, "table", Str(p, "name")), StrArray(p, "keys"),
+                                        !Bool(p, "noExists"), !Bool(p, "noFindRecId")),
+                "table-relation"  => h.GenerateTableRelation(StrOr(p, "table", Str(p, "name")), StrArray(p, "fields")),
+                "form-clone"      => h.GenerateFormClone(Str(p, "name"), StrOrNull(p, "from"), StrArray(p, "rebind")),
+                "datasource-method" => h.GenerateFormMethod(StrOr(p, "form", Str(p, "name")), StrOrNull(p, "dataSource"),
+                                        null, StrOrNull(p, "method"), StrOrNull(p, "returnType"), StrOrNull(p, "body")),
+                "control-method"  => h.GenerateFormMethod(StrOr(p, "form", Str(p, "name")), null, StrOrNull(p, "control"),
+                                        StrOrNull(p, "method"), StrOrNull(p, "returnType"), StrOrNull(p, "body")),
                 _ => D365FO.Core.ToolResult<object>.Fail("BAD_INPUT",
                         $"Unknown objectType '{Str(p, "objectType")}' for generate_object.",
                         "Write: table, class, coc, form. XML-only: edt, enum, query, sysoperation, business-event, runbase, "
-                        + "security-policy, menu-item, privilege, duty, role, entity, extension."),
+                        + "security-policy, menu-item, privilege, duty, role, entity, extension, event-handler, view, map, "
+                        + "systest, migration-script, custom-service, number-sequence, workflow, report, report-extension, "
+                        + "find-methods, table-relation, form-clone, datasource-method, control-method."),
             }),
 
         new Descriptor("modify_method",

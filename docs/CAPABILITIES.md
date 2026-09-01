@@ -579,6 +579,13 @@ two — listed 130 commands out of 200 registered and named routes that did not 
 | Route truth | A manifest claim like `analyze (mode=completeness)` whose tool, or whose discriminator value, the catalog does not dispatch. |
 | No orphan tools | An MCP tool no CLI command reaches, unless declared MCP-only with a reason. |
 | Write surface | Any `ObjectModifyEngine.Operation` not reachable as both `d365fo modify <op>` and `modify_object(action=<op>)`. |
+| Scaffold surface | A `d365fo generate <x>` sub-command with no `generate_object` objectType behind it. |
+
+One consequence is worth stating on its own: **`D365FO_GROUNDING_ENFORCE=true` now means the
+same thing on both surfaces.** The gate — index-proved identifiers, the offline BP validator, and
+an object-bound token from `prepare` — used to live beside the CLI's generate commands, so it ran
+on every CLI write and on no MCP write. `generate_object` takes a `groundingToken`, reports what
+the gate saw in `grounding`, and refuses an ungated write under enforcement.
 
 The shared implementations behind that live in Core — `CompletenessAnalyzer`, `FormPatternMiner`,
 `ExtensionAnswers`, `BpMonikerAnswers`, `PatternCatalogAnswers`, `BatchStepParser` — so the two

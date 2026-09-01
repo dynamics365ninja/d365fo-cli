@@ -38,6 +38,32 @@ was ported from.
   derived the enum spelling from the step name, which works for every operation whose command name
   matches its enum name and fails for the one that does not — `property` is `SetProperty`.
 
+### Fixed — grounding was enforced on one surface of two
+- **`D365FO_GROUNDING_ENFORCE=true` did nothing over MCP.** The gate that proves every generated
+  identifier against the index, runs the offline BP validator and demands an object-bound
+  `prepare` token lived beside the CLI's generate commands, so it ran on every CLI write and on
+  no MCP write at all. A deployment that turned enforcement on had turned it on for one of its
+  two front doors — and the difference was invisible, because an ungated write looks exactly
+  like a successful one. `GroundingGate` moved to Core; `generate_object` now takes a
+  `groundingToken`, returns what the gate saw in `grounding`, and refuses the write when
+  enforcement is on and the token is missing or bound to a different object.
+
+### Added — the sixteen scaffolds MCP could not produce
+- **`generate_object` covers all thirty-three `generate` sub-commands.** It had seventeen object
+  types; the CLI has thirty-three, so an agent that had picked the MCP surface could not scaffold
+  a report, a workflow, a view, a map, a SysTest, a custom service, a number sequence, a
+  migration script, an event handler, a form clone, a report extension, the table augmenters or a
+  form method — and the only sign of it was `Unknown objectType` for something the tool does.
+  Added: `view`, `map`, `systest`, `migration-script`, `custom-service`, `number-sequence`,
+  `workflow`, `report` (the whole SSRS stack — AxReport + DP + contract + TmpTable + controller,
+  with `preProcess`, `controllerType=print-mgmt` and `uiBuilder`), `report-extension` (the three
+  compiler-checked ways to extend a shipped report), `event-handler`, `find-methods`,
+  `table-relation`, `form-clone`, `datasource-method` and `control-method`. They are XML-only —
+  each document comes back by name, which is the shape the existing multi-document handlers use
+  and the one that works off a D365FO VM.
+- `CliMcpParityTests` gained the matching invariant: a `generate` sub-command with no
+  `generate_object` objectType fails the build.
+
 ### Added — what the MCP server was missing
 - **`analyze(mode=completeness)`** — the one analysis that reads the developer's working tree
   rather than the index, previously CLI-only.

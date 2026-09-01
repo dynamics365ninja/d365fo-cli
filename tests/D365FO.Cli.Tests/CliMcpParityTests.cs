@@ -243,6 +243,32 @@ public class CliMcpParityTests
         return data;
     }
 
+    /// <summary>
+    /// Every scaffold the CLI can produce is one an agent on the MCP surface can produce too.
+    /// </summary>
+    /// <remarks>
+    /// Seventeen of the thirty-three <c>generate</c> sub-commands had an objectType and sixteen
+    /// did not, which is not a smaller tool but a differently-shaped one: an agent that had
+    /// picked MCP could not scaffold a report, a workflow, a view, a map or a SysTest, and the
+    /// only sign of it was "Unknown objectType" for something the tool does.
+    /// </remarks>
+    [Fact]
+    public void Every_generate_subcommand_is_reachable_over_mcp()
+    {
+        var byCommand = Manifest().ToDictionary(c => c.Command, c => c.McpTool, StringComparer.Ordinal);
+
+        var unreachable = RegisteredCommands()
+            .Where(path => path.StartsWith("generate ", StringComparison.Ordinal))
+            .Where(path => !byCommand.TryGetValue(path, out var claims)
+                           || !claims.Any(c => c.StartsWith("generate_object", StringComparison.Ordinal)))
+            .OrderBy(p => p, StringComparer.Ordinal)
+            .ToList();
+
+        Assert.True(unreachable.Count == 0,
+            "These scaffolds exist only on the shell surface — generate_object has no objectType for "
+            + "them:\n  " + string.Join("\n  ", unreachable));
+    }
+
     /// <summary>An unknown action must fail, not quietly become a property write.</summary>
     [Fact]
     public void An_unknown_modify_action_is_refused()

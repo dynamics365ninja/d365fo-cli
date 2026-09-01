@@ -308,6 +308,13 @@ skipped silently. The MCP adapter exposes the same engine as `undo_last_modifica
 
 ### CLI-only commands (no MCP equivalent)
 
+> "No MCP equivalent" here means **upstream** `d365fo-mcp-server` has no such tool. This
+> repository's own `d365fo-mcp` adapter reaches most of them — `analyze`, `models`, `lint`,
+> `stats` and `search(type=batch-jobs)` are all published — and which commands it does *not*
+> reach is no longer a matter of reading two tables and hoping: `CliMcpParityTests` derives the
+> mapping from the registration tree and the tool catalog and fails the build when the published
+> manifest disagrees with either. See [CAPABILITIES.md](CAPABILITIES.md#keeping-the-two-surfaces-the-same).
+
 | Command | Purpose |
 |---|---|
 | `d365fo schema [--full]` / `d365fo agent-prompt` | Agent manifest / system prompt for any harness |
