@@ -7,7 +7,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![.NET](https://img.shields.io/badge/.NET-10-purple.svg)](https://dotnet.microsoft.com/)
 [![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey.svg)]()
-[![Tests](https://img.shields.io/badge/tests-1595-brightgreen.svg)]()
+[![Tests](https://img.shields.io/badge/tests-1613-brightgreen.svg)]()
 [![Successor to d365fo-mcp-server](https://img.shields.io/badge/successor%20to-d365fo--mcp--server-orange.svg)](https://github.com/dynamics365ninja/d365fo-mcp-server)
 
 *Grounded AI development for Dynamics 365 Finance & Operations — works with GitHub Copilot, Claude Code, Codex, Gemini CLI, and any agent with a shell*
@@ -292,7 +292,7 @@ See [docs/TOKEN_ECONOMICS.md](docs/TOKEN_ECONOMICS.md) for the full analysis and
 | **Labels** | `labels search\|resolve\|info\|create\|rename\|delete` — search/resolve plus in-place `*.label.txt` edits, multi-language via `--lang` (mirrors the MCP `labels` tool) |
 | **Journal / undo** | `undo [--steps N] [--dry-run]`, `journal list`, `delete` (kind/name, bridge or on-disk) — deterministic single-command rollback for every write path (mirrors the MCP `undo_last_modification` tool) |
 | **Modify** | `modify property\|method`, `modify add-field\|add-enum-value\|add-control`, `modify add-index\|add-relation\|add-field-group\|add-delete-action`, `modify rename-field`, `modify add-query-range\|remove-query-range`, `modify add-entry-point\|remove-entry-point`, seven `modify remove-*` forms, and `modify batch` (several changes in one read-edit-write) — 22 operations over all 41 bridge-writable kinds, extension-aware and journalled for `undo` |
-| **Patterns & rules** | `table-pattern list\|spec` — table shapes and what each presets · `bp-moniker validate\|search\|suppress\|extract` — Best-Practice rule monikers from names a real installation declares, never a guess |
+| **Patterns & rules** | `report-pattern list\|spec` — the seven SSRS shapes as recipes · `table-pattern list\|spec` — table shapes and what each presets · `bp-moniker validate\|search\|suppress\|extract` — Best-Practice rule monikers from names a real installation declares, never a guess |
 | **Analyze** | `analyze completeness`, `analyze integration`, `analyze impact`, `lint`, `suggest edt`, `suggest extension`, `report-integrations` |
 | **Review** | `review diff` |
 | **Models** | `models list`, `models deps`, `models coupling` |
