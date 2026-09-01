@@ -31,8 +31,13 @@ jobs:
       - name: Build
         run: dotnet build d365fo-cli.slnx --no-restore -c Release -nologo
 
+      # No LogFileName: both test assemblies run concurrently and a fixed name makes the
+      # second one overwrite the first. That is not cosmetic — when the run went red the
+      # surviving .trx was the assembly that PASSED, so the failing test was unnamed in the
+      # artifact and only visible in the console scrollback. The default name carries the
+      # assembly and a timestamp, so each writes its own.
       - name: Test
-        run: dotnet test d365fo-cli.slnx --no-build -c Release --logger "trx;LogFileName=test-results.trx" --collect "XPlat Code Coverage"
+        run: dotnet test d365fo-cli.slnx --no-build -c Release --logger "trx" --collect "XPlat Code Coverage"
 
       - name: Upload test results
         if: always()
@@ -40,6 +45,21 @@ jobs:
         with:
           name: test-results-${{ matrix.os }}
           path: "**/TestResults/**"
+
+  # A hundred-odd warnings hide the one that matters — NU1903 (a known-vulnerable transitive
+  # SQLite package) sat in the build output unnoticed. This ratchets the count: it may fall
+  # freely, and any rise fails with the new warnings named. Ubuntu only; the count is the same
+  # on every OS and there is no reason to pay for it three times.
+  warning-baseline:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+      - name: Warning count must not rise
+        shell: pwsh
+        run: ./scripts/check-build-warnings.ps1 -Baseline 117
 
   # What `dotnet test` builds is not what anybody installs. install.ps1/install.sh publish
   # self-contained, single-file and TRIMMED, and issue #182 showed that shape failing on

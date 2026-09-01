@@ -125,13 +125,20 @@ public sealed class PrepareCreateCommand : Command<PrepareCreateCommand.Settings
 /// cover the target, whether the model references TestEssentials, the scaffold
 /// call, the red-first order and a grounding token. The aggregation lives in
 /// <see cref="D365FO.Mcp.ToolHandlers.PrepareTest"/>.
+///
+/// Resolves a TABLE as well as a class. The index stores declared members only, so a
+/// table that has never overridden <c>validateWrite</c> has no row for it — which is
+/// exactly the method a caller naming <c>CustTable.validateWrite</c> came for. The
+/// inherited data methods are listed from <see cref="D365FO.Core.Knowledge.TableDataMethods"/>
+/// alongside the declared overrides, and the answer carries the shape a table test needs
+/// (arrange a buffer, assert the verdict AND the infolog line, keep the accepting case).
 /// </summary>
 public sealed class PrepareTestCommand : Command<PrepareTestCommand.Settings>
 {
     public sealed class Settings : D365OutputSettings
     {
-        [CommandArgument(0, "<CLASS>")]
-        [System.ComponentModel.Description("The class under test. Example: FmVehicleService.")]
+        [CommandArgument(0, "<TARGET>")]
+        [System.ComponentModel.Description("The class or table under test. A table method may be named in one go: FmVehicleService, CustTable, or CustTable.validateWrite.")]
         public string ObjectName { get; init; } = "";
 
         [CommandOption("--goal <TEXT>")]
@@ -151,7 +158,7 @@ public sealed class PrepareTestCommand : Command<PrepareTestCommand.Settings>
     {
         var kind = OutputMode.Resolve(settings.Output);
         if (string.IsNullOrWhiteSpace(settings.ObjectName))
-            return RenderHelpers.Render(kind, ToolResult<object>.Fail("BAD_INPUT", "Class name required."));
+            return RenderHelpers.Render(kind, ToolResult<object>.Fail("BAD_INPUT", "Class or table name required."));
 
         MetadataRepository repo;
         try { repo = RepoFactory.Create(); }

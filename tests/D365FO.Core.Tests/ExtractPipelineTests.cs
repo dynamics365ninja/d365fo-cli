@@ -1,4 +1,4 @@
-using D365FO.Core.Extract;
+﻿using D365FO.Core.Extract;
 using D365FO.Core.Index;
 using D365FO.Core.Scaffolding;
 using System.Xml.Linq;
@@ -20,7 +20,7 @@ public class ExtractPipelineTests : IDisposable
 
     public void Dispose()
     {
-        Microsoft.Data.Sqlite.SqliteConnection.ClearAllPools();
+        SqlitePool.ReleaseFor(_dbPath);
         foreach (var ext in new[] { "", "-wal", "-shm" })
         {
             var p = _dbPath + ext;
@@ -772,4 +772,241 @@ public void run()
         repo.ApplyExtract(batch);
         Assert.Single(repo.SearchMaps("DirParty"));
     }
+
+    [Fact]
+    public void MetadataExtractor_doc_comment_is_not_the_signature()
+    {
+        // A doc comment is one of the three things that can legally precede a declaration
+        // (blank line, attribute block, comment) and it was the only one not skipped —
+        // so every documented method reported "/// <summary>" as its exact signature.
+        var model = Path.Combine(_workRoot, "PkgSig1", "PkgSig1");
+        Directory.CreateDirectory(Path.Combine(model, "AxClass"));
+        File.WriteAllText(Path.Combine(model, "AxClass", "Documented.xml"), """
+            <AxClass>
+              <Name>Documented</Name>
+              <SourceCode>
+                <Methods>
+                  <Method>
+                    <Name>agreementIsLinked</Name>
+                    <Source>
+            /// &lt;summary&gt;
+            /// Tells whether the agreement is linked.
+            /// &lt;/summary&gt;
+            /// &lt;returns&gt;true when linked.&lt;/returns&gt;
+            display public SalesAgreementIsLinked agreementIsLinked()
+            {
+                return true;
+            }
+                    </Source>
+                  </Method>
+                </Methods>
+              </SourceCode>
+            </AxClass>
+            """);
+
+        var batch = new MetadataExtractor().ExtractAll(_workRoot).ToList().Single(b => b.Model == "PkgSig1");
+        var method = Assert.Single(Assert.Single(batch.Classes).Methods);
+        Assert.Equal("display public SalesAgreementIsLinked agreementIsLinked()", method.Signature);
+        Assert.True(method.HasDocComment, "the doc comment is still recorded, just not as the signature");
+    }
+
+    [Fact]
+    public void MetadataExtractor_line_and_block_comments_are_not_the_signature()
+    {
+        var model = Path.Combine(_workRoot, "PkgSig2", "PkgSig2");
+        Directory.CreateDirectory(Path.Combine(model, "AxClass"));
+        File.WriteAllText(Path.Combine(model, "AxClass", "Commented.xml"), """
+            <AxClass>
+              <Name>Commented</Name>
+              <SourceCode>
+                <Methods>
+                  <Method>
+                    <Name>lineComment</Name>
+                    <Source>
+            // legacy, kept for the batch job
+            public void lineComment()
+            {
+            }
+                    </Source>
+                  </Method>
+                  <Method>
+                    <Name>blockComment</Name>
+                    <Source>
+            /* ----------------------------
+               banner spanning lines
+               ---------------------------- */
+            protected int blockComment(int _n)
+            {
+                return _n;
+            }
+                    </Source>
+                  </Method>
+                  <Method>
+                    <Name>closesOnDeclarationLine</Name>
+                    <Source>
+            /* opened here
+               and closed */ public void closesOnDeclarationLine()
+            {
+            }
+                    </Source>
+                  </Method>
+                </Methods>
+              </SourceCode>
+            </AxClass>
+            """);
+
+        var batch = new MetadataExtractor().ExtractAll(_workRoot).ToList().Single(b => b.Model == "PkgSig2");
+        var methods = Assert.Single(batch.Classes).Methods.ToDictionary(m => m.Name, m => m.Signature);
+        Assert.Equal("public void lineComment()", methods["lineComment"]);
+        Assert.Equal("protected int blockComment(int _n)", methods["blockComment"]);
+        Assert.Equal("public void closesOnDeclarationLine()", methods["closesOnDeclarationLine"]);
+    }
+
+    [Fact]
+    public void MetadataExtractor_comment_before_attribute_still_finds_the_declaration()
+    {
+        // Comments and attributes interleave: the skip for one must not consume the other.
+        var model = Path.Combine(_workRoot, "PkgSig3", "PkgSig3");
+        Directory.CreateDirectory(Path.Combine(model, "AxClass"));
+        File.WriteAllText(Path.Combine(model, "AxClass", "Mixed.xml"), """
+            <AxClass>
+              <Name>Mixed</Name>
+              <SourceCode>
+                <Methods>
+                  <Method>
+                    <Name>handler</Name>
+                    <Source>
+            /// &lt;summary&gt;Handles the event.&lt;/summary&gt;
+            [FormEventHandler(
+                formStr(CustTable),
+                FormEventType::Initialized)]
+            public static void handler(FormRun _sender, FormEventArgs _e)
+            {
+            }
+                    </Source>
+                  </Method>
+                </Methods>
+              </SourceCode>
+            </AxClass>
+            """);
+
+        var batch = new MetadataExtractor().ExtractAll(_workRoot).ToList().Single(b => b.Model == "PkgSig3");
+        var method = Assert.Single(Assert.Single(batch.Classes).Methods);
+        Assert.Equal("public static void handler(FormRun _sender, FormEventArgs _e)", method.Signature);
+        Assert.True(method.IsStatic, "IsStatic is derived from the signature, so it was wrong too");
+    }
+
+    [Fact]
+    public void MetadataExtractor_comment_only_source_yields_no_signature()
+    {
+        var model = Path.Combine(_workRoot, "PkgSig4", "PkgSig4");
+        Directory.CreateDirectory(Path.Combine(model, "AxClass"));
+        File.WriteAllText(Path.Combine(model, "AxClass", "Empty.xml"), """
+            <AxClass>
+              <Name>Empty</Name>
+              <SourceCode>
+                <Methods>
+                  <Method>
+                    <Name>nothing</Name>
+                    <Source>
+            // everything here is commented out
+            // public void nothing() {}
+                    </Source>
+                  </Method>
+                </Methods>
+              </SourceCode>
+            </AxClass>
+            """);
+
+        var batch = new MetadataExtractor().ExtractAll(_workRoot).ToList().Single(b => b.Model == "PkgSig4");
+        var method = Assert.Single(Assert.Single(batch.Classes).Methods);
+        Assert.Equal(string.Empty, method.Signature);
+    }
+
+
+    [Fact]
+    public void MetadataExtractor_reads_a_delete_action_from_the_element_the_AOT_writes()
+    {
+        // AxTableDeleteAction declares `Name, DeleteAction, Relation, Table, Tags` - the related
+        // table is <Table>. The extractor looked for <RelatedTable>, which the contract does not
+        // have, so it skipped EVERY delete action: measured against a real installation, the
+        // index held 0 rows across 214 packages while shipped tables plainly declare them.
+        var model = Path.Combine(_workRoot, "PkgDelAct", "PkgDelAct");
+        Directory.CreateDirectory(Path.Combine(model, "AxTable"));
+        File.WriteAllText(Path.Combine(model, "AxTable", "ParentTable.xml"), """
+            <AxTable>
+              <Name>ParentTable</Name>
+              <DeleteActions>
+                <AxTableDeleteAction>
+                  <Name>JournalError</Name>
+                  <DeleteAction>Cascade</DeleteAction>
+                  <Relation></Relation>
+                  <Table>JournalError</Table>
+                </AxTableDeleteAction>
+              </DeleteActions>
+            </AxTable>
+            """);
+
+        var batch = new MetadataExtractor().ExtractAll(_workRoot).ToList().Single(b => b.Model == "PkgDelAct");
+        var action = Assert.Single(Assert.Single(batch.Tables).DeleteActions);
+        Assert.Equal("JournalError", action.RelatedTable);
+        Assert.Equal("Cascade", action.DeleteAction);
+    }
+
+    [Fact]
+    public void MetadataExtractor_reads_the_datasource_element_names_the_AOT_writes()
+    {
+        // Shipped queries use AxQuerySimpleRootDataSource and AxQuerySimpleEmbeddedDataSource.
+        // The extractor matched AxQuerySimpleDataSource / AxQueryDataSource, which occur in no
+        // shipped query at all - so the index held 4,896 queries and zero datasources, and
+        // `get query` answered "no datasources" for every one of them. Only the sample fixtures
+        // used the shorter name, which is why the suite stayed green.
+        var model = Path.Combine(_workRoot, "PkgQds", "PkgQds");
+        Directory.CreateDirectory(Path.Combine(model, "AxQuery"));
+        File.WriteAllText(Path.Combine(model, "AxQuery", "RealShapeQuery.xml"), """
+            <AxQuery>
+              <Name>RealShapeQuery</Name>
+              <DataSources>
+                <AxQuerySimpleRootDataSource>
+                  <Name>CustTable</Name>
+                  <Table>CustTable</Table>
+                  <DataSources>
+                    <AxQuerySimpleEmbeddedDataSource>
+                      <Name>CustTrans</Name>
+                      <Table>CustTrans</Table>
+                      <JoinMode>InnerJoin</JoinMode>
+                    </AxQuerySimpleEmbeddedDataSource>
+                  </DataSources>
+                </AxQuerySimpleRootDataSource>
+              </DataSources>
+            </AxQuery>
+            """);
+
+        var batch = new MetadataExtractor().ExtractAll(_workRoot).ToList().Single(b => b.Model == "PkgQds");
+        var query = Assert.Single(batch.Queries);
+        Assert.Equal(2, query.DataSources.Count);
+
+        var root = Assert.Single(query.DataSources, d => d.Name == "CustTable");
+        Assert.Equal("CustTable", root.Table);
+        Assert.Null(root.ParentDs);
+
+        var nested = Assert.Single(query.DataSources, d => d.Name == "CustTrans");
+        Assert.Equal("CustTable", nested.ParentDs);
+        Assert.Equal("InnerJoin", nested.JoinMode);
+    }
+
+    [Theory]
+    // The real names.
+    [InlineData("AxQuerySimpleRootDataSource", true)]
+    [InlineData("AxQuerySimpleEmbeddedDataSource", true)]
+    // The fixture spelling, still accepted.
+    [InlineData("AxQuerySimpleDataSource", true)]
+    // Members of a datasource, which a prefix match would have swept in as datasources.
+    [InlineData("AxQuerySimpleDataSourceField", false)]
+    [InlineData("AxQuerySimpleDataSourceRange", false)]
+    [InlineData("AxQuerySimpleDataSourceRelation", false)]
+    [InlineData("AxTableField", false)]
+    public void MetadataExtractor_datasource_predicate_matches_only_datasources(string localName, bool expected)
+        => Assert.Equal(expected, MetadataExtractor.IsQueryDataSourceElement(localName));
+
 }
