@@ -21,7 +21,7 @@ public class LabelDiskCheckTests : IDisposable
 
     public void Dispose()
     {
-        Microsoft.Data.Sqlite.SqliteConnection.ClearAllPools();
+        SqlitePool.ReleaseFor(_dbPath);
         try { Directory.Delete(_dir, recursive: true); } catch { /* best-effort */ }
     }
 

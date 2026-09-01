@@ -187,10 +187,11 @@ public class WorkflowScaffolderTests
                 Path.Combine(dir, "ConVehicleTask.xml"));
 
             // Listed, not counted (issue #158): when this went red the message said
-            // "Expected 3, Actual 2" and nothing about which write was missing.
-            Assert.Equal(
-                new[] { "ConVehicleApproval.xml", "ConVehicleReview.xml", "ConVehicleTask.xml" },
-                Directory.GetFiles(dir, "*.xml").Select(Path.GetFileName).Order().ToArray());
+            // "Expected 3, Actual 2" and nothing about which write was missing. Existence is
+            // now asked per path rather than read off a directory enumeration, which is what
+            // made this the flakiest assertion in the suite — see WrittenFilesAssert.
+            WrittenFilesAssert.ExactlyTheseXml(dir,
+                "ConVehicleApproval.xml", "ConVehicleReview.xml", "ConVehicleTask.xml");
         }
         finally
         {

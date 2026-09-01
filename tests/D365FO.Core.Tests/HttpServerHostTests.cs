@@ -29,7 +29,7 @@ public class HttpServerHostTests : IAsyncLifetime
     public async Task DisposeAsync()
     {
         if (_app is not null) await _app.StopAsync();
-        Microsoft.Data.Sqlite.SqliteConnection.ClearAllPools();
+        SqlitePool.ReleaseFor(_dbPath);
         foreach (var ext in new[] { "", "-wal", "-shm" })
         {
             var p = _dbPath + ext;
