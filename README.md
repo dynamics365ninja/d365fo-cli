@@ -45,7 +45,7 @@ This CLI pre-indexes your entire D365FO installation (hundreds of thousands of s
 | 🧩 **Form pattern engine** | Catalog of Microsoft form patterns and container sub-patterns: `get form-pattern` serves the required structure, `generate form` self-tests against it (FP001–FP010), `validate form-pattern` re-checks any hand edit |
 | ✍️ **Pattern-correct scaffolding** | 33 `generate` commands — tables, classes, CoC, forms (9 patterns), form datasource/control override methods, entities, security, SysOperation, workflows, business events, number sequences, XDS policies |
 | 🏗️ **SDLC integration** | MSBuild compilation with structured `xppcDiagnostics`, DB sync, xppbp best practices, SysTestRunner — on Windows D365FO VMs |
-| 📐 **X++ knowledge base** | 38 lazy-loaded Skills: select grammar, CoC authoring, FormRun lifecycle, BP rule canon — loaded only when relevant, for Copilot and Claude alike |
+| 📐 **X++ knowledge base** | 43 lazy-loaded Skills: select grammar, CoC authoring, FormRun lifecycle, BP rule canon — loaded only when relevant, for Copilot and Claude alike |
 | ⚡ **Agent-first ergonomics** | Stable `{ ok, data, warnings }` JSON envelope, `search batch` / `get batch` / `prepare` single-round aggregators, `agent-prompt` + `schema` manifests |
 | 🔌 **Daemon & MCP adapter** | Warm-cache named-pipe daemon with file-system watcher; `d365fo-mcp` speaks JSON-RPC 2.0 over the same index for MCP-only hosts, over stdio or `--http` for a shared team deployment (`API_KEY`, `MCP_SERVER_MODE`) |
 
@@ -145,7 +145,7 @@ Ready to scaffold your first table, form, and CoC extension? Full walkthrough wi
 
 ### GitHub Copilot (VS Code / Visual Studio)
 
-The preferred method is the **one-command skill installer** — it deploys the bundled `d365fo-cli` Copilot skill (SKILL.md + 38 lazily-loaded topic references) into your X++ project's `.github/skills/d365fo-cli/` folder. Copilot auto-discovers skills in `.github/skills/` with no extra configuration.
+The preferred method is the **one-command skill installer** — it deploys the bundled `d365fo-cli` Copilot skill (SKILL.md + 43 lazily-loaded topic references) into your X++ project's `.github/skills/d365fo-cli/` folder. Copilot auto-discovers skills in `.github/skills/` with no extra configuration.
 
 ```powershell
 # From the d365fo-cli repo's scripts folder:
@@ -165,7 +165,7 @@ The installer:
 └── skills/
     └── d365fo-cli/
         ├── SKILL.md              # core rule canon + tool mapping (loaded when the skill activates)
-        └── references/            # 38 X++ topic files, loaded per topic on demand
+        └── references/            # 43 X++ topic files, loaded per topic on demand
             ├── analytics-and-er.md
             ├── barcode-scanning.md
             ├── build-error-triage.md
@@ -173,9 +173,11 @@ The installer:
             ├── coc-extension-authoring.md
             ├── custom-service-authoring.md
             ├── data-entity-scaffolding.md
+            ├── document-attachments.md
             ├── event-handler-authoring.md
             ├── form-pattern-scaffolding.md
             ├── forms-and-navigation.md
+            ├── global-class-statics.md
             ├── integration-dmf-dualwrite.md
             ├── integration-patterns.md
             ├── inventory-and-warehouse.md
@@ -185,12 +187,15 @@ The installer:
             ├── object-extension-authoring.md
             ├── performance-and-caching.md
             ├── posting-and-financials.md
+            ├── rdl-design-expressions.md
+            ├── report-print-destinations.md
             ├── review-and-checkpoint-workflow.md
             ├── runtime-frameworks.md
             ├── security-hierarchy-trace.md
             ├── security-modeling.md
             ├── ssrs-report-authoring.md
             ├── sysoperation-batch-patterns.md
+            ├── system-objects.md
             ├── table-scaffolding.md
             ├── testing-and-quality.md
             ├── transactions-and-concurrency.md

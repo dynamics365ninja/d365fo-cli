@@ -184,7 +184,7 @@ public static class KnowledgeBase
     /// <c>description</c>, <c>appliesWhen</c>, <c>covers</c>). List-valued keys such as
     /// <c>applyTo</c> are Copilot-only and deliberately ignored here.
     /// </summary>
-    internal static KnowledgeTopic Parse(string raw, string fallbackId)
+    public static KnowledgeTopic Parse(string raw, string fallbackId)
     {
         var text = raw.Replace("\r\n", "\n");
         string id = fallbackId, description = "", appliesWhen = "", covers = "";

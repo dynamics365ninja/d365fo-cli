@@ -251,9 +251,11 @@ Detailed rules are in `references/` (lazily loaded when relevant):
 | `coc-extension-authoring` | CoC wrapper rules, `next` placement, signature matching, `[Hookable]`/`[Wrappable]` |
 | `custom-service-authoring` | JSON/SOAP custom service scaffolding |
 | `data-entity-scaffolding` | Data entity (`AxDataEntityView`) patterns, OData exposure |
+| `document-attachments` | DocuRef, DocuValue, DocuType, DocumentManagement::attachFile, attachment retrieval |
 | `event-handler-authoring` | `[DataEventHandler]`, `[SubscribesTo]`, pre/post handlers |
 | `form-pattern-scaffolding` | FormRun lifecycle, 9 form patterns, Display/Action/Output menu items |
 | `forms-and-navigation` | Form lifecycle extension points, menus and submenu nesting |
+| `global-class-statics` | Global statics, bare vs qualified calls, overlap with predefined functions |
 | `integration-dmf-dualwrite` | DMF, dual-write, virtual entities, uploaded-file readers |
 | `integration-patterns` | OData, custom services, DMF, business events |
 | `inventory-and-warehouse` | InventTrans/InventDim/InventSum, on-hand, WHS work and waves |
@@ -263,12 +265,15 @@ Detailed rules are in `references/` (lazily loaded when relevant):
 | `object-extension-authoring` | Table / Form / EDT / Enum extensions; AOT XML safety |
 | `performance-and-caching` | Set-based work, `CacheLookup`, explicit caches, parallel batch |
 | `posting-and-financials` | Financial dimensions, voucher posting, currency, pricing |
+| `rdl-design-expressions` | RDL expression syntax, aggregate scope, formatting, where RDL lives |
+| `report-print-destinations` | SRSPrintDestinationSettings, SRSPrintMediumType, setting a destination on a controller |
 | `review-and-checkpoint-workflow` | Git checkpoint, `d365fo review diff`, accept/reject workflow |
 | `runtime-frameworks` | Feature Management, SysExtension, telemetry, Global Address Book |
 | `security-hierarchy-trace` | Role to duty to privilege to entry-point tracing |
 | `security-modeling` | Privilege/duty/role chain, XDS policies, configuration keys |
 | `ssrs-report-authoring` | TmpTable to Contract to DP to Controller to AxReport, Print management |
 | `sysoperation-batch-patterns` | SysOperation batch jobs, RunBase, migration scripts, retryable/async batch |
+| `system-objects` | kernel types, xRecord/Common members, system fields, why the index cannot carry them |
 | `table-scaffolding` | Table creation, EDTs, relations, indexes, `TableGroup` vs `TableType`, inheritance |
 | `testing-and-quality` | SysTestCase, ATL, and the offline validate/lint gates |
 | `transactions-and-concurrency` | tts scoping, OCC retry, `UnitOfWork`, error handling |

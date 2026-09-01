@@ -1,6 +1,6 @@
 {
-  "capturedAt": "2026-08-31T19:54:25.3716735Z",
-  "indexedAt": "2026-05-19T14:46:43.8643815Z",
+  "capturedAt": "2026-09-01T16:08:15.2062917Z",
+  "indexedAt": "2026-09-01T15:30:37.8522496Z",
   "ok": [
     "analytics-and-er|static-call|ERModelDefinitionInputParametersAction::addParameter",
     "analytics-and-er|static-call|ERObjectsFactory::createFormatMappingRunByFormatMappingId",
@@ -28,6 +28,9 @@
     "custom-service-authoring|attribute|DataMemberAttribute",
     "custom-service-authoring|attribute|ServiceAttribute",
     "custom-service-authoring|attribute|SysEntryPointAttribute",
+    "document-attachments|declaration|DocuRef",
+    "document-attachments|declaration|DocuValue",
+    "document-attachments|intrinsic|CustTable",
     "event-handler-authoring|attribute|DataEventHandler",
     "event-handler-authoring|attribute|FormEventHandler",
     "event-handler-authoring|attribute|SubscribesTo",
@@ -105,6 +108,8 @@
     "posting-and-financials|static-call|LedgerVoucherObject::newVoucher",
     "posting-and-financials|static-call|LedgerVoucherTransObject::newTransactionAmountDefault",
     "posting-and-financials|static-call|SysModule::Ledger",
+    "report-print-destinations|static-call|SRSPrintMediumType::File",
+    "report-print-destinations|static-call|SRSReportFileFormat::PDF",
     "runtime-frameworks|attribute|ExportAttribute",
     "runtime-frameworks|attribute|Hookable",
     "runtime-frameworks|declaration|DirPartyPostalAddressView",
