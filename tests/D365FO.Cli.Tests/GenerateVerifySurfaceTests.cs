@@ -4,6 +4,7 @@ using System.Xml.Linq;
 using D365FO.Cli.Commands.Generate;
 using D365FO.Core.Scaffolding;
 using Xunit;
+using D365FO.Core.Bridge;
 
 namespace D365FO.Cli.Tests;
 
@@ -143,10 +144,10 @@ public class BridgeVerifyVerdictTests
     [Fact]
     public void A_provider_that_returned_the_object_verifies()
     {
-        var (outcome, detail) = D365FO.Cli.Commands.Get.BridgeGate.VerdictFrom(
+        var (outcome, detail) = D365FO.Core.Bridge.BridgeGate.VerdictFrom(
             "query", Envelope("""{"ok":true,"kind":"query","name":"ConVerifyQuery","xml":"<AxQuerySimple />"}"""));
 
-        Assert.Equal(D365FO.Cli.Commands.Get.BridgeGate.VerifyOutcome.Readable, outcome);
+        Assert.Equal(D365FO.Core.Bridge.BridgeGate.VerifyOutcome.Readable, outcome);
         Assert.Null(detail);
     }
 
@@ -155,20 +156,20 @@ public class BridgeVerifyVerdictTests
     {
         // What a document the reader refuses to deserialize looks like from here: the provider
         // simply does not hand it back.
-        var (outcome, detail) = D365FO.Cli.Commands.Get.BridgeGate.VerdictFrom(
+        var (outcome, detail) = D365FO.Core.Bridge.BridgeGate.VerdictFrom(
             "query", Envelope("""{"ok":false,"error":"NOT_FOUND","message":"query 'ConVerifyQuery' was not returned by IMetadataProvider."}"""));
 
-        Assert.Equal(D365FO.Cli.Commands.Get.BridgeGate.VerifyOutcome.Unreadable, outcome);
+        Assert.Equal(D365FO.Core.Bridge.BridgeGate.VerifyOutcome.Unreadable, outcome);
         Assert.Contains("could not load the object back", detail);
     }
 
     [Fact]
     public void A_type_the_bridge_cannot_serialise_still_counts_as_loaded()
     {
-        var (outcome, detail) = D365FO.Cli.Commands.Get.BridgeGate.VerdictFrom(
+        var (outcome, detail) = D365FO.Core.Bridge.BridgeGate.VerdictFrom(
             "menuitemaction", Envelope("""{"ok":false,"error":"SERIALIZE_FAILED","message":"InvalidOperationException: There was an error reflecting type 'Microsoft.Dynamics.AX.Metadata.MetaModel.AxMenuItemAction'."}"""));
 
-        Assert.Equal(D365FO.Cli.Commands.Get.BridgeGate.VerifyOutcome.Readable, outcome);
+        Assert.Equal(D365FO.Core.Bridge.BridgeGate.VerifyOutcome.Readable, outcome);
         Assert.Contains("could not render it back as XML", detail);
     }
 
@@ -179,18 +180,18 @@ public class BridgeVerifyVerdictTests
     [InlineData("""{"ok":false,"error":"METADATA_UNAVAILABLE","message":"IMetadataProvider failed to initialise."}""")]
     public void Answers_that_check_nothing_are_skips_not_verdicts(string json)
     {
-        var (outcome, detail) = D365FO.Cli.Commands.Get.BridgeGate.VerdictFrom("tile", Envelope(json));
+        var (outcome, detail) = D365FO.Core.Bridge.BridgeGate.VerdictFrom("tile", Envelope(json));
 
-        Assert.Equal(D365FO.Cli.Commands.Get.BridgeGate.VerifyOutcome.Skipped, outcome);
+        Assert.Equal(D365FO.Core.Bridge.BridgeGate.VerifyOutcome.Skipped, outcome);
         Assert.False(string.IsNullOrWhiteSpace(detail));
     }
 
     [Fact]
     public void A_bridge_that_never_answered_is_a_skip()
     {
-        var (outcome, detail) = D365FO.Cli.Commands.Get.BridgeGate.VerdictFrom("class", null);
+        var (outcome, detail) = D365FO.Core.Bridge.BridgeGate.VerdictFrom("class", null);
 
-        Assert.Equal(D365FO.Cli.Commands.Get.BridgeGate.VerifyOutcome.Skipped, outcome);
+        Assert.Equal(D365FO.Core.Bridge.BridgeGate.VerifyOutcome.Skipped, outcome);
         Assert.Contains("did not answer", detail);
     }
 }

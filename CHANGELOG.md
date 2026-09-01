@@ -38,6 +38,33 @@ was ported from.
   derived the enum spelling from the step name, which works for every operation whose command name
   matches its enum name and fails for the one that does not — `property` is `SetProperty`.
 
+### Added — the work an agent does after a write
+- **`sdlc`** — build, sync, run SysTest and run xppbp over MCP. The CLI could answer "does what I
+  just wrote compile?" and the MCP server could not, which leaves the one surface a remote agent
+  uses able to generate code and unable to find out whether it is right. The build returns
+  per-diagnostic X++ compiler findings (object, member, line, column, message, fix hint) rather
+  than a log tail, and says when xppc reports stale symbols — which needs a Full Build, not a
+  retry. The test action reads its verdict from the runner's XML result document, because a run
+  that dies half way still exits 0 with its remaining cases marked pending. Local-only: the tool
+  is in `LocalTools`, so a shared read-only deployment neither advertises nor accepts it.
+- **`delete_object`** — remove an AOT object through the provider or from disk, journaled so
+  `undo_last_modification` can put it back. The pre-image is captured before the delete and a
+  delete that cannot capture one is refused.
+- **`validate(mode=metadata)`** — the metadata provider's own verdict on a document: what it
+  deserialises to, and every member it drops on the way in. MCP had only the offline half
+  (`metadata-shape`), which cannot see a property the type does not declare.
+- **`get_workspace_info(changes=true)`** — the uncommitted X++ diff plus the cheap rule pass over
+  it, mirroring upstream. `d365fo review diff` was shell-only.
+- `BridgeGate` moved into Core, where it always belonged: two Core engines had been *copying* its
+  bridge-option builder rather than depending upwards, so the bridge could be configured
+  differently depending on which entry point reached it. Three copies became one.
+- The parity harness now requires a published command with no MCP route to say **why** in
+  `CliMcpParityTests.CliOnly`. An empty route list read as "nothing to say" rather than
+  "decided" — which is how the whole `modify` surface came to be shell-only without anyone
+  choosing it. The remaining honest gap is recorded there: `index extract`/`refresh` walk the
+  package tree for minutes, and the MCP-appropriate form is a per-file upsert that does not exist
+  yet.
+
 ### Fixed — grounding was enforced on one surface of two
 - **`D365FO_GROUNDING_ENFORCE=true` did nothing over MCP.** The gate that proves every generated
   identifier against the index, runs the offline BP validator and demands an object-bound

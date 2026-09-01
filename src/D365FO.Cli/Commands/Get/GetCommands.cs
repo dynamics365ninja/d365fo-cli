@@ -2,6 +2,7 @@
 using D365FO.Core.Index;
 using Spectre.Console;
 using Spectre.Console.Cli;
+using D365FO.Core.Bridge;
 
 namespace D365FO.Cli.Commands.Get;
 

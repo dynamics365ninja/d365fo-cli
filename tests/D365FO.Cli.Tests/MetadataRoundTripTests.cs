@@ -1,5 +1,6 @@
-using D365FO.Cli.Commands.Get;
+﻿using D365FO.Cli.Commands.Get;
 using Xunit;
+using D365FO.Core.Bridge;
 
 namespace D365FO.Cli.Tests;
 

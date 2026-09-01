@@ -1,4 +1,4 @@
-using System.Text.Json.Nodes;
+﻿using System.Text.Json.Nodes;
 using D365FO.Core.Bridge;
 using D365FO.Core.Guardrails;
 using D365FO.Core.Labels;
@@ -276,19 +276,10 @@ public static class UndoEngine
         return (true, null, detail, null);
     }
 
-    /// <summary>
-    /// Build <see cref="BridgeOptions"/> from the unified config resolver — duplicated (rather than
-    /// referencing <c>D365FO.Cli.Commands.Get.BridgeGate</c>) so this Core-level engine has no
-    /// dependency on the CLI project, matching the existing precedent in
-    /// <c>MethodModifyEngine.DefaultBridgeOptions</c>.
-    /// </summary>
-    public static BridgeOptions DefaultBridgeOptions() => new()
-    {
-        MetadataBinPath = D365FoSettings.Resolve("D365FO_BIN_PATH"),
-        PackagesPath = D365FoSettings.Resolve("D365FO_PACKAGES_PATH"),
-        CustomPackagesPaths = D365FoSettings.FromEnvironment().CustomPackagesPaths,
-        XrefConnectionString = D365FoSettings.Resolve("D365FO_XREF_CONNECTIONSTRING"),
-    };
+    /// <summary>Build <see cref="BridgeOptions"/> from the unified config resolver.</summary>
+    /// <remarks>The third copy of this, until <c>BridgeGate</c> moved into Core. See
+    /// <see cref="Bridge.MethodModifyEngine.DefaultBridgeOptions"/>.</remarks>
+    public static BridgeOptions DefaultBridgeOptions() => BridgeGate.DefaultOptions();
 
     // ---- label replay ------------------------------------------------------
 

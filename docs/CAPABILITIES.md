@@ -559,7 +559,7 @@ Returns `UNSUPPORTED_PLATFORM` on non-Windows.
 
 ## MCP server
 
-Exposes the same index and scaffolding surface as the CLI over the `ModelContextProtocol` C# SDK via stdio (default) or HTTP (`--http`, for a shared team deployment). The tool surface is **consolidated** into **28 discriminator-based tools** (`search`, `get_object_info`, `get_method`, `labels`, `security_info`, `extension_info`, `object_patterns`, `generate_object`, `modify_method`, `modify_object`, `get_knowledge`, `explain_build_error`, `analyze`, `models`, …) instead of one tool per object type — mirroring the upstream `d365fo-mcp-server` (which sits at 26). A single tool dispatches on a `type` / `objectType` / `mode` / `action` / `domain` / `include` field. See [MIGRATION_FROM_MCP.md](MIGRATION_FROM_MCP.md) for the full old→new mapping.
+Exposes the same index and scaffolding surface as the CLI over the `ModelContextProtocol` C# SDK via stdio (default) or HTTP (`--http`, for a shared team deployment). The tool surface is **consolidated** into **30 discriminator-based tools** (`search`, `get_object_info`, `get_method`, `labels`, `security_info`, `extension_info`, `object_patterns`, `generate_object`, `modify_method`, `modify_object`, `get_knowledge`, `explain_build_error`, `analyze`, `models`, …) instead of one tool per object type — mirroring the upstream `d365fo-mcp-server` (which sits at 26). A single tool dispatches on a `type` / `objectType` / `mode` / `action` / `domain` / `include` field. See [MIGRATION_FROM_MCP.md](MIGRATION_FROM_MCP.md) for the full old→new mapping.
 
 ### Keeping the two surfaces the same
 
@@ -580,12 +580,18 @@ two — listed 130 commands out of 200 registered and named routes that did not 
 | No orphan tools | An MCP tool no CLI command reaches, unless declared MCP-only with a reason. |
 | Write surface | Any `ObjectModifyEngine.Operation` not reachable as both `d365fo modify <op>` and `modify_object(action=<op>)`. |
 | Scaffold surface | A `d365fo generate <x>` sub-command with no `generate_object` objectType behind it. |
+| Stated intent | A published command with no MCP route and no reason recorded for it. |
 
 One consequence is worth stating on its own: **`D365FO_GROUNDING_ENFORCE=true` now means the
 same thing on both surfaces.** The gate — index-proved identifiers, the offline BP validator, and
 an object-bound token from `prepare` — used to live beside the CLI's generate commands, so it ran
 on every CLI write and on no MCP write. `generate_object` takes a `groundingToken`, reports what
 the gate saw in `grounding`, and refuses an ungated write under enforcement.
+
+One gap is left, and it is recorded rather than papered over: `index extract` / `index refresh`
+walk the whole package tree for minutes, which is the wrong shape for a tool call. The
+MCP-appropriate form is a per-file upsert (upstream's `update_symbol_index`), which this
+repository does not have yet.
 
 The shared implementations behind that live in Core — `CompletenessAnalyzer`, `FormPatternMiner`,
 `ExtensionAnswers`, `BpMonikerAnswers`, `PatternCatalogAnswers`, `BatchStepParser` — so the two

@@ -1667,6 +1667,54 @@ public sealed partial class ToolHandlers
                 : warnings > 0 ? "No errors; review the warnings." : "Clean.",
         });
 
+    /// <summary>
+    /// The metadata provider's own verdict on one document: what it deserialises to, and every
+    /// member it drops on the way in.
+    /// </summary>
+    /// <remarks>
+    /// A dropped element is a property the type does not declare — the document reads without
+    /// error and arrives missing what you wrote, which no offline rule can see. Off a machine
+    /// with the metadata assemblies this returns <c>skipped</c>: a verdict it cannot support is
+    /// worse than no verdict.
+    /// </remarks>
+    public ToolResult<object> ValidateMetadata(string? kind, string xml)
+    {
+        if (string.IsNullOrWhiteSpace(xml))
+            return ToolResult<object>.Fail(D365FoErrorCodes.BadInput, "code (the AOT XML) is required.");
+
+        if (!D365FO.Core.Bridge.BridgeGate.ShouldTry())
+            return ToolResult<object>.Success(new
+            {
+                skipped = true,
+                reason = "The metadata provider is not enabled here. Set D365FO_BRIDGE_ENABLED=1 (and D365FO_BIN_PATH) "
+                       + "on a machine with the D365FO metadata assemblies to validate against Microsoft's own serializer.",
+            });
+
+        var verdict = D365FO.Core.Bridge.BridgeGate.TryValidateArtifact(kind, xml);
+        if (verdict is null)
+            return ToolResult<object>.Success(new
+            {
+                skipped = true,
+                reason = "The bridge did not answer. Check D365FO_BRIDGE_PATH points at D365FO.Bridge.exe and "
+                       + "D365FO_BIN_PATH at the folder holding Microsoft.Dynamics.AX.Metadata.dll.",
+            });
+
+        return ToolResult<object>.Success(new
+        {
+            rootElement = verdict.RootElement,
+            clrType = verdict.ClrType,
+            deserialized = verdict.Deserialized,
+            valid = verdict.Valid,
+            errorCode = verdict.ErrorCode,
+            errorMessage = verdict.ErrorMessage,
+            droppedCount = verdict.Dropped.Count,
+            dropped = verdict.Dropped,
+            verdict = verdict.Valid
+                ? "The provider reads this document as written."
+                : "The provider cannot read this document as written — a dropped element is a property the type does not have.",
+        });
+    }
+
     public ToolResult<object> ValidateFormPattern(string xml)
     {
         if (string.IsNullOrWhiteSpace(xml))

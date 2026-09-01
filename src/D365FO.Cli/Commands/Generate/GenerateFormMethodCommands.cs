@@ -1,9 +1,10 @@
-using System.Xml.Linq;
+﻿using System.Xml.Linq;
 using D365FO.Cli.Commands.Get;
 using D365FO.Core;
 using D365FO.Core.Journal;
 using D365FO.Core.Scaffolding;
 using Spectre.Console.Cli;
+using D365FO.Core.Bridge;
 
 namespace D365FO.Cli.Commands.Generate;
 

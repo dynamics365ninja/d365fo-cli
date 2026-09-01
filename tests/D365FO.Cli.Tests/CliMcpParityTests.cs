@@ -67,7 +67,32 @@ public class CliMcpParityTests
     /// </summary>
     private static readonly IReadOnlyDictionary<string, string> McpOnly = new Dictionary<string, string>(StringComparer.Ordinal)
     {
-        ["get_workspace_info"] = "Reports the resolved configuration of the serving process. `d365fo doctor` is the CLI's answer to the same question, but it diagnoses rather than reporting a config block, so it is not the same call.",
+        // (empty — every tool is reachable from a command)
+    };
+
+    /// <summary>
+    /// Published commands that deliberately have no MCP route, each with the reason.
+    /// </summary>
+    /// <remarks>
+    /// This is the direction that rots quietly. A manifest entry with an empty <c>mcpTool</c>
+    /// list reads as "nothing to say" rather than "decided", which is how the whole `modify`
+    /// surface, every pattern catalog and sixteen scaffolds came to be shell-only without anyone
+    /// choosing that. Making the empty list require an entry here turns each one into a claim
+    /// someone had to write down.
+    /// </remarks>
+    private static readonly IReadOnlyDictionary<string, string> CliOnly = new Dictionary<string, string>(StringComparer.Ordinal)
+    {
+        ["daemon start"] = "Runs a long-lived local process. An MCP server IS the long-lived process; starting a second one from inside it is not a tool call.",
+        ["daemon stop"] = "See `daemon start`.",
+        ["daemon status"] = "See `daemon start`.",
+        ["init"] = "Interactive first-run setup: detects PackagesLocalDirectory, writes a profile, offers to extract. It asks questions, which a tool call cannot answer.",
+        ["doctor"] = "Diagnoses the local environment — paths, bridge, index, versions. `get_workspace_info` reports the resolved configuration, which is the part of it a remote caller can act on.",
+        ["version"] = "Reports the assembly version of the shell binary. The MCP server reports its own in `initialize`.",
+        ["index build"] = "Creates the index database. First-run setup, and the server needs a database to have been started at all.",
+        ["index extract"] = "Walks the whole PackagesLocalDirectory — minutes of filesystem work. A tool call that long is the wrong shape; the MCP-appropriate form is a per-file upsert, which does not exist yet (upstream's `update_symbol_index`). Tracked as the remaining gap.",
+        ["index refresh"] = "The incremental form of `index extract`, and the same reason.",
+        ["schema"] = "Publishes this manifest — the shell surface described for an agent that has a shell. An MCP client reads `tools/list` instead.",
+        ["agent-prompt"] = "Emits the CLI-first system prompt. Same reason as `schema`: it describes the shell surface to a harness that will use it.",
     };
 
     private static IReadOnlyList<string> RegisteredCommands() =>
@@ -201,6 +226,29 @@ public class CliMcpParityTests
             "These MCP tools are named by no CLI command in the manifest and are not declared MCP-only — "
             + "either the CLI cannot do what MCP can, or the manifest forgot to say it can:\n  "
             + string.Join("\n  ", orphans));
+    }
+
+    [Fact]
+    public void Every_published_command_has_an_mcp_route_or_a_reason_not_to()
+    {
+        var unexplained = Manifest()
+            .Where(c => c.McpTool.Length == 0 && !CliOnly.ContainsKey(c.Command))
+            .Select(c => c.Command)
+            .OrderBy(p => p, StringComparer.Ordinal)
+            .ToList();
+
+        Assert.True(unexplained.Count == 0,
+            "These commands are published with no MCP route and no reason for it. Either route them, or "
+            + "say in CliMcpParityTests.CliOnly why the shell is the only place they belong:\n  "
+            + string.Join("\n  ", unexplained));
+
+        var stale = CliOnly.Keys
+            .Where(command => Manifest().Any(c => c.Command == command && c.McpTool.Length > 0))
+            .ToList();
+
+        Assert.True(stale.Count == 0,
+            "These are declared CLI-only but the manifest now names an MCP route for them — drop them from "
+            + "CliOnly: " + string.Join(", ", stale));
     }
 
     [Fact]

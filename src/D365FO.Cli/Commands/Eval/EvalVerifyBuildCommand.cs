@@ -1,5 +1,6 @@
-using System.Text.RegularExpressions;
+﻿using System.Text.RegularExpressions;
 using D365FO.Core;
+using D365FO.Core.Ops;
 using D365FO.Core.Eval;
 using D365FO.Core.Validation;
 using D365FO.Cli.Commands.Ops;
@@ -149,7 +150,7 @@ public sealed class EvalVerifyBuildCommand : Command<EvalVerifyBuildCommand.Sett
                 }));
             }
 
-            var guard = WindowsGuard.Check("d365fo eval verify-build");
+            var guard = SdlcRunner.WindowsGuard("d365fo eval verify-build");
             if (guard is not null) return RenderHelpers.Render(kind, guard);
 
             var packagesRoot = settings.PackagesPath
@@ -181,7 +182,7 @@ public sealed class EvalVerifyBuildCommand : Command<EvalVerifyBuildCommand.Sett
             // (one directory per package) the compiler enumerates.
             var args = Expand(template, workDir, packagesRoot!, modelName, outputDir, logPath);
 
-            var (exit, stdout, stderr, elapsed) = ProcessRunner.Run(compiler, args);
+            var (exit, stdout, stderr, elapsed) = SdlcRunner.Run(compiler, args);
             var log = stdout + "\n" + stderr;
             if (File.Exists(logPath))
             {

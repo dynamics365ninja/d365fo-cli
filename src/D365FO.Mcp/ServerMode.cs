@@ -53,6 +53,8 @@ public static class ServerModeConfig
     ///   <see cref="WriteToolsAreLocal"/>.</description></item>
     ///   <item><description><c>undo_last_modification</c> — replays journal entries back
     ///   through the same disk/bridge write path that produced them.</description></item>
+    ///   <item><description><c>sdlc</c> — builds, syncs, runs SysTest and runs xppbp by
+    ///   launching the Windows D365FO developer tools against the local package tree.</description></item>
     ///   <item><description><c>journal_list</c> — reads <c>&lt;index-dir&gt;/journal/</c>,
     ///   which is only populated on the instance that did the writing. Read-only itself,
     ///   but it belongs with the writer: a write-only companion needs it to inspect what
@@ -65,6 +67,10 @@ public static class ServerModeConfig
     {
         "generate_object", "labels", "get_workspace_info", "get_method",
         "modify_method", "modify_object", "undo_last_modification", "journal_list",
+        // `sdlc` launches msbuild.exe / SyncEngine.exe / SysTestConsole.exe / xppbp.exe against
+        // the local package tree. A shared instance with no D365FO installation has nothing to
+        // run, and would be launching processes on the host of whoever deployed it.
+        "sdlc",
     };
 
     /// <summary>

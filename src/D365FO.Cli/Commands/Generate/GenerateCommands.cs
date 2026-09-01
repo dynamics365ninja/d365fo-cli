@@ -5,6 +5,7 @@ using Spectre.Console.Cli;
 using D365FO.Cli.Commands.Get;
 
 using static D365FO.Core.ObjectTypes.ObjectTypeRegistry;
+using D365FO.Core.Bridge;
 
 namespace D365FO.Cli.Commands.Generate;
 

@@ -222,17 +222,17 @@ public sealed class SchemaCommand : Command<SchemaCommand.Settings>
         C("generate role", "Scaffold or merge a security role.", ["<NAME>"], ["--duty", "--privilege", "--label", "--description", "--add-to", "--out", "--overwrite", "--install-to", "--output"], ["generate_object (objectType=role)"]),
         C("generate report", "Scaffold AxReport and RDP skeleton.", ["<NAME>"], ["--dp", "--tmp", "--dataset", "--caption", "--field", "--parameter", "--extra-dataset", "--out-dp", "--out-contract", "--out", "--overwrite", "--install-to", "--output"], ["generate_object (objectType=report)"]),
 
-        C("delete", "Delete an AOT object (bridge or on-disk), journaled for `undo`.", [], ["--kind", "--name", "--install-to", "--path", "--model", "--output"], []),
+        C("delete", "Delete an AOT object (bridge or on-disk), journaled for `undo`.", [], ["--kind", "--name", "--install-to", "--path", "--model", "--output"], ["delete_object"]),
 
         C("analyze completeness", "Cross-check a workspace folder's AOT XML against the index: broken EDT, label and security-role references.", ["<PATH>"], ["--skip-labels", "--skip-edts", "--skip-security", "--output"], ["analyze (mode=completeness)"]),
         C("analyze integration", "Cross-check data entities for OData/DMF readiness.", [], ["--model", "--output"], ["analyze (mode=integration)"]),
         C("analyze impact", "List downstream consumers of an AOT object.", ["<OBJECT>"], ["--output"], ["analyze (mode=impact)"]),
         C("report-integrations", "Aggregated integration surface report.", [], ["--model", "--output"], ["analyze (mode=report)"]),
-        C("review diff", "Inspect AOT changes vs. a git revision.", [], ["--base", "--head", "--repo", "--output"], []),
-        C("build", "Invoke MSBuild on a D365FO project.", [], ["--msbuild", "--project", "--config", "--output"], []),
-        C("sync", "Run DB sync.", [], ["--tool", "--full", "--output"], []),
-        C("test run", "Invoke the platform SysTest console runner (SysTestConsole.exe).", [], ["--runner", "--test", "--suite", "--granularity", "--results", "--parallel", "--output"], []),
-        C("bp check", "Invoke xppbp best-practice checks.", [], ["--tool", "--model", "--packages", "--metadata", "--output"], []),
+        C("review diff", "Inspect AOT changes vs. a git revision.", [], ["--base", "--head", "--repo", "--output"], ["get_workspace_info (changes=true)"]),
+        C("build", "Invoke MSBuild on a D365FO project.", [], ["--msbuild", "--project", "--config", "--output"], ["sdlc (action=build)"]),
+        C("sync", "Run DB sync.", [], ["--tool", "--full", "--output"], ["sdlc (action=sync)"]),
+        C("test run", "Invoke the platform SysTest console runner (SysTestConsole.exe).", [], ["--runner", "--test", "--suite", "--granularity", "--results", "--parallel", "--output"], ["sdlc (action=test)"]),
+        C("bp check", "Invoke xppbp best-practice checks.", [], ["--tool", "--model", "--packages", "--metadata", "--output"], ["sdlc (action=bp-check)"]),
         C("daemon start", "Start warm JSON-RPC daemon.", [], ["--db", "--packages", "--foreground", "--no-watch", "--watch-debounce"], []),
         C("daemon stop", "Stop daemon.", [], [], []),
         C("daemon status", "Report daemon status.", [], [], []),
@@ -284,7 +284,7 @@ public sealed class SchemaCommand : Command<SchemaCommand.Settings>
         C("form-pattern repair", "Auto-repair the structural violations that have exactly one correct fix (missing controls, order, version, pattern defaults). Dry-run unless --apply/--out.", ["[FILE]"], ["--pattern", "--apply", "--out", "--output"], ["object_patterns (domain=form, action=repair)"]),
 
         C("validate form-pattern", "Structural form-pattern validator (FP001-FP010) over AxForm XML — same gate `generate form` enforces.", ["[FILE]"], ["--output"], ["validate (mode=form-pattern)"]),
-        C("validate metadata", "Round-trip AOT XML through Microsoft's IMetadataProvider serializer and report anything it drops. Nothing is written. Requires D365FO_BRIDGE_ENABLED=1.", ["[PATH]"], ["--kind", "--recursive", "--output"], []),
+        C("validate metadata", "Round-trip AOT XML through Microsoft's IMetadataProvider serializer and report anything it drops. Nothing is written. Requires D365FO_BRIDGE_ENABLED=1.", ["[PATH]"], ["--kind", "--recursive", "--output"], ["validate (mode=metadata)"]),
 
         C("generate custom-service", "Scaffold an AxService class, XML, and service group.", ["<NAME>"], ["--class-name", "--external-name", "--group-name", "--operation", "--contract-param", "--out-class", "--out-service", "--out-group", "--out", "--overwrite", "--install-to", "--verify", "--output"], ["generate_object (objectType=custom-service)"]),
         C("generate find-methods", "Generate the standard static find()/exists()/findRecId() for a table from its unique index; --apply-to merges them into the table XML.", ["<TABLE>"], ["--key", "--no-exists", "--no-find-recid", "--apply-to", "--out", "--overwrite", "--install-to", "--verify", "--output"], ["generate_object (objectType=find-methods)"]),

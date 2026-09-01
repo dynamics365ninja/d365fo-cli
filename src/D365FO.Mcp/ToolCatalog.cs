@@ -284,11 +284,17 @@ public static class ToolCatalog
             "Inside the document: XML007 (a member the type does not declare, silently dropped on read) and XML008 " +
             "(a value outside its enum, which stops the read outright). The root itself: XML009 (names no AOT type), " +
             "XML010 (abstract root with no concrete i:type), XML011 (missing xmlns:i), XML012 (wrong contract " +
-            "namespace). Every AOT family, not just tables. Needs no bridge and no VM; this is the offline half of " +
-            "the CLI's `validate metadata`.",
+            "namespace). Every AOT family, not just tables. Needs no bridge and no VM.\n" +
+            "\u2022 metadata \u2014 the provider's own verdict: round-trips `code` through Microsoft's " +
+            "IMetadataProvider serializer and reports every member it drops on the way in. Nothing is written. " +
+            "Requires D365FO_BRIDGE_ENABLED=1 on a machine with the metadata assemblies; without them it " +
+            "returns skipped rather than a verdict it cannot support. `kind` hints the type when the root " +
+            "element alone cannot resolve it.",
             Schema(("mode", "string", true), ("code", "string", true),
-                   ("context", "string", false), ("codeType", "string", false)),
-            (h, p) => h.Validate(Str(p, "mode"), Str(p, "code"), StrOrNull(p, "context"), StrOrNull(p, "codeType"))),
+                   ("context", "string", false), ("codeType", "string", false), ("kind", "string", false)),
+            (h, p) => StrOr(p, "mode", "").ToLowerInvariant() is "metadata" or "metadata-provider"
+                      ? h.ValidateMetadata(StrOrNull(p, "kind"), Str(p, "code"))
+                      : h.Validate(Str(p, "mode"), Str(p, "code"), StrOrNull(p, "context"), StrOrNull(p, "codeType"))),
 
         new Descriptor("validate_object_naming",
             "Static naming-rule check (PascalCase, length, character set, extension suffix, optional publisher prefix). No index access required.",
@@ -296,9 +302,19 @@ public static class ToolCatalog
             (h, p) => h.ValidateObjectNaming(Str(p, "kind"), Str(p, "name"), StrOrNull(p, "prefix"))),
 
         new Descriptor("get_workspace_info",
-            "Return the effective configuration in use (paths, custom-model patterns, label languages). Each D365FO_* key resolves via CLI flag → environment variable → settings.json → default.",
-            Schema(),
-            (h, _) => h.GetWorkspaceInfo()),
+            "Return the effective configuration in use (paths, custom-model patterns, label languages). Each "
+            + "D365FO_* key resolves via CLI flag → environment variable → settings.json → default. "
+            + "`changes=true` answers a different question with the same tool: what has changed in the working "
+            + "tree (`git diff` over `repo`, default the current directory, from `baseRev` to `headRev`) plus a "
+            + "cheap rule pass over the changed AOT XML — fields with no EDT or label, hard-coded strings, "
+            + "dynamic query construction. Shallow on purpose: it tells you whether a build or a BP check is "
+            + "worth its minutes, and says plainly when the directory is not a git work tree.",
+            Schema(("changes", "boolean", false), ("repo", "string", false),
+                   ("baseRev", "string", false), ("headRev", "string", false)),
+            (h, p) => Bool(p, "changes")
+                      ? D365FO.Core.Analysis.WorkspaceReview.Diff(
+                            StrOrNull(p, "repo"), StrOr(p, "baseRev", "HEAD"), StrOrNull(p, "headRev"))
+                      : h.GetWorkspaceInfo()),
 
         // ---- Knowledge ----
 
@@ -706,6 +722,75 @@ public static class ToolCatalog
             "anything — always do this first when unsure what will be reverted.",
             Schema(("steps", "integer", false), ("dryRun", "boolean", false)),
             (h, p) => h.UndoLastModification(Int(p, "steps", 1), Bool(p, "dryRun"))),
+
+        // ---- SDLC (Windows D365FO VM only) ----
+
+        new Descriptor("sdlc",
+            "Run the Windows-only D365FO developer tools and read their output as structured "
+            + "results. `action`:\n"
+            + "• build — MSBuild over `project` (`configuration`, default Debug; `msbuild` to "
+            + "override the executable). Returns per-diagnostic X++ compiler findings — object, "
+            + "member, line, column, message and a fix hint — not a log tail, and says when xppc "
+            + "reports stale symbols from a previous incremental build (which needs a Full Build, "
+            + "not a retry). Pass `xppcLog` to also parse Dynamics.AX.<Model>.xppc.log. A failed "
+            + "build still returns its diagnostics; the failure is reported as a `build-failed` "
+            + "warning rather than an error envelope that would throw them away.\n"
+            + "• sync — database synchronisation (SyncEngine.exe); `full` for a full sync rather "
+            + "than the partial list.\n"
+            + "• test — SysTestConsole.exe over `testClasses`, with `granularity` "
+            + "(Default|UnitTest|ScenarioTest), `parallel`, and `resultsPath` for the runner's XML "
+            + "result document. Ask for the results document: the verdict comes from it, not from "
+            + "the exit code — a run that dies half way still exits 0 with its remaining cases "
+            + "marked pending.\n"
+            + "• bp-check — Microsoft Best Practices (xppbp.exe) over `model`; `packagesPath` / "
+            + "`metadataPath` for a UDE layout where the framework and the model store are "
+            + "different directories.\n"
+            + "Every action needs a Windows D365FO VM and refuses elsewhere with "
+            + "UNSUPPORTED_PLATFORM. This is the answer to \"does what I just wrote compile?\", "
+            + "which is the question that follows every write.",
+            Schema(("action", "string", true), ("project", "string", false), ("configuration", "string", false),
+                   ("msbuild", "string", false), ("xppcLog", "string", false),
+                   ("full", "boolean", false), ("tool", "string", false),
+                   ("testClasses", "array", false), ("granularity", "string", false),
+                   ("resultsPath", "string", false), ("parallel", "boolean", false),
+                   ("model", "string", false), ("packagesPath", "string", false),
+                   ("metadataPath", "string", false)),
+            (h, p) =>
+            {
+                var action = StrOr(p, "action", "").ToLowerInvariant();
+                var guard = D365FO.Core.Ops.SdlcRunner.WindowsGuard($"sdlc(action={action})");
+                if (guard is not null) return guard;
+
+                return action switch
+                {
+                    "build" => D365FO.Core.Ops.SdlcRunner.Build(
+                        StrOrNull(p, "msbuild"), StrOrNull(p, "project"),
+                        StrOr(p, "configuration", "Debug"), StrOrNull(p, "xppcLog")),
+                    "sync" or "db-sync" => D365FO.Core.Ops.SdlcRunner.Sync(StrOrNull(p, "tool"), Bool(p, "full")),
+                    "test" or "systest" => D365FO.Core.Ops.SdlcRunner.RunTests(
+                        StrOrNull(p, "tool"), StrArray(p, "testClasses"), StrOrNull(p, "granularity"),
+                        StrOrNull(p, "resultsPath"), Bool(p, "parallel")).Result,
+                    "bp-check" or "bp" => D365FO.Core.Ops.SdlcRunner.BpCheck(
+                        StrOrNull(p, "model"), StrOrNull(p, "tool"),
+                        StrOrNull(p, "packagesPath"), StrOrNull(p, "metadataPath")),
+                    _ => D365FO.Core.ToolResult<object>.Fail("BAD_INPUT",
+                            $"Unknown action '{Str(p, "action")}' for sdlc.",
+                            "Use one of: build, sync, test, bp-check."),
+                };
+            }),
+
+        new Descriptor("delete_object",
+            "Remove an AOT object and journal the removal so `undo_last_modification` can put it back. "
+            + "Name `kind` and `name`, then exactly one of: `installTo` (the model — deletes through the live "
+            + "metadata provider, requires D365FO_BRIDGE_ENABLED=1) or `path` (deletes that XML file, `model` "
+            + "optional for the journal entry). The pre-image is captured BEFORE the delete and a delete that "
+            + "cannot capture one is refused — a deletion nothing can undo is not one to make by accident. "
+            + "The index is NOT refreshed automatically; the result says so.",
+            Schema(("kind", "string", true), ("name", "string", true), ("installTo", "string", false),
+                   ("path", "string", false), ("model", "string", false)),
+            (h, p) => D365FO.Core.Journal.AotObjectDeleter.Delete(
+                Str(p, "kind"), Str(p, "name"), StrOrNull(p, "installTo"),
+                StrOrNull(p, "path"), StrOrNull(p, "model"))),
 
         new Descriptor("journal_list",
             "Inspect the modification-journal stack (most-recent-first) without reverting anything — " +
