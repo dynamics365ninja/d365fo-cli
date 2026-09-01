@@ -1,5 +1,5 @@
 {
-  "capturedAt": "2026-09-01T15:34:30.3123183Z",
+  "capturedAt": "2026-09-01T16:08:15.2062917Z",
   "indexedAt": "2026-09-01T15:30:37.8522496Z",
   "ok": [
     "analytics-and-er|static-call|ERModelDefinitionInputParametersAction::addParameter",
@@ -108,8 +108,6 @@
     "posting-and-financials|static-call|LedgerVoucherObject::newVoucher",
     "posting-and-financials|static-call|LedgerVoucherTransObject::newTransactionAmountDefault",
     "posting-and-financials|static-call|SysModule::Ledger",
-    "report-print-destinations|declaration|SrsReportRunController",
-    "report-print-destinations|new|SrsReportRunController",
     "report-print-destinations|static-call|SRSPrintMediumType::File",
     "report-print-destinations|static-call|SRSReportFileFormat::PDF",
     "runtime-frameworks|attribute|ExportAttribute",

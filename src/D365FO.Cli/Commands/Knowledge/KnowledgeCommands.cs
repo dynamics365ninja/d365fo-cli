@@ -222,6 +222,26 @@ public sealed class KnowledgeAuditCommand : Command<KnowledgeAuditCommand.Settin
                 $"Run `d365fo index extract` against a real PackagesLocalDirectory first (sentinels: {string.Join(", ", KnowledgeAudit.Sentinels)})."));
         }
 
+        // The corpus this process audits is EMBEDDED in the assembly. Capturing from a binary
+        // built before the topics were last edited writes a snapshot describing the old text —
+        // and that snapshot then verifies clean against the same stale binary, so the failure
+        // only surfaces in CI, which builds from source. Refuse instead: a snapshot that
+        // silently describes something other than the working tree is exactly the kind of
+        // confidently-wrong artefact this audit exists to prevent.
+        if (settings.Capture)
+        {
+            var drifted = StaleEmbeddedCorpus(repoRoot);
+            if (drifted.Count > 0)
+            {
+                return RenderHelpers.Render(kind, ToolResult<object>.Fail(
+                    D365FoErrorCodes.SourceUnreadable,
+                    $"The embedded corpus is older than skills/_source — {drifted.Count} topic(s) differ: "
+                    + string.Join(", ", drifted.Take(5)) + (drifted.Count > 5 ? ", …" : "."),
+                    "Rebuild before capturing (`dotnet build -c Release`), then re-run. Capturing now would "
+                    + "snapshot the previous text and then pass its own verification."));
+            }
+        }
+
         object symbols;
         int symbolDefects;
         if (live)
@@ -300,6 +320,48 @@ public sealed class KnowledgeAuditCommand : Command<KnowledgeAuditCommand.Settin
 
         var rc = RenderHelpers.Render(kind, envelope);
         return rc != 0 ? rc : defects > 0 ? 2 : 0;
+    }
+
+    /// <summary>
+    /// Topic ids whose on-disk source differs from the copy embedded in this binary.
+    /// </summary>
+    /// <remarks>
+    /// The corpus is an <c>EmbeddedResource</c>, so a process started from a stale build audits
+    /// the PREVIOUS text. Comparison goes through the same parser the loader uses, which
+    /// normalises line endings and strips frontmatter, so a checkout with CRLF is not drift.
+    /// Returns empty when <c>skills/_source</c> is absent: a published binary running outside
+    /// the repo has no working tree to be stale against.
+    /// </remarks>
+    private static IReadOnlyList<string> StaleEmbeddedCorpus(string repoRoot)
+    {
+        var sourceDir = Path.Combine(repoRoot, "skills", "_source");
+        if (!Directory.Exists(sourceDir)) return Array.Empty<string>();
+
+        var embedded = KnowledgeBase.Topics.ToDictionary(t => t.Id, t => t, StringComparer.Ordinal);
+        var drifted = new List<string>();
+
+        foreach (var file in Directory.EnumerateFiles(sourceDir, "*.md"))
+        {
+            string raw;
+            try { raw = File.ReadAllText(file); }
+            catch { continue; }
+
+            var onDisk = KnowledgeBase.Parse(raw, Path.GetFileNameWithoutExtension(file));
+            if (!embedded.TryGetValue(onDisk.Id, out var inBinary))
+            {
+                // A topic added since the last build is drift of the most obvious kind.
+                drifted.Add(onDisk.Id);
+                continue;
+            }
+
+            if (!string.Equals(onDisk.Body, inBinary.Body, StringComparison.Ordinal)
+                || !string.Equals(onDisk.Description, inBinary.Description, StringComparison.Ordinal))
+            {
+                drifted.Add(onDisk.Id);
+            }
+        }
+
+        return drifted;
     }
 }
 
