@@ -37,6 +37,20 @@ was ported from.
   `D365FO_BP_CATALOG_PATH` points at a snapshot matching an instance's own D365FO version.
   The resources are read through `PEReader` rather than by loading the assemblies — loading a
   D365FO rule assembly drags in its dependency graph for the sake of a string table.
+- **`d365fo mobile-pattern list|spec`** — warehouse scanner screens, seven recipes across the two
+  frameworks. The list leads with the framework DECISION rather than the recipes, because it is
+  the one choice that cannot be taken back cheaply: the same screens are built by ProcessGuide
+  (controller, step, page builder, data processor, navigation agent, action — each behind an
+  abstract factory, each an extension point) and by the legacy `WhsWorkExecuteDisplay` hierarchy
+  (all of it in one class with a `displayForm()` per mode). Picking wrong is a rewrite.
+  Counted here rather than recalled: the `ProcessGuide` package holds 382 classes, of which
+  `ProcessGuidePageBuilder` has 75 subclasses, `ProcessGuideStep` 74,
+  `ProcessGuideNavigationAgent` 40, `ProcessGuideController` 25, `ProcessGuideAction` 23; the
+  abstract `WhsWorkExecuteDisplay` has 64 subclasses in ApplicationSuite/Foundation alone.
+  Two recipes deliberately ask for **no code at all** — a screen's title, icon and menu placement
+  are warehouse configuration, and GS1 barcode splitting is barcode configuration. Writing a class
+  for the first or a `parseBarcode()` for the second is the mistake those recipes exist to prevent.
+  `MobileAppRecipesAotTests` resolves every named class against a real installation.
 - **`d365fo report-pattern list|spec`** — the seven SSRS shapes as implementation recipes:
   object roster, base classes, the one `generate report` call that produces the stack, what still
   has to be written by hand, and the checks worth running. `generate report` could already build

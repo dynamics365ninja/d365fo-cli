@@ -359,6 +359,13 @@ public static class CliApp
             // The CLI's `get_knowledge` equivalent: the verified skills/_source corpus,
             // embedded in the binary and served per-topic / per-section so an agent
             // without skill-file support can still ground itself.
+            cfg.AddBranch("mobile-pattern", b =>
+            {
+                b.SetDescription("Warehouse scanner screens: which of the two frameworks owns the flow, then how to change it.");
+                b.AddCommand<MobilePatternListCommand>("list").WithDescription("The framework decision, then the seven recipes.");
+                b.AddCommand<MobilePatternSpecCommand>("spec").WithDescription("One recipe in full, with shipped reference classes to read.");
+            });
+
             cfg.AddBranch("report-pattern", b =>
             {
                 b.SetDescription("SSRS report shapes as implementation recipes: object roster, base classes, one scaffold call.");
