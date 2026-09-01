@@ -25,7 +25,7 @@ By default the index stores object/method *metadata* only — method bodies (the
 | `index export` | Dump the index to a portable archive |
 | `index import` | Restore from an archive |
 | `index cross-check` | Report where this tool's catalogs are narrower than the installation |
-| `index optimize` | Run `VACUUM` + `ANALYZE` to compact and re-plan |
+| `index optimize` | Checkpoint the WAL, then `VACUUM` + `ANALYZE` to compact and re-plan |
 | `doctor` | End-to-end health check: paths, schema version, object counts |
 
 ### `index cross-check`
