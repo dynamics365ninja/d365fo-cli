@@ -1,4 +1,4 @@
-using D365FO.Core;
+﻿using D365FO.Core;
 using D365FO.Core.Index;
 using Spectre.Console;
 using Spectre.Console.Cli;
@@ -15,11 +15,31 @@ public sealed class GetTableCommand : Command<GetTableCommand.Settings>
         [CommandOption("--include <PARTS>")]
         [System.ComponentModel.Description("Comma list: fields,indexes,relations (default: all)")]
         public string? Include { get; init; }
+
+        [CommandOption("--merged")]
+        [System.ComponentModel.Description("Return the EFFECTIVE shape: the base table with every TableExtension folded in, each member labelled with the object that contributes it. This is what the AOS sees; the plain output is the base table alone.")]
+        public bool Merged { get; init; }
     }
 
     public override int Execute(CommandContext ctx, Settings settings)
     {
         var kind = OutputMode.Resolve(settings.Output);
+
+        // The merged view is assembled from the index plus each extension's own XML, so it
+        // cannot come from the bridge's single-object read — resolve it before that gate.
+        if (settings.Merged)
+        {
+            var mergeRepo = RepoFactory.Create();
+            var merged = D365FO.Core.Index.TableMergeAnalyzer.Merge(mergeRepo, settings.Name);
+            var mergeWarnings = merged.Unreadable.Count > 0
+                ? new List<string>
+                {
+                    $"{merged.Unreadable.Count} extension(s) could not be read, so this schema is INCOMPLETE: "
+                    + string.Join("; ", merged.Unreadable),
+                }
+                : null;
+            return RenderHelpers.Render(kind, ToolResult<object>.Success(merged, mergeWarnings));
+        }
 
         if (BridgeGate.ShouldTry())
         {

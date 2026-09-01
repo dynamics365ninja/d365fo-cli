@@ -80,5 +80,12 @@ public static class D365FoErrorCodes
     public const string FieldNotFound = "FIELD_NOT_FOUND";
     public const string ControlNotFound = "CONTROL_NOT_FOUND";
     public const string PropertyNotFound = "PROPERTY_NOT_FOUND";
+
+    /// <summary>
+    /// A named member of a collection an object owns — index, relation, field group, delete
+    /// action, enum value — is not there. Distinct from the per-kind codes above because the
+    /// removal operations share one implementation and the collection is a parameter to it.
+    /// </summary>
+    public const string MemberNotFound = "MEMBER_NOT_FOUND";
     public const string AlreadyExists = "ALREADY_EXISTS";
 }

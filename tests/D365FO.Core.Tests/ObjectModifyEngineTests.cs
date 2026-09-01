@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -67,7 +67,7 @@ public sealed class ObjectModifyEngineTests : IDisposable
     public void Dispose()
     {
         Environment.SetEnvironmentVariable("D365FO_CUSTOM_MODELS", _prevCustomModels);
-        Microsoft.Data.Sqlite.SqliteConnection.ClearAllPools();
+        SqlitePool.ReleaseFor(_dbPath);
         foreach (var ext in new[] { "", "-wal", "-shm" })
         {
             var p = _dbPath + ext;
@@ -85,6 +85,446 @@ public sealed class ObjectModifyEngineTests : IDisposable
         "<AxFormControl i:type=\"AxFormGridControl\" xmlns:i=\"http://www.w3.org/2001/XMLSchema-instance\">" +
         "<Name>Grid</Name><Type>Grid</Type><Controls /></AxFormControl>" +
         "</Controls></Design></AxForm>";
+
+    // ---- kind coverage, batching, query and security --------------------------
+
+    [Fact]
+    public void A_kind_the_bridge_can_write_is_no_longer_refused_by_a_hand_written_list()
+    {
+        // SupportedKinds was five entries while the bridge resolves 41 from the registry, so a
+        // query - which it can write perfectly well - came back "unsupported kind".
+        var capture = new BridgeCapture("<AxQuery><Name>FmVehicleQuery</Name></AxQuery>");
+        using var harness = FakeBridge.Create(capture.Respond);
+
+        var result = ObjectModifyEngine.ModifyCore(new ObjectModifyEngine.ModifyRequest
+        {
+            Operation = ObjectModifyEngine.Operation.SetProperty,
+            Kind = "query",
+            ObjectName = "FmVehicleQuery",
+            Member = "Title",
+            Value = "@SYS1",
+            Model = "FleetCustom",
+        }, _repo, harness.Client, _journalDb);
+
+        Assert.True(result.Ok, result.Error?.Message);
+        Assert.Equal("updateObject", capture.WriteVerb);
+    }
+
+    [Fact]
+    public void An_unknown_kind_names_the_near_misses_instead_of_all_41()
+    {
+        var capture = new BridgeCapture(CustomTableXml);
+        using var harness = FakeBridge.Create(capture.Respond);
+
+        var result = ObjectModifyEngine.ModifyCore(new ObjectModifyEngine.ModifyRequest
+        {
+            Operation = ObjectModifyEngine.Operation.SetProperty,
+            Kind = "securityprivilage",
+            ObjectName = "X",
+            Member = "Label",
+            Value = "@SYS1",
+        }, _repo, harness.Client, _journalDb);
+
+        Assert.False(result.Ok);
+        Assert.Equal("BAD_INPUT", result.Error!.Code);
+        Assert.Null(capture.WriteVerb);
+    }
+
+    [Fact]
+    public void A_batch_applies_every_step_in_one_write()
+    {
+        var capture = new BridgeCapture(CustomTableXml);
+        using var harness = FakeBridge.Create(capture.Respond);
+
+        var result = ObjectModifyEngine.ModifyCore(new ObjectModifyEngine.ModifyRequest
+        {
+            Operation = ObjectModifyEngine.Operation.SetProperty,
+            Kind = "table",
+            ObjectName = "FmVehicle",
+            Member = "batch",
+            Model = "FleetCustom",
+            Batch = new[]
+            {
+                new ObjectModifyEngine.ModifyRequest
+                {
+                    Operation = ObjectModifyEngine.Operation.AddField,
+                    Kind = "table", ObjectName = "FmVehicle", Member = "Note", Type = "Notes",
+                },
+                new ObjectModifyEngine.ModifyRequest
+                {
+                    Operation = ObjectModifyEngine.Operation.AddIndex,
+                    Kind = "table", ObjectName = "FmVehicle", Member = "NoteIdx",
+                    Fields = new[] { "Note" },
+                },
+            },
+        }, _repo, harness.Client, _journalDb);
+
+        Assert.True(result.Ok, result.Error?.Message);
+        // One write, not two: that is the whole point of batching.
+        Assert.Equal(1, capture.WriteCount);
+
+        var written = XDocument.Parse((string)capture.WriteArgs!["xml"]!);
+        Assert.Contains(written.Descendants("AxTableField"), e => e.Element("Name")?.Value == "Note");
+        Assert.Contains(written.Descendants("AxTableIndex"), e => e.Element("Name")?.Value == "NoteIdx");
+    }
+
+    [Fact]
+    public void A_refused_step_discards_the_whole_batch_and_writes_nothing()
+    {
+        var capture = new BridgeCapture(CustomTableXml);
+        using var harness = FakeBridge.Create(capture.Respond);
+
+        var result = ObjectModifyEngine.ModifyCore(new ObjectModifyEngine.ModifyRequest
+        {
+            Operation = ObjectModifyEngine.Operation.SetProperty,
+            Kind = "table",
+            ObjectName = "FmVehicle",
+            Member = "batch",
+            Model = "FleetCustom",
+            Batch = new[]
+            {
+                new ObjectModifyEngine.ModifyRequest
+                {
+                    Operation = ObjectModifyEngine.Operation.AddField,
+                    Kind = "table", ObjectName = "FmVehicle", Member = "Note", Type = "Notes",
+                },
+                // Second step refuses: the field does not exist on the table.
+                new ObjectModifyEngine.ModifyRequest
+                {
+                    Operation = ObjectModifyEngine.Operation.AddIndex,
+                    Kind = "table", ObjectName = "FmVehicle", Member = "BadIdx",
+                    Fields = new[] { "NoSuchField" },
+                },
+            },
+        }, _repo, harness.Client, _journalDb);
+
+        Assert.False(result.Ok);
+        // Nothing written at all - the first step's field must not reach the AOT on its own.
+        Assert.Null(capture.WriteVerb);
+        Assert.Contains("NOTHING was written", result.Error!.Hint);
+    }
+
+    [Fact]
+    public void Add_query_range_refuses_to_guess_between_two_datasources()
+    {
+        var capture = new BridgeCapture(
+            "<AxQuery><Name>FmVehicleQuery</Name><DataSources>" +
+            "<AxQuerySimpleDataSource><Name>FmVehicle</Name></AxQuerySimpleDataSource>" +
+            "<AxQuerySimpleDataSource><Name>FmRental</Name></AxQuerySimpleDataSource>" +
+            "</DataSources></AxQuery>");
+        using var harness = FakeBridge.Create(capture.Respond);
+
+        var result = ObjectModifyEngine.ModifyCore(new ObjectModifyEngine.ModifyRequest
+        {
+            Operation = ObjectModifyEngine.Operation.AddQueryRange,
+            Kind = "query",
+            ObjectName = "FmVehicleQuery",
+            Member = "VehicleId",
+            Model = "FleetCustom",
+        }, _repo, harness.Client, _journalDb);
+
+        // A range on the wrong datasource returns the wrong rows silently, so guessing is worse
+        // than refusing.
+        Assert.False(result.Ok);
+        Assert.Contains("--data-source", result.Error!.Message);
+        Assert.Null(capture.WriteVerb);
+    }
+
+    [Fact]
+    public void Add_query_range_uses_the_only_datasource_without_being_told()
+    {
+        var capture = new BridgeCapture(
+            "<AxQuery><Name>FmVehicleQuery</Name><DataSources>" +
+            "<AxQuerySimpleDataSource><Name>FmVehicle</Name></AxQuerySimpleDataSource>" +
+            "</DataSources></AxQuery>");
+        using var harness = FakeBridge.Create(capture.Respond);
+
+        var result = ObjectModifyEngine.ModifyCore(new ObjectModifyEngine.ModifyRequest
+        {
+            Operation = ObjectModifyEngine.Operation.AddQueryRange,
+            Kind = "query",
+            ObjectName = "FmVehicleQuery",
+            Member = "VehicleId",
+            RangeValue = "!Closed",
+            Model = "FleetCustom",
+        }, _repo, harness.Client, _journalDb);
+
+        Assert.True(result.Ok, result.Error?.Message);
+        var written = XDocument.Parse((string)capture.WriteArgs!["xml"]!);
+        var range = written.Descendants("AxQuerySimpleDataSourceRange").Single();
+        Assert.Equal("VehicleId", range.Element("Field")!.Value);
+        Assert.Equal("!Closed", range.Element("Value")!.Value);
+    }
+
+    [Fact]
+    public void Add_entry_point_writes_a_grant_not_an_access_level()
+    {
+        var capture = new BridgeCapture(
+            "<AxSecurityPrivilege><Name>FmVehicleMaintain</Name></AxSecurityPrivilege>");
+        using var harness = FakeBridge.Create(capture.Respond);
+
+        var result = ObjectModifyEngine.ModifyCore(new ObjectModifyEngine.ModifyRequest
+        {
+            Operation = ObjectModifyEngine.Operation.AddEntryPoint,
+            Kind = "securityprivilege",
+            ObjectName = "FmVehicleMaintain",
+            Member = "FmVehicleListPage",
+            EntryPointType = "MenuItemDisplay",
+            Access = "Update",
+            Model = "FleetCustom",
+        }, _repo, harness.Client, _journalDb);
+
+        Assert.True(result.Ok, result.Error?.Message);
+        var written = XDocument.Parse((string)capture.WriteArgs!["xml"]!);
+        var reference = written.Descendants("AxSecurityEntryPointReference").Single();
+
+        // There is no AccessLevel member in the security model - writing one grants nothing and
+        // reads as a deliberate no-access privilege.
+        Assert.Null(reference.Element("AccessLevel"));
+        var grant = reference.Element("Grant")!;
+        Assert.Equal(new[] { "Read", "Update" }, grant.Elements().Select(e => e.Name.LocalName).ToArray());
+        Assert.Equal("MenuItemDisplay", reference.Element("ObjectType")!.Value);
+    }
+
+    // ---- contract order (the write path had no canonicalisation) --------------
+
+    [Fact]
+    public void A_created_collection_lands_in_contract_order_not_at_the_end()
+    {
+        // AxTable member order ends: DeleteActions, FieldGroups, Fields, FullTextIndexes,
+        // Indexes, Mappings, Relations. This table declares Indexes but no Fields, so a naive
+        // append puts <Fields> AFTER <Indexes> - and DataContractSerializer skips a child that
+        // arrives out of turn, so the field is DROPPED on read while the write reports ok.
+        var capture = new BridgeCapture(
+            "<AxTable><Name>FmVehicle</Name>" +
+            "<Indexes><AxTableIndex><Name>Idx</Name></AxTableIndex></Indexes></AxTable>");
+        using var harness = FakeBridge.Create(capture.Respond);
+
+        var result = ObjectModifyEngine.ModifyCore(new ObjectModifyEngine.ModifyRequest
+        {
+            Operation = ObjectModifyEngine.Operation.AddField,
+            Kind = "table",
+            ObjectName = "FmVehicle",
+            Member = "LicensePlate",
+            Type = "Name",
+            Model = "FleetCustom",
+        }, _repo, harness.Client, _journalDb);
+
+        Assert.True(result.Ok, result.Error?.Message);
+        var written = XDocument.Parse((string)capture.WriteArgs!["xml"]!);
+        Assert.Equal(
+            new[] { "Name", "Fields", "Indexes" },
+            written.Root!.Elements().Select(e => e.Name.LocalName).ToArray());
+    }
+
+    [Fact]
+    public void A_property_added_to_the_root_lands_in_contract_order()
+    {
+        // SetProperty inserted straight after <Name>, which for most properties is too early:
+        // CacheLookup sorts long after Label in the AxTable contract.
+        var capture = new BridgeCapture("<AxTable><Name>FmVehicle</Name><Label>@SYS1</Label></AxTable>");
+        using var harness = FakeBridge.Create(capture.Respond);
+
+        var result = ObjectModifyEngine.ModifyCore(new ObjectModifyEngine.ModifyRequest
+        {
+            Operation = ObjectModifyEngine.Operation.SetProperty,
+            Kind = "table",
+            ObjectName = "FmVehicle",
+            Member = "CacheLookup",
+            Value = "Found",
+            Model = "FleetCustom",
+        }, _repo, harness.Client, _journalDb);
+
+        Assert.True(result.Ok, result.Error?.Message);
+        var written = XDocument.Parse((string)capture.WriteArgs!["xml"]!);
+        Assert.Equal(
+            new[] { "Name", "Label", "CacheLookup" },
+            written.Root!.Elements().Select(e => e.Name.LocalName).ToArray());
+    }
+
+    // ---- table structure ------------------------------------------------------
+
+    [Fact]
+    public void Add_index_is_unique_by_default_and_keeps_the_field_order_given()
+    {
+        var capture = new BridgeCapture(CustomTableXml);
+        using var harness = FakeBridge.Create(capture.Respond);
+
+        var result = ObjectModifyEngine.ModifyCore(new ObjectModifyEngine.ModifyRequest
+        {
+            Operation = ObjectModifyEngine.Operation.AddIndex,
+            Kind = "table",
+            ObjectName = "FmVehicle",
+            Member = "VehicleIdx",
+            Fields = new[] { "VIN", "RecId" },
+        }, _repo, harness.Client, _journalDb);
+
+        Assert.True(result.Ok, result.Error?.Message);
+        var written = XDocument.Parse((string)capture.WriteArgs!["xml"]!);
+        var index = written.Descendants("AxTableIndex").Single(e => e.Element("Name")?.Value == "VehicleIdx");
+        Assert.Equal("No", index.Element("AllowDuplicates")!.Value);
+        Assert.Equal(
+            new[] { "VIN", "RecId" },
+            index.Element("Fields")!.Elements("AxTableIndexField").Select(f => f.Element("DataField")!.Value).ToArray());
+    }
+
+    [Fact]
+    public void Add_index_refuses_a_field_the_table_does_not_have()
+    {
+        var capture = new BridgeCapture(CustomTableXml);
+        using var harness = FakeBridge.Create(capture.Respond);
+
+        var result = ObjectModifyEngine.ModifyCore(new ObjectModifyEngine.ModifyRequest
+        {
+            Operation = ObjectModifyEngine.Operation.AddIndex,
+            Kind = "table",
+            ObjectName = "FmVehicle",
+            Member = "BadIdx",
+            Fields = new[] { "NoSuchField" },
+        }, _repo, harness.Client, _journalDb);
+
+        Assert.False(result.Ok);
+        Assert.Equal("FIELD_NOT_FOUND", result.Error!.Code);
+        Assert.Null(capture.WriteVerb);
+    }
+
+    [Fact]
+    public void Add_relation_pins_the_concrete_constraint_subtype()
+    {
+        var capture = new BridgeCapture(CustomTableXml);
+        using var harness = FakeBridge.Create(capture.Respond);
+
+        var result = ObjectModifyEngine.ModifyCore(new ObjectModifyEngine.ModifyRequest
+        {
+            Operation = ObjectModifyEngine.Operation.AddRelation,
+            Kind = "table",
+            ObjectName = "FmVehicle",
+            Member = "CustAccount",
+            RelatedTable = "CustTable",
+            RelatedField = "AccountNum",
+        }, _repo, harness.Client, _journalDb);
+
+        Assert.True(result.Ok, result.Error?.Message);
+        var written = XDocument.Parse((string)capture.WriteArgs!["xml"]!);
+        var constraint = written.Descendants("AxTableRelationConstraint").Single();
+        var xsi = XNamespace.Get("http://www.w3.org/2001/XMLSchema-instance");
+        Assert.Equal("AxTableRelationConstraintField", (string?)constraint.Attribute(xsi + "type"));
+        Assert.Equal("AccountNum", constraint.Element("RelatedField")!.Value);
+    }
+
+    [Fact]
+    public void Add_delete_action_refuses_an_action_the_platform_does_not_define()
+    {
+        var capture = new BridgeCapture(CustomTableXml);
+        using var harness = FakeBridge.Create(capture.Respond);
+
+        var result = ObjectModifyEngine.ModifyCore(new ObjectModifyEngine.ModifyRequest
+        {
+            Operation = ObjectModifyEngine.Operation.AddDeleteAction,
+            Kind = "table",
+            ObjectName = "FmVehicle",
+            Member = "FmVehicleLine",
+            RelatedTable = "FmVehicleLine",
+            DeleteAction = "CascadeAll",
+        }, _repo, harness.Client, _journalDb);
+
+        Assert.False(result.Ok);
+        Assert.Equal("BAD_INPUT", result.Error!.Code);
+        Assert.Null(capture.WriteVerb);
+    }
+
+    [Fact]
+    public void Rename_field_rewrites_the_index_that_names_it()
+    {
+        var capture = new BridgeCapture(
+            "<AxTable><Name>FmVehicle</Name>" +
+            "<Fields><AxTableField><Name>VehicleId</Name></AxTableField></Fields>" +
+            "<Indexes><AxTableIndex><Name>Idx</Name><Fields>" +
+            "<AxTableIndexField><DataField>VehicleId</DataField></AxTableIndexField>" +
+            "</Fields></AxTableIndex></Indexes></AxTable>");
+        using var harness = FakeBridge.Create(capture.Respond);
+
+        var result = ObjectModifyEngine.ModifyCore(new ObjectModifyEngine.ModifyRequest
+        {
+            Operation = ObjectModifyEngine.Operation.RenameField,
+            Kind = "table",
+            ObjectName = "FmVehicle",
+            Member = "VehicleId",
+            NewName = "VehicleNumber",
+            Model = "FleetCustom",
+        }, _repo, harness.Client, _journalDb);
+
+        Assert.True(result.Ok, result.Error?.Message);
+        var written = XDocument.Parse((string)capture.WriteArgs!["xml"]!);
+        Assert.Equal("VehicleNumber", written.Descendants("AxTableField").Single().Element("Name")!.Value);
+        // Leaving the index behind gives a table that cannot resolve its own index.
+        Assert.Equal("VehicleNumber", written.Descendants("AxTableIndexField").Single().Element("DataField")!.Value);
+    }
+
+    [Fact]
+    public void Remove_index_refuses_a_name_that_is_not_there_and_writes_nothing()
+    {
+        var capture = new BridgeCapture(CustomTableXml);
+        using var harness = FakeBridge.Create(capture.Respond);
+
+        var result = ObjectModifyEngine.ModifyCore(new ObjectModifyEngine.ModifyRequest
+        {
+            Operation = ObjectModifyEngine.Operation.RemoveIndex,
+            Kind = "table",
+            ObjectName = "FmVehicle",
+            Member = "NoSuchIdx",
+        }, _repo, harness.Client, _journalDb);
+
+        Assert.False(result.Ok);
+        Assert.Equal("MEMBER_NOT_FOUND", result.Error!.Code);
+        Assert.Null(capture.WriteVerb);
+    }
+
+    [Fact]
+    public void Remove_control_takes_its_nested_controls_with_it()
+    {
+        var capture = new BridgeCapture(
+            "<AxForm><Name>FmVehicleForm</Name><Design>" +
+            "<Controls><AxFormControlGroup><Name>Grp</Name><Controls>" +
+            "<AxFormControlString><Name>Inner1</Name></AxFormControlString>" +
+            "<AxFormControlString><Name>Inner2</Name></AxFormControlString>" +
+            "</Controls></AxFormControlGroup></Controls></Design></AxForm>");
+        using var harness = FakeBridge.Create(capture.Respond);
+
+        var result = ObjectModifyEngine.ModifyCore(new ObjectModifyEngine.ModifyRequest
+        {
+            Operation = ObjectModifyEngine.Operation.RemoveControl,
+            Kind = "form",
+            ObjectName = "FmVehicleForm",
+            Member = "Grp",
+            Model = "FleetCustom",
+        }, _repo, harness.Client, _journalDb);
+
+        Assert.True(result.Ok, result.Error?.Message);
+        var written = XDocument.Parse((string)capture.WriteArgs!["xml"]!);
+        Assert.DoesNotContain(written.Descendants(),
+            e => e.Name.LocalName.StartsWith("AxFormControl", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void A_table_operation_on_a_form_is_refused_by_the_name_the_caller_typed()
+    {
+        var capture = new BridgeCapture(FormXml);
+        using var harness = FakeBridge.Create(capture.Respond);
+
+        var result = ObjectModifyEngine.ModifyCore(new ObjectModifyEngine.ModifyRequest
+        {
+            Operation = ObjectModifyEngine.Operation.AddIndex,
+            Kind = "form",
+            ObjectName = "FmVehicleForm",
+            Member = "Idx",
+            Fields = new[] { "A" },
+        }, _repo, harness.Client, _journalDb);
+
+        Assert.False(result.Ok);
+        Assert.Contains("add-index", result.Error!.Message);
+        Assert.Null(capture.WriteVerb);
+    }
 
     // ---- base-object writes (custom model) ----------------------------------
 
@@ -526,6 +966,9 @@ public sealed class ObjectModifyEngineTests : IDisposable
 
         public JsonObject? WriteArgs { get; private set; }
 
+        /// <summary>How many writes reached the bridge. A batch must produce exactly one.</summary>
+        public int WriteCount { get; private set; }
+
         public JsonObject Respond(JsonObject request)
         {
             var method = (string?)request["method"];
@@ -541,6 +984,7 @@ public sealed class ObjectModifyEngineTests : IDisposable
                 case "updateObject":
                     WriteVerb = method;
                     WriteArgs = (JsonObject?)request["params"]?.DeepClone();
+                    WriteCount++;
                     result = new JsonObject { ["ok"] = true };
                     break;
                 default:

@@ -1,9 +1,10 @@
-// <copyright file="ObjectModifyEngine.cs" company="d365fo-cli contributors">
+﻿// <copyright file="ObjectModifyEngine.cs" company="d365fo-cli contributors">
 // MIT
 // </copyright>
 
 using System.Text.Json.Nodes;
 using System.Xml.Linq;
+using D365FO.Core.Extract;
 using D365FO.Core.FormPatterns;
 using D365FO.Core.Index;
 using D365FO.Core.Journal;
@@ -53,7 +54,80 @@ public static class ObjectModifyEngine
 
         /// <summary>Add a control to a form's Design tree.</summary>
         AddControl,
+
+        /// <summary>Add an index to a table.</summary>
+        AddIndex,
+
+        /// <summary>Add a foreign-key relation to a table.</summary>
+        AddRelation,
+
+        /// <summary>Add a field group to a table.</summary>
+        AddFieldGroup,
+
+        /// <summary>Add a delete action to a table.</summary>
+        AddDeleteAction,
+
+        /// <summary>Remove a field from a table.</summary>
+        RemoveField,
+
+        /// <summary>Remove an index from a table.</summary>
+        RemoveIndex,
+
+        /// <summary>Remove a relation from a table.</summary>
+        RemoveRelation,
+
+        /// <summary>Remove a field group from a table.</summary>
+        RemoveFieldGroup,
+
+        /// <summary>Remove a delete action from a table.</summary>
+        RemoveDeleteAction,
+
+        /// <summary>Rename a field on a table.</summary>
+        RenameField,
+
+        /// <summary>Remove a value from a base enum.</summary>
+        RemoveEnumValue,
+
+        /// <summary>Remove a control from a form's Design tree.</summary>
+        RemoveControl,
+
+        /// <summary>Add a range to a datasource of an AOT query.</summary>
+        AddQueryRange,
+
+        /// <summary>Remove a range from a datasource of an AOT query.</summary>
+        RemoveQueryRange,
+
+        /// <summary>Add an entry point to a security privilege.</summary>
+        AddEntryPoint,
+
+        /// <summary>Remove an entry point from a security privilege.</summary>
+        RemoveEntryPoint,
     }
+
+    /// <summary>
+    /// Operations that only ever remove something. They share one shape — find the member by
+    /// name inside its collection, refuse when it is not there, remove it — so they are
+    /// described once rather than repeated thirteen times.
+    /// </summary>
+    /// <remarks>
+    /// <c>Collection</c> is the container element under the object root, <c>Item</c> the element
+    /// name of one entry, and <c>Key</c> the child element carrying the name to match on. The
+    /// table collections key on <c>Name</c>; a delete action is addressed by the table it
+    /// governs, which the contract calls <c>Table</c> (there is no <c>RelatedTable</c> member -
+    /// writing one produced a rule naming nothing, and keying on one found nothing).
+    /// </remarks>
+    private sealed record RemovalShape(string Collection, string Item, string Key, string Noun);
+
+    private static readonly IReadOnlyDictionary<Operation, RemovalShape> Removals =
+        new Dictionary<Operation, RemovalShape>
+        {
+            [Operation.RemoveField]       = new("Fields", "AxTableField", "Name", "Field"),
+            [Operation.RemoveIndex]       = new("Indexes", "AxTableIndex", "Name", "Index"),
+            [Operation.RemoveRelation]    = new("Relations", "AxTableRelation", "Name", "Relation"),
+            [Operation.RemoveFieldGroup]  = new("FieldGroups", "AxTableFieldGroup", "Name", "Field group"),
+            [Operation.RemoveDeleteAction] = new("DeleteActions", "AxTableDeleteAction", "Table", "Delete action"),
+            [Operation.RemoveEnumValue]   = new("EnumValues", "AxEnumValue", "Name", "Enum value"),
+        };
 
     /// <summary>Inputs for one structured modification.</summary>
     public sealed record ModifyRequest
@@ -102,10 +176,82 @@ public static class ObjectModifyEngine
 
         /// <summary>Never modify the base object in place; fail instead of falling back.</summary>
         public bool RequireExtension { get; init; }
+
+        /// <summary>
+        /// Member fields, in order, for <see cref="Operation.AddIndex"/> and
+        /// <see cref="Operation.AddFieldGroup"/>. Order is data, not decoration — an index's
+        /// field order decides which queries it can serve.
+        /// </summary>
+        public IReadOnlyList<string>? Fields { get; init; }
+
+        /// <summary>Target table for <see cref="Operation.AddRelation"/> / <see cref="Operation.AddDeleteAction"/>.</summary>
+        public string? RelatedTable { get; init; }
+
+        /// <summary>Field on <see cref="RelatedTable"/> the relation constrains to. Defaults to <see cref="Member"/>.</summary>
+        public string? RelatedField { get; init; }
+
+        /// <summary>Cascade | Restricted | CascadeRestricted | None, for <see cref="Operation.AddDeleteAction"/>.</summary>
+        public string? DeleteAction { get; init; }
+
+        /// <summary><see cref="Operation.AddIndex"/>: allow duplicate keys. A unique index is the default.</summary>
+        public bool AllowDuplicates { get; init; }
+
+        /// <summary><see cref="Operation.AddIndex"/>: mark the index an alternate key.</summary>
+        public bool AlternateKey { get; init; }
+
+        /// <summary>New member name for <see cref="Operation.RenameField"/>.</summary>
+        public string? NewName { get; init; }
+
+        /// <summary>Query datasource the range belongs to. Defaults to the query's only datasource.</summary>
+        public string? DataSourceName { get; init; }
+
+        /// <summary>
+        /// Range value for <see cref="Operation.AddQueryRange"/> — the range EXPRESSION, not a
+        /// literal to be quoted. Empty is legal and common: a range with no value is one the
+        /// caller sets at run time through <c>QueryBuildRange.value()</c>.
+        /// </summary>
+        public string? RangeValue { get; init; }
+
+        /// <summary>AOT type of an entry point: MenuItemDisplay, MenuItemAction, MenuItemOutput, Form, …</summary>
+        public string? EntryPointType { get; init; }
+
+        /// <summary>Access level granted to an entry point: Read | Update | Create | Correct | Delete | Invoke.</summary>
+        public string? Access { get; init; }
+
+        /// <summary>
+        /// Several operations against the SAME object, applied in order to one in-memory
+        /// document. Null or empty means this request is the single operation.
+        /// </summary>
+        /// <remarks>
+        /// The saving is not cosmetic. Each entry would otherwise be its own bridge read, write
+        /// and journal entry, and the intermediate states get published — a table is briefly on
+        /// disk with a field and no index covering it. Batched, the object goes from one valid
+        /// state to the next in a single write, and a step that refuses discards the whole batch
+        /// with nothing written.
+        ///
+        /// Steps inherit <see cref="Kind"/>, <see cref="ObjectName"/> and <see cref="Model"/>
+        /// from the request carrying them; anything they set for those is ignored, because a
+        /// batch that could retarget mid-flight is not a batch.
+        /// </remarks>
+        public IReadOnlyList<ModifyRequest>? Batch { get; init; }
     }
 
+    /// <summary>
+    /// Every kind the bridge can read and write, taken from the registry rather than listed here.
+    /// </summary>
+    /// <remarks>
+    /// This was a hand-written set of five — class, table, edt, enum, form — while the bridge
+    /// resolves its collections from <see cref="ObjectTypeRegistry.BridgeCollections"/>, which
+    /// names 41. So <c>modify property</c> refused a query, a privilege, a menu item, a service
+    /// group, a view, a report and a tile that the layer underneath was perfectly able to write,
+    /// and the refusal named the five as if they were the platform's limit. It is the same drift
+    /// the extension-type lookup had (#171), with the same fix: one source of truth.
+    ///
+    /// Operations narrower than a property set still gate themselves — <c>add-field</c> on
+    /// anything but a table, <c>add-index</c> on anything but a table, and so on.
+    /// </remarks>
     private static readonly IReadOnlySet<string> SupportedKinds =
-        new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "class", "table", "edt", "enum", "form" };
+        ObjectTypeRegistry.BridgeCollections().Keys.ToHashSet(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>
     /// The AOT type that extends <paramref name="kind"/>, or null when there is none.
@@ -152,8 +298,22 @@ public static class ObjectModifyEngine
         ModifyRequest request, MetadataRepository? repo, BridgeClient client, string? journalDbOverride = null)
     {
         var kind = (request.Kind ?? string.Empty).Trim().ToLowerInvariant();
-        var validation = ValidateRequest(request, kind);
-        if (validation is not null) return validation;
+
+        // A batch header names the object, not an operation — its Operation and Member are
+        // placeholders, so validating it as if it were a step would refuse every batch for a
+        // missing member name. The steps are each validated in the loop below.
+        if (request.Batch is { Count: > 0 })
+        {
+            if (!SupportedKinds.Contains(kind))
+                return ValidateRequest(request with { Batch = null, Member = "batch" }, kind)!;
+            if (string.IsNullOrWhiteSpace(request.ObjectName))
+                return ToolResult<object>.Fail(D365FoErrorCodes.BadInput, "Object name is required.");
+        }
+        else
+        {
+            var validation = ValidateRequest(request, kind);
+            if (validation is not null) return validation;
+        }
 
         var warnings = new List<string>();
 
@@ -173,11 +333,45 @@ public static class ObjectModifyEngine
         var (doc, preImage, readFailure) = ReadOrCreate(client, target!, request, kind);
         if (readFailure is not null) return readFailure;
 
-        // ---- 3. Structured edit ----
-        var (applied, editFailure) = ApplyOperation(doc!, request, kind, target!, repo);
-        if (editFailure is not null) return editFailure;
+        // ---- 3. Structured edit(s) ----
+        // A batch applies every operation to the SAME in-memory document, so N changes cost one
+        // bridge read, one write and one journal entry. Stopped at the first failure, and since
+        // nothing has been written at that point the object is untouched — a half-applied batch
+        // is never published.
+        var operations = request.Batch is { Count: > 0 } ? request.Batch : new[] { request };
+        var applied = new List<object?>(operations.Count);
+        for (var i = 0; i < operations.Count; i++)
+        {
+            var step = operations[i] with
+            {
+                // The batch header owns where the write lands; a step only says what to change.
+                // `Kind` is `required` but callers can still pass null through it, which is why
+                // the top of this method normalises it the same defensive way.
+                Kind = request.Kind ?? string.Empty,
+                ObjectName = request.ObjectName,
+                Model = request.Model,
+            };
+
+            var stepValidation = ValidateRequest(step, kind);
+            if (stepValidation is not null)
+                return BatchFailure(stepValidation, i, operations.Count, applied);
+
+            var (stepApplied, editFailure) = ApplyOperation(doc!, step, kind, target!, repo);
+            if (editFailure is not null)
+                return BatchFailure(editFailure, i, operations.Count, applied);
+
+            applied.Add(stepApplied);
+        }
 
         // ---- 4. Write back, journaling the pre-image first ----
+        // An element that arrives out of contract order is not rejected by the AOT reader, it is
+        // DROPPED: DataContractSerializer matches children in order and skips anything early or
+        // late. The disk write path has always canonicalised (ScaffoldFileWriter.Finalize) but
+        // this one did not, so an edit that created a missing collection — `<Fields>` on a table
+        // that had none, `<EnumValues>`, `<Controls>` — appended it at the end of the root and
+        // the write came back "ok" with the change silently absent. Canonicalise the same way
+        // before serialising; it is idempotent and leaves collection item order alone.
+        ContractOrderCanonicalizer.Apply(doc!);
         var newXml = doc!.ToString(SaveOptions.DisableFormatting);
         var verb = target!.Exists ? "updateObject" : "createObject";
 
@@ -209,19 +403,43 @@ public static class ObjectModifyEngine
                 BridgeFailureHint(code, target));
         }
 
-        warnings.Add($"Index not auto-refreshed — run `d365fo index refresh --model {target.Model}` so '{request.Member}' is searchable.");
+        warnings.Add($"Index not auto-refreshed — run `d365fo index refresh --model {target.Model}` so the change is searchable.");
 
+        var isBatch = request.Batch is { Count: > 0 };
         return ToolResult<object>.Success(new
         {
-            operation = request.Operation.ToString(),
+            operation = isBatch ? "Batch" : request.Operation.ToString(),
+            operations = isBatch ? operations.Select(o => o.Operation.ToString()).ToArray() : null,
             kind,
             name = request.ObjectName,
-            member = request.Member,
+            member = isBatch ? null : request.Member,
             wroteTo = new { kind = target.Kind, name = target.Name, model = target.Model, extension = target.IsExtension },
             created = !target.Exists,
             source = "bridge",
-            applied,
+            applied = isBatch ? applied : applied.FirstOrDefault(),
         }, warnings);
+    }
+
+    /// <summary>
+    /// Report a batch step that refused, naming which one and what had already been applied.
+    /// </summary>
+    /// <remarks>
+    /// Nothing has been written when this runs — the failure happens against the in-memory
+    /// document, before the single write — so the object on disk is untouched. Saying so
+    /// matters: "step 3 of 5 failed" reads like a half-applied change unless the answer also
+    /// says the other four were discarded rather than published.
+    /// </remarks>
+    private static ToolResult<object> BatchFailure(
+        ToolResult<object> failure, int index, int total, IReadOnlyList<object?> appliedSoFar)
+    {
+        if (total <= 1) return failure;
+
+        var error = failure.Error!;
+        var hint = $"Step {index + 1} of {total} refused; NOTHING was written — the {appliedSoFar.Count} " +
+                   "earlier step(s) were applied to an in-memory copy and discarded, so the object is unchanged. " +
+                   "Fix this step and re-run the whole batch.";
+        return ToolResult<object>.Fail(error.Code, error.Message,
+            string.IsNullOrWhiteSpace(error.Hint) ? hint : error.Hint + " " + hint);
     }
 
     /// <summary>
@@ -253,8 +471,19 @@ public static class ObjectModifyEngine
     {
         if (!SupportedKinds.Contains(kind))
         {
+            // 41 kinds is too many to print at a caller who mistyped one of them, so name the
+            // near misses and point at the full list rather than filling the terminal.
+            var close = SupportedKinds
+                .Where(k => k.Contains(kind, StringComparison.OrdinalIgnoreCase)
+                            || kind.Contains(k, StringComparison.OrdinalIgnoreCase))
+                .OrderBy(k => k.Length)
+                .Take(5)
+                .ToList();
             return ToolResult<object>.Fail(D365FoErrorCodes.BadInput,
-                $"Unsupported object kind '{request.Kind}'. Supported: {string.Join(", ", SupportedKinds)}.");
+                $"Unsupported object kind '{request.Kind}'.",
+                close.Count > 0
+                    ? $"Did you mean: {string.Join(", ", close)}? Full list: `d365fo schema --output json`."
+                    : $"{SupportedKinds.Count} kinds are writable; see `d365fo schema --output json`.");
         }
         if (string.IsNullOrWhiteSpace(request.ObjectName))
             return ToolResult<object>.Fail(D365FoErrorCodes.BadInput, "Object name is required.");
@@ -278,9 +507,103 @@ public static class ObjectModifyEngine
             Operation.AddControl when string.IsNullOrWhiteSpace(request.Type) =>
                 ToolResult<object>.Fail(D365FoErrorCodes.BadInput,
                     "--type is required for `modify add-control` (Grid, Group, TabPage, String, …)."),
+
+            // ---- table-shaped operations ----
+            _ when TableOnly.Contains(request.Operation) && kind != "table" =>
+                ToolResult<object>.Fail(D365FoErrorCodes.BadInput,
+                    $"`modify {CommandNameFor(request.Operation)}` applies to tables, not {kind}."),
+            Operation.AddIndex when (request.Fields?.Count ?? 0) == 0 =>
+                ToolResult<object>.Fail(D365FoErrorCodes.BadInput,
+                    "--field is required for `modify add-index` (repeat it; the order is the index's key order)."),
+            Operation.AddFieldGroup when (request.Fields?.Count ?? 0) == 0 =>
+                ToolResult<object>.Fail(D365FoErrorCodes.BadInput,
+                    "--field is required for `modify add-field-group` (repeat it for each member)."),
+            Operation.AddRelation when string.IsNullOrWhiteSpace(request.RelatedTable) =>
+                ToolResult<object>.Fail(D365FoErrorCodes.BadInput,
+                    "--related-table is required for `modify add-relation`."),
+            Operation.AddDeleteAction when string.IsNullOrWhiteSpace(request.RelatedTable) =>
+                ToolResult<object>.Fail(D365FoErrorCodes.BadInput,
+                    "--related-table is required for `modify add-delete-action`."),
+            Operation.AddDeleteAction when !ValidDeleteActions.Contains(request.DeleteAction ?? "") =>
+                ToolResult<object>.Fail(D365FoErrorCodes.BadInput,
+                    $"--action must be one of: {string.Join(", ", ValidDeleteActions)}."),
+            Operation.RenameField when string.IsNullOrWhiteSpace(request.NewName) =>
+                ToolResult<object>.Fail(D365FoErrorCodes.BadInput,
+                    "--new-name is required for `modify rename-field`."),
+
+            Operation.RemoveEnumValue when kind != "enum" =>
+                ToolResult<object>.Fail(D365FoErrorCodes.BadInput,
+                    $"`modify remove-enum-value` applies to enums, not {kind}."),
+            Operation.RemoveControl when kind != "form" =>
+                ToolResult<object>.Fail(D365FoErrorCodes.BadInput,
+                    $"`modify remove-control` applies to forms, not {kind}."),
+
+            _ when QueryOnly.Contains(request.Operation) && kind != "query" =>
+                ToolResult<object>.Fail(D365FoErrorCodes.BadInput,
+                    $"`modify {CommandNameFor(request.Operation)}` applies to AOT queries, not {kind}."),
+            Operation.AddQueryRange when string.IsNullOrWhiteSpace(request.Member) =>
+                ToolResult<object>.Fail(D365FoErrorCodes.BadInput,
+                    "The range's field name is required for `modify add-query-range`."),
+
+            _ when PrivilegeOnly.Contains(request.Operation) && kind != "securityprivilege" =>
+                ToolResult<object>.Fail(D365FoErrorCodes.BadInput,
+                    $"`modify {CommandNameFor(request.Operation)}` applies to security privileges, not {kind}."),
+            Operation.AddEntryPoint when string.IsNullOrWhiteSpace(request.EntryPointType) =>
+                ToolResult<object>.Fail(D365FoErrorCodes.BadInput,
+                    "--type is required for `modify add-entry-point` (MenuItemDisplay, MenuItemAction, MenuItemOutput, Form, …)."),
             _ => null,
         };
     }
+
+    /// <summary>Operations that only make sense on an <c>AxQuery</c>.</summary>
+    private static readonly IReadOnlySet<Operation> QueryOnly = new HashSet<Operation>
+    {
+        Operation.AddQueryRange, Operation.RemoveQueryRange,
+    };
+
+    /// <summary>Operations that only make sense on an <c>AxSecurityPrivilege</c>.</summary>
+    private static readonly IReadOnlySet<Operation> PrivilegeOnly = new HashSet<Operation>
+    {
+        Operation.AddEntryPoint, Operation.RemoveEntryPoint,
+    };
+
+    /// <summary>Operations that only make sense on an <c>AxTable</c>.</summary>
+    private static readonly IReadOnlySet<Operation> TableOnly = new HashSet<Operation>
+    {
+        Operation.AddIndex, Operation.AddRelation, Operation.AddFieldGroup, Operation.AddDeleteAction,
+        Operation.RemoveField, Operation.RemoveIndex, Operation.RemoveRelation,
+        Operation.RemoveFieldGroup, Operation.RemoveDeleteAction, Operation.RenameField,
+    };
+
+    /// <summary>The four delete actions the platform defines. Anything else is a typo.</summary>
+    private static readonly IReadOnlySet<string> ValidDeleteActions =
+        new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "Cascade", "Restricted", "CascadeRestricted", "None" };
+
+    /// <summary>The <c>modify</c> subcommand an operation is reached through, for error text.</summary>
+    private static string CommandNameFor(Operation op) => op switch
+    {
+        Operation.SetProperty => "property",
+        Operation.AddField => "add-field",
+        Operation.AddEnumValue => "add-enum-value",
+        Operation.AddControl => "add-control",
+        Operation.AddIndex => "add-index",
+        Operation.AddRelation => "add-relation",
+        Operation.AddFieldGroup => "add-field-group",
+        Operation.AddDeleteAction => "add-delete-action",
+        Operation.RemoveField => "remove-field",
+        Operation.RemoveIndex => "remove-index",
+        Operation.RemoveRelation => "remove-relation",
+        Operation.RemoveFieldGroup => "remove-field-group",
+        Operation.RemoveDeleteAction => "remove-delete-action",
+        Operation.RenameField => "rename-field",
+        Operation.RemoveEnumValue => "remove-enum-value",
+        Operation.RemoveControl => "remove-control",
+        Operation.AddQueryRange => "add-query-range",
+        Operation.RemoveQueryRange => "remove-query-range",
+        Operation.AddEntryPoint => "add-entry-point",
+        Operation.RemoveEntryPoint => "remove-entry-point",
+        _ => op.ToString(),
+    };
 
     // ------------------------------------------------------------ target planning
 
@@ -478,8 +801,473 @@ public static class ObjectModifyEngine
             Operation.AddField => AddField(doc, request, repo),
             Operation.AddEnumValue => AddEnumValue(doc, request),
             Operation.AddControl => AddControl(doc, request),
+            Operation.AddIndex => AddIndex(doc, request),
+            Operation.AddRelation => AddRelation(doc, request),
+            Operation.AddFieldGroup => AddFieldGroup(doc, request),
+            Operation.AddDeleteAction => AddDeleteAction(doc, request),
+            Operation.RenameField => RenameField(doc, request),
+            Operation.RemoveControl => RemoveControl(doc, request),
+            Operation.AddQueryRange => AddQueryRange(doc, request),
+            Operation.RemoveQueryRange => RemoveQueryRange(doc, request),
+            Operation.AddEntryPoint => AddEntryPoint(doc, request),
+            Operation.RemoveEntryPoint => RemoveEntryPoint(doc, request),
+            _ when Removals.TryGetValue(request.Operation, out var shape) => RemoveMember(doc, request, shape),
             _ => (null, ToolResult<object>.Fail(D365FoErrorCodes.BadInput, $"Unhandled operation {request.Operation}.")),
         };
+
+    /// <summary>
+    /// The container element under the root, created in place if the object does not have one yet.
+    /// </summary>
+    /// <remarks>
+    /// Creating it by appending to the root is only safe because the write path canonicalises
+    /// member order before serialising — see the comment at the write-back step. Without that,
+    /// a collection appended after a later-ordered sibling is dropped on read.
+    /// </remarks>
+    private static XElement EnsureCollection(XElement root, string name)
+    {
+        var existing = root.Elements().FirstOrDefault(e => e.Name.LocalName == name);
+        if (existing is not null) return existing;
+
+        var created = new XElement(root.Name.Namespace + name);
+        root.Add(created);
+        return created;
+    }
+
+    private static bool HasNamed(XElement collection, string key, string value) =>
+        collection.Elements().Any(e => string.Equals(LocalValue(e, key), value, StringComparison.OrdinalIgnoreCase));
+
+    private static (object?, ToolResult<object>?) AddIndex(XDocument doc, ModifyRequest request)
+    {
+        var root = doc.Root!;
+        var ns = root.Name.Namespace;
+        var indexes = EnsureCollection(root, "Indexes");
+
+        if (HasNamed(indexes, "Name", request.Member))
+        {
+            return (null, ToolResult<object>.Fail(D365FoErrorCodes.AlreadyExists,
+                $"Index '{request.Member}' already exists on {request.ObjectName}.",
+                $"Drop it first with `d365fo modify remove-index {request.ObjectName} {request.Member}`."));
+        }
+
+        // Every named field must exist on the table, or the index is one the AOS will refuse
+        // after a build cycle has already been paid for.
+        var declared = root.Elements().FirstOrDefault(e => e.Name.LocalName == "Fields");
+        var known = declared?.Elements()
+            .Select(e => LocalValue(e, "Name"))
+            .Where(n => !string.IsNullOrEmpty(n))
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        if (known is not null && known.Count > 0)
+        {
+            var missing = request.Fields!.Where(f => !known.Contains(f) && !SystemFieldNames.Contains(f)).ToList();
+            if (missing.Count > 0)
+            {
+                return (null, ToolResult<object>.Fail(D365FoErrorCodes.FieldNotFound,
+                    $"{request.ObjectName} has no field named {string.Join(", ", missing.Select(m => $"'{m}'"))}.",
+                    $"See the real field list with `d365fo get table {request.ObjectName}`."));
+            }
+        }
+
+        var index = new XElement(ns + "AxTableIndex",
+            new XElement(ns + "Name", request.Member),
+            request.AlternateKey ? new XElement(ns + "AlternateKey", "Yes") : null,
+            // The serializer's default is AllowDuplicates=Yes, so a unique index has to say so.
+            request.AllowDuplicates ? null : new XElement(ns + "AllowDuplicates", "No"),
+            new XElement(ns + "Fields",
+                request.Fields!.Select(f => new XElement(ns + "AxTableIndexField",
+                    new XElement(ns + "DataField", f)))));
+
+        indexes.Add(index);
+        return (new
+        {
+            index = request.Member,
+            fields = request.Fields,
+            unique = !request.AllowDuplicates,
+            alternateKey = request.AlternateKey,
+        }, null);
+    }
+
+    /// <summary>Fields the kernel puts on every table; they are indexable but never declared.</summary>
+    private static readonly IReadOnlySet<string> SystemFieldNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+    {
+        "RecId", "RecVersion", "DataAreaId", "Partition", "createdBy", "createdDateTime",
+        "modifiedBy", "modifiedDateTime", "createdTransactionId", "modifiedTransactionId",
+    };
+
+    private static (object?, ToolResult<object>?) AddRelation(XDocument doc, ModifyRequest request)
+    {
+        var root = doc.Root!;
+        var ns = root.Name.Namespace;
+        XNamespace xsi = "http://www.w3.org/2001/XMLSchema-instance";
+        var relations = EnsureCollection(root, "Relations");
+
+        if (HasNamed(relations, "Name", request.Member))
+        {
+            return (null, ToolResult<object>.Fail(D365FoErrorCodes.AlreadyExists,
+                $"Relation '{request.Member}' already exists on {request.ObjectName}."));
+        }
+
+        // The constraint's concrete i:type is mandatory: AxTableRelationConstraint is abstract
+        // and the metadata reader throws on it, the same way an untyped AxTableField does.
+        var relatedField = string.IsNullOrWhiteSpace(request.RelatedField) ? request.Member : request.RelatedField!;
+        var relation = new XElement(ns + "AxTableRelation",
+            new XElement(ns + "Name", request.Member),
+            new XElement(ns + "Cardinality", "ZeroMore"),
+            new XElement(ns + "RelatedTable", request.RelatedTable!),
+            new XElement(ns + "RelatedTableCardinality", "ExactlyOne"),
+            new XElement(ns + "RelationshipType", "Association"),
+            new XElement(ns + "Constraints",
+                new XElement(ns + "AxTableRelationConstraint",
+                    new XAttribute(xsi + "type", "AxTableRelationConstraintField"),
+                    new XElement(ns + "Name", request.Member),
+                    new XElement(ns + "Field", request.Member),
+                    new XElement(ns + "RelatedField", relatedField))));
+
+        if (root.Attributes().All(a => a.Value != xsi.NamespaceName))
+            root.SetAttributeValue(XNamespace.Xmlns + "i", xsi.NamespaceName);
+
+        relations.Add(relation);
+        return (new
+        {
+            relation = request.Member,
+            relatedTable = request.RelatedTable,
+            field = request.Member,
+            relatedField,
+        }, null);
+    }
+
+    private static (object?, ToolResult<object>?) AddFieldGroup(XDocument doc, ModifyRequest request)
+    {
+        var root = doc.Root!;
+        var ns = root.Name.Namespace;
+        var groups = EnsureCollection(root, "FieldGroups");
+
+        if (HasNamed(groups, "Name", request.Member))
+        {
+            return (null, ToolResult<object>.Fail(D365FoErrorCodes.AlreadyExists,
+                $"Field group '{request.Member}' already exists on {request.ObjectName}.",
+                "The five Auto* groups and Overview/General are created with every table."));
+        }
+
+        var group = new XElement(ns + "AxTableFieldGroup",
+            new XElement(ns + "Name", request.Member),
+            string.IsNullOrWhiteSpace(request.Label) ? null : new XElement(ns + "Label", request.Label),
+            new XElement(ns + "Fields",
+                request.Fields!.Select(f => new XElement(ns + "AxTableFieldGroupField",
+                    new XElement(ns + "DataField", f)))));
+
+        groups.Add(group);
+        return (new { fieldGroup = request.Member, fields = request.Fields, label = request.Label }, null);
+    }
+
+    private static (object?, ToolResult<object>?) AddDeleteAction(XDocument doc, ModifyRequest request)
+    {
+        var root = doc.Root!;
+        var ns = root.Name.Namespace;
+        var actions = EnsureCollection(root, "DeleteActions");
+
+        // A delete action is identified by the table it points at — two actions for the same
+        // related table is not a richer rule, it is a conflict.
+        if (HasNamed(actions, "RelatedTable", request.RelatedTable!))
+        {
+            return (null, ToolResult<object>.Fail(D365FoErrorCodes.AlreadyExists,
+                $"{request.ObjectName} already has a delete action for '{request.RelatedTable}'.",
+                $"Remove it first with `d365fo modify remove-delete-action {request.ObjectName} {request.RelatedTable}`."));
+        }
+
+        // The contract is `Name, DeleteAction, Relation, Table, Tags` — the related table is
+        // <Table>. Writing <RelatedTable> produced a delete action naming NOTHING: the member
+        // does not exist, so the serializer dropped it while the write reported ok, and what
+        // landed on disk was a Cascade rule with no target. Shipped tables emit an empty
+        // <Relation> alongside, and this matches them.
+        actions.Add(new XElement(ns + "AxTableDeleteAction",
+            new XElement(ns + "Name", request.RelatedTable!),
+            new XElement(ns + "DeleteAction", request.DeleteAction!),
+            new XElement(ns + "Relation", string.Empty),
+            new XElement(ns + "Table", request.RelatedTable!)));
+
+        return (new { deleteAction = request.DeleteAction, relatedTable = request.RelatedTable }, null);
+    }
+
+    private static (object?, ToolResult<object>?) RenameField(XDocument doc, ModifyRequest request)
+    {
+        var root = doc.Root!;
+        var fields = root.Elements().FirstOrDefault(e => e.Name.LocalName == "Fields");
+        var field = fields?.Elements().FirstOrDefault(e =>
+            string.Equals(LocalValue(e, "Name"), request.Member, StringComparison.OrdinalIgnoreCase));
+
+        if (field is null)
+        {
+            return (null, ToolResult<object>.Fail(D365FoErrorCodes.FieldNotFound,
+                $"{request.ObjectName} has no field named '{request.Member}'.",
+                $"See the real field list with `d365fo get table {request.ObjectName}`."));
+        }
+
+        if (fields!.Elements().Any(e =>
+                string.Equals(LocalValue(e, "Name"), request.NewName, StringComparison.OrdinalIgnoreCase)))
+        {
+            return (null, ToolResult<object>.Fail(D365FoErrorCodes.AlreadyExists,
+                $"{request.ObjectName} already has a field named '{request.NewName}'."));
+        }
+
+        field.Elements().First(e => e.Name.LocalName == "Name").SetValue(request.NewName!);
+
+        // Indexes, field groups and relations reference a field BY NAME. Renaming the field and
+        // leaving those behind produces a table that no longer resolves its own index — the AOS
+        // reports it as a missing field, pointing at the index rather than at this edit.
+        var rewritten = new List<string>();
+        foreach (var (collection, item, member) in new[]
+                 {
+                     ("Indexes", "AxTableIndexField", "DataField"),
+                     ("FieldGroups", "AxTableFieldGroupField", "DataField"),
+                 })
+        {
+            var container = root.Elements().FirstOrDefault(e => e.Name.LocalName == collection);
+            if (container is null) continue;
+            foreach (var reference in container.Descendants()
+                         .Where(e => e.Name.LocalName == member)
+                         .Where(e => string.Equals(e.Value, request.Member, StringComparison.OrdinalIgnoreCase)))
+            {
+                reference.SetValue(request.NewName!);
+                rewritten.Add($"{collection}/{item}");
+            }
+        }
+
+        var relations = root.Elements().FirstOrDefault(e => e.Name.LocalName == "Relations");
+        if (relations is not null)
+        {
+            foreach (var reference in relations.Descendants()
+                         .Where(e => e.Name.LocalName == "Field")
+                         .Where(e => string.Equals(e.Value, request.Member, StringComparison.OrdinalIgnoreCase)))
+            {
+                reference.SetValue(request.NewName!);
+                rewritten.Add("Relations/AxTableRelationConstraintField");
+            }
+        }
+
+        return (new
+        {
+            renamedField = request.Member,
+            to = request.NewName,
+            referencesRewritten = rewritten.Distinct().ToArray(),
+            warning = "X++ that names this field by fieldStr()/fieldNum() is NOT rewritten — " +
+                      $"check with `d365fo find refs {request.ObjectName}.{request.Member}` before you build.",
+        }, null);
+    }
+
+    private static (object?, ToolResult<object>?) RemoveControl(XDocument doc, ModifyRequest request)
+    {
+        var root = doc.Root!;
+        var design = root.Elements().FirstOrDefault(e => e.Name.LocalName == "Design") ?? root;
+
+        var control = design.Descendants()
+            .FirstOrDefault(e => e.Name.LocalName.StartsWith("AxFormControl", StringComparison.Ordinal)
+                                 && string.Equals(LocalValue(e, "Name"), request.Member, StringComparison.OrdinalIgnoreCase));
+
+        if (control is null)
+        {
+            return (null, ToolResult<object>.Fail(D365FoErrorCodes.ControlNotFound,
+                $"Control '{request.Member}' was not found on {request.ObjectName}.",
+                $"See the control tree with `d365fo get form {request.ObjectName}`."));
+        }
+
+        // Removing a container takes its children with it — say so, rather than reporting "1".
+        var descendants = control.Descendants()
+            .Count(e => e.Name.LocalName.StartsWith("AxFormControl", StringComparison.Ordinal));
+        control.Remove();
+
+        return (new { removedControl = request.Member, nestedControlsRemoved = descendants }, null);
+    }
+
+    /// <summary>
+    /// The query datasource a range operation targets: the one named, or the only one there is.
+    /// </summary>
+    /// <remarks>
+    /// Most queries have exactly one datasource, and making the caller name it would be asking
+    /// for something the document already determines. With two or more it is genuinely ambiguous,
+    /// so the refusal lists them rather than picking the first — picking would put the range on a
+    /// join the caller never mentioned, and a range on the wrong datasource silently returns the
+    /// wrong rows instead of failing.
+    /// </remarks>
+    private static (XElement? DataSource, ToolResult<object>? Failure) ResolveQueryDataSource(
+        XElement root, ModifyRequest request)
+    {
+        var container = root.Elements().FirstOrDefault(e => e.Name.LocalName == "DataSources");
+        // Shared with the extractor: the AOT writes AxQuerySimpleRootDataSource and
+        // AxQuerySimpleEmbeddedDataSource, not the shorter names the fixtures use.
+        var sources = container?.Elements()
+            .Where(e => MetadataExtractor.IsQueryDataSourceElement(e.Name.LocalName))
+            .ToList() ?? new List<XElement>();
+
+        if (sources.Count == 0)
+        {
+            return (null, ToolResult<object>.Fail(D365FoErrorCodes.MemberNotFound,
+                $"Query '{request.ObjectName}' declares no datasources.",
+                $"Check it with `d365fo get query {request.ObjectName}`."));
+        }
+
+        if (!string.IsNullOrWhiteSpace(request.DataSourceName))
+        {
+            var named = sources.FirstOrDefault(e =>
+                string.Equals(LocalValue(e, "Name"), request.DataSourceName, StringComparison.OrdinalIgnoreCase));
+            if (named is null)
+            {
+                return (null, ToolResult<object>.Fail(D365FoErrorCodes.MemberNotFound,
+                    $"Query '{request.ObjectName}' has no datasource named '{request.DataSourceName}'.",
+                    $"It has: {string.Join(", ", sources.Select(e => LocalValue(e, "Name")))}."));
+            }
+            return (named, null);
+        }
+
+        if (sources.Count > 1)
+        {
+            return (null, ToolResult<object>.Fail(D365FoErrorCodes.BadInput,
+                $"Query '{request.ObjectName}' has {sources.Count} datasources — name the one you mean with --data-source.",
+                $"It has: {string.Join(", ", sources.Select(e => LocalValue(e, "Name")))}."));
+        }
+
+        return (sources[0], null);
+    }
+
+    private static (object?, ToolResult<object>?) AddQueryRange(XDocument doc, ModifyRequest request)
+    {
+        var (dataSource, failure) = ResolveQueryDataSource(doc.Root!, request);
+        if (failure is not null) return (null, failure);
+
+        var ns = doc.Root!.Name.Namespace;
+        var ranges = dataSource!.Elements().FirstOrDefault(e => e.Name.LocalName == "Ranges");
+        if (ranges is null)
+        {
+            ranges = new XElement(ns + "Ranges");
+            dataSource.Add(ranges);
+        }
+
+        if (HasNamed(ranges, "Field", request.Member))
+        {
+            return (null, ToolResult<object>.Fail(D365FoErrorCodes.AlreadyExists,
+                $"Datasource '{LocalValue(dataSource, "Name")}' already ranges on '{request.Member}'.",
+                "A second range on the same field ANDs with the first, which is almost never what is wanted — " +
+                "remove it first, or widen the existing value."));
+        }
+
+        // Name and Field carry the same value in every shipped query: the name is the field.
+        ranges.Add(new XElement(ns + "AxQuerySimpleDataSourceRange",
+            new XElement(ns + "Name", request.Member),
+            new XElement(ns + "Field", request.Member),
+            // An empty <Value> is legal and idiomatic — it is the shape a range gets when the
+            // value is supplied at run time via QueryBuildRange.value().
+            new XElement(ns + "Value", request.RangeValue ?? "")));
+
+        return (new
+        {
+            range = request.Member,
+            dataSource = LocalValue(dataSource, "Name"),
+            value = request.RangeValue ?? "",
+            note = string.IsNullOrWhiteSpace(request.RangeValue)
+                ? "Empty value — set it at run time with QueryBuildRange.value()."
+                : null,
+        }, null);
+    }
+
+    private static (object?, ToolResult<object>?) RemoveQueryRange(XDocument doc, ModifyRequest request)
+    {
+        var (dataSource, failure) = ResolveQueryDataSource(doc.Root!, request);
+        if (failure is not null) return (null, failure);
+
+        var ranges = dataSource!.Elements().FirstOrDefault(e => e.Name.LocalName == "Ranges");
+        var range = ranges?.Elements().FirstOrDefault(e =>
+            string.Equals(LocalValue(e, "Field"), request.Member, StringComparison.OrdinalIgnoreCase));
+
+        if (range is null)
+        {
+            return (null, ToolResult<object>.Fail(D365FoErrorCodes.MemberNotFound,
+                $"Datasource '{LocalValue(dataSource, "Name")}' has no range on '{request.Member}'.",
+                "Nothing was changed."));
+        }
+
+        var wasValue = LocalValue(range, "Value");
+        range.Remove();
+        return (new { removedRange = request.Member, dataSource = LocalValue(dataSource, "Name"), wasValue }, null);
+    }
+
+    private static (object?, ToolResult<object>?) AddEntryPoint(XDocument doc, ModifyRequest request)
+    {
+        var root = doc.Root!;
+        var ns = root.Name.Namespace;
+        var entryPoints = EnsureCollection(root, "EntryPoints");
+
+        if (HasNamed(entryPoints, "Name", request.Member))
+        {
+            return (null, ToolResult<object>.Fail(D365FoErrorCodes.AlreadyExists,
+                $"Privilege '{request.ObjectName}' already grants '{request.Member}'.",
+                "Remove it and add it back to change the access level."));
+        }
+
+        // Contract order for AxSecurityEntryPointReference is Name, Grant, …, ObjectName,
+        // ObjectType. Access is six independent permissions, never an <AccessLevel> element —
+        // writing one produces a privilege that grants nothing and reads as deliberate.
+        entryPoints.Add(new XElement(ns + "AxSecurityEntryPointReference",
+            new XElement(ns + "Name", request.Member),
+            XppScaffolder.SecurityGrant(request.Access),
+            new XElement(ns + "ObjectName", request.Member),
+            new XElement(ns + "ObjectType", request.EntryPointType!)));
+
+        return (new
+        {
+            entryPoint = request.Member,
+            objectType = request.EntryPointType,
+            access = request.Access ?? "Read",
+        }, null);
+    }
+
+    private static (object?, ToolResult<object>?) RemoveEntryPoint(XDocument doc, ModifyRequest request)
+    {
+        var entryPoints = doc.Root!.Elements().FirstOrDefault(e => e.Name.LocalName == "EntryPoints");
+        var entryPoint = entryPoints?.Elements().FirstOrDefault(e =>
+            string.Equals(LocalValue(e, "Name"), request.Member, StringComparison.OrdinalIgnoreCase)
+            || string.Equals(LocalValue(e, "ObjectName"), request.Member, StringComparison.OrdinalIgnoreCase));
+
+        if (entryPoint is null)
+        {
+            return (null, ToolResult<object>.Fail(D365FoErrorCodes.MemberNotFound,
+                $"Privilege '{request.ObjectName}' does not grant '{request.Member}'.",
+                $"See what it grants with `d365fo get privilege {request.ObjectName}`."));
+        }
+
+        var objectType = LocalValue(entryPoint, "ObjectType");
+        entryPoint.Remove();
+        return (new { removedEntryPoint = request.Member, objectType }, null);
+    }
+
+    private static (object?, ToolResult<object>?) RemoveMember(XDocument doc, ModifyRequest request, RemovalShape shape)
+    {
+        var root = doc.Root!;
+        var collection = root.Elements().FirstOrDefault(e => e.Name.LocalName == shape.Collection);
+
+        // A delete action is addressed by the table it governs, everything else by its own name.
+        var wanted = shape.Key == "Table" ? request.RelatedTable ?? request.Member : request.Member;
+
+        var member = collection?.Elements()
+            .FirstOrDefault(e => string.Equals(LocalValue(e, shape.Key), wanted, StringComparison.OrdinalIgnoreCase));
+
+        if (member is null)
+        {
+            return (null, ToolResult<object>.Fail(D365FoErrorCodes.MemberNotFound,
+                $"{shape.Noun} '{wanted}' was not found on {request.ObjectName}.",
+                $"Nothing was changed. Check the current members with `d365fo get {request.Kind} {request.ObjectName}`."));
+        }
+
+        var removed = member.ToString(SaveOptions.DisableFormatting);
+        member.Remove();
+
+        return (new
+        {
+            removed = wanted,
+            of = shape.Noun,
+            // The pre-image is in the journal, but printing it here is what lets a caller see
+            // what it just gave up without going and reading the journal back.
+            wasXml = removed.Length <= 2000 ? removed : removed[..2000] + "…",
+        }, null);
+    }
 
     private static (object?, ToolResult<object>?) SetProperty(XDocument doc, ModifyRequest request)
     {
