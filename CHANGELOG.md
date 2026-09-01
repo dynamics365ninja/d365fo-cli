@@ -37,6 +37,20 @@ was ported from.
   `D365FO_BP_CATALOG_PATH` points at a snapshot matching an instance's own D365FO version.
   The resources are read through `PEReader` rather than by loading the assemblies — loading a
   D365FO rule assembly drags in its dependency graph for the sake of a string table.
+- **`d365fo report-pattern list|spec`** — the seven SSRS shapes as implementation recipes:
+  object roster, base classes, the one `generate report` call that produces the stack, what still
+  has to be written by hand, and the checks worth running. `generate report` could already build
+  every one; what was missing was the layer that says WHICH — and getting it wrong is expensive in
+  a way a form-pattern violation is not, because there is no pattern XML to validate a report
+  against. A pre-processed requirement built on `SRSReportDataProviderBase` simply behaves wrong
+  in batch with nothing failing anywhere.
+  Every base class was **counted in this installation** rather than recalled —
+  `SrsReportRunController` 152, `SRSReportDataProviderBase` 95,
+  `SrsReportDataProviderPreProcessTempDB` 88, `SrsReportDataContractUIBuilder` 59,
+  `SrsPrintMgmtFormLetterController` 6 — and each recipe names shipped reference objects to read
+  instead of working from prose. `ReportRecipesAotTests` resolves all 11 of them against a real
+  `PackagesLocalDirectory` and asserts each extends the base its recipe claims; it is inert where
+  there is no install, rather than passing vacuously.
 - **`d365fo table-pattern list|spec`** — the decision layer over `generate table`. The patterns,
   their canonical `TableGroup` and their default fields already existed, but only as a value
   `--pattern` accepted: an agent choosing a shape could not see what the choices were or what each

@@ -359,6 +359,13 @@ public static class CliApp
             // The CLI's `get_knowledge` equivalent: the verified skills/_source corpus,
             // embedded in the binary and served per-topic / per-section so an agent
             // without skill-file support can still ground itself.
+            cfg.AddBranch("report-pattern", b =>
+            {
+                b.SetDescription("SSRS report shapes as implementation recipes: object roster, base classes, one scaffold call.");
+                b.AddCommand<ReportPatternListCommand>("list").WithDescription("The seven shapes and when each applies.");
+                b.AddCommand<ReportPatternSpecCommand>("spec").WithDescription("One shape in full, with shipped reference objects to read.");
+            });
+
             cfg.AddBranch("table-pattern", b =>
             {
                 b.SetDescription("Table shape patterns: what each one is for, and what it presets.");
