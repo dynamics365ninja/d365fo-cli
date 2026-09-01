@@ -37,6 +37,33 @@ was ported from.
   `D365FO_BP_CATALOG_PATH` points at a snapshot matching an instance's own D365FO version.
   The resources are read through `PEReader` rather than by loading the assemblies — loading a
   D365FO rule assembly drags in its dependency graph for the sake of a string table.
+- **Five knowledge topics**, taking the corpus from 38 to 43. Each claim was checked against
+  this installation before it was written, and the ones worth stating are the ones a plausible
+  guess gets wrong:
+  - `document-attachments` — `DocumentManagement::attachFile` takes **nine** arguments, the last
+    optional. The eight-argument call therefore COMPILES, and a value meant as notes lands in
+    `_attachmentName`: the attachment is stored under the note text, nothing fails, and it only
+    shows when someone opens the attachment list. `DocuRef`/`DocuValue`/`DocuType` are **tables**
+    while `DocumentManagement`/`DocuAction` are classes; the link is `RefTableId`/`RefRecId`/
+    `RefCompanyId` (verified field names — `RefDataArea` also exists and is not the one).
+  - `global-class-statics` — `Global` declares **375** static methods, of which only **34** are
+    also compiler predefined functions and therefore callable bare; the other 341 need `Global::`.
+    In the other direction `strFmt`, `today`, `setPrefix`, `curUserId`, `conPeek`, `funcName` and
+    `fieldId2Name` are predefined functions that `Global` does NOT declare, so `Global::strFmt(…)`
+    does not compile however natural it reads.
+  - `system-objects` — the kernel types no AOT file declares, why the index cannot carry them, and
+    why `validate references` degrades an unknown declared type to a warning. Checked: `xRecord`,
+    `Common`, `xSession`, `xApplication`, `xGlobal`, `Args` and `ClassFactory` have no AOT file at
+    all, while `xUserInfo` — which looks like the same family — is an ordinary `AxClass`.
+  - `report-print-destinations` — `SRSPrintDestinationSettings` (68 methods) with plain accessors:
+    `printMediumType()`, `fileFormat()`, `fileName()`. `parmPrintMediumType()`, `toFile()`,
+    `toScreen()` and `lockDestinationProperties()` read like the API and do not exist.
+    `SRSPrintMediumType` has six values and `PDF` is not one of them — PDF is an
+    `SRSReportFileFormat`. Set the destination BEFORE `startOperation()`, with
+    `parmShowDialog(false)`, or the run has already resolved it.
+  - `rdl-design-expressions` — the `=Fields!`/`Parameters!` language, aggregate SCOPE (a total
+    with no scope argument is correct in every single-group test and wrong in a page footer), and
+    that `IIf` evaluates both branches, so guarding a division in the result still divides by zero.
 - **`d365fo mobile-pattern list|spec`** — warehouse scanner screens, seven recipes across the two
   frameworks. The list leads with the framework DECISION rather than the recipes, because it is
   the one choice that cannot be taken back cheaply: the same screens are built by ProcessGuide
