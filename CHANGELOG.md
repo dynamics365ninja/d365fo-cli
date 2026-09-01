@@ -19,6 +19,30 @@ was ported from.
 
 ## [Unreleased]
 
+### Added — grounded knowledge catalogs
+- **`d365fo bp-moniker`** — `validate`, `search`, `suppress`, `extract`. Every Best-Practice
+  moniker has been guessed wrong at least once, and nothing about the spelling separates the real
+  `BPErrorPrivilegeNotCoveredByDuty` from the entirely plausible `BPCheckNamingConventions`; a
+  suppression naming a moniker that does not exist suppresses nothing while looking deliberate.
+  So the catalog never infers — a name is real because an installation declared it.
+  Two sources, extracted from `PackagesLocalDirectory` and shipped as a snapshot so the answer
+  works with no install: canonical names from every model's `AxRuleSet/*.xml`, and message text
+  from the resx resources embedded in `bin/BPExtensions/*.dll`. Measured on this repo's own host:
+  144 rule sets, **409 canonical monikers**, 17 rule assemblies, 726 entries of which 724 carry
+  real message text. The 317 non-canonical entries are resource strings belonging to the upgrade
+  and form-conversion tooling — kept, because their text is searchable, but flagged
+  `canonical: false`, since presence in the catalog is not what makes something a rule.
+  Lookup is deliberately **case-sensitive** (xppbp and the suppression reader match exactly), and
+  a case-only miss is answered with the right casing rather than a flat "no".
+  `D365FO_BP_CATALOG_PATH` points at a snapshot matching an instance's own D365FO version.
+  The resources are read through `PEReader` rather than by loading the assemblies — loading a
+  D365FO rule assembly drags in its dependency graph for the sake of a string table.
+- **`d365fo table-pattern list|spec`** — the decision layer over `generate table`. The patterns,
+  their canonical `TableGroup` and their default fields already existed, but only as a value
+  `--pattern` accepted: an agent choosing a shape could not see what the choices were or what each
+  implied, so it guessed a name (one wasted round trip on the refusal) or skipped `--pattern` and
+  got a table with no `TableGroup` at all.
+
 ### Added — the structural half of `modify`
 - **Seventeen new `modify` sub-commands**, taking the write surface from 5 operations to 22:
   `add-index`, `add-relation`, `add-field-group`, `add-delete-action`, `rename-field`,

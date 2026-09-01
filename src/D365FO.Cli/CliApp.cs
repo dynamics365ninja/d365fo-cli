@@ -359,6 +359,22 @@ public static class CliApp
             // The CLI's `get_knowledge` equivalent: the verified skills/_source corpus,
             // embedded in the binary and served per-topic / per-section so an agent
             // without skill-file support can still ground itself.
+            cfg.AddBranch("table-pattern", b =>
+            {
+                b.SetDescription("Table shape patterns: what each one is for, and what it presets.");
+                b.AddCommand<TablePatternListCommand>("list").WithDescription("Every pattern with its TableGroup, when to use it, and its default fields.");
+                b.AddCommand<TablePatternSpecCommand>("spec").WithDescription("One pattern in full, with the scaffold call that produces it.");
+            });
+
+            cfg.AddBranch("bp-moniker", b =>
+            {
+                b.SetDescription("Best-Practice rule monikers, from names a real installation declares.");
+                b.AddCommand<BpMonikerValidateCommand>("validate").WithDescription("Is this an exact, real moniker? Case-sensitive, as xppbp is.");
+                b.AddCommand<BpMonikerSearchCommand>("search").WithDescription("Find the rule covering a scenario, by words in its name, message or description.");
+                b.AddCommand<BpMonikerSuppressCommand>("suppress").WithDescription("Render a _BPSuppressions.xml <Diagnostic> block; refuses a moniker the catalog does not know.");
+                b.AddCommand<BpMonikerExtractCommand>("extract").WithDescription("Rebuild the catalog from this installation's rule sets and BP rule assemblies.");
+            });
+
             cfg.AddBranch("knowledge", b =>
             {
                 b.SetDescription("Verified X++/D365FO knowledge topics (the skills/_source corpus), served per topic or per section.");
