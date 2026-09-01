@@ -18,6 +18,12 @@
     <Using Include="Xunit" />
   </ItemGroup>
 
+  <!-- Redirects D365FO_INDEX_DB (and the journal beside it) into a per-run temp directory so
+       the suite cannot write into the real index of the machine it runs on. See the file. -->
+  <ItemGroup>
+    <Compile Include="..\Shared\TestIndexIsolation.cs" Link="TestIndexIsolation.cs" />
+  </ItemGroup>
+
   <ItemGroup>
     <ProjectReference Include="..\..\src\D365FO.Cli\D365FO.Cli.csproj" />
     <ProjectReference Include="..\..\src\D365FO.Core\D365FO.Core.csproj" />

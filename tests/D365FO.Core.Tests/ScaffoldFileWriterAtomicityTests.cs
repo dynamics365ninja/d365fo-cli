@@ -56,9 +56,7 @@ public sealed class ScaffoldFileWriterAtomicityTests : IDisposable
         Parallel.ForEach(names, Bounded, name =>
             ScaffoldFileWriter.Write(TableDoc(name), Path.Combine(_dir, name + ".xml")));
 
-        Assert.Equal(
-            names.Select(n => n + ".xml").Order().ToArray(),
-            Directory.GetFiles(_dir, "*.xml").Select(Path.GetFileName).Order().ToArray()!);
+        WrittenFilesAssert.ExactlyTheseXml(_dir, names.Select(n => n + ".xml").ToArray());
         Assert.Empty(Directory.GetFiles(_dir, "*.tmp"));
 
         // Every file holds its own document — not a neighbour's, which is what a shared

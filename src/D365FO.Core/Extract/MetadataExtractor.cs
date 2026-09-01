@@ -454,7 +454,14 @@ public sealed class MetadataExtractor
         {
             foreach (var de in daContainer.Elements().Where(x => x.Name.LocalName.StartsWith("AxTableDeleteAction", StringComparison.Ordinal)))
             {
-                var related = Local(de, "RelatedTable");
+                // The member is <Table>. AxTableDeleteAction declares
+                // `Name, DeleteAction, Relation, Table, Tags` — there is no RelatedTable, so
+                // looking for one skipped EVERY delete action: measured against this repo's own
+                // installation, the index held 0 rows across 214 packages while shipped tables
+                // plainly declare them, and `get table` answered `deleteActions: []` for all of
+                // them. `RelatedTable` is still accepted, for documents written by the tool
+                // before this was understood.
+                var related = Local(de, "Table") ?? Local(de, "RelatedTable");
                 if (string.IsNullOrEmpty(related)) continue;
                 deleteActions.Add(new ExtractedTableDeleteAction(
                     Local(de, "Name"),
@@ -932,18 +939,54 @@ public sealed class MetadataExtractor
         }
     }
 
+    /// <summary>
+    /// The declaration line of a method body, skipping everything that can legally precede it.
+    /// </summary>
+    /// <remarks>
+    /// Three kinds of thing sit between the start of a method's source and its declaration:
+    /// blank lines, attribute blocks, and COMMENTS. Only the first two were skipped, so any
+    /// method carrying an XML doc comment reported <c>/// &lt;summary&gt;</c> as its signature —
+    /// 362 of the 621 methods on <c>SalesTable</c>, and the same for a plain <c>//</c> or a
+    /// <c>/* … */</c> banner. That is worse than an empty signature: <c>prepare change</c> and
+    /// <c>get table</c> present it as the exact declaration a CoC wrapper has to match, which is
+    /// the one thing a green build cannot correct.
+    /// </remarks>
     private static string ExtractSignatureLine(string source)
     {
-        // Find the first non-empty, non-attribute line — that's the actual
-        // method signature. Attribute lines start with '[' and may span
+        // Find the first non-empty, non-attribute, non-comment line — that's the
+        // actual method signature. Attribute lines start with '[' and may span
         // multiple lines (e.g. [FormEventHandler(\n    formStr(X),\n ...)]).
         using var reader = new StringReader(source);
         int attrDepth = 0;
+        bool inBlockComment = false;
         string? line;
         while ((line = reader.ReadLine()) is not null)
         {
             var t = line.TrimStart();
+
+            // A /* … */ banner opened on an earlier line runs until it closes; the
+            // declaration may follow on the very line that closes it.
+            if (inBlockComment)
+            {
+                var close = t.IndexOf("*/", StringComparison.Ordinal);
+                if (close < 0) continue;
+                inBlockComment = false;
+                t = t[(close + 2)..].TrimStart();
+            }
+
             if (t.Length == 0) continue;
+
+            // `///` doc comments and `//` line comments precede a declaration, they are never it.
+            if (t.StartsWith("//", StringComparison.Ordinal)) continue;
+
+            if (t.StartsWith("/*", StringComparison.Ordinal))
+            {
+                var close = t.IndexOf("*/", StringComparison.Ordinal);
+                if (close < 0) { inBlockComment = true; continue; }
+                t = t[(close + 2)..].TrimStart();
+                if (t.Length == 0) continue;
+            }
+
             if (attrDepth > 0)
             {
                 foreach (var ch in t) { if (ch == '[') attrDepth++; else if (ch == ']') attrDepth--; }
@@ -1293,12 +1336,27 @@ public sealed class MetadataExtractor
         return new ExtractedQuery(name, file, ds);
     }
 
+    /// <summary>Is this element, directly under a <c>&lt;DataSources&gt;</c>, a datasource?</summary>
+    /// <remarks>
+    /// The names the AOT actually writes are <c>AxQuerySimpleRootDataSource</c> and
+    /// <c>AxQuerySimpleEmbeddedDataSource</c>. The code looked for <c>AxQuerySimpleDataSource</c>
+    /// and <c>AxQueryDataSource</c>, neither of which occurs in a shipped query — so the index
+    /// held <b>4 896 queries and zero datasources</b>, and `get query` answered "no datasources"
+    /// for every query in the installation. The sample fixtures use the shorter name, which is
+    /// why nothing in the suite noticed; it is still accepted here.
+    ///
+    /// Matching on the suffix rather than a prefix also keeps <c>AxQuerySimpleDataSourceField</c>,
+    /// <c>…Range</c> and <c>…Relation</c> out, which a prefix match would have swept in.
+    /// </remarks>
+    internal static bool IsQueryDataSourceElement(string localName) =>
+        localName.StartsWith("AxQuery", StringComparison.Ordinal)
+        && localName.EndsWith("DataSource", StringComparison.Ordinal);
+
     private static void CollectQueryDataSources(XElement parentEl, string? parent, List<ExtractedQueryDataSource> acc)
     {
         var container = parentEl.Elements().FirstOrDefault(x => x.Name.LocalName == "DataSources");
         if (container is null) return;
-        foreach (var ds in container.Elements().Where(x => x.Name.LocalName.StartsWith("AxQuerySimpleDataSource", StringComparison.Ordinal)
-                                                        || x.Name.LocalName.StartsWith("AxQueryDataSource", StringComparison.Ordinal)))
+        foreach (var ds in container.Elements().Where(x => IsQueryDataSourceElement(x.Name.LocalName)))
         {
             var dsName = Local(ds, "Name");
             if (string.IsNullOrEmpty(dsName)) continue;

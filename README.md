@@ -7,7 +7,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![.NET](https://img.shields.io/badge/.NET-10-purple.svg)](https://dotnet.microsoft.com/)
 [![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey.svg)]()
-[![Tests](https://img.shields.io/badge/tests-310%2B-brightgreen.svg)]()
+[![Tests](https://img.shields.io/badge/tests-1580-brightgreen.svg)]()
 [![Successor to d365fo-mcp-server](https://img.shields.io/badge/successor%20to-d365fo--mcp--server-orange.svg)](https://github.com/dynamics365ninja/d365fo-mcp-server)
 
 *Grounded AI development for Dynamics 365 Finance & Operations — works with GitHub Copilot, Claude Code, Codex, Gemini CLI, and any agent with a shell*
@@ -32,7 +32,7 @@ This CLI pre-indexes your entire D365FO installation (hundreds of thousands of s
 | Labels | Hardcoded strings | Right `@SYS`/`@MODULE` key found instantly |
 | Security chains | Hours of manual tracing | Role → Duty → Privilege → Entry Point in one call |
 | Generated code | Hallucinated fields and types | Every reference proven against the index, gated before write |
-| Agent context cost | 26–27 MCP tool schemas every turn | 1 shell tool + lazy-loaded Skills (~85 % fewer tokens) |
+| Agent context cost | 26–28 MCP tool schemas every turn | 1 shell tool + lazy-loaded Skills (~85 % fewer tokens) |
 
 ---
 
@@ -43,9 +43,9 @@ This CLI pre-indexes your entire D365FO installation (hundreds of thousands of s
 | 🔍 **Full-codebase intelligence** | Tables, classes, EDTs, enums, forms, queries, views, entities, reports, services, workflows, security artifacts, labels (FTS5) — results in milliseconds, no VM round-trip |
 | 🛡️ **Grounded generation** | Fail-closed gates: `prepare change`/`prepare create` issue grounding tokens, `validate references` proves every identifier, `validate xpp` enforces BP rules — hallucinated code never reaches disk |
 | 🧩 **Form pattern engine** | Catalog of Microsoft form patterns and container sub-patterns: `get form-pattern` serves the required structure, `generate form` self-tests against it (FP001–FP010), `validate form-pattern` re-checks any hand edit |
-| ✍️ **Pattern-correct scaffolding** | 29 `generate` commands — tables, classes, CoC, forms (9 patterns), form datasource/control override methods, entities, security, SysOperation, workflows, business events, number sequences, XDS policies |
+| ✍️ **Pattern-correct scaffolding** | 33 `generate` commands — tables, classes, CoC, forms (9 patterns), form datasource/control override methods, entities, security, SysOperation, workflows, business events, number sequences, XDS policies |
 | 🏗️ **SDLC integration** | MSBuild compilation with structured `xppcDiagnostics`, DB sync, xppbp best practices, SysTestRunner — on Windows D365FO VMs |
-| 📐 **X++ knowledge base** | 19 lazy-loaded Skills: select grammar, CoC authoring, FormRun lifecycle, BP rule canon — loaded only when relevant, for Copilot and Claude alike |
+| 📐 **X++ knowledge base** | 38 lazy-loaded Skills: select grammar, CoC authoring, FormRun lifecycle, BP rule canon — loaded only when relevant, for Copilot and Claude alike |
 | ⚡ **Agent-first ergonomics** | Stable `{ ok, data, warnings }` JSON envelope, `search batch` / `get batch` / `prepare` single-round aggregators, `agent-prompt` + `schema` manifests |
 | 🔌 **Daemon & MCP adapter** | Warm-cache named-pipe daemon with file-system watcher; `d365fo-mcp` speaks JSON-RPC 2.0 over the same index for MCP-only hosts, over stdio or `--http` for a shared team deployment (`API_KEY`, `MCP_SERVER_MODE`) |
 
@@ -145,7 +145,7 @@ Ready to scaffold your first table, form, and CoC extension? Full walkthrough wi
 
 ### GitHub Copilot (VS Code / Visual Studio)
 
-The preferred method is the **one-command skill installer** — it deploys the bundled `d365fo-cli` Copilot skill (SKILL.md + 19 lazily-loaded topic references) into your X++ project's `.github/skills/d365fo-cli/` folder. Copilot auto-discovers skills in `.github/skills/` with no extra configuration.
+The preferred method is the **one-command skill installer** — it deploys the bundled `d365fo-cli` Copilot skill (SKILL.md + 38 lazily-loaded topic references) into your X++ project's `.github/skills/d365fo-cli/` folder. Copilot auto-discovers skills in `.github/skills/` with no extra configuration.
 
 ```powershell
 # From the d365fo-cli repo's scripts folder:
@@ -165,26 +165,45 @@ The installer:
 └── skills/
     └── d365fo-cli/
         ├── SKILL.md              # core rule canon + tool mapping (loaded when the skill activates)
-        └── references/            # 19 X++ topic files, loaded per topic on demand
+        └── references/            # 38 X++ topic files, loaded per topic on demand
+            ├── analytics-and-er.md
+            ├── barcode-scanning.md
+            ├── build-error-triage.md
+            ├── business-events-authoring.md
             ├── coc-extension-authoring.md
-            ├── xpp-database-queries.md
-            ├── x++-class-authoring.md
-            ├── xpp-class-and-method-rules.md
-            ├── xpp-statement-and-type-rules.md
-            ├── xpp-best-practice-rules.md
-            ├── form-pattern-scaffolding.md
-            ├── table-scaffolding.md
+            ├── custom-service-authoring.md
             ├── data-entity-scaffolding.md
             ├── event-handler-authoring.md
-            ├── object-extension-authoring.md
-            ├── security-hierarchy-trace.md
-            ├── sysoperation-batch-patterns.md
-            ├── business-events-authoring.md
-            ├── custom-service-authoring.md
+            ├── form-pattern-scaffolding.md
+            ├── forms-and-navigation.md
+            ├── integration-dmf-dualwrite.md
             ├── integration-patterns.md
+            ├── inventory-and-warehouse.md
             ├── label-translation.md
             ├── model-dependency-and-coupling.md
-            └── review-and-checkpoint-workflow.md
+            ├── number-sequence-patterns.md
+            ├── object-extension-authoring.md
+            ├── performance-and-caching.md
+            ├── posting-and-financials.md
+            ├── review-and-checkpoint-workflow.md
+            ├── runtime-frameworks.md
+            ├── security-hierarchy-trace.md
+            ├── security-modeling.md
+            ├── ssrs-report-authoring.md
+            ├── sysoperation-batch-patterns.md
+            ├── table-scaffolding.md
+            ├── testing-and-quality.md
+            ├── transactions-and-concurrency.md
+            ├── warehouse-mobile-app.md
+            ├── workflow-authoring.md
+            ├── x++-class-authoring.md
+            ├── xpp-best-practice-rules.md
+            ├── xpp-class-and-method-rules.md
+            ├── xpp-data-access-apis.md
+            ├── xpp-database-queries.md
+            ├── xpp-runtime-functions.md
+            ├── xpp-runtime-types.md
+            └── xpp-statement-and-type-rules.md
 ```
 
 **Legacy path (pre-skill format):** If you previously used `copilot-instructions.md` + `instructions/*.instructions.md`, you can migrate by running the installer and then removing the old files:
@@ -212,7 +231,7 @@ Reference the `SKILL.md` files from `skills/anthropic/` in your session prompt o
 
 ### MCP (Claude Desktop, Continue, VS Code MCP)
 
-The bundled `d365fo-mcp` adapter speaks JSON-RPC 2.0 over the same index. Its tool surface is **consolidated** into 27 discriminator-based tools (e.g. `search`, `get_object_info`, `get_method`, `labels`, `security_info`, `extension_info`, `object_patterns`, `generate_object`, `modify_method`, `analyze`, `models`) — see [docs/MIGRATION_FROM_MCP.md](docs/MIGRATION_FROM_MCP.md):
+The bundled `d365fo-mcp` adapter speaks JSON-RPC 2.0 over the same index. Its tool surface is **consolidated** into 28 discriminator-based tools (e.g. `search`, `get_object_info`, `get_method`, `labels`, `security_info`, `extension_info`, `object_patterns`, `generate_object`, `modify_method`, `analyze`, `models`) — see [docs/MIGRATION_FROM_MCP.md](docs/MIGRATION_FROM_MCP.md):
 
 ```json
 {
@@ -246,7 +265,7 @@ MCP servers inject every tool definition into the model's context on every singl
 
 | | MCP server | CLI + Skills |
 |---|---|---|
-| Tool definitions per turn | 26–27 tools (~1,800 tokens) | 1 shell tool (~100 tokens) |
+| Tool definitions per turn | 26–28 tools (~1,800 tokens) | 1 shell tool (~100 tokens) |
 | Discovery round-trips | 2–3 per task | often 1 (`d365fo prepare change`) |
 | Scriptable (shell, CI/CD) | No | Yes |
 | Works in any AI harness | No — MCP hosts only | Yes — Copilot, Claude, Codex, Gemini, … |
@@ -272,6 +291,7 @@ See [docs/TOKEN_ECONOMICS.md](docs/TOKEN_ECONOMICS.md) for the full analysis and
 | **Generate** | `generate table\|class\|coc\|form\|datasource-method\|control-method\|simple-list\|entity\|extension\|event-handler\|privilege\|duty\|role\|report\|sysoperation\|number-sequence\|workflow\|menu-item\|edt\|enum\|query\|view\|map\|business-event\|custom-service\|migration-script\|runbase\|security-policy\|systest` |
 | **Labels** | `labels search\|resolve\|info\|create\|rename\|delete` — search/resolve plus in-place `*.label.txt` edits, multi-language via `--lang` (mirrors the MCP `labels` tool) |
 | **Journal / undo** | `undo [--steps N] [--dry-run]`, `journal list`, `delete` (kind/name, bridge or on-disk) — deterministic single-command rollback for every write path (mirrors the MCP `undo_last_modification` tool) |
+| **Modify** | `modify property\|method`, `modify add-field\|add-enum-value\|add-control`, `modify add-index\|add-relation\|add-field-group\|add-delete-action`, `modify rename-field`, `modify add-query-range\|remove-query-range`, `modify add-entry-point\|remove-entry-point`, seven `modify remove-*` forms, and `modify batch` (several changes in one read-edit-write) — 22 operations over all 41 bridge-writable kinds, extension-aware and journalled for `undo` |
 | **Analyze** | `analyze completeness`, `analyze integration`, `analyze impact`, `lint`, `suggest edt`, `suggest extension`, `report-integrations` |
 | **Review** | `review diff` |
 | **Models** | `models list`, `models deps`, `models coupling` |

@@ -104,6 +104,35 @@ public static class TableDataMethods
         => Catalog.TryGetValue(methodName.Trim(), out var m) ? m : null;
 
     /// <summary>
+    /// Every inherited data method, in the order a test author meets them: the three validation
+    /// gates first (the ones a rule is written into), then the write path, then the seeding and
+    /// field-level hooks. <c>prepare test</c> lists these for a table because the index cannot —
+    /// it stores declared members only, so a table that has never overridden <c>validateWrite</c>
+    /// has no row for it, and that is exactly the method the caller wants to pin down.
+    /// </summary>
+    public static IReadOnlyList<TableDataMethod> All { get; } =
+    [
+        Catalog["validateWrite"], Catalog["validateField"], Catalog["validateDelete"],
+        Catalog["insert"], Catalog["update"], Catalog["delete"],
+        Catalog["initValue"], Catalog["modifiedField"],
+    ];
+
+    /// <summary>
+    /// Does this method write to the database? A test for one needs a transaction and a re-read;
+    /// a test for a validation gate only needs the buffer and the verdict.
+    /// </summary>
+    public static bool IsWritePath(string methodName)
+        => methodName.Trim().ToLowerInvariant() is "insert" or "update" or "delete";
+
+    /// <summary>
+    /// Does this method report its verdict as a boolean the caller must assert on? Those are the
+    /// gates — and a test that asserts only the rejecting case passes even when the rule refuses
+    /// every row, which is why <c>prepare test</c> insists on the accepting case beside it.
+    /// </summary>
+    public static bool IsVerdictMethod(string methodName)
+        => methodName.Trim().ToLowerInvariant() is "validatewrite" or "validatefield" or "validatedelete";
+
+    /// <summary>
     /// True for the object types this fallback speaks for. Tables only, deliberately — a
     /// fallback that guessed for views/maps/entities would be inventing a signature, which is
     /// the failure it exists to prevent.

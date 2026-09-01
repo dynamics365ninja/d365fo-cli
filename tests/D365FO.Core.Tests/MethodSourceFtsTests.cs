@@ -27,11 +27,11 @@ public class MethodSourceFtsTests : IDisposable
 
     public void Dispose()
     {
-        Microsoft.Data.Sqlite.SqliteConnection.ClearAllPools();
+        SqlitePool.ReleaseFor(_dbPath);
         foreach (var ext in new[] { "", "-wal", "-shm" })
         {
             var p = _dbPath + ext;
-            // Windows can keep the handle alive for a moment after ClearAllPools
+            // Windows can keep the handle alive for a moment after the pool is released
             // (observed on CI: IOException "being used by another process").
             // Temp-file cleanup is best-effort — retry briefly, then let the OS
             // temp sweeper have it rather than failing the test run.

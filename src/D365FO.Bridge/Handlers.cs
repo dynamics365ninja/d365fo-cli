@@ -1,4 +1,4 @@
-// <copyright file="Handlers.cs" company="d365fo-cli contributors">
+﻿// <copyright file="Handlers.cs" company="d365fo-cli contributors">
 // MIT
 // </copyright>
 
@@ -67,6 +67,16 @@ namespace D365FO.Bridge
         /// it never reaches disk itself; <see cref="MetadataBootstrap.SaveArtifact"/>
         /// re-serialises through the provider on write, same as every other write path here.
         /// </summary>
+
+        /// <summary>Exception type and message, with the whole inner chain appended.</summary>
+        private static string Detail(Exception ex)
+        {
+            var sb = new System.Text.StringBuilder(ex.GetType().Name + ": " + ex.Message);
+            for (var inner = ex.InnerException; inner != null; inner = inner.InnerException)
+                sb.Append(" / ").Append(inner.GetType().Name).Append(": ").Append(inner.Message);
+            return sb.ToString();
+        }
+
         internal JsonObject ReadObjectXml(JsonObject args)
         {
             string kind = args != null ? (string)args["kind"] : null;
@@ -103,16 +113,32 @@ namespace D365FO.Bridge
             string xml;
             try
             {
-                var serializer = new XmlSerializer(artifact.GetType());
+                // DataContractSerializer, not XmlSerializer — the same reason validateArtifact
+                // gives below, and the reason this path was BROKEN for the most-used kinds.
+                // XmlSerializer reflects a type eagerly and refuses anything implementing
+                // IEnumerable without Add(object); Microsoft's own AccessGrant does exactly
+                // that, so reading ANY artifact transitively referencing it — AxTable,
+                // AxSecurityPrivilege, AxMenuItem* — failed with "There was an error reflecting
+                // type 'AxTable'". `modify` reads through here, so on a real installation it
+                // could not touch a table at all. The MetaModel types are DataContract-annotated
+                // and that contract is what the on-disk format encodes, so this is also the
+                // shape the caller expects to edit and hand back.
+                var serializer = new System.Runtime.Serialization.DataContractSerializer(artifact.GetType());
                 using (var sw = new StringWriter())
+                using (var xw = System.Xml.XmlWriter.Create(sw, new System.Xml.XmlWriterSettings { Indent = true, OmitXmlDeclaration = false }))
                 {
-                    serializer.Serialize(sw, artifact);
+                    serializer.WriteObject(xw, artifact);
+                    xw.Flush();
                     xml = sw.ToString();
                 }
             }
             catch (Exception ex)
             {
-                return Fail("SERIALIZE_FAILED", ex.GetType().Name + ": " + ex.Message);
+                // "There was an error reflecting type 'AxTable'" says nothing on its own; the
+                // reason is always in the inner chain, and the validate path already chains it.
+                // Without this, a serializer limitation and a genuinely unreadable artifact
+                // produce the same undiagnosable message.
+                return Fail("SERIALIZE_FAILED", Detail(ex));
             }
 
             return new JsonObject
@@ -573,16 +599,24 @@ namespace D365FO.Bridge
 
                 try
                 {
-                    var serializer = new XmlSerializer(serializerType);
+                    // DataContractSerializer for the same reason the read and validate paths use
+                    // it: XmlSerializer refuses to reflect any type transitively holding an
+                    // AccessGrant (IEnumerable with no Add(object)), which is every AxTable,
+                    // AxSecurityPrivilege and AxMenuItem*. With XmlSerializer here, a write to a
+                    // table failed before it reached IMetadataProvider — and the read path had
+                    // the identical fault, so `modify` never worked against a real installation
+                    // for the kinds people use most. It is also the serializer whose contract the
+                    // on-disk format encodes, so what is parsed here matches what was handed out.
+                    var serializer = new System.Runtime.Serialization.DataContractSerializer(serializerType);
                     using (var reader = new StringReader(xml))
+                    using (var xr = System.Xml.XmlReader.Create(reader, new System.Xml.XmlReaderSettings { DtdProcessing = System.Xml.DtdProcessing.Prohibit }))
                     {
-                        ax = serializer.Deserialize(reader);
+                        ax = serializer.ReadObject(xr, true);
                     }
                 }
                 catch (Exception ex)
                 {
-                    var inner = ex.InnerException?.Message;
-                    return Fail("XML_DESERIALIZE_FAILED", ex.Message + (inner != null ? " / " + inner : string.Empty));
+                    return Fail("XML_DESERIALIZE_FAILED", Detail(ex));
                 }
 
                 // Use the deserialized instance's runtime (concrete) type from here on —
@@ -675,7 +709,11 @@ namespace D365FO.Bridge
             }
             catch (Exception ex)
             {
-                return Fail("SERIALIZE_FAILED", ex.GetType().Name + ": " + ex.Message);
+                // "There was an error reflecting type 'AxTable'" says nothing on its own; the
+                // reason is always in the inner chain, and the validate path already chains it.
+                // Without this, a serializer limitation and a genuinely unreadable artifact
+                // produce the same undiagnosable message.
+                return Fail("SERIALIZE_FAILED", Detail(ex));
             }
 
             return new JsonObject

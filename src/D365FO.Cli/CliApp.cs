@@ -1,4 +1,4 @@
-using D365FO.Cli.Commands;
+﻿using D365FO.Cli.Commands;
 using D365FO.Cli.Commands.Agent;
 using D365FO.Cli.Commands.Analyze;
 using D365FO.Cli.Commands.Daemon;
@@ -277,6 +277,23 @@ public static class CliApp
                 b.AddCommand<ModifyAddFieldCommand>("add-field").WithDescription("Add a field to a live table — concrete AxTableField subtype resolved from the EDT.");
                 b.AddCommand<ModifyAddEnumValueCommand>("add-enum-value").WithDescription("Add a value to a live base enum (positional, never a hard-coded ordinal).");
                 b.AddCommand<ModifyAddControlCommand>("add-control").WithDescription("Add a control to a live form's design, optionally bound to a datasource field.");
+                b.AddCommand<ModifyAddIndexCommand>("add-index").WithDescription("Add an index to a live table; unique unless --allow-duplicates.");
+                b.AddCommand<ModifyAddRelationCommand>("add-relation").WithDescription("Add a foreign-key relation to a live table.");
+                b.AddCommand<ModifyAddFieldGroupCommand>("add-field-group").WithDescription("Add a field group to a live table.");
+                b.AddCommand<ModifyAddDeleteActionCommand>("add-delete-action").WithDescription("Add a delete action to a live table (Cascade | Restricted | CascadeRestricted | None).");
+                b.AddCommand<ModifyRenameFieldCommand>("rename-field").WithDescription("Rename a table field, rewriting the indexes, field groups and relations that name it.");
+                b.AddCommand<ModifyRemoveFieldCommand>("remove-field").WithDescription("Remove a field from a live table.");
+                b.AddCommand<ModifyRemoveIndexCommand>("remove-index").WithDescription("Remove an index from a live table.");
+                b.AddCommand<ModifyRemoveRelationCommand>("remove-relation").WithDescription("Remove a relation from a live table.");
+                b.AddCommand<ModifyRemoveFieldGroupCommand>("remove-field-group").WithDescription("Remove a field group from a live table.");
+                b.AddCommand<ModifyRemoveDeleteActionCommand>("remove-delete-action").WithDescription("Remove a delete action, named by its related table.");
+                b.AddCommand<ModifyRemoveEnumValueCommand>("remove-enum-value").WithDescription("Remove a value from a live base enum.");
+                b.AddCommand<ModifyRemoveControlCommand>("remove-control").WithDescription("Remove a control, and everything nested under it, from a live form.");
+                b.AddCommand<ModifyAddQueryRangeCommand>("add-query-range").WithDescription("Add a range to an AOT query's datasource.");
+                b.AddCommand<ModifyRemoveQueryRangeCommand>("remove-query-range").WithDescription("Remove a range from an AOT query's datasource.");
+                b.AddCommand<ModifyAddEntryPointCommand>("add-entry-point").WithDescription("Grant an entry point on a security privilege.");
+                b.AddCommand<ModifyRemoveEntryPointCommand>("remove-entry-point").WithDescription("Revoke an entry point from a security privilege.");
+                b.AddCommand<ModifyBatchCommand>("batch").WithDescription("Apply several changes to one object in a single read-edit-write; a refused step discards the batch.");
             });
 
             cfg.AddBranch("analyze", b =>

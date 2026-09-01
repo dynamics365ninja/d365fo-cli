@@ -232,7 +232,9 @@ public static class ToolCatalog
             "D365FO extensibility analyzer. Pick a `mode`: " +
             "coc (Chain-of-Command extensions for `target` class, optionally scoped to `method`) · " +
             "events (DataEventHandler / SubscribesTo handlers bound to `target`; set `objectType` to its kind) · " +
-            "table-merge (all TableExtensions targeting `target` table + effective merged schema) · " +
+            "table-merge (all TableExtensions targeting `target` table + the effective merged schema: base fields, " +
+            "indexes, relations and field groups with every extension folded in, each member labelled with the " +
+            "object that contributes it; reports any extension whose file could not be read rather than dropping it) · " +
             "points (Table/Form/Enum/EDT _Extension objects targeting `target`; filter with `kind`) · " +
             "strategy (enumerate existing extensions/handlers/CoC on `target` and recommend the least-invasive change). " +
             "Use before writing any extension to check for conflicts and pick the right mechanism. " +

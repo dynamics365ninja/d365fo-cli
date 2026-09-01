@@ -2,6 +2,7 @@ using D365FO.Core;
 using D365FO.Core.Extract;
 using D365FO.Core.Guardrails;
 using D365FO.Core.Index;
+using D365FO.Core.Knowledge;
 using System.IO;
 
 namespace D365FO.Mcp;
@@ -417,15 +418,44 @@ public sealed class ToolHandlers
         });
     }
 
+    /// <summary>
+    /// Every TableExtension targeting <paramref name="table"/>, plus the effective merged schema.
+    /// </summary>
+    /// <remarks>
+    /// The roster alone was returned under a contract promising a merge, which is worse than
+    /// returning a roster honestly: a caller that trusts it reads the absence of a field as the
+    /// field not existing. <see cref="TableMergeAnalyzer"/> now folds each extension's own XML
+    /// onto the base table, and an extension whose file cannot be read is reported rather than
+    /// silently dropped.
+    /// </remarks>
     public ToolResult<object> GetTableExtensionInfo(string table)
     {
         var items = _repo.FindExtensions(table, "Table");
+        var merged = TableMergeAnalyzer.Merge(_repo, table);
+
+        var warnings = merged.Unreadable.Count > 0
+            ? new List<string>
+            {
+                $"{merged.Unreadable.Count} extension(s) could not be read, so the merged schema is INCOMPLETE: "
+                + string.Join("; ", merged.Unreadable),
+            }
+            : null;
+
         return ToolResult<object>.Success(new
         {
-            target = table,
+            target = merged.Table,
+            baseModel = merged.BaseModel,
             count = items.Count,
             extensions = items,
-        });
+            merged = new
+            {
+                fields = merged.Fields,
+                indexes = merged.Indexes,
+                relations = merged.Relations,
+                fieldGroups = merged.FieldGroups,
+                complete = merged.Unreadable.Count == 0,
+            },
+        }, warnings);
     }
 
     public ToolResult<object> AnalyzeExtensionPoints(string target)
@@ -2042,23 +2072,70 @@ public sealed class ToolHandlers
     public ToolResult<object> PrepareTest(string objectName, string? goal, string? methodName, string? modelName)
     {
         if (string.IsNullOrWhiteSpace(objectName))
-            return ToolResult<object>.Fail("BAD_INPUT", "Object name (the class under test) required.");
+            return ToolResult<object>.Fail("BAD_INPUT", "Object name (the class or table under test) required.");
 
-        var target = objectName.Trim();
+        // `CustTable.validateWrite` is how a developer names a table CoC target, and it was the
+        // single most-asked shape across real runs. Split it before resolution, and let an
+        // explicit --method win over the dotted half so the two spellings cannot disagree.
+        var raw = objectName.Trim();
+        var focus = methodName?.Trim();
+        var target = raw;
+        if (raw.Contains('.'))
+        {
+            var cut = raw.LastIndexOf('.');
+            var head = raw[..cut].Trim();
+            var tail = raw[(cut + 1)..].Trim();
+            if (head.Length > 0 && tail.Length > 0)
+            {
+                target = head;
+                focus ??= tail;
+            }
+        }
+
         var testClass = $"{target}Test";
         var details = _repo.GetClassDetails(target);
+
+        // Resolve the kind. Class first (the original contract), table second — a table only wins
+        // when nothing of that name is a class, so an installation holding both keeps the old answer.
+        TableDetails? tableDetails = details is null ? _repo.GetTableDetails(target) : null;
+        var isTable = details is null && tableDetails is not null;
+        var targetKind = isTable ? "table" : "class";
 
         // Lifecycle and serialisation members are not what a unit test pins down.
         var skip = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
             { "new", "finalize", "typenew", "pack", "unpack", "classdeclaration" };
-        var focus = methodName?.Trim();
-        var methods = details?.Methods ?? Array.Empty<MethodInfo>();
-        var suggested = methods
-            .Where(m => !skip.Contains(m.Name))
-            .Where(m => focus is null || string.Equals(m.Name, focus, StringComparison.OrdinalIgnoreCase))
-            .Take(8)
-            .Select(m => new { m.Name, m.Signature })
-            .ToList();
+
+        List<SuggestedTestMethod> suggested;
+        if (isTable)
+        {
+            // The index stores DECLARED members only, so a table that has never overridden
+            // validateWrite has no row for it — and that is the method the caller came for.
+            // Declared overrides first (they carry the table's own signature), then the kernel
+            // data methods it inherits and could still wrap.
+            var declared = (tableDetails!.Methods ?? Array.Empty<TableMethodInfo>())
+                .Where(m => !skip.Contains(m.Name))
+                .Select(m => new SuggestedTestMethod(m.Name, m.Signature, "declared on the table"))
+                .ToList();
+            var declaredNames = new HashSet<string>(declared.Select(m => m.Name), StringComparer.OrdinalIgnoreCase);
+            var inherited = TableDataMethods.All
+                .Where(m => !declaredNames.Contains(m.Name))
+                .Select(m => new SuggestedTestMethod(m.Name, m.Signature, $"inherited from {m.DeclaredOn} — no AOT row, wrap with CoC"))
+                .ToList();
+
+            suggested = declared.Concat(inherited)
+                .Where(m => focus is null || string.Equals(m.Name, focus, StringComparison.OrdinalIgnoreCase))
+                .Take(8)
+                .ToList();
+        }
+        else
+        {
+            suggested = (details?.Methods ?? Array.Empty<MethodInfo>())
+                .Where(m => !skip.Contains(m.Name))
+                .Where(m => focus is null || string.Equals(m.Name, focus, StringComparison.OrdinalIgnoreCase))
+                .Take(8)
+                .Select(m => new SuggestedTestMethod(m.Name, m.Signature, null))
+                .ToList();
+        }
 
         // Classes that look like tests and mention the target — the coverage that exists.
         var existingTests = new List<string>();
@@ -2077,22 +2154,26 @@ public sealed class ToolHandlers
 
         var testEssentials = TestEssentialsReferenced(modelName);
 
-        var scaffold = $"d365fo generate systest {testClass} --class {target}"
+        var scaffold = $"d365fo generate systest {testClass} --{targetKind} {target}"
             + string.Join("", suggested.Select(m => $" --method {m.Name}"))
             + " --install-to <Model>";
 
         var token = ProvenanceStore.CreateToken(new ProvenanceContext(
-            goal ?? $"unit tests for {target}", target, focus, "class", testClass));
+            goal ?? $"unit tests for {target}", target, focus, targetKind, testClass));
+
+        var resolved = details is not null || tableDetails is not null;
 
         return ToolResult<object>.Success(new
         {
             target,
+            targetKind,
             testClass = $"{testClass} extends SysTestCase (the platform's own convention: <Target>Test)",
-            targetIndexed = details is not null,
-            targetHint = details is null
-                ? $"\"{target}\" is not in the index as a class — check the name (`d365fo search any {target}`), or re-extract if it was written outside this session. The rest of this answer is generic."
-                : null,
+            targetIndexed = resolved,
+            targetHint = resolved
+                ? null
+                : $"\"{target}\" is in the index as neither a class nor a table — check the name (`d365fo search any {target}`), or re-extract if it was written outside this session. The rest of this answer is generic.",
             methodsWorthTesting = suggested,
+            tableTestShape = isTable ? TableTestShape(target, focus) : null,
             scaffoldCall = scaffold,
             existingTests = existingTests.Count > 0 ? existingTests : null,
             existingTestsVerdict = existingTests.Count > 0
@@ -2123,6 +2204,62 @@ public sealed class ToolHandlers
                 "cleanup and there is no rollback attribute to add.",
             groundingToken = token,
         });
+    }
+
+    /// <summary>One method <c>prepare test</c> puts forward, with why it is on the list.</summary>
+    /// <param name="Name">Method name as the scaffold call spells it.</param>
+    /// <param name="Signature">The declaration, when one is known.</param>
+    /// <param name="Origin">Declared on the object, or inherited from a kernel type. Null for classes.</param>
+    private sealed record SuggestedTestMethod(string Name, string? Signature, string? Origin);
+
+    /// <summary>
+    /// What a test for a TABLE method has to do that a test for a class method does not. A table
+    /// rule is exercised through a record buffer, and the two mistakes it invites are structural:
+    /// asserting only the rejecting case (a rule that refuses every row then passes its own test),
+    /// and asserting only the boolean while the message the rule writes goes unchecked.
+    /// </summary>
+    private static object TableTestShape(string table, string? focus)
+    {
+        var method = focus ?? "validateWrite";
+        var isVerdict = TableDataMethods.IsVerdictMethod(method);
+        var isWrite = TableDataMethods.IsWritePath(method);
+
+        var steps = new List<string>
+        {
+            $"Arrange a buffer, do not select one: `{table} rec; rec.initValue();` then set exactly the fields the rule reads. " +
+            "A row fetched from the database drags in whatever demo data the box happens to hold.",
+        };
+
+        if (isVerdict)
+        {
+            steps.Add($"Act on the buffer and keep the verdict: `boolean verdict = rec.{method}();`");
+            steps.Add("Assert the verdict AND the message: SysTestAssert::assertFalse(verdict) alone passes even when the " +
+                      "rule refuses every row. Pin the infolog line the rule writes with " +
+                      "`this.assertExpectedInfoLogMessage(\"@MyModel:MyLabel\")` after the act.");
+            steps.Add("Add the ACCEPTING case beside the rejecting one — same arrangement, a value the rule must let through, " +
+                      "assertTrue. Without it the test cannot tell a working rule from one that refuses everything.");
+        }
+        else if (isWrite)
+        {
+            steps.Add($"Act inside a transaction: `ttsbegin; rec.{method}(); ttscommit;` — the write path is what is under test, " +
+                      "so it has to actually run.");
+            steps.Add($"Assert against a RE-READ, not against the buffer you wrote: `{table} stored = {table}::find(rec.RecId);` " +
+                      "then assert on `stored`. The in-memory buffer still holds what you set, so asserting on it proves nothing.");
+        }
+        else
+        {
+            steps.Add($"Act on the buffer: `rec.{method}(…);` then assert on the fields the method is supposed to have derived.");
+        }
+
+        return new
+        {
+            method,
+            steps,
+            rollback = "Every SysTest method runs in its own transaction and is rolled back, so records created here need no " +
+                       "cleanup and there is no rollback attribute to add.",
+            company = "A table with SaveDataPerCompany needs a company: pass one with [SysTestCaseDataDependency('<Company>')] " +
+                      "(`d365fo generate systest … --data-area-id <Company>`) rather than switching company inside the method.",
+        };
     }
 
     /// <summary>Does the model that will hold the test reference TestEssentials? Null when unknowable here.</summary>
