@@ -19,6 +19,53 @@ was ported from.
 
 ## [Unreleased]
 
+### Fixed — the CLI and the MCP server had drifted apart
+- **`modify_object` reached four of the engine's twenty operations, and mis-applied the rest.**
+  An unknown `action` fell back to `SetProperty`, so `action="add-index"` did not fail — it set a
+  property named after the index and reported `ok: true`. The whole structural write surface the
+  CLI gained (`add-index`, `add-relation`, `add-field-group`, `add-delete-action`, `rename-field`,
+  the seven `remove-*` forms, the query ranges and the privilege entry points) was unreachable over
+  MCP, and asking for it did something else. The tool now resolves the action through
+  `ObjectModifyEngine.TryParseOperation` — the same map the sub-commands use — and refuses what it
+  cannot resolve, naming the twenty alternatives. It also gained `operations[]`, the batched form:
+  one bridge round trip, one journal entry, and no intermediate state published to disk.
+- **`d365fo schema` published 130 of the 200 commands the app registers.** The manifest is what an
+  agent reads to find the tool, so `modify`, `knowledge`, `bp-moniker`, the table/report/mobile
+  pattern catalogs and eleven `generate` sub-commands were, for that reader, not shipped. It was
+  also wrong in both directions: it claimed `object_patterns (action=analyze)`, which no tool
+  dispatched, and denied that `validate xpp` is `validate(mode=xpp)`, which it is.
+- **`modify batch` refused the operation its own error message recommends.** The batch parser
+  derived the enum spelling from the step name, which works for every operation whose command name
+  matches its enum name and fails for the one that does not — `property` is `SetProperty`.
+
+### Added — what the MCP server was missing
+- **`analyze(mode=completeness)`** — the one analysis that reads the developer's working tree
+  rather than the index, previously CLI-only.
+- **`object_patterns` gained three domains and an action**: `domain=table`, `domain=report` and
+  `domain=mobile-app` (list + spec), and `domain=form, action=analyze` — the mined half of the
+  form toolkit. The tool used to answer these with "not backed here, use the CLI", for catalogs
+  that are pure in-process data.
+- **`get_knowledge(kind=bp-moniker)`** — validate, search and render a `_BPSuppressions.xml`
+  block against names extracted from a real installation.
+- **`get_object_info(objectType=security-policy)`**.
+
+### Added — what the CLI was missing
+- **`d365fo find extensions --merged`** — the effective merged table schema (base fields, indexes,
+  relations and field groups with every extension folded in, each member labelled with the object
+  that contributes it). It was reachable over MCP and from nowhere on the CLI, which is the wrong
+  way round for a repository whose CLI is the primary surface.
+
+### Added — the check that keeps them together
+- **`CliMcpParityTests`** walks Spectre's own registration tree and the MCP tool catalog and fails
+  the build when a command is published in neither the manifest nor a declared exclusion, when a
+  manifest entry names a command or an MCP route that does not exist, when an MCP tool is reachable
+  from no command, or when an `ObjectModifyEngine.Operation` is missing from either surface. Both
+  inventories were hand-written and both had gone stale; deriving the ground truth from the
+  registration itself is the only thing that has ever kept them honest.
+- Six implementations moved into Core so the two surfaces share them rather than agreeing by
+  inspection: `CompletenessAnalyzer`, `FormPatternMiner`, `ExtensionAnswers`, `BpMonikerAnswers`,
+  `PatternCatalogAnswers`, `BatchStepParser`.
+
 ### Added — grounded knowledge catalogs
 - **`d365fo bp-moniker`** — `validate`, `search`, `suppress`, `extract`. Every Best-Practice
   moniker has been guessed wrong at least once, and nothing about the spelling separates the real

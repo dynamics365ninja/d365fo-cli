@@ -429,34 +429,7 @@ public sealed class ToolHandlers
     /// silently dropped.
     /// </remarks>
     public ToolResult<object> GetTableExtensionInfo(string table)
-    {
-        var items = _repo.FindExtensions(table, "Table");
-        var merged = TableMergeAnalyzer.Merge(_repo, table);
-
-        var warnings = merged.Unreadable.Count > 0
-            ? new List<string>
-            {
-                $"{merged.Unreadable.Count} extension(s) could not be read, so the merged schema is INCOMPLETE: "
-                + string.Join("; ", merged.Unreadable),
-            }
-            : null;
-
-        return ToolResult<object>.Success(new
-        {
-            target = merged.Table,
-            baseModel = merged.BaseModel,
-            count = items.Count,
-            extensions = items,
-            merged = new
-            {
-                fields = merged.Fields,
-                indexes = merged.Indexes,
-                relations = merged.Relations,
-                fieldGroups = merged.FieldGroups,
-                complete = merged.Unreadable.Count == 0,
-            },
-        }, warnings);
-    }
+        => D365FO.Core.Analysis.ExtensionAnswers.TableMerge(_repo, table);
 
     public ToolResult<object> AnalyzeExtensionPoints(string target)
     {
@@ -810,6 +783,14 @@ public sealed class ToolHandlers
         return ToolResult<object>.Success(new { count = items.Count, items });
     }
 
+    public ToolResult<object> GetSecurityPolicy(string name)
+    {
+        var item = _repo.GetSecurityPolicy(name);
+        return item is null
+            ? ToolResult<object>.Fail("NOT_FOUND", $"Security policy '{name}' not found.")
+            : ToolResult<object>.Success(item);
+    }
+
     public ToolResult<object> GetBusinessEvent(string name)
     {
         var e = _repo.GetBusinessEvent(name);
@@ -843,6 +824,39 @@ public sealed class ToolHandlers
     }
 
     // ---- integration analysis handlers ----
+
+    /// <summary>
+    /// Cross-check a workspace folder's AOT XML against the index — the one <c>analyze</c> mode
+    /// that reads the developer's own working tree rather than the index alone.
+    /// </summary>
+    public ToolResult<object> AnalyzeCompleteness(string path, bool skipLabels, bool skipEdts, bool skipSecurity)
+    {
+        path = (path ?? "").Trim();
+        if (string.IsNullOrWhiteSpace(path) || (!File.Exists(path) && !Directory.Exists(path)))
+            return ToolResult<object>.Fail(D365FoErrorCodes.BadInput, $"Path not found: {path}");
+
+        var report = D365FO.Core.Analysis.CompletenessAnalyzer.Analyze(
+            path, _repo, new D365FO.Core.Analysis.CompletenessAnalyzer.Options(skipLabels, skipEdts, skipSecurity));
+
+        return ToolResult<object>.Success(report,
+            report.IssueCount == 0 ? null : [$"{report.IssueCount} completeness issue(s) found."]);
+    }
+
+    /// <summary>Mined form patterns: the histogram, a filtered list, or the peers of one form.</summary>
+    public ToolResult<object> AnalyzeFormPatterns(
+        string? pattern, string? table, string? similarTo, string? model, int limit)
+    {
+        try
+        {
+            return ToolResult<object>.Success(
+                D365FO.Core.Analysis.FormPatternMiner.Analyze(_repo, pattern, table, similarTo, model, limit));
+        }
+        catch (D365FO.Core.Analysis.FormPatternMiner.ReferenceNotFoundException ex)
+        {
+            return ToolResult<object>.Fail("FORM_NOT_FOUND", ex.Message,
+                "Run `d365fo index extract` (or refresh) and retry, or check the spelling with search(type=form).");
+        }
+    }
 
     public ToolResult<object> AnalyzeIntegration(string? model)
     {
@@ -1251,43 +1265,19 @@ public sealed class ToolHandlers
     /// Writes to a model outside <c>D365FO_CUSTOM_MODELS</c> are redirected to an
     /// extension object, and every write is journaled for <c>undo_last_modification</c>.
     /// </summary>
-    public ToolResult<object> ModifyObject(
-        string action, string kind, string name, string member,
-        string? value, string? type, string? label, bool mandatory,
-        string? parent, string? dataSource, string? dataField,
-        string? model, string? extensionSuffix, string? extensionModel, bool requireExtension)
-    {
-        var op = (action ?? "").ToLowerInvariant() switch
-        {
-            "property" or "set-property" or "modify-property" => D365FO.Core.Bridge.ObjectModifyEngine.Operation.SetProperty,
-            "add-field" or "addfield" => D365FO.Core.Bridge.ObjectModifyEngine.Operation.AddField,
-            "add-enum-value" or "addenumvalue" => D365FO.Core.Bridge.ObjectModifyEngine.Operation.AddEnumValue,
-            "add-control" or "addcontrol" => D365FO.Core.Bridge.ObjectModifyEngine.Operation.AddControl,
-            _ => (D365FO.Core.Bridge.ObjectModifyEngine.Operation?)null,
-        } ?? D365FO.Core.Bridge.ObjectModifyEngine.Operation.SetProperty;
-
-        if (string.IsNullOrWhiteSpace(action))
-            return ToolResult<object>.Fail(D365FoErrorCodes.BadInput, "action is required: property | add-field | add-enum-value | add-control.");
-
-        return D365FO.Core.Bridge.ObjectModifyEngine.Modify(new D365FO.Core.Bridge.ObjectModifyEngine.ModifyRequest
-        {
-            Operation = op,
-            Kind = kind,
-            ObjectName = name,
-            Member = member,
-            Value = value,
-            Type = type,
-            Label = label,
-            Mandatory = mandatory,
-            Parent = parent,
-            DataSource = dataSource,
-            DataField = dataField,
-            Model = model,
-            ExtensionSuffix = extensionSuffix,
-            ExtensionModel = extensionModel,
-            RequireExtension = requireExtension,
-        }, _repo);
-    }
+    /// <summary>
+    /// Apply one structured modification — or a batch of them — through the same engine the
+    /// <c>d365fo modify</c> sub-commands use.
+    /// </summary>
+    /// <remarks>
+    /// The request arrives fully bound (see <c>ToolCatalog.ModifyObjectCall</c>) rather than as
+    /// a parameter list, because the parameter list is what fell behind: the engine grew from
+    /// five operations to twenty and this handler kept binding the four it was written with.
+    /// Taking the engine's own request type means an operation that the engine gains cannot be
+    /// unreachable here without also being unreachable from the CLI.
+    /// </remarks>
+    public ToolResult<object> ModifyObject(D365FO.Core.Bridge.ObjectModifyEngine.ModifyRequest request)
+        => D365FO.Core.Bridge.ObjectModifyEngine.Modify(request, _repo);
 
     public ToolResult<object> GenerateClass(
         string name, string? extends, bool nonFinal,

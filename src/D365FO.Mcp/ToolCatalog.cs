@@ -1,5 +1,8 @@
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using D365FO.Core;
+using D365FO.Core.Bridge;
+using D365FO.Core.Knowledge;
 
 namespace D365FO.Mcp;
 
@@ -122,7 +125,7 @@ public static class ToolCatalog
 
         new Descriptor("get_object_info",
             "Read one object's full metadata by `objectType`: table | class | edt | enum | form | query | view | " +
-            "entity | report | service | service-group | menu-item | business-event. For tables, set exactly one of " +
+            "entity | report | service | service-group | menu-item | business-event | security-policy. For tables, set exactly one of " +
             "`relations` | `methods` | `indexes` | `deleteActions` to return just that slice instead of the full table.",
             Schema(("objectType", "string", true), ("name", "string", true),
                    ("relations", "boolean", false), ("methods", "boolean", false),
@@ -149,9 +152,10 @@ public static class ToolCatalog
                     "service-group"           => h.GetServiceGroup(name),
                     "menu-item"               => h.GetMenuItem(name),
                     "business-event"          => h.GetBusinessEvent(name),
+                    "security-policy"         => h.GetSecurityPolicy(name),
                     _ => D365FO.Core.ToolResult<object>.Fail("BAD_INPUT",
                             $"Unknown objectType '{Str(p, "objectType")}'.",
-                            "Use one of: table, class, edt, enum, form, query, view, entity, report, service, service-group, menu-item, business-event."),
+                            "Use one of: table, class, edt, enum, form, query, view, entity, report, service, service-group, menu-item, business-event, security-policy."),
                 };
             }),
 
@@ -303,11 +307,34 @@ public static class ToolCatalog
             "live D365FO dev VM). `action=list` returns the catalog with each topic's section count and token cost; " +
             "`action=get` returns one topic by `topic` id (`section` narrows to one '##' section, `outline=true` " +
             "returns only headings); `action=search` ranks sections across the corpus against a free-text `query`. " +
-            "Prefer search → get(section) over fetching whole topics — a full topic can run to 2.5k tokens.",
-            Schema(("action", "string", false), ("topic", "string", false), ("section", "string", false),
-                   ("query", "string", false), ("limit", "integer", false), ("outline", "boolean", false)),
-            (h, p) => h.GetKnowledge(StrOr(p, "action", "list"), StrOrNull(p, "topic"), StrOrNull(p, "section"),
-                                     StrOrNull(p, "query"), Int(p, "limit", 10), Bool(p, "outline"))),
+            "Prefer search → get(section) over fetching whole topics — a full topic can run to 2.5k tokens.\n" +
+            "`kind=bp-moniker` switches to the Best-Practice rule catalog, whose names come from the AxRuleSet " +
+            "files and BP rule assemblies of a real installation and are NEVER inferred: `action=validate` " +
+            "(is `moniker` an exact, real rule? matched case-sensitively, as xppbp is — a case-only miss is " +
+            "answered with the right casing) · `action=search` (which rule covers `query`; every word must appear " +
+            "in the name, message or description, so a scenario can be described in words the rule name does not " +
+            "contain; `canonicalOnly` drops the rule-assembly strings no rule set declares) · `action=suppress` " +
+            "(render the `_BPSuppressions.xml` <Diagnostic> block for `moniker` at dynamics:// `path`, with " +
+            "`justification`, `message` and `severity`; refused for a moniker the catalog does not know, because " +
+            "a suppression naming a rule that does not exist suppresses nothing while looking deliberate).",
+            Schema(("kind", "string", false), ("action", "string", false), ("topic", "string", false),
+                   ("section", "string", false), ("query", "string", false), ("limit", "integer", false),
+                   ("outline", "boolean", false), ("moniker", "string", false), ("path", "string", false),
+                   ("justification", "string", false), ("message", "string", false),
+                   ("severity", "string", false), ("canonicalOnly", "boolean", false)),
+            (h, p) => StrOr(p, "kind", "knowledge").ToLowerInvariant() switch
+            {
+                "bp-moniker" or "bp" => StrOr(p, "action", "validate").ToLowerInvariant() switch
+                {
+                    "search"   => BpMonikerAnswers.Search(Str(p, "query"), Int(p, "limit", 20), Bool(p, "canonicalOnly")),
+                    "suppress" => BpMonikerAnswers.Suppress(Str(p, "moniker"), StrOrNull(p, "path"),
+                                    StrOrNull(p, "message"), StrOrNull(p, "justification"),
+                                    StrOr(p, "severity", "Warning")),
+                    _          => BpMonikerAnswers.Validate(Str(p, "moniker")),
+                },
+                _ => h.GetKnowledge(StrOr(p, "action", "list"), StrOrNull(p, "topic"), StrOrNull(p, "section"),
+                                    StrOrNull(p, "query"), Int(p, "limit", 10), Bool(p, "outline")),
+            }),
 
         new Descriptor("explain_build_error",
             "Score xppc / MSBuild output against the fix-hint rules and return ranked, machine-identified causes " +
@@ -326,21 +353,49 @@ public static class ToolCatalog
             "`xml` — the same gate `generate_object(objectType=form)` enforces before writing) · " +
             "repair (apply the deterministic fixes for those violations — missing required controls, control order, " +
             "PatternVersion, pattern-default properties, unambiguous sub-patterns — and return the repaired `xml` " +
-            "plus what it refused to change; pass `name` to adopt an unpatterned form into a pattern). " +
-            "`domain=table` is not backed by the C# index here — use `analyze(mode=integration)` or the CLI " +
-            "`d365fo find form-patterns` for table/form mining.",
-            Schema(("domain", "string", false), ("action", "string", true), ("name", "string", false), ("xml", "string", false)),
+            "plus what it refused to change; pass `name` to adopt an unpatterned form into a pattern) · " +
+            "analyze (mine the INDEXED forms rather than the catalog: no filter returns the pattern histogram, " +
+            "`pattern`/`table` filter it, `similarTo` returns the peers of one form — the reference forms worth " +
+            "cloning). " +
+            "`domain=table`: list (every pattern with its TableGroup, when to use it, its default fields, and the " +
+            "storage choices) · spec (one pattern by `name`, including the scaffold call that produces it). " +
+            "`domain=report`: list · spec — the seven SSRS shapes as recipes; there is no pattern XML to validate " +
+            "a report against, so each is an object roster, base classes, one scaffold call and the checks to run. " +
+            "`domain=mobile-app`: list (leads with the framework decision — ProcessGuide vs the legacy " +
+            "WHSWorkExecuteDisplay hierarchy, which is a rewrite to get wrong; `framework` filters) · spec — " +
+            "warehouse scanner screens.",
+            Schema(("domain", "string", false), ("action", "string", true), ("name", "string", false),
+                   ("xml", "string", false), ("pattern", "string", false), ("table", "string", false),
+                   ("similarTo", "string", false), ("model", "string", false), ("framework", "string", false),
+                   ("limit", "integer", false)),
             (h, p) => StrOr(p, "domain", "form").ToLowerInvariant() switch
             {
                 "form" => StrOr(p, "action", "spec").ToLowerInvariant() switch
                 {
                     "validate" => h.ValidateFormPattern(Str(p, "xml")),
                     "repair"   => h.RepairFormPattern(Str(p, "xml"), StrOrNull(p, "name")),
+                    "analyze"  => h.AnalyzeFormPatterns(StrOrNull(p, "pattern"), StrOrNull(p, "table"),
+                                    StrOrNull(p, "similarTo"), StrOrNull(p, "model"), Int(p, "limit", 50)),
                     _          => h.GetFormPatternSpec(StrOrNull(p, "name")),
+                },
+                "table" => StrOr(p, "action", "list").ToLowerInvariant() switch
+                {
+                    "spec" => PatternCatalogAnswers.TableSpec(StrOr(p, "name", Str(p, "pattern"))),
+                    _      => PatternCatalogAnswers.TableList(),
+                },
+                "report" => StrOr(p, "action", "list").ToLowerInvariant() switch
+                {
+                    "spec" => PatternCatalogAnswers.ReportSpec(StrOr(p, "name", Str(p, "pattern"))),
+                    _      => PatternCatalogAnswers.ReportList(),
+                },
+                "mobile-app" or "mobile" => StrOr(p, "action", "list").ToLowerInvariant() switch
+                {
+                    "spec" => PatternCatalogAnswers.MobileSpec(StrOr(p, "name", Str(p, "pattern"))),
+                    _      => PatternCatalogAnswers.MobileList(StrOrNull(p, "framework")),
                 },
                 _ => D365FO.Core.ToolResult<object>.Fail("BAD_INPUT",
                         $"Unsupported domain '{Str(p, "domain")}' for object_patterns.",
-                        "Only domain=form is index-backed here. Use analyze(mode=integration) or CLI 'd365fo find form-patterns' for table patterns."),
+                        "Use one of: form, table, report, mobile-app."),
             }),
 
         // ---- Generation ----
@@ -425,30 +480,50 @@ public static class ToolCatalog
 
         new Descriptor("modify_object",
             "Structured edits to an EXISTING object beyond its method bodies, via D365FO.Bridge (Windows VM, " +
-            "requires D365FO_BRIDGE_ENABLED=1). `action` selects the edit:\n" +
+            "requires D365FO_BRIDGE_ENABLED=1). `action` names the edit — the same twenty the CLI's `d365fo " +
+            "modify` sub-commands carry:\n" +
             "• property — set `member` (Label, ConfigurationKey, TableGroup, …) to `value` on any kind\n" +
-            "• add-field — add field `member` to table `name`; `type` is the EDT and decides the concrete " +
-            "AxTableField subtype (`label`, `mandatory` optional)\n" +
-            "• add-enum-value — add value `member` to base enum `name` (positional; never writes an ordinal, " +
-            "which is what breaks when another model inserts a value ahead of it)\n" +
-            "• add-control — add control `member` of `type` (Grid, Group, TabPage, String, …) to form `name`, " +
-            "optionally inside `parent` and bound to `dataSource`/`dataField`\n" +
+            "• add-field / remove-field / rename-field — a field on table `name`; on add, `type` is the EDT and " +
+            "decides the concrete AxTableField subtype (`label`, `mandatory` optional); on rename, `newName`\n" +
+            "• add-index / remove-index — an index `member` over `fields` (order is the key order); unique " +
+            "unless `allowDuplicates`, `alternateKey` marks it an alternate key\n" +
+            "• add-relation / remove-relation — a foreign key `member` to `relatedTable`.`relatedField`\n" +
+            "• add-field-group / remove-field-group — a field group `member` over `fields`\n" +
+            "• add-delete-action / remove-delete-action — `relatedTable` governed with `deleteAction` " +
+            "(Cascade | Restricted | CascadeRestricted | None); the remove form is addressed by that table\n" +
+            "• add-enum-value / remove-enum-value — a value `member` on base enum `name` (positional; never " +
+            "writes an ordinal, which is what breaks when another model inserts a value ahead of it)\n" +
+            "• add-control / remove-control — control `member` of `type` (Grid, Group, TabPage, String, …) on " +
+            "form `name`, optionally inside `parent` and bound to `dataSource`/`dataField`; remove takes " +
+            "everything nested under it too\n" +
+            "• add-query-range / remove-query-range — a range on field `member` of query `name`, in " +
+            "`dataSourceName` (optional when the query has one datasource); `rangeValue` is the range " +
+            "EXPRESSION, and empty is legal — that is a range whose value is set at run time\n" +
+            "• add-entry-point / remove-entry-point — grant/revoke `member` on security privilege `name`, " +
+            "with `entryPointType` (MenuItemDisplay, Form, …) and `access` (Read | Update | Create | Correct | " +
+            "Delete | Invoke)\n" +
+            "BATCHING: `operations: [{operation, member, …}]` applies several edits to the SAME object in one " +
+            "read-edit-write — one bridge round trip, one journal entry, and no intermediate state published " +
+            "(a table is never briefly on disk carrying a field no index covers). Steps inherit `kind`, `name` " +
+            "and `model`; a step that refuses discards the whole batch with nothing written.\n" +
             "EXTENSION FALLBACK: when the object's model is not in D365FO_CUSTOM_MODELS the edit is written to " +
             "the <Target>.<Suffix> extension in a custom model instead of the object itself, creating that " +
             "extension if needed, and says so in `warnings`. Force it with `extensionSuffix`, or refuse the " +
             "in-place path entirely with `requireExtension`. Every write is journaled — revert with " +
             "undo_last_modification. No on-disk fallback: fails BRIDGE_REQUIRED when the bridge is unavailable.",
-            Schema(("action", "string", true), ("kind", "string", true), ("name", "string", true),
-                   ("member", "string", true), ("value", "string", false), ("type", "string", false),
+            Schema(("action", "string", false), ("kind", "string", true), ("name", "string", true),
+                   ("member", "string", false), ("value", "string", false), ("type", "string", false),
                    ("label", "string", false), ("mandatory", "boolean", false), ("parent", "string", false),
                    ("dataSource", "string", false), ("dataField", "string", false), ("model", "string", false),
+                   ("fields", "array", false), ("relatedTable", "string", false), ("relatedField", "string", false),
+                   ("deleteAction", "string", false), ("allowDuplicates", "boolean", false),
+                   ("alternateKey", "boolean", false), ("newName", "string", false),
+                   ("dataSourceName", "string", false), ("rangeValue", "string", false),
+                   ("entryPointType", "string", false), ("access", "string", false),
+                   ("operations", "object-array", false),
                    ("extensionSuffix", "string", false), ("extensionModel", "string", false),
                    ("requireExtension", "boolean", false)),
-            (h, p) => h.ModifyObject(Str(p, "action"), Str(p, "kind"), Str(p, "name"), Str(p, "member"),
-                        StrOrNull(p, "value"), StrOrNull(p, "type"), StrOrNull(p, "label"), Bool(p, "mandatory"),
-                        StrOrNull(p, "parent"), StrOrNull(p, "dataSource"), StrOrNull(p, "dataField"),
-                        StrOrNull(p, "model"), StrOrNull(p, "extensionSuffix"), StrOrNull(p, "extensionModel"),
-                        Bool(p, "requireExtension"))),
+            ModifyObjectCall),
 
         new Descriptor("suggest_edt",
             "Suggest indexed EDTs for a field name using similarity heuristics. Returns confidence-ranked candidates.",
@@ -461,12 +536,20 @@ public static class ToolCatalog
             "Cross-index analysis via `mode`: integration (OData/DMF readiness of data entities — duplicate PublicEntityName, " +
             "missing staging table, zero-field entities) · impact (downstream consumers of `object`: CoC wrappers, event " +
             "handlers, extensions, form datasources, data entities, queries) · report (aggregated integration surface: OData " +
-            "entities, custom services, business events, workflow types, batch jobs). `model` scopes integration/report.",
-            Schema(("mode", "string", true), ("object", "string", false), ("model", "string", false)),
+            "entities, custom services, business events, workflow types, batch jobs) · completeness (walk `path` — a model " +
+            "folder, a PackagesLocalDirectory or one AOT XML file — and report references that resolve to nothing: " +
+            "MISSING_DUTY, MISSING_PRIVILEGE, MISSING_EDT, MISSING_LABEL; narrow with `skipLabels`/`skipEdts`/" +
+            "`skipSecurity`. This is the only mode that reads the working tree, so it needs a local path). " +
+            "`model` scopes integration/report.",
+            Schema(("mode", "string", true), ("object", "string", false), ("model", "string", false),
+                   ("path", "string", false), ("skipLabels", "boolean", false),
+                   ("skipEdts", "boolean", false), ("skipSecurity", "boolean", false)),
             (h, p) => StrOr(p, "mode", "integration").ToLowerInvariant() switch
             {
                 "impact" => h.AnalyzeImpact(Str(p, "object")),
                 "report" => h.ReportIntegrations(StrOrNull(p, "model")),
+                "completeness" => h.AnalyzeCompleteness(Str(p, "path"), Bool(p, "skipLabels"),
+                                    Bool(p, "skipEdts"), Bool(p, "skipSecurity")),
                 _        => h.AnalyzeIntegration(StrOrNull(p, "model")),
             }),
 
@@ -573,14 +656,102 @@ public static class ToolCatalog
 
     // ---- JSON helpers ----
 
+    /// <summary>
+    /// Bind and dispatch <c>modify_object</c>: every operation the engine defines, plus the
+    /// batched form.
+    /// </summary>
+    /// <remarks>
+    /// The action is resolved through <see cref="ObjectModifyEngine.TryParseOperation"/> and an
+    /// unresolved one is refused. It used to fall back to <c>SetProperty</c>, so the sixteen
+    /// operations this tool did not know were not merely unreachable: <c>action="add-index"</c>
+    /// set a property named after the index and reported success.
+    /// </remarks>
+    private static object ModifyObjectCall(ToolHandlers h, JsonElement p)
+    {
+        var kind = Str(p, "kind");
+        var name = Str(p, "name");
+        var model = StrOrNull(p, "model");
+
+        if (p.ValueKind == JsonValueKind.Object
+            && p.TryGetProperty("operations", out var operations)
+            && operations.ValueKind == JsonValueKind.Array)
+        {
+            List<ObjectModifyEngine.ModifyRequest> steps;
+            try
+            {
+                steps = BatchStepParser.Parse(operations, kind, name, model);
+            }
+            catch (Exception ex)
+            {
+                return D365FO.Core.ToolResult<object>.Fail(D365FoErrorCodes.BadInput,
+                    $"`operations` is not a usable step array: {ex.Message}",
+                    "Each step is {\"operation\":\"<name>\", \"member\":\"<name>\", …}. Operation names are the "
+                    + $"same as `action`: {string.Join(", ", ObjectModifyEngine.OperationNames)}.");
+            }
+
+            if (steps.Count == 0)
+                return D365FO.Core.ToolResult<object>.Fail(D365FoErrorCodes.BadInput, "`operations` is empty.");
+
+            return h.ModifyObject(Request(p, ObjectModifyEngine.Operation.SetProperty, kind, name, model) with
+            {
+                Member = "batch",
+                Batch = steps,
+            });
+        }
+
+        if (!ObjectModifyEngine.TryParseOperation(Str(p, "action"), out var operation))
+            return D365FO.Core.ToolResult<object>.Fail(D365FoErrorCodes.BadInput,
+                string.IsNullOrWhiteSpace(Str(p, "action"))
+                    ? "`action` is required (or pass `operations` for a batch)."
+                    : $"Unknown action '{Str(p, "action")}' for modify_object.",
+                $"Use one of: {string.Join(", ", ObjectModifyEngine.OperationNames)}.");
+
+        return h.ModifyObject(Request(p, operation, kind, name, model));
+    }
+
+    private static ObjectModifyEngine.ModifyRequest Request(
+        JsonElement p, ObjectModifyEngine.Operation operation, string kind, string name, string? model)
+        => new()
+        {
+            Operation = operation,
+            Kind = kind,
+            ObjectName = name,
+            Member = Str(p, "member"),
+            Value = StrOrNull(p, "value"),
+            Type = StrOrNull(p, "type"),
+            Label = StrOrNull(p, "label"),
+            Mandatory = Bool(p, "mandatory"),
+            Parent = StrOrNull(p, "parent"),
+            DataSource = StrOrNull(p, "dataSource"),
+            DataField = StrOrNull(p, "dataField"),
+            Model = model,
+            Fields = StrArray(p, "fields"),
+            RelatedTable = StrOrNull(p, "relatedTable"),
+            RelatedField = StrOrNull(p, "relatedField"),
+            DeleteAction = StrOrNull(p, "deleteAction"),
+            AllowDuplicates = Bool(p, "allowDuplicates"),
+            AlternateKey = Bool(p, "alternateKey"),
+            NewName = StrOrNull(p, "newName"),
+            DataSourceName = StrOrNull(p, "dataSourceName") ?? StrOrNull(p, "dataSource"),
+            RangeValue = StrOrNull(p, "rangeValue"),
+            EntryPointType = StrOrNull(p, "entryPointType") ?? StrOrNull(p, "type"),
+            Access = StrOrNull(p, "access"),
+            ExtensionSuffix = StrOrNull(p, "extensionSuffix"),
+            ExtensionModel = StrOrNull(p, "extensionModel"),
+            RequireExtension = Bool(p, "requireExtension"),
+        };
+
     private static JsonObject Schema(params (string name, string type, bool required)[] props)
     {
         var properties = new JsonObject();
         var required = new JsonArray();
         foreach (var (n, t, r) in props)
         {
-            var node = new JsonObject { ["type"] = t };
+            // "object-array" is an array of objects (modify_object's `operations` steps);
+            // a plain "array" is an array of strings, which is every other array here.
+            var node = new JsonObject { ["type"] = t == "object-array" ? "array" : t };
             if (t == "array") node["items"] = new JsonObject { ["type"] = "string" };
+            if (t == "object-array") node["items"] = new JsonObject { ["type"] = "object" };
             properties[n] = node;
             if (r) required.Add(n);
         }

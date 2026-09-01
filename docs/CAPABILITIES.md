@@ -559,7 +559,30 @@ Returns `UNSUPPORTED_PLATFORM` on non-Windows.
 
 ## MCP server
 
-Exposes the same index and scaffolding surface as the CLI over the `ModelContextProtocol` C# SDK via stdio (default) or HTTP (`--http`, for a shared team deployment). The tool surface is **consolidated** into **27 discriminator-based tools** (`search`, `get_object_info`, `get_method`, `labels`, `security_info`, `extension_info`, `object_patterns`, `generate_object`, `modify_method`, `modify_object`, `get_knowledge`, `explain_build_error`, `analyze`, `models`, …) instead of one tool per object type — mirroring the upstream `d365fo-mcp-server` (which sits at 26). A single tool dispatches on a `type` / `objectType` / `mode` / `action` / `domain` / `include` field. See [MIGRATION_FROM_MCP.md](MIGRATION_FROM_MCP.md) for the full old→new mapping.
+Exposes the same index and scaffolding surface as the CLI over the `ModelContextProtocol` C# SDK via stdio (default) or HTTP (`--http`, for a shared team deployment). The tool surface is **consolidated** into **28 discriminator-based tools** (`search`, `get_object_info`, `get_method`, `labels`, `security_info`, `extension_info`, `object_patterns`, `generate_object`, `modify_method`, `modify_object`, `get_knowledge`, `explain_build_error`, `analyze`, `models`, …) instead of one tool per object type — mirroring the upstream `d365fo-mcp-server` (which sits at 26). A single tool dispatches on a `type` / `objectType` / `mode` / `action` / `domain` / `include` field. See [MIGRATION_FROM_MCP.md](MIGRATION_FROM_MCP.md) for the full old→new mapping.
+
+### Keeping the two surfaces the same
+
+"The same surface as the CLI" is a claim, and for a while it was not true in either direction:
+`modify_object` dispatched four of the engine's twenty operations (and silently treated every
+other `action` as `property`), `object_patterns` served only the form domain, the BP-moniker
+catalog was unreachable, and the merged table schema was reachable *only* over MCP. Meanwhile
+the JSON manifest `d365fo schema` publishes — the map an agent reads to translate between the
+two — listed 130 commands out of 200 registered and named routes that did not exist.
+
+`CliMcpParityTests` now holds the claim up:
+
+| Check | What fails the build |
+|---|---|
+| Published surface | A registered command that is neither in the manifest nor in the test's declared out-of-scope list (with a reason). |
+| No phantoms | A manifest entry naming a command the app does not register. |
+| Route truth | A manifest claim like `analyze (mode=completeness)` whose tool, or whose discriminator value, the catalog does not dispatch. |
+| No orphan tools | An MCP tool no CLI command reaches, unless declared MCP-only with a reason. |
+| Write surface | Any `ObjectModifyEngine.Operation` not reachable as both `d365fo modify <op>` and `modify_object(action=<op>)`. |
+
+The shared implementations behind that live in Core — `CompletenessAnalyzer`, `FormPatternMiner`,
+`ExtensionAnswers`, `BpMonikerAnswers`, `PatternCatalogAnswers`, `BatchStepParser` — so the two
+surfaces return the same answer rather than two answers that agree by inspection.
 
 ```jsonc
 {

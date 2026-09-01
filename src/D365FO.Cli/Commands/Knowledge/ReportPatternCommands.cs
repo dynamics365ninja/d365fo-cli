@@ -1,4 +1,4 @@
-using D365FO.Core;
+﻿using D365FO.Core;
 using D365FO.Core.Knowledge;
 using Spectre.Console.Cli;
 
@@ -19,26 +19,8 @@ public sealed class ReportPatternListCommand : Command<ReportPatternListCommand.
     {
     }
 
-    public override int Execute(CommandContext ctx, Settings settings)
-    {
-        var kind = OutputMode.Resolve(settings.Output);
-
-        return RenderHelpers.Render(kind, ToolResult<object>.Success(new
-        {
-            count = ReportRecipes.List().Count,
-            items = ReportRecipes.List().Select(r => new
-            {
-                r.Id,
-                r.Title,
-                r.WhenToUse,
-                objects = r.Roster.Count,
-                r.ScaffoldCall,
-            }),
-            note = "Unlike a form pattern there is no pattern XML to validate a report against, so these are "
-                 + "recipes, not specs: an object roster, the base classes, one scaffold call, and the checks "
-                 + "worth running. `report-pattern spec <id>` has the rest.",
-        }));
-    }
+    public override int Execute(CommandContext ctx, Settings settings) =>
+        RenderHelpers.Render(OutputMode.Resolve(settings.Output), PatternCatalogAnswers.ReportList());
 }
 
 /// <summary><c>d365fo report-pattern spec</c> — one shape in full.</summary>
@@ -51,32 +33,7 @@ public sealed class ReportPatternSpecCommand : Command<ReportPatternSpecCommand.
         public string Pattern { get; init; } = "";
     }
 
-    public override int Execute(CommandContext ctx, Settings settings)
-    {
-        var kind = OutputMode.Resolve(settings.Output);
-
-        var recipe = ReportRecipes.Find(settings.Pattern);
-        if (recipe is null)
-        {
-            return RenderHelpers.Render(kind, ToolResult<object>.Fail(D365FoErrorCodes.TopicNotFound,
-                $"No report recipe called '{settings.Pattern}'.",
-                $"Available: {string.Join(", ", ReportRecipes.Ids())}."));
-        }
-
-        return RenderHelpers.Render(kind, ToolResult<object>.Success(new
-        {
-            recipe.Id,
-            recipe.Title,
-            recipe.WhenToUse,
-            roster = recipe.Roster.Select(o => new { o.Kind, o.Role, o.Extends, o.Naming }),
-            recipe.ScaffoldCall,
-            methodGuidance = recipe.MethodGuidance,
-            checks = recipe.Checks,
-            referenceObjects = recipe.ReferenceObjects.Count > 0 ? recipe.ReferenceObjects : null,
-            readTheReference = recipe.ReferenceObjects.Count > 0
-                ? $"Shipped objects of this exact shape — read one with `d365fo read class {recipe.ReferenceObjects[0]}` "
-                  + "rather than working from this description alone."
-                : null,
-        }));
-    }
+    public override int Execute(CommandContext ctx, Settings settings) =>
+        RenderHelpers.Render(OutputMode.Resolve(settings.Output),
+            PatternCatalogAnswers.ReportSpec(settings.Pattern));
 }
