@@ -710,3 +710,70 @@ CREATE VIRTUAL TABLE IF NOT EXISTS MethodSourceFts USING fts5(
     tokenize = 'unicode61'
 );
 
+
+-- ---------------------------------------------------------------------------
+-- v18: indexes for the per-model re-extract path.
+--
+-- ApplyExtract clears a model's rows before re-inserting them, which is ~40
+-- statements of the shape `DELETE FROM X WHERE ModelId=@m` plus a dozen nested
+-- `DELETE FROM Child WHERE ParentId IN (SELECT ParentId FROM Parent WHERE
+-- ModelId=@m)`. Of the 28 tables carrying ModelId, exactly one was indexed on
+-- it, so every one of those statements was a full table scan — over 60k
+-- classes, 525k methods and 1.4M labels, repeated for each of ~200 models.
+--
+-- Measured before this: one model (241 classes, no tables, no labels) took
+-- 4.8s extracted on its own and 57s inside a full run. The model had not
+-- changed; the database had grown. The cost was O(models x database size),
+-- which is why a full extract took about an hour and got slower as it went.
+--
+-- These are pure additions: no table shape changes, so an existing database
+-- picks them up on the next EnsureSchema without a re-extract.
+-- ---------------------------------------------------------------------------
+CREATE INDEX IF NOT EXISTS IX_Tables_ModelId             ON Tables(ModelId);
+CREATE INDEX IF NOT EXISTS IX_Classes_ModelId            ON Classes(ModelId);
+CREATE INDEX IF NOT EXISTS IX_CocExtensions_ModelId      ON CocExtensions(ModelId);
+CREATE INDEX IF NOT EXISTS IX_Edts_ModelId               ON Edts(ModelId);
+CREATE INDEX IF NOT EXISTS IX_Enums_ModelId              ON Enums(ModelId);
+CREATE INDEX IF NOT EXISTS IX_MenuItems_ModelId          ON MenuItems(ModelId);
+CREATE INDEX IF NOT EXISTS IX_SecurityRoles_ModelId      ON SecurityRoles(ModelId);
+CREATE INDEX IF NOT EXISTS IX_Forms_ModelId              ON Forms(ModelId);
+CREATE INDEX IF NOT EXISTS IX_ObjectExtensions_ModelId   ON ObjectExtensions(ModelId);
+CREATE INDEX IF NOT EXISTS IX_EventSubscribers_ModelId   ON EventSubscribers(ModelId);
+CREATE INDEX IF NOT EXISTS IX_SecurityDuties_ModelId     ON SecurityDuties(ModelId);
+CREATE INDEX IF NOT EXISTS IX_SecurityPrivileges_ModelId ON SecurityPrivileges(ModelId);
+CREATE INDEX IF NOT EXISTS IX_Queries_ModelId            ON Queries(ModelId);
+CREATE INDEX IF NOT EXISTS IX_Views_ModelId              ON Views(ModelId);
+CREATE INDEX IF NOT EXISTS IX_DataEntities_ModelId       ON DataEntities(ModelId);
+CREATE INDEX IF NOT EXISTS IX_Reports_ModelId            ON Reports(ModelId);
+CREATE INDEX IF NOT EXISTS IX_Services_ModelId           ON Services(ModelId);
+CREATE INDEX IF NOT EXISTS IX_ServiceGroups_ModelId      ON ServiceGroups(ModelId);
+CREATE INDEX IF NOT EXISTS IX_WorkflowTypes_ModelId      ON WorkflowTypes(ModelId);
+CREATE INDEX IF NOT EXISTS IX_Maps_ModelId               ON Maps(ModelId);
+CREATE INDEX IF NOT EXISTS IX_BusinessEvents_ModelId     ON BusinessEvents(ModelId);
+CREATE INDEX IF NOT EXISTS IX_SecurityPolicies_ModelId   ON SecurityPolicies(ModelId);
+CREATE INDEX IF NOT EXISTS IX_ConfigurationKeys_ModelId  ON ConfigurationKeys(ModelId);
+CREATE INDEX IF NOT EXISTS IX_Tiles_ModelId              ON Tiles(ModelId);
+CREATE INDEX IF NOT EXISTS IX_Workspaces_ModelId         ON Workspaces(ModelId);
+CREATE INDEX IF NOT EXISTS IX_ExtensionFields_ModelId    ON ExtensionFields(ModelId);
+
+-- The nested deletes scan the CHILD table too, so the parent key needs covering
+-- on both sides of the IN.
+CREATE INDEX IF NOT EXISTS IX_ClassAttributes_ClassId    ON ClassAttributes(ClassId);
+CREATE INDEX IF NOT EXISTS IX_TableIndexes_TableId       ON TableIndexes(TableId);
+CREATE INDEX IF NOT EXISTS IX_TableDeleteActions_TableId ON TableDeleteActions(TableId);
+CREATE INDEX IF NOT EXISTS IX_ViewFields_ViewId          ON ViewFields(ViewId);
+CREATE INDEX IF NOT EXISTS IX_DataEntityFields_EntityId  ON DataEntityFields(EntityId);
+CREATE INDEX IF NOT EXISTS IX_ReportDataSets_ReportId    ON ReportDataSets(ReportId);
+CREATE INDEX IF NOT EXISTS IX_ServiceOperations_SvcId    ON ServiceOperations(ServiceId);
+CREATE INDEX IF NOT EXISTS IX_ServiceGroupMembers_GrpId  ON ServiceGroupMembers(GroupId);
+CREATE INDEX IF NOT EXISTS IX_MapFields_MapId            ON MapFields(MapId);
+CREATE INDEX IF NOT EXISTS IX_MapTables_MapId            ON MapTables(MapId);
+CREATE INDEX IF NOT EXISTS IX_SecurityMap_Role           ON SecurityMap(Role);
+
+-- Foreign keys are enforced (PRAGMA foreign_keys = ON), and SQLite checks a parent
+-- DELETE by looking for referencing child rows. Without an index on the child's FK
+-- column that check is a full scan of the child table *per parent row deleted*:
+-- `DELETE FROM Forms WHERE ModelId=?` for a 222-form model spent 1.27s scanning
+-- FormDataSources 222 times over. Every other FK column in this schema is already
+-- covered by an index; this was the only one that was not.
+CREATE INDEX IF NOT EXISTS IX_FormDataSources_FormId     ON FormDataSources(FormId);

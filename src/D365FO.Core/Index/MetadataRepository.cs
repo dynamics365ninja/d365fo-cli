@@ -14,8 +14,15 @@ namespace D365FO.Core.Index;
 public sealed partial class MetadataRepository
 {
     /// <summary>Current schema version tracked in PRAGMA user_version.</summary>
-    /// <remarks>v17: LabelFiles table (per-label-file source paths for the disk check).</remarks>
-    public const int CurrentSchemaVersion = 17;
+    /// <remarks>
+    /// v19: index on FormDataSources(FormId) — the one foreign key whose child column was
+    /// unindexed, so enforcing it rescanned the child table once per deleted form.
+    /// &lt;para&gt;v18: indexes on every ModelId and on the parent keys the per-model re-extract
+    /// deletes filter by. Pure additions — an existing database picks them up on the next
+    /// EnsureSchema, with no re-extract.&lt;/para&gt;
+    /// &lt;para&gt;v17: LabelFiles table (per-label-file source paths for the disk check).&lt;/para&gt;
+    /// </remarks>
+    public const int CurrentSchemaVersion = 19;
 
     private static readonly Lazy<string> SchemaSql = new(LoadEmbeddedSchema);
 
@@ -2911,10 +2918,8 @@ public sealed partial class MetadataRepository
 
         tx.Commit();
 
-        // Flush and truncate WAL after each model commit. wal_autocheckpoint=0
-        // prevents mid-transaction checkpoint stalls on large models; we do it
-        // manually here so the WAL never grows unboundedly across models.
-        conn.Execute("PRAGMA wal_checkpoint(TRUNCATE)");
+        // Keep the WAL bounded across models without paying a checkpoint per model.
+        MaybeCheckpointWal(conn);
 
         // Rebuild the flattened SecurityMap (Role x Duty x Privilege x
         // EntryPoint) for this model's roles/duties. We do this in a short
@@ -3045,6 +3050,51 @@ public sealed partial class MetadataRepository
             .Select(r => new TopCocStat((string)r.Target, (long)r.ExtensionCount)).ToList();
 
         return new IndexStats(perModel, topTables, topClasses, topCoc);
+    }
+
+    /// <summary>
+    /// How much WAL we tolerate between checkpoints during a bulk extract.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// A checkpoint copies the WAL back into the database file and fsyncs it, and it was run
+    /// after every model. That charged even a trivial model the full latency — a model with 76
+    /// classes and no forms spent 982 ms of its 1.2 s write on the checkpoint — and it wrote a
+    /// page once per model that dirtied it instead of once per run. Over a ten-model sample it
+    /// was 60 s of an 83 s extract; batching brought that to 26 s and the run to 60 s.
+    /// </para>
+    /// <para>
+    /// Bounding the WAL is the only thing the per-model checkpoint was there for, so a size
+    /// threshold does the same job. The file peaks at the threshold plus one model's
+    /// transaction (88 MB on that sample) — the same worst case the old code had while a large
+    /// model was still uncommitted.
+    /// </para>
+    /// </remarks>
+    private const long WalCheckpointThresholdBytes = 64L * 1024 * 1024;
+
+    /// <summary>
+    /// Checkpoint the WAL back into the database, but only once it has grown past
+    /// <see cref="WalCheckpointThresholdBytes"/>. Call <see cref="CheckpointWal"/> at the end
+    /// of a bulk run to flush whatever is left.
+    /// </summary>
+    private void MaybeCheckpointWal(SqliteConnection conn)
+    {
+        // Reading the file length does not touch the database, so a below-threshold model
+        // pays a stat() rather than a checkpoint.
+        var wal = new FileInfo(_databasePath + "-wal");
+        if (!wal.Exists || wal.Length < WalCheckpointThresholdBytes) return;
+        conn.Execute("PRAGMA wal_checkpoint(TRUNCATE)");
+    }
+
+    /// <summary>
+    /// Flush the WAL back into the database file and truncate it. Bulk callers
+    /// (<c>index extract</c> / <c>index refresh</c>) run this once when they are done, so the
+    /// database on disk is complete and the WAL does not outlive the run.
+    /// </summary>
+    public void CheckpointWal()
+    {
+        using var conn = Open();
+        conn.Execute("PRAGMA wal_checkpoint(TRUNCATE)");
     }
 
     internal SqliteConnection Open()
