@@ -336,6 +336,11 @@ public sealed class IndexExtractCommand : Command<IndexExtractCommand.Settings>
                         coc = batch.CocExtensions.Count,
                         labels = batch.Labels.Count,
                         elapsedMs,
+                        // Split out so a slow extract can be attributed without a profiler:
+                        // parse is XML off the packages folder, write is ApplyExtract's
+                        // delete-and-reinsert against SQLite.
+                        parseMs,
+                        writeMs = writeSw.ElapsedMilliseconds,
                     });
                     onDone?.Invoke(batch.Model, batch, elapsedMs);
                 }
@@ -374,6 +379,10 @@ public sealed class IndexExtractCommand : Command<IndexExtractCommand.Settings>
         {
             ProcessAll(null, null);
         }
+
+        // ApplyExtract only checkpoints once the WAL crosses its threshold, so flush what the
+        // last models left behind rather than leaving it for whichever process opens next.
+        repo.CheckpointWal();
 
         runSw.Stop();
         var totals = repo.CountAll();
