@@ -125,6 +125,89 @@ This is expected behaviour — the index still serves `search`, `get`, `find`, a
 
 ---
 
+## Extraction is slow
+
+`index extract` spends far more time writing than parsing, so "slow" almost always means the
+database rather than the AOT XML. Measure before changing anything — and measure against a
+**copy** of the index, so a benchmark run cannot disturb the one your agent is using.
+
+### Benchmark a single model
+
+`--model` limits the run to one model folder and `--output json` reports where its time went:
+
+```powershell
+Copy-Item "$env:LOCALAPPDATA\d365fo-cli\d365fo-index.sqlite" "$env:TEMP\bench.sqlite"
+d365fo index extract --model RentalManagement --db "$env:TEMP\bench.sqlite" --output json
+```
+
+```json
+"perModel": [
+  { "model": "RentalManagement", "classes": 906, "elapsedMs": 13283, "parseMs": 1326, "writeMs": 11957 }
+]
+```
+
+| Field | What it covers | What it scales with |
+|---|---|---|
+| `parseMs` | Walking and parsing the model's AOT XML | The model. A 906-class model parses in ~1.3 s |
+| `writeMs` | `ApplyExtract` — clearing the model's rows and re-inserting them | The **database**, not the model |
+
+Run the same model two or three times: the first run pays for a cold page cache. A model that is
+cheap on its own but expensive inside a full run is the signature of a cost that grows with
+database size — that is `writeMs`, and it is where every extraction slowdown found so far has
+lived.
+
+### Benchmark a handful of models
+
+A single model will not show costs that only appear across models (WAL growth, checkpointing).
+For that, build a packages root of junctions to the few packages you want and point `--packages`
+at it — the extractor treats it as a normal `PackagesLocalDirectory`:
+
+```powershell
+$root = "$env:TEMP\bench-packages"
+New-Item -ItemType Directory -Force $root | Out-Null
+'RentalManagement','TaxEngine','GeneralLedger' | ForEach-Object {
+    cmd /c mklink /J "$root\$_" "$env:D365FO_PACKAGES_PATH\$_"
+}
+d365fo index extract --packages $root --db "$env:TEMP\bench.sqlite" --output json
+```
+
+Junctions need no admin rights, and removing one must be done with `cmd /c rmdir` (or
+`Remove-Item` without `-Recurse`) so the delete does not follow the link into the real
+`PackagesLocalDirectory`.
+
+### Reference numbers
+
+Measured on a 751 MB index (203 models, 60k classes, 525k methods, 1.4M labels) on the schema
+these numbers were taken at:
+
+| Sample | Time |
+|---|---|
+| 76-class model, write phase | ~1.4 s |
+| 906-class model, write phase | ~12 s |
+| Ten mid-size models, end to end | ~60 s |
+
+If your `writeMs` is several times these for a comparable model, something is scanning.
+
+### When `writeMs` is out of proportion to the model
+
+Almost always a missing index — the per-model re-extract filters by `ModelId` and by parent keys,
+and foreign keys are enforced, so an unindexed column turns a delete into a full table scan (for
+foreign keys, one scan *per deleted parent row*). Check the plan for the delete you suspect:
+
+```sql
+EXPLAIN QUERY PLAN DELETE FROM Forms WHERE ModelId = 161;
+```
+
+`SEARCH ... USING INDEX` is fine. `SCAN <table>` is the bug — including a `SCAN` of a *child*
+table, which is the foreign-key check rather than anything in the statement itself.
+
+`SchemaIndexCoverageTests` guards this: it derives from the live schema, via `pragma_table_info`
+and `pragma_foreign_key_list`, that every `ModelId`, every parent key the re-extract deletes by,
+and every foreign-key child column is indexed. A new table or foreign key that misses one fails
+the test suite rather than quietly slowing extraction down.
+
+---
+
 ## SQLite WAL-mode locking
 
 The index uses WAL (Write-Ahead Logging) mode for concurrent reads. You may see these files alongside the main database:
@@ -151,7 +234,7 @@ d365fo-index.sqlite-shm      ← shared memory for WAL
    ```
 4. Re-run extraction, then optimise: `d365fo index optimize`
 
-`index optimize` runs `PRAGMA wal_checkpoint(FULL)` + `PRAGMA optimize` which compacts the WAL and reclaims space. Schedule it periodically in CI.
+`index optimize` runs `PRAGMA wal_checkpoint(TRUNCATE)` + `VACUUM` + `ANALYZE`: it compacts the WAL, reclaims the space that the delete-and-reinsert extract cycle frees, and refreshes the query planner's statistics. Schedule it periodically in CI.
 
 ---
 

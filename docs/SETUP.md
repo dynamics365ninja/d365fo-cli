@@ -158,6 +158,10 @@ d365fo index extract --model MyCustomModel       # seconds
 d365fo index extract --model ApplicationSuite    # minutes — parallelised per file
 ```
 
+`--model` is also how you benchmark extraction: with `--output json` it reports `parseMs` and
+`writeMs` per model, which is enough to tell a slow model from a slow database. See
+[Extraction is slow](TROUBLESHOOTING.md#extraction-is-slow).
+
 | When to refresh | Command |
 |---|---|
 | You edited XML in a custom model | `d365fo index refresh --model <Model>` |
