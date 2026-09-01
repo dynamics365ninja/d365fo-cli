@@ -26,6 +26,19 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <InvariantGlobalization>true</InvariantGlobalization>
+    <!-- The SQLite provider ships a native e_sqlite3.dll. PublishSingleFile leaves native
+         assets loose next to the .exe unless they are bundled, so a d365fo.exe that travels
+         without its folder dies with "The type initializer for
+         'Microsoft.Data.Sqlite.SqliteConnection' threw an exception" (issue #182). Bundle it. -->
+    <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
+    <!-- PublishTrimmed defaults this feature switch to false, which makes every
+         reflection-based System.Text.Json call throw ("Reflection-based serialization has
+         been disabled for this application"). The journal, the provenance store behind
+         `prepare`, the eval catalog and the metadata contracts all use reflection-based
+         (de)serialization, and the journal/provenance paths swallow the exception, so the
+         damage is silent: `journal list` returned an empty list on a 500-entry journal.
+         Reflection still works in a trimmed (non-AOT) app, so switch it back on. -->
+    <JsonSerializerIsReflectionEnabledByDefault>true</JsonSerializerIsReflectionEnabledByDefault>
   </PropertyGroup>
 
   <ItemGroup>
