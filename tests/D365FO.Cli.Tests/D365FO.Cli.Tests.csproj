@@ -27,6 +27,9 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\D365FO.Cli\D365FO.Cli.csproj" />
     <ProjectReference Include="..\..\src\D365FO.Core\D365FO.Core.csproj" />
+    <!-- The parity tests compare the CLI's registered surface against the MCP tool catalog;
+         both have to be in scope for that comparison to exist at all. -->
+    <ProjectReference Include="..\..\src\D365FO.Mcp\D365FO.Mcp.csproj" />
   </ItemGroup>
 
 </Project>

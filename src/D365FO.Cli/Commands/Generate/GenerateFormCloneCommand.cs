@@ -1,4 +1,4 @@
-using D365FO.Core;
+﻿using D365FO.Core;
 using D365FO.Core.FormPatterns;
 using D365FO.Core.Scaffolding;
 using Spectre.Console.Cli;
@@ -43,7 +43,7 @@ public sealed class GenerateFormCloneCommand : Command<GenerateFormCloneCommand.
         if (string.IsNullOrWhiteSpace(settings.From))
             return RenderHelpers.Render(kind, ToolResult<object>.Fail(D365FoErrorCodes.BadInput, "--from <FORM> required."));
 
-        var (sourceXml, readError) = ReadSourceForm(settings.From!);
+        var (sourceXml, readError) = AotSourceReader.ReadForm(TryRepo(), settings.From!);
         if (readError is not null)
             return RenderHelpers.Render(kind, ToolResult<object>.Fail(D365FoErrorCodes.SourceUnreadable, readError));
 
@@ -111,32 +111,12 @@ public sealed class GenerateFormCloneCommand : Command<GenerateFormCloneCommand.
     /// without an index. The name route reads <c>SourcePath</c> off the index and then reads the
     /// file — the index stores metadata, not the document.
     /// </remarks>
-    private static (string? Xml, string? Error) ReadSourceForm(string from)
+
+    /// <summary>The index, or null when there is none — a path-based clone does not need one.</summary>
+    private static D365FO.Core.Index.MetadataRepository? TryRepo()
     {
-        if (File.Exists(from))
-        {
-            try { return (File.ReadAllText(from), null); }
-            catch (Exception ex) { return (null, $"Could not read '{from}': {ex.Message}"); }
-        }
-
-        try
-        {
-            var details = RepoFactory.Create().GetForm(from);
-            if (details is null)
-                return (null, $"Form '{from}' is not in the index, and no file exists at that path. " +
-                              "Run `d365fo index extract`, or pass the path to the AxForm XML.");
-
-            var path = details.Form.SourcePath;
-            if (string.IsNullOrWhiteSpace(path) || !File.Exists(path))
-                return (null, $"The index knows form '{from}' but its source file is not at '{path}'. " +
-                              "The index is a cache and is never invalidated on delete — re-run `d365fo index refresh`.");
-
-            return (File.ReadAllText(path), null);
-        }
-        catch (Exception ex)
-        {
-            return (null, $"Could not resolve form '{from}': {ex.Message}");
-        }
+        try { return RepoFactory.Create(); }
+        catch { return null; }
     }
 
     private static bool TryParseRebinds(

@@ -1,4 +1,4 @@
-using D365FO.Core;
+﻿using D365FO.Core;
 using D365FO.Core.Knowledge;
 using Spectre.Console.Cli;
 
@@ -20,38 +20,9 @@ public sealed class MobilePatternListCommand : Command<MobilePatternListCommand.
         public string? Framework { get; init; }
     }
 
-    public override int Execute(CommandContext ctx, Settings settings)
-    {
-        var kind = OutputMode.Resolve(settings.Output);
-
-        var recipes = MobileAppRecipes.List().AsEnumerable();
-        if (!string.IsNullOrWhiteSpace(settings.Framework))
-        {
-            var wanted = settings.Framework!.Replace("-", "", StringComparison.Ordinal);
-            if (!Enum.TryParse<MobileFramework>(wanted, ignoreCase: true, out var framework))
-            {
-                return RenderHelpers.Render(kind, ToolResult<object>.Fail(D365FoErrorCodes.BadInput,
-                    $"Unknown framework '{settings.Framework}'.",
-                    "Use process-guide, work-execute-display or configuration."));
-            }
-            recipes = recipes.Where(r => r.Framework == framework);
-        }
-
-        var items = recipes.ToList();
-        return RenderHelpers.Render(kind, ToolResult<object>.Success(new
-        {
-            decideFirst = MobileAppRecipes.FrameworkDecision,
-            count = items.Count,
-            items = items.Select(r => new
-            {
-                r.Id,
-                r.Title,
-                framework = r.Framework.ToString(),
-                r.WhenToUse,
-                classes = r.Roster.Count,
-            }),
-        }));
-    }
+    public override int Execute(CommandContext ctx, Settings settings) =>
+        RenderHelpers.Render(OutputMode.Resolve(settings.Output),
+            PatternCatalogAnswers.MobileList(settings.Framework));
 }
 
 /// <summary><c>d365fo mobile-pattern spec</c> — one recipe in full.</summary>
@@ -64,34 +35,7 @@ public sealed class MobilePatternSpecCommand : Command<MobilePatternSpecCommand.
         public string Recipe { get; init; } = "";
     }
 
-    public override int Execute(CommandContext ctx, Settings settings)
-    {
-        var kind = OutputMode.Resolve(settings.Output);
-
-        var recipe = MobileAppRecipes.Find(settings.Recipe);
-        if (recipe is null)
-        {
-            return RenderHelpers.Render(kind, ToolResult<object>.Fail(D365FoErrorCodes.TopicNotFound,
-                $"No warehouse-app recipe called '{settings.Recipe}'.",
-                $"Available: {string.Join(", ", MobileAppRecipes.Ids())}."));
-        }
-
-        return RenderHelpers.Render(kind, ToolResult<object>.Success(new
-        {
-            recipe.Id,
-            recipe.Title,
-            framework = recipe.Framework.ToString(),
-            recipe.WhenToUse,
-            roster = recipe.Roster.Select(o => new { o.Role, o.Extends, o.Naming, o.Required }),
-            guidance = recipe.Guidance,
-            checks = recipe.Checks,
-            referenceObjects = recipe.ReferenceObjects.Count > 0 ? recipe.ReferenceObjects : null,
-            readTheReference = recipe.ReferenceObjects.Count > 0
-                ? $"Shipped classes of this exact shape — read one with `d365fo read class {recipe.ReferenceObjects[0]}`."
-                : null,
-            note = recipe.Framework == MobileFramework.Configuration
-                ? "This one is CONFIGURATION, not code. Writing a class here is the mistake the recipe exists to prevent."
-                : null,
-        }));
-    }
+    public override int Execute(CommandContext ctx, Settings settings) =>
+        RenderHelpers.Render(OutputMode.Resolve(settings.Output),
+            PatternCatalogAnswers.MobileSpec(settings.Recipe));
 }

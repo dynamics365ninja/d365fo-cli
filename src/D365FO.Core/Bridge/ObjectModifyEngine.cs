@@ -579,6 +579,50 @@ public static class ObjectModifyEngine
     private static readonly IReadOnlySet<string> ValidDeleteActions =
         new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "Cascade", "Restricted", "CascadeRestricted", "None" };
 
+    /// <summary>
+    /// The name an operation is reached by on both surfaces: the <c>d365fo modify</c>
+    /// subcommand, and the MCP <c>modify_object</c> <c>action</c>.
+    /// </summary>
+    /// <remarks>
+    /// One spelling for both, because two spellings is how the surfaces came apart in the first
+    /// place: MCP knew four of these actions and silently treated every other value as
+    /// <see cref="Operation.SetProperty"/>, so <c>action="add-index"</c> wrote a property called
+    /// "add-index" and reported success. Callers parse with
+    /// <see cref="TryParseOperation"/>, which is built from this map, so an operation added to
+    /// the enum is reachable from both surfaces or from neither.
+    /// </remarks>
+    public static string OperationName(Operation op) => CommandNameFor(op);
+
+    private static readonly IReadOnlyDictionary<string, Operation> OperationsByName =
+        BuildOperationLookup();
+
+    private static Dictionary<string, Operation> BuildOperationLookup()
+    {
+        var map = new Dictionary<string, Operation>(StringComparer.OrdinalIgnoreCase);
+        foreach (var op in Enum.GetValues<Operation>())
+        {
+            map[CommandNameFor(op)] = op;
+            // The same name without its hyphens, for clients that guess "addfield".
+            map[CommandNameFor(op).Replace("-", "")] = op;
+        }
+        // Spellings of the property operation that read naturally but are not its command name.
+        map["set-property"] = Operation.SetProperty;
+        map["modify-property"] = Operation.SetProperty;
+        return map;
+    }
+
+    /// <summary>Resolve an operation name to the operation, or fail — never to a default.</summary>
+    public static bool TryParseOperation(string? name, out Operation operation)
+    {
+        operation = default;
+        if (string.IsNullOrWhiteSpace(name)) return false;
+        return OperationsByName.TryGetValue(name.Trim(), out operation);
+    }
+
+    /// <summary>Every operation name, in enum order — for error text that lists the alternatives.</summary>
+    public static IReadOnlyList<string> OperationNames { get; } =
+        Enum.GetValues<Operation>().Select(CommandNameFor).ToArray();
+
     /// <summary>The <c>modify</c> subcommand an operation is reached through, for error text.</summary>
     private static string CommandNameFor(Operation op) => op switch
     {

@@ -1,4 +1,4 @@
-using D365FO.Core;
+﻿using D365FO.Core;
 using D365FO.Core.Knowledge;
 using Spectre.Console.Cli;
 
@@ -22,51 +22,9 @@ public sealed class BpMonikerValidateCommand : Command<BpMonikerValidateCommand.
         public string Moniker { get; init; } = "";
     }
 
-    public override int Execute(CommandContext ctx, Settings settings)
-    {
-        var kind = OutputMode.Resolve(settings.Output);
-
-        if (!BpMonikerCatalog.IsPopulated)
-        {
-            // An empty catalog cannot refute anything. Saying "not a moniker" here would be the
-            // worst possible answer: confidently wrong, and indistinguishable from a real verdict.
-            return RenderHelpers.Render(kind, ToolResult<object>.Fail(D365FoErrorCodes.NoIndex,
-                "The BP moniker catalog is empty, so this cannot say whether the moniker is real.",
-                $"Run `d365fo bp-moniker extract` on a machine with D365FO_PACKAGES_PATH set, or point {BpMonikerCatalog.PathEnvVar} at a captured snapshot."));
-        }
-
-        var found = BpMonikerCatalog.Find(settings.Moniker);
-        if (found is not null)
-        {
-            return RenderHelpers.Render(kind, ToolResult<object>.Success(new
-            {
-                moniker = found.Name,
-                valid = true,
-                canonical = found.Canonical,
-                found.Message,
-                found.Description,
-                note = found.Canonical
-                    ? null
-                    : "This string ships in a rule assembly but NO rule set declares it — it is not a BP rule, "
-                      + "and suppressing it will have no effect.",
-            }));
-        }
-
-        var caseVariants = BpMonikerCatalog.CaseVariants(settings.Moniker);
-        var near = BpMonikerCatalog.Search(settings.Moniker, 5);
-
-        return RenderHelpers.Render(kind, ToolResult<object>.Success(new
-        {
-            moniker = settings.Moniker,
-            valid = false,
-            caseVariants = caseVariants.Count > 0 ? caseVariants : null,
-            didYouMean = near.Count > 0 ? near.Select(m => m.Name).ToArray() : null,
-            note = caseVariants.Count > 0
-                ? "The name exists with different casing. The moniker is matched exactly, so the casing above is the one to use."
-                : "No rule set in the indexed installation declares this name. Do not suppress it — a suppression naming a "
-                  + "moniker that does not exist suppresses nothing.",
-        }));
-    }
+    public override int Execute(CommandContext ctx, Settings settings) =>
+        RenderHelpers.Render(OutputMode.Resolve(settings.Output),
+            BpMonikerAnswers.Validate(settings.Moniker));
 }
 
 /// <summary><c>d365fo bp-moniker search</c> — which rule covers this scenario?</summary>
@@ -87,27 +45,9 @@ public sealed class BpMonikerSearchCommand : Command<BpMonikerSearchCommand.Sett
         public bool CanonicalOnly { get; init; }
     }
 
-    public override int Execute(CommandContext ctx, Settings settings)
-    {
-        var kind = OutputMode.Resolve(settings.Output);
-
-        if (!BpMonikerCatalog.IsPopulated)
-        {
-            return RenderHelpers.Render(kind, ToolResult<object>.Fail(D365FoErrorCodes.NoIndex,
-                "The BP moniker catalog is empty.",
-                $"Run `d365fo bp-moniker extract`, or point {BpMonikerCatalog.PathEnvVar} at a captured snapshot."));
-        }
-
-        var hits = BpMonikerCatalog.Search(settings.Query, settings.Limit);
-        if (settings.CanonicalOnly) hits = hits.Where(m => m.Canonical).ToList();
-
-        return RenderHelpers.Render(kind, ToolResult<object>.Success(new
-        {
-            query = settings.Query,
-            count = hits.Count,
-            items = hits.Select(m => new { m.Name, m.Canonical, m.Message, m.Description }),
-        }));
-    }
+    public override int Execute(CommandContext ctx, Settings settings) =>
+        RenderHelpers.Render(OutputMode.Resolve(settings.Output),
+            BpMonikerAnswers.Search(settings.Query, settings.Limit, settings.CanonicalOnly));
 }
 
 /// <summary><c>d365fo bp-moniker suppress</c> — render a `_BPSuppressions.xml` block.</summary>
@@ -136,45 +76,10 @@ public sealed class BpMonikerSuppressCommand : Command<BpMonikerSuppressCommand.
         public string Severity { get; init; } = "Warning";
     }
 
-    public override int Execute(CommandContext ctx, Settings settings)
-    {
-        var kind = OutputMode.Resolve(settings.Output);
-
-        if (string.IsNullOrWhiteSpace(settings.Path))
-        {
-            return RenderHelpers.Render(kind, ToolResult<object>.Fail(D365FoErrorCodes.BadInput,
-                "--path is required.",
-                "It is the dynamics:// URI xppbp reported the finding against — without it the block "
-                + "does not identify what is being suppressed."));
-        }
-
-        var known = BpMonikerCatalog.Find(settings.Moniker);
-        if (BpMonikerCatalog.IsPopulated && known is null)
-        {
-            var variants = BpMonikerCatalog.CaseVariants(settings.Moniker);
-            return RenderHelpers.Render(kind, ToolResult<object>.Fail(D365FoErrorCodes.TopicNotFound,
-                $"'{settings.Moniker}' is not a moniker any indexed rule set declares.",
-                variants.Count > 0
-                    ? $"The name exists as: {string.Join(", ", variants)}. Monikers are matched exactly."
-                    : "Find the right one with `d365fo bp-moniker search <words>`. Suppressing a name that does not exist suppresses nothing."));
-        }
-
-        var block = BpMonikerCatalog.SuppressionBlock(
-            settings.Moniker, settings.Path!, settings.Message, settings.Justification, settings.Severity);
-
-        return RenderHelpers.Render(kind, ToolResult<object>.Success(new
-        {
-            moniker = settings.Moniker,
-            canonical = known?.Canonical,
-            block,
-            file = "<Model>/<Model>/AxIgnoreDiagnosticList/<Model>_BPSuppressions.xml",
-            placement = "Add the block inside <IgnoreDiagnostics><Items>. The file is an AOT object like any "
-                      + "other — it belongs to the model whose code raised the finding.",
-        },
-        settings.Justification is null
-            ? new List<string> { "No --justification given; the block carries a TODO placeholder that a reviewer will see." }
-            : null));
-    }
+    public override int Execute(CommandContext ctx, Settings settings) =>
+        RenderHelpers.Render(OutputMode.Resolve(settings.Output),
+            BpMonikerAnswers.Suppress(settings.Moniker, settings.Path, settings.Message,
+                settings.Justification, settings.Severity));
 }
 
 /// <summary><c>d365fo bp-moniker extract</c> — rebuild the catalog from this installation.</summary>

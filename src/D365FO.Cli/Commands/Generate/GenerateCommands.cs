@@ -1,10 +1,11 @@
-using D365FO.Core;
+﻿using D365FO.Core;
 using D365FO.Core.Journal;
 using D365FO.Core.Scaffolding;
 using Spectre.Console.Cli;
 using D365FO.Cli.Commands.Get;
 
 using static D365FO.Core.ObjectTypes.ObjectTypeRegistry;
+using D365FO.Core.Bridge;
 
 namespace D365FO.Cli.Commands.Generate;
 
@@ -59,7 +60,19 @@ internal static class GenerateInstaller
         IEnumerable<string>? requiredSymbols = null)
         => GroundingGate.Check(
             settings.GroundingToken, targetObject, doc, requiredMethods, requiredSymbols,
-            RequestedValues(settings));
+            RequestedValues(settings), TryRepo());
+
+    /// <summary>The index the gate proves identifiers against, or null when there is none.</summary>
+    /// <remarks>
+    /// The gate takes the repository rather than opening one, because the MCP server already
+    /// holds an open connection and Core has no <c>RepoFactory</c>. A missing index degrades the
+    /// checks to warnings inside the gate — it never fails a write on gate infrastructure.
+    /// </remarks>
+    private static D365FO.Core.Index.MetadataRepository? TryRepo()
+    {
+        try { return RepoFactory.Create(); }
+        catch { return null; }
+    }
 
     /// <summary>
     /// The option/value pairs a caller actually supplied, for the property-honesty

@@ -1,4 +1,4 @@
-using System.Text.Json;
+﻿using System.Text.Json;
 using D365FO.Core;
 using D365FO.Core.Bridge;
 using Spectre.Console.Cli;
@@ -227,89 +227,5 @@ public sealed class ModifyBatchCommand : Command<ModifyBatchCommand.Settings>
             ExtensionModel = settings.ExtensionModel,
             RequireExtension = settings.RequireExtension,
         });
-    }
-}
-
-/// <summary>Turns the JSON step array into engine requests.</summary>
-/// <remarks>
-/// Steps are named by their <c>modify</c> sub-command — <c>add-index</c>, not <c>AddIndex</c> —
-/// because that is the name the caller already knows from `--help` and from every error message
-/// this engine produces. Accepting the enum spelling too costs nothing and stops a plausible
-/// guess from being an error.
-/// </remarks>
-internal static class BatchStepParser
-{
-    internal static List<ObjectModifyEngine.ModifyRequest> Parse(
-        string json, string kind, string objectName, string? model)
-    {
-        using var doc = JsonDocument.Parse(json);
-        if (doc.RootElement.ValueKind != JsonValueKind.Array)
-            throw new InvalidOperationException("expected a JSON array of steps");
-
-        var steps = new List<ObjectModifyEngine.ModifyRequest>();
-        var index = 0;
-        foreach (var element in doc.RootElement.EnumerateArray())
-        {
-            index++;
-            var name = Str(element, "operation")
-                       ?? throw new InvalidOperationException($"step {index} has no \"operation\"");
-            if (!TryParseOperation(name, out var operation))
-                throw new InvalidOperationException($"step {index}: unknown operation \"{name}\"");
-
-            steps.Add(new ObjectModifyEngine.ModifyRequest
-            {
-                Operation = operation,
-                Kind = kind,
-                ObjectName = objectName,
-                Model = model,
-                Member = Str(element, "member") ?? Str(element, "name") ?? "",
-                Value = Str(element, "value"),
-                Type = Str(element, "type") ?? Str(element, "edt"),
-                Label = Str(element, "label"),
-                Mandatory = Bool(element, "mandatory"),
-                Parent = Str(element, "parent"),
-                DataSource = Str(element, "dataSource"),
-                DataField = Str(element, "dataField"),
-                Fields = Strings(element, "fields"),
-                RelatedTable = Str(element, "relatedTable"),
-                RelatedField = Str(element, "relatedField"),
-                DeleteAction = Str(element, "action") ?? Str(element, "deleteAction"),
-                AllowDuplicates = Bool(element, "allowDuplicates"),
-                AlternateKey = Bool(element, "alternateKey"),
-                NewName = Str(element, "newName"),
-                DataSourceName = Str(element, "dataSourceName") ?? Str(element, "dataSource"),
-                RangeValue = Str(element, "rangeValue") ?? Str(element, "value"),
-                EntryPointType = Str(element, "entryPointType") ?? Str(element, "type"),
-                Access = Str(element, "access"),
-            });
-        }
-        return steps;
-    }
-
-    private static bool TryParseOperation(string name, out ObjectModifyEngine.Operation operation)
-    {
-        // "add-field" -> "AddField"; the enum spelling is accepted as-is by Enum.TryParse.
-        var pascal = string.Concat(name.Split('-', StringSplitOptions.RemoveEmptyEntries)
-            .Select(part => char.ToUpperInvariant(part[0]) + part[1..]));
-        return Enum.TryParse(pascal, ignoreCase: true, out operation)
-               || Enum.TryParse(name, ignoreCase: true, out operation);
-    }
-
-    private static string? Str(JsonElement element, string name) =>
-        element.TryGetProperty(name, out var value) && value.ValueKind == JsonValueKind.String
-            ? value.GetString()
-            : null;
-
-    private static bool Bool(JsonElement element, string name) =>
-        element.TryGetProperty(name, out var value) && value.ValueKind == JsonValueKind.True;
-
-    private static IReadOnlyList<string>? Strings(JsonElement element, string name)
-    {
-        if (!element.TryGetProperty(name, out var value) || value.ValueKind != JsonValueKind.Array)
-            return null;
-        return value.EnumerateArray()
-            .Where(v => v.ValueKind == JsonValueKind.String)
-            .Select(v => v.GetString()!)
-            .ToList();
     }
 }

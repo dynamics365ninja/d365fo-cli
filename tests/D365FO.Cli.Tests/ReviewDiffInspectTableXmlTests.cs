@@ -1,4 +1,5 @@
-using D365FO.Cli.Commands.Review;
+﻿using D365FO.Cli.Commands.Review;
+using D365FO.Core.Analysis;
 
 namespace D365FO.Cli.Tests;
 
@@ -85,7 +86,7 @@ public class ReviewDiffInspectTableXmlTests
     {
         var violations = new List<object>();
 
-        ReviewDiffCommand.InspectTableXml("Metadata/MyModel/AxTable/MyTable.xml", MinimalReproXml, violations);
+        WorkspaceReview.InspectTableXml("Metadata/MyModel/AxTable/MyTable.xml", MinimalReproXml, violations);
 
         Assert.Empty(violations);
     }
@@ -95,7 +96,7 @@ public class ReviewDiffInspectTableXmlTests
     {
         var violations = new List<object>();
 
-        ReviewDiffCommand.InspectTableXml("t.xml", MinimalReproXml, violations);
+        WorkspaceReview.InspectTableXml("t.xml", MinimalReproXml, violations);
 
         var fieldNames = violations
             .Select(v => v.GetType().GetProperty("field")!.GetValue(v) as string)
@@ -126,7 +127,7 @@ public class ReviewDiffInspectTableXmlTests
             """;
         var violations = new List<object>();
 
-        ReviewDiffCommand.InspectTableXml("t.xml", xml, violations);
+        WorkspaceReview.InspectTableXml("t.xml", xml, violations);
 
         var rules = violations.Select(v => v.GetType().GetProperty("rule")!.GetValue(v) as string).ToList();
         Assert.Contains("FIELD_WITHOUT_EDT", rules);

@@ -1,25 +1,29 @@
 using System.Text.Json.Nodes;
 using D365FO.Core;
-using D365FO.Core.Bridge;
 
-namespace D365FO.Cli.Commands.Get;
+namespace D365FO.Core.Bridge;
 
 /// <summary>
-/// Opt-in entry point for bridge-primary reads. When
+/// Opt-in entry point for bridge-primary reads and writes. When
 /// <c>D365FO_BRIDGE_ENABLED=1</c> and the bridge spawns successfully, read
 /// helpers here call the live <c>IMetadataProvider</c>-backed handlers and
 /// return the deserialised payload. Any bridge failure / unavailability
-/// returns null and the CLI falls back to the SQLite index.
+/// returns null and the caller falls back to the SQLite index.
+///
+/// It lived in the CLI project, which two Core engines worked around by duplicating its
+/// option-building rather than depending upwards — and which left the MCP server unable to
+/// reach the bridge-backed reads and deletes at all. It is Core material: it wraps
+/// <see cref="BridgeClient"/> and touches nothing above it.
 /// </summary>
-internal static class BridgeGate
+public static class BridgeGate
 {
-    internal static bool ShouldTry() => D365FoSettings.ResolveFlag("D365FO_BRIDGE_ENABLED");
+    public static bool ShouldTry() => D365FoSettings.ResolveFlag("D365FO_BRIDGE_ENABLED");
 
     /// <summary>
     /// Build bridge options from the unified config resolver so values set in
     /// settings.json (not just real env vars) reach the bridge child process.
     /// </summary>
-    private static BridgeOptions DefaultOptions() => new()
+    public static BridgeOptions DefaultOptions() => new()
     {
         MetadataBinPath = D365FoSettings.Resolve("D365FO_BIN_PATH"),
         PackagesPath = D365FoSettings.Resolve("D365FO_PACKAGES_PATH"),
@@ -27,11 +31,11 @@ internal static class BridgeGate
         XrefConnectionString = D365FoSettings.Resolve("D365FO_XREF_CONNECTIONSTRING"),
     };
 
-    internal static object? TryReadClass(string name) => TryRead("readClass", name);
-    internal static object? TryReadTable(string name) => TryRead("readTable", name);
-    internal static object? TryReadEdt(string name) => TryRead("readEdt", name);
-    internal static object? TryReadEnum(string name) => TryRead("readEnum", name);
-    internal static object? TryReadForm(string name) => TryRead("readForm", name);
+    public static object? TryReadClass(string name) => TryRead("readClass", name);
+    public static object? TryReadTable(string name) => TryRead("readTable", name);
+    public static object? TryReadEdt(string name) => TryRead("readEdt", name);
+    public static object? TryReadEnum(string name) => TryRead("readEnum", name);
+    public static object? TryReadForm(string name) => TryRead("readForm", name);
 
     /// <summary>
     /// Persist a raw Ax* XML blob into <paramref name="model"/> via the
@@ -40,7 +44,7 @@ internal static class BridgeGate
     /// should surface the error back to the user because the generate
     /// command has no on-disk fallback for this operation.
     /// </summary>
-    internal static (bool ok, string? error) TrySaveObject(string kind, string name, string model, string? xml)
+    public static (bool ok, string? error) TrySaveObject(string kind, string name, string model, string? xml)
     {
         if (!BridgeClient.IsAvailable())
         {
@@ -85,7 +89,7 @@ internal static class BridgeGate
     /// current form, inject a method, and push the whole modified XML back.
     /// Returns (true, null) on success, (false, message) on any failure.
     /// </summary>
-    internal static (bool ok, string? error) TryUpdateObject(string kind, string name, string model, string xml)
+    public static (bool ok, string? error) TryUpdateObject(string kind, string name, string model, string xml)
     {
         if (!BridgeClient.IsAvailable())
         {
@@ -128,7 +132,7 @@ internal static class BridgeGate
     /// by <c>d365fo undo</c> to revert a bridge-mediated create (issue #113).
     /// Returns (true, null) on success, (false, message) on any failure.
     /// </summary>
-    internal static (bool ok, string? error) TryDeleteObject(string kind, string name, string model)
+    public static (bool ok, string? error) TryDeleteObject(string kind, string name, string model)
     {
         if (!BridgeClient.IsAvailable())
         {
@@ -169,7 +173,7 @@ internal static class BridgeGate
     /// capture an exact pre-image before a bridge delete so <c>d365fo undo</c> can recreate it
     /// (issue #113). Returns null on any failure, including bridge unavailability.
     /// </summary>
-    internal static string? TryReadObjectXml(string kind, string name)
+    public static string? TryReadObjectXml(string kind, string name)
     {
         if (!BridgeClient.IsAvailable()) return null;
         try
@@ -195,7 +199,7 @@ internal static class BridgeGate
     /// bridge) or null on any failure — callers fall back to the regex
     /// scanner.
     /// </summary>
-    internal static JsonObject? TryFindReferences(string symbol, string? kind, int limit)
+    public static JsonObject? TryFindReferences(string symbol, string? kind, int limit)
     {
         if (!BridgeClient.IsAvailable()) return null;
         try
@@ -221,7 +225,7 @@ internal static class BridgeGate
     /// (via <c>ModelManifest.GetFolderForModel</c>). Returns null on any
     /// failure — callers should surface a clear error to the user.
     /// </summary>
-    internal static string? TryGetModelFolder(string model)
+    public static string? TryGetModelFolder(string model)
     {
         if (!BridgeClient.IsAvailable()) return null;
         try
@@ -247,8 +251,12 @@ internal static class BridgeGate
     /// </summary>
     /// <param name="Deserialized">The provider's serializer accepted the document.</param>
     /// <param name="Valid">It deserialized <em>and</em> the round-trip lost nothing.</param>
+    /// <param name="RootElement">Root element the document declared, as read.</param>
+    /// <param name="ClrType">MetaModel type the provider resolved that root to, when it resolved one.</param>
+    /// <param name="ErrorCode">Machine-readable refusal, when the provider refused the document.</param>
+    /// <param name="ErrorMessage">The provider's own words for that refusal.</param>
     /// <param name="Dropped">Leaf elements (path = value) present in the input and gone after the round-trip.</param>
-    internal sealed record MetadataVerdict(
+    public sealed record MetadataVerdict(
         bool Deserialized,
         bool Valid,
         string? RootElement,
@@ -262,7 +270,7 @@ internal static class BridgeGate
     /// anything. Returns null when the bridge is unavailable — the caller decides whether
     /// that is a skip or a failure.
     /// </summary>
-    internal static MetadataVerdict? TryValidateArtifact(string? kind, string xml)
+    public static MetadataVerdict? TryValidateArtifact(string? kind, string xml)
     {
         if (!BridgeClient.IsAvailable()) return null;
         try
@@ -301,7 +309,7 @@ internal static class BridgeGate
     /// Metadata API runtime is not available at all — generation must keep working
     /// offline, so this is never an error.
     /// </summary>
-    internal enum VerifyOutcome { Skipped, Readable, Unreadable }
+    public enum VerifyOutcome { Skipped, Readable, Unreadable }
 
     /// <summary>
     /// Read a just-written artefact back through the live metadata provider — the
@@ -326,7 +334,8 @@ internal static class BridgeGate
     /// the tooling, and blaming a perfectly good artefact for them is worse than not
     /// checking at all.
     /// </remarks>
-    internal static (VerifyOutcome outcome, string? detail) TryVerifyObject(string axKind, string name)
+    /// <param name="name">Object to read back, by the name the provider knows it under.</param>
+    public static (VerifyOutcome outcome, string? detail) TryVerifyObject(string axKind, string name)
     {
         // The typed read verbs exist only for the five original kinds. Everything the
         // bridge can now write (views, maps, queries, and the *Extension kinds) is
@@ -359,8 +368,9 @@ internal static class BridgeGate
     /// <see cref="TryVerifyObject"/> so the mapping — the part that decides whether a
     /// command fails — is testable without a live AOS.
     /// </summary>
+    /// <param name="axKind">Registry kind the read was issued for, for the detail message.</param>
     /// <param name="response">The bridge envelope, or null when the bridge did not answer.</param>
-    internal static (VerifyOutcome outcome, string? detail) VerdictFrom(string? axKind, JsonObject? response)
+    public static (VerifyOutcome outcome, string? detail) VerdictFrom(string? axKind, JsonObject? response)
     {
         // No answer at all — a timeout or a child process that died says nothing about
         // the artefact, so it is a skip and never a verdict against the file.

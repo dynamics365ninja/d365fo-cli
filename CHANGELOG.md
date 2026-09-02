@@ -19,6 +19,120 @@ was ported from.
 
 ## [Unreleased]
 
+### Fixed — the CLI and the MCP server had drifted apart
+- **`modify_object` reached four of the engine's twenty operations, and mis-applied the rest.**
+  An unknown `action` fell back to `SetProperty`, so `action="add-index"` did not fail — it set a
+  property named after the index and reported `ok: true`. The whole structural write surface the
+  CLI gained (`add-index`, `add-relation`, `add-field-group`, `add-delete-action`, `rename-field`,
+  the seven `remove-*` forms, the query ranges and the privilege entry points) was unreachable over
+  MCP, and asking for it did something else. The tool now resolves the action through
+  `ObjectModifyEngine.TryParseOperation` — the same map the sub-commands use — and refuses what it
+  cannot resolve, naming the twenty alternatives. It also gained `operations[]`, the batched form:
+  one bridge round trip, one journal entry, and no intermediate state published to disk.
+- **`d365fo schema` published 130 of the 200 commands the app registers.** The manifest is what an
+  agent reads to find the tool, so `modify`, `knowledge`, `bp-moniker`, the table/report/mobile
+  pattern catalogs and eleven `generate` sub-commands were, for that reader, not shipped. It was
+  also wrong in both directions: it claimed `object_patterns (action=analyze)`, which no tool
+  dispatched, and denied that `validate xpp` is `validate(mode=xpp)`, which it is.
+- **`modify batch` refused the operation its own error message recommends.** The batch parser
+  derived the enum spelling from the step name, which works for every operation whose command name
+  matches its enum name and fails for the one that does not — `property` is `SetProperty`.
+
+### Added — the index can be refreshed from either surface
+- **`d365fo index sync <TARGET>` / `index_sync`** — re-index ONE model, named directly or by a
+  path to any file inside it. This was the gap the previous wave recorded rather than closed: a
+  write this tool makes refreshes the index itself, but an edit made in Visual Studio, by a git
+  pull or by a colleague left the index quietly lying about that model, and the only repair was a
+  full walk of every package — minutes, and not the shape of a call anyone waits on.
+  A model is the unit and not a file on purpose: `ApplyExtract` replaces a model's rows
+  atomically, which is what makes re-extraction idempotent, so handing it a single object would
+  not add that object — it would delete every other object of that model. Measured on this
+  repository's own host: `ApplicationCommon` (302 classes, 39 tables, 2 070 labels) re-indexes in
+  12 s cold and under a second warm, and a second sync leaves the row counts unchanged.
+  `EnumerateModelDirs` and `ComputeFingerprint` moved to Core with it, so `index refresh` and
+  `index sync` cannot disagree about what a model is or whether one has changed.
+
+### Added — the work an agent does after a write
+- **`sdlc`** — build, sync, run SysTest and run xppbp over MCP. The CLI could answer "does what I
+  just wrote compile?" and the MCP server could not, which leaves the one surface a remote agent
+  uses able to generate code and unable to find out whether it is right. The build returns
+  per-diagnostic X++ compiler findings (object, member, line, column, message, fix hint) rather
+  than a log tail, and says when xppc reports stale symbols — which needs a Full Build, not a
+  retry. The test action reads its verdict from the runner's XML result document, because a run
+  that dies half way still exits 0 with its remaining cases marked pending. Local-only: the tool
+  is in `LocalTools`, so a shared read-only deployment neither advertises nor accepts it.
+- **`delete_object`** — remove an AOT object through the provider or from disk, journaled so
+  `undo_last_modification` can put it back. The pre-image is captured before the delete and a
+  delete that cannot capture one is refused.
+- **`validate(mode=metadata)`** — the metadata provider's own verdict on a document: what it
+  deserialises to, and every member it drops on the way in. MCP had only the offline half
+  (`metadata-shape`), which cannot see a property the type does not declare.
+- **`get_workspace_info(changes=true)`** — the uncommitted X++ diff plus the cheap rule pass over
+  it, mirroring upstream. `d365fo review diff` was shell-only.
+- `BridgeGate` moved into Core, where it always belonged: two Core engines had been *copying* its
+  bridge-option builder rather than depending upwards, so the bridge could be configured
+  differently depending on which entry point reached it. Three copies became one.
+- The parity harness now requires a published command with no MCP route to say **why** in
+  `CliMcpParityTests.CliOnly`. An empty route list read as "nothing to say" rather than
+  "decided" — which is how the whole `modify` surface came to be shell-only without anyone
+  choosing it. The remaining honest gap is recorded there: `index extract`/`refresh` walk the
+  package tree for minutes, and the MCP-appropriate form is a per-file upsert that does not exist
+  yet.
+
+### Fixed — grounding was enforced on one surface of two
+- **`D365FO_GROUNDING_ENFORCE=true` did nothing over MCP.** The gate that proves every generated
+  identifier against the index, runs the offline BP validator and demands an object-bound
+  `prepare` token lived beside the CLI's generate commands, so it ran on every CLI write and on
+  no MCP write at all. A deployment that turned enforcement on had turned it on for one of its
+  two front doors — and the difference was invisible, because an ungated write looks exactly
+  like a successful one. `GroundingGate` moved to Core; `generate_object` now takes a
+  `groundingToken`, returns what the gate saw in `grounding`, and refuses the write when
+  enforcement is on and the token is missing or bound to a different object.
+
+### Added — the sixteen scaffolds MCP could not produce
+- **`generate_object` covers all thirty-three `generate` sub-commands.** It had seventeen object
+  types; the CLI has thirty-three, so an agent that had picked the MCP surface could not scaffold
+  a report, a workflow, a view, a map, a SysTest, a custom service, a number sequence, a
+  migration script, an event handler, a form clone, a report extension, the table augmenters or a
+  form method — and the only sign of it was `Unknown objectType` for something the tool does.
+  Added: `view`, `map`, `systest`, `migration-script`, `custom-service`, `number-sequence`,
+  `workflow`, `report` (the whole SSRS stack — AxReport + DP + contract + TmpTable + controller,
+  with `preProcess`, `controllerType=print-mgmt` and `uiBuilder`), `report-extension` (the three
+  compiler-checked ways to extend a shipped report), `event-handler`, `find-methods`,
+  `table-relation`, `form-clone`, `datasource-method` and `control-method`. They are XML-only —
+  each document comes back by name, which is the shape the existing multi-document handlers use
+  and the one that works off a D365FO VM.
+- `CliMcpParityTests` gained the matching invariant: a `generate` sub-command with no
+  `generate_object` objectType fails the build.
+
+### Added — what the MCP server was missing
+- **`analyze(mode=completeness)`** — the one analysis that reads the developer's working tree
+  rather than the index, previously CLI-only.
+- **`object_patterns` gained three domains and an action**: `domain=table`, `domain=report` and
+  `domain=mobile-app` (list + spec), and `domain=form, action=analyze` — the mined half of the
+  form toolkit. The tool used to answer these with "not backed here, use the CLI", for catalogs
+  that are pure in-process data.
+- **`get_knowledge(kind=bp-moniker)`** — validate, search and render a `_BPSuppressions.xml`
+  block against names extracted from a real installation.
+- **`get_object_info(objectType=security-policy)`**.
+
+### Added — what the CLI was missing
+- **`d365fo find extensions --merged`** — the effective merged table schema (base fields, indexes,
+  relations and field groups with every extension folded in, each member labelled with the object
+  that contributes it). It was reachable over MCP and from nowhere on the CLI, which is the wrong
+  way round for a repository whose CLI is the primary surface.
+
+### Added — the check that keeps them together
+- **`CliMcpParityTests`** walks Spectre's own registration tree and the MCP tool catalog and fails
+  the build when a command is published in neither the manifest nor a declared exclusion, when a
+  manifest entry names a command or an MCP route that does not exist, when an MCP tool is reachable
+  from no command, or when an `ObjectModifyEngine.Operation` is missing from either surface. Both
+  inventories were hand-written and both had gone stale; deriving the ground truth from the
+  registration itself is the only thing that has ever kept them honest.
+- Six implementations moved into Core so the two surfaces share them rather than agreeing by
+  inspection: `CompletenessAnalyzer`, `FormPatternMiner`, `ExtensionAnswers`, `BpMonikerAnswers`,
+  `PatternCatalogAnswers`, `BatchStepParser`.
+
 ### Added — grounded knowledge catalogs
 - **`d365fo bp-moniker`** — `validate`, `search`, `suppress`, `extract`. Every Best-Practice
   moniker has been guessed wrong at least once, and nothing about the spelling separates the real

@@ -12,7 +12,7 @@ namespace D365FO.Mcp;
 /// operations that back the CLI. Every method returns a <see cref="ToolResult{T}"/>
 /// so MCP tool handlers and CLI commands produce byte-identical envelopes.
 /// </summary>
-public sealed class ToolHandlers
+public sealed partial class ToolHandlers
 {
     private readonly MetadataRepository _repo;
 
@@ -429,34 +429,7 @@ public sealed class ToolHandlers
     /// silently dropped.
     /// </remarks>
     public ToolResult<object> GetTableExtensionInfo(string table)
-    {
-        var items = _repo.FindExtensions(table, "Table");
-        var merged = TableMergeAnalyzer.Merge(_repo, table);
-
-        var warnings = merged.Unreadable.Count > 0
-            ? new List<string>
-            {
-                $"{merged.Unreadable.Count} extension(s) could not be read, so the merged schema is INCOMPLETE: "
-                + string.Join("; ", merged.Unreadable),
-            }
-            : null;
-
-        return ToolResult<object>.Success(new
-        {
-            target = merged.Table,
-            baseModel = merged.BaseModel,
-            count = items.Count,
-            extensions = items,
-            merged = new
-            {
-                fields = merged.Fields,
-                indexes = merged.Indexes,
-                relations = merged.Relations,
-                fieldGroups = merged.FieldGroups,
-                complete = merged.Unreadable.Count == 0,
-            },
-        }, warnings);
-    }
+        => D365FO.Core.Analysis.ExtensionAnswers.TableMerge(_repo, table);
 
     public ToolResult<object> AnalyzeExtensionPoints(string target)
     {
@@ -810,6 +783,14 @@ public sealed class ToolHandlers
         return ToolResult<object>.Success(new { count = items.Count, items });
     }
 
+    public ToolResult<object> GetSecurityPolicy(string name)
+    {
+        var item = _repo.GetSecurityPolicy(name);
+        return item is null
+            ? ToolResult<object>.Fail("NOT_FOUND", $"Security policy '{name}' not found.")
+            : ToolResult<object>.Success(item);
+    }
+
     public ToolResult<object> GetBusinessEvent(string name)
     {
         var e = _repo.GetBusinessEvent(name);
@@ -843,6 +824,39 @@ public sealed class ToolHandlers
     }
 
     // ---- integration analysis handlers ----
+
+    /// <summary>
+    /// Cross-check a workspace folder's AOT XML against the index — the one <c>analyze</c> mode
+    /// that reads the developer's own working tree rather than the index alone.
+    /// </summary>
+    public ToolResult<object> AnalyzeCompleteness(string path, bool skipLabels, bool skipEdts, bool skipSecurity)
+    {
+        path = (path ?? "").Trim();
+        if (string.IsNullOrWhiteSpace(path) || (!File.Exists(path) && !Directory.Exists(path)))
+            return ToolResult<object>.Fail(D365FoErrorCodes.BadInput, $"Path not found: {path}");
+
+        var report = D365FO.Core.Analysis.CompletenessAnalyzer.Analyze(
+            path, _repo, new D365FO.Core.Analysis.CompletenessAnalyzer.Options(skipLabels, skipEdts, skipSecurity));
+
+        return ToolResult<object>.Success(report,
+            report.IssueCount == 0 ? null : [$"{report.IssueCount} completeness issue(s) found."]);
+    }
+
+    /// <summary>Mined form patterns: the histogram, a filtered list, or the peers of one form.</summary>
+    public ToolResult<object> AnalyzeFormPatterns(
+        string? pattern, string? table, string? similarTo, string? model, int limit)
+    {
+        try
+        {
+            return ToolResult<object>.Success(
+                D365FO.Core.Analysis.FormPatternMiner.Analyze(_repo, pattern, table, similarTo, model, limit));
+        }
+        catch (D365FO.Core.Analysis.FormPatternMiner.ReferenceNotFoundException ex)
+        {
+            return ToolResult<object>.Fail("FORM_NOT_FOUND", ex.Message,
+                "Run `d365fo index extract` (or refresh) and retry, or check the spelling with search(type=form).");
+        }
+    }
 
     public ToolResult<object> AnalyzeIntegration(string? model)
     {
@@ -1111,10 +1125,28 @@ public sealed class ToolHandlers
         return writeRoot is null ? null : Path.Combine(writeRoot, model, model, "AxLabelFile", "LabelResources", lang, $"{lf}.{lang}.label.txt");
     }
 
-    private static ToolResult<object> WriteScaffold(
+    /// <summary>
+    /// Run the grounding gate, then write. Both halves, in that order, for the same reason the
+    /// CLI does it: a write that reaches disk without the gate is one that
+    /// <c>D365FO_GROUNDING_ENFORCE=true</c> did not enforce, and this path used to be exactly
+    /// that — the flag was honoured on the shell surface and silently inert here.
+    /// </summary>
+    /// <param name="targetObject">
+    /// What the write is bound to, and what a <c>prepare</c> token is checked against: the
+    /// extension or CoC target for extension-shaped scaffolds, the artefact's own name otherwise.
+    /// </param>
+    private ToolResult<object> WriteScaffold(
         System.Xml.Linq.XDocument doc, string name, string kind, string axSubfolder,
-        string? installTo, string? outPath, bool overwrite, object extra)
+        string? installTo, string? outPath, bool overwrite, object extra,
+        string? groundingToken = null, string? targetObject = null,
+        IEnumerable<string>? requiredSymbols = null)
     {
+        var gate = D365FO.Core.Scaffolding.GroundingGate.Check(
+            groundingToken, targetObject ?? name, doc,
+            requiredMethods: null, requiredSymbols: requiredSymbols,
+            requested: null, repository: _repo);
+        if (gate.Failure is not null) return gate.Failure;
+
         var path = outPath;
         if (string.IsNullOrWhiteSpace(path) && !string.IsNullOrWhiteSpace(installTo))
         {
@@ -1130,6 +1162,7 @@ public sealed class ToolHandlers
         try
         {
             var res = D365FO.Core.Scaffolding.ScaffoldFileWriter.Write(doc, path!, overwrite);
+            gate.Observe(doc.ToString());
             return ToolResult<object>.Success(new
             {
                 kind,
@@ -1138,8 +1171,9 @@ public sealed class ToolHandlers
                 bytes = res.Bytes,
                 backup = res.BackupPath,
                 model = installTo,
+                grounding = gate.Grounding,
                 extra,
-            });
+            }, gate.Warnings.Count > 0 ? gate.Warnings : null);
         }
         catch (Exception ex)
         {
@@ -1147,10 +1181,19 @@ public sealed class ToolHandlers
         }
     }
 
-    private static ToolResult<object> WriteScaffoldString(
+    /// <summary>String-rendered counterpart of <see cref="WriteScaffold"/> (used for forms).</summary>
+    private ToolResult<object> WriteScaffoldString(
         string xml, string name, string kind, string axSubfolder,
-        string? installTo, string? outPath, bool overwrite, object extra)
+        string? installTo, string? outPath, bool overwrite, object extra,
+        string? groundingToken = null, string? targetObject = null)
     {
+        System.Xml.Linq.XDocument? parsed = null;
+        try { parsed = System.Xml.Linq.XDocument.Parse(xml); } catch { /* the writer reports it */ }
+
+        var gate = D365FO.Core.Scaffolding.GroundingGate.Check(
+            groundingToken, targetObject ?? name, parsed, repository: _repo);
+        if (gate.Failure is not null) return gate.Failure;
+
         var path = outPath;
         if (string.IsNullOrWhiteSpace(path) && !string.IsNullOrWhiteSpace(installTo))
         {
@@ -1166,6 +1209,7 @@ public sealed class ToolHandlers
         try
         {
             var res = D365FO.Core.Scaffolding.ScaffoldFileWriter.Write(xml, path!, overwrite);
+            gate.Observe(xml);
             return ToolResult<object>.Success(new
             {
                 kind,
@@ -1174,8 +1218,9 @@ public sealed class ToolHandlers
                 bytes = res.Bytes,
                 backup = res.BackupPath,
                 model = installTo,
+                grounding = gate.Grounding,
                 extra,
-            });
+            }, gate.Warnings.Count > 0 ? gate.Warnings : null);
         }
         catch (Exception ex)
         {
@@ -1194,7 +1239,7 @@ public sealed class ToolHandlers
 
     public ToolResult<object> GenerateTable(
         string name, string? label, string[]? fields, string? pattern,
-        string? installTo, string? outPath, bool overwrite)
+        string? installTo, string? outPath, bool overwrite, string? groundingToken = null)
     {
         if (string.IsNullOrWhiteSpace(name))
             return ToolResult<object>.Fail("BAD_INPUT", "name is required.");
@@ -1229,7 +1274,8 @@ public sealed class ToolHandlers
         var doc = D365FO.Core.Scaffolding.XppScaffolder.Table(name, label, fieldSpecs, pat,
             D365FO.Core.Scaffolding.TableStorage.RegularTable, null, edtBaseTypeResolver: edtResolver);
         var extra = new { fieldCount = fieldSpecs.Count > 0 ? fieldSpecs.Count : (int?)null, pattern = pat == D365FO.Core.Scaffolding.TablePattern.None ? null : pat.ToString() };
-        return WriteScaffold(doc, name, "AxTable", "AxTable", installTo, outPath, overwrite, extra);
+        return WriteScaffold(doc, name, "AxTable", "AxTable", installTo, outPath, overwrite, extra,
+            groundingToken);
     }
 
     /// <summary>
@@ -1251,57 +1297,34 @@ public sealed class ToolHandlers
     /// Writes to a model outside <c>D365FO_CUSTOM_MODELS</c> are redirected to an
     /// extension object, and every write is journaled for <c>undo_last_modification</c>.
     /// </summary>
-    public ToolResult<object> ModifyObject(
-        string action, string kind, string name, string member,
-        string? value, string? type, string? label, bool mandatory,
-        string? parent, string? dataSource, string? dataField,
-        string? model, string? extensionSuffix, string? extensionModel, bool requireExtension)
-    {
-        var op = (action ?? "").ToLowerInvariant() switch
-        {
-            "property" or "set-property" or "modify-property" => D365FO.Core.Bridge.ObjectModifyEngine.Operation.SetProperty,
-            "add-field" or "addfield" => D365FO.Core.Bridge.ObjectModifyEngine.Operation.AddField,
-            "add-enum-value" or "addenumvalue" => D365FO.Core.Bridge.ObjectModifyEngine.Operation.AddEnumValue,
-            "add-control" or "addcontrol" => D365FO.Core.Bridge.ObjectModifyEngine.Operation.AddControl,
-            _ => (D365FO.Core.Bridge.ObjectModifyEngine.Operation?)null,
-        } ?? D365FO.Core.Bridge.ObjectModifyEngine.Operation.SetProperty;
-
-        if (string.IsNullOrWhiteSpace(action))
-            return ToolResult<object>.Fail(D365FoErrorCodes.BadInput, "action is required: property | add-field | add-enum-value | add-control.");
-
-        return D365FO.Core.Bridge.ObjectModifyEngine.Modify(new D365FO.Core.Bridge.ObjectModifyEngine.ModifyRequest
-        {
-            Operation = op,
-            Kind = kind,
-            ObjectName = name,
-            Member = member,
-            Value = value,
-            Type = type,
-            Label = label,
-            Mandatory = mandatory,
-            Parent = parent,
-            DataSource = dataSource,
-            DataField = dataField,
-            Model = model,
-            ExtensionSuffix = extensionSuffix,
-            ExtensionModel = extensionModel,
-            RequireExtension = requireExtension,
-        }, _repo);
-    }
+    /// <summary>
+    /// Apply one structured modification — or a batch of them — through the same engine the
+    /// <c>d365fo modify</c> sub-commands use.
+    /// </summary>
+    /// <remarks>
+    /// The request arrives fully bound (see <c>ToolCatalog.ModifyObjectCall</c>) rather than as
+    /// a parameter list, because the parameter list is what fell behind: the engine grew from
+    /// five operations to twenty and this handler kept binding the four it was written with.
+    /// Taking the engine's own request type means an operation that the engine gains cannot be
+    /// unreachable here without also being unreachable from the CLI.
+    /// </remarks>
+    public ToolResult<object> ModifyObject(D365FO.Core.Bridge.ObjectModifyEngine.ModifyRequest request)
+        => D365FO.Core.Bridge.ObjectModifyEngine.Modify(request, _repo);
 
     public ToolResult<object> GenerateClass(
         string name, string? extends, bool nonFinal,
-        string? installTo, string? outPath, bool overwrite)
+        string? installTo, string? outPath, bool overwrite, string? groundingToken = null)
     {
         if (string.IsNullOrWhiteSpace(name))
             return ToolResult<object>.Fail("BAD_INPUT", "name is required.");
         var doc = D365FO.Core.Scaffolding.XppScaffolder.Class(name, extends, !nonFinal);
-        return WriteScaffold(doc, name, "AxClass", "AxClass", installTo, outPath, overwrite, new { extends });
+        return WriteScaffold(doc, name, "AxClass", "AxClass", installTo, outPath, overwrite, new { extends },
+            groundingToken);
     }
 
     public ToolResult<object> GenerateCoc(
         string target, string[] methods,
-        string? installTo, string? outPath, bool overwrite)
+        string? installTo, string? outPath, bool overwrite, string? groundingToken = null)
     {
         if (string.IsNullOrWhiteSpace(target))
             return ToolResult<object>.Fail("BAD_INPUT", "target is required.");
@@ -1326,7 +1349,8 @@ public sealed class ToolHandlers
         var extensionName = target + "_Extension";
         var doc = D365FO.Core.Scaffolding.XppScaffolder.CocExtension(target, methods);
         var result = WriteScaffold(doc, extensionName, "AxClass", "AxClass", installTo, outPath, overwrite,
-            new { target, methodCount = methods.Length });
+            new { target, methodCount = methods.Length },
+            groundingToken: groundingToken, targetObject: target, requiredSymbols: [target]);
 
         // Attach warnings to a successful result envelope.
         if (warnings.Count > 0 && result.Ok)
@@ -1347,7 +1371,7 @@ public sealed class ToolHandlers
     public ToolResult<object> GenerateForm(
         string name, string? table, string? pattern, string? caption,
         string[]? fields, string? linesTable,
-        string? installTo, string? outPath, bool overwrite)
+        string? installTo, string? outPath, bool overwrite, string? groundingToken = null)
     {
         if (string.IsNullOrWhiteSpace(name))
             return ToolResult<object>.Fail("BAD_INPUT", "name is required.");
@@ -1373,7 +1397,7 @@ public sealed class ToolHandlers
         }
 
         return WriteScaffoldString(xml, name, "AxForm", "AxForm", installTo, outPath, overwrite,
-            new { table, pattern = fp.ToString() });
+            new { table, pattern = fp.ToString() }, groundingToken: groundingToken);
     }
 
     private static bool FormPatternEnforced() =>
@@ -1642,6 +1666,54 @@ public sealed class ToolHandlers
                 ? "Fix every error before writing — the artifact is wrong as it stands."
                 : warnings > 0 ? "No errors; review the warnings." : "Clean.",
         });
+
+    /// <summary>
+    /// The metadata provider's own verdict on one document: what it deserialises to, and every
+    /// member it drops on the way in.
+    /// </summary>
+    /// <remarks>
+    /// A dropped element is a property the type does not declare — the document reads without
+    /// error and arrives missing what you wrote, which no offline rule can see. Off a machine
+    /// with the metadata assemblies this returns <c>skipped</c>: a verdict it cannot support is
+    /// worse than no verdict.
+    /// </remarks>
+    public ToolResult<object> ValidateMetadata(string? kind, string xml)
+    {
+        if (string.IsNullOrWhiteSpace(xml))
+            return ToolResult<object>.Fail(D365FoErrorCodes.BadInput, "code (the AOT XML) is required.");
+
+        if (!D365FO.Core.Bridge.BridgeGate.ShouldTry())
+            return ToolResult<object>.Success(new
+            {
+                skipped = true,
+                reason = "The metadata provider is not enabled here. Set D365FO_BRIDGE_ENABLED=1 (and D365FO_BIN_PATH) "
+                       + "on a machine with the D365FO metadata assemblies to validate against Microsoft's own serializer.",
+            });
+
+        var verdict = D365FO.Core.Bridge.BridgeGate.TryValidateArtifact(kind, xml);
+        if (verdict is null)
+            return ToolResult<object>.Success(new
+            {
+                skipped = true,
+                reason = "The bridge did not answer. Check D365FO_BRIDGE_PATH points at D365FO.Bridge.exe and "
+                       + "D365FO_BIN_PATH at the folder holding Microsoft.Dynamics.AX.Metadata.dll.",
+            });
+
+        return ToolResult<object>.Success(new
+        {
+            rootElement = verdict.RootElement,
+            clrType = verdict.ClrType,
+            deserialized = verdict.Deserialized,
+            valid = verdict.Valid,
+            errorCode = verdict.ErrorCode,
+            errorMessage = verdict.ErrorMessage,
+            droppedCount = verdict.Dropped.Count,
+            dropped = verdict.Dropped,
+            verdict = verdict.Valid
+                ? "The provider reads this document as written."
+                : "The provider cannot read this document as written — a dropped element is a property the type does not have.",
+        });
+    }
 
     public ToolResult<object> ValidateFormPattern(string xml)
     {

@@ -1,4 +1,4 @@
-// <copyright file="MethodModifyEngine.cs" company="d365fo-cli contributors">
+﻿// <copyright file="MethodModifyEngine.cs" company="d365fo-cli contributors">
 // MIT
 // </copyright>
 
@@ -7,6 +7,7 @@ using System.Xml.Linq;
 using D365FO.Core.Guardrails;
 using D365FO.Core.Index;
 using D365FO.Core.Validation;
+using D365FO.Core.Bridge;
 
 namespace D365FO.Core.Bridge;
 
@@ -52,16 +53,15 @@ public static class MethodModifyEngine
 
     /// <summary>
     /// Build <see cref="BridgeOptions"/> from the unified config resolver (env vars or
-    /// settings.json) — the same values <c>D365FO.Cli.Commands.Get.BridgeGate</c> uses,
-    /// duplicated here so this engine has no dependency on the CLI project.
+    /// settings.json).
     /// </summary>
-    public static BridgeOptions DefaultBridgeOptions() => new()
-    {
-        MetadataBinPath = D365FoSettings.Resolve("D365FO_BIN_PATH"),
-        PackagesPath = D365FoSettings.Resolve("D365FO_PACKAGES_PATH"),
-        CustomPackagesPaths = D365FoSettings.FromEnvironment().CustomPackagesPaths,
-        XrefConnectionString = D365FoSettings.Resolve("D365FO_XREF_CONNECTIONSTRING"),
-    };
+    /// <remarks>
+    /// This was a copy of <see cref="BridgeGate.DefaultOptions"/>, kept because the gate lived in
+    /// the CLI project and Core cannot depend upwards. The gate is in Core now, so the copy —
+    /// four settings keys that had to be kept identical in three places or the bridge would be
+    /// configured differently depending on which entry point reached it — is gone.
+    /// </remarks>
+    public static BridgeOptions DefaultBridgeOptions() => BridgeGate.DefaultOptions();
 
     /// <summary>
     /// Entry point used by the CLI (<c>d365fo modify method</c>) and the MCP
