@@ -19,6 +19,51 @@ was ported from.
 
 ## [Unreleased]
 
+### Added — wave 06: the ten missing documents, and two of them generated
+
+The documentation set upstream has and this repository did not. Two are not written but
+**generated**, because a document that restates what the code does is a document that will
+disagree with it:
+
+- **`docs/MCP_TOOLS.md`** — the map between the adapter's tools and the commands behind them,
+  emitted by `scripts/emit-mcp-tools.py` from two live sources: the command manifest
+  (`d365fo schema --full`) and the adapter's own `tools/list`. The generator **refuses** to write a
+  mapping where one side names something the other does not have, so it is a parity gate as much
+  as a docs gate; CI runs it with `--check`. Upstream's version of this file was a copy, and a copy
+  cannot notice.
+- **`docs/TOKEN_ECONOMICS.md`** — rewritten around measurements from
+  `scripts/measure-context-cost.py` instead of estimates. The estimate it replaces was wrong by six
+  times: the document claimed ~1 800 tokens/turn for a 20-tool MCP surface; the adapter actually
+  advertises **32 tools** whose minified schemas are **40 132 characters** — ~11 100 tokens — in
+  context on every turn, against the CLI one-skill layout's **366**. Characters are measured;
+  tokens are stated as approximate with the divisor named, because this repository cannot honestly
+  measure another model's tokenizer.
+
+The other eight, each grounded in commands run against a live installation while writing:
+
+- **`QUICK_START.md`** — five minutes to the first answer, with `SETUP.md` for the branches.
+- **`USAGE_EXAMPLES.md`** — whole tasks end to end, where `EXAMPLES.md` is one call per command.
+  Every sequence was executed; where the output taught something it is quoted, including the two
+  traps worth knowing: `prepare change CustTable` resolves the *form* unless you pass `--type`,
+  and `CustTable` already carries 98 CoC extensions.
+- **`TESTING.md`** — the four layers (unit, eval replay, build oracle, oracles), what each catches
+  that the one below cannot, and every gate in the order CI runs it.
+- **`NEW_TOOL_CHECKLIST.md`** — what a new command must satisfy, with the defect behind each rule.
+- **`KNOWLEDGE_AUTHORING.md`** — one source, three emitted layouts, and the audit that proves the
+  corpus names nothing that does not exist.
+- **`CUSTOM_EXTENSIONS.md`** — declaring which models are yours, and what that answer changes; the
+  two-package-tree (UDE) setup.
+- **`MCP_CONFIG.md`** — client configuration, the three transports, and the `indexReachable: false`
+  failure that accounts for most MCP-only trouble.
+- **`SETUP_AZURE.md`** — the shared read-only deployment, which `src/D365FO.Mcp/Program.cs` has
+  been pointing at since before it existed.
+
+### Fixed
+
+- Two documents linked to `SETUP.md#ude-unified-developer-experience-setup`, a heading that is not
+  there; both now point at the section of `CUSTOM_EXTENSIONS.md` that covers it.
+- `AGENT_EVAL_LOOP.md` still described a 51-case catalog. It is 60, and all 60 goldens compile.
+
 ### Added — wave 05: oracles, and what the first one found
 
 Five `oracle` commands that measure this tool against the installation it claims to understand,

@@ -1,8 +1,9 @@
 # Self-improving agent eval loop — design spec
 
-**Status:** implemented — a 51-case catalog (L0–L2) replays in CI, and an L3 build
-oracle compiles every reviewed golden where a D365FO installation exists. L4
-(runtime/SysTest) is still missing. See [eval/README.md](../eval/README.md) for
+**Status:** implemented — a 60-case catalog (L0–L2) replays in CI, and an L3 build
+oracle compiles every reviewed golden where a D365FO installation exists (60 of 60).
+L4 (runtime/SysTest) is still missing; `oracle runtime` is its groundwork, and
+[BACKLOG.md](BACKLOG.md) records what "still missing" costs. See [eval/README.md](../eval/README.md) for
 day-to-day mechanics and the open work queue.
 
 **Adapted from:** the sibling repo `d365fo-mcp-server` runs the same pattern

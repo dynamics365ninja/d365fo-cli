@@ -195,7 +195,7 @@ exit 2 on errors).
 | Variable | Purpose |
 |---|---|
 | `D365FO_PACKAGES_PATH` | Primary `PackagesLocalDirectory` root |
-| `D365FO_CUSTOM_PACKAGES_PATH` | Additional roots (semicolon/comma-separated). Used for UDE dual-folder setups — see [SETUP.md](SETUP.md#ude-unified-developer-experience-setup). |
+| `D365FO_CUSTOM_PACKAGES_PATH` | Additional roots (semicolon/comma-separated). Used for UDE dual-folder setups — see [CUSTOM_EXTENSIONS.md](CUSTOM_EXTENSIONS.md#two-package-trees-ude-and-split-setups). |
 | `D365FO_BIN_PATH` | D365FO binaries directory (resolves metadata assemblies) |
 | `D365FO_BRIDGE_ENABLED` | `1`/`true` enables bridge-primary reads |
 | `D365FO_BRIDGE_PATH` | Override bridge exe location |
