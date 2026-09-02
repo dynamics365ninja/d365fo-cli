@@ -128,9 +128,6 @@ public sealed class FindExtensionsCommand : Command<FindExtensionsCommand.Settin
         [System.ComponentModel.Description("Filter: Table/Form/Edt/Enum/View/Map")]
         public string? Kind { get; init; }
 
-        [CommandOption("--merged")]
-        [System.ComponentModel.Description("Tables only: also return the EFFECTIVE schema — base fields, indexes, relations and field groups with every extension folded in, each member labelled with the object that contributes it. An extension whose file cannot be read is reported rather than dropped, and the result says so.")]
-        public bool Merged { get; init; }
     }
 
     public override int Execute(CommandContext ctx, Settings settings)
@@ -139,9 +136,6 @@ public sealed class FindExtensionsCommand : Command<FindExtensionsCommand.Settin
         if (string.IsNullOrWhiteSpace(settings.Target))
             return RenderHelpers.Render(kind, ToolResult<object>.Fail("BAD_INPUT", "Target required."));
         var repo = RepoFactory.Create();
-
-        if (settings.Merged)
-            return RenderHelpers.Render(kind, ExtensionAnswers.TableMerge(repo, settings.Target));
 
         var items = repo.FindExtensions(settings.Target, settings.Kind);
         return RenderHelpers.Render(kind,

@@ -162,7 +162,7 @@ public sealed class SchemaCommand : Command<SchemaCommand.Settings>
         C("search service", "Find SOAP services.", ["<QUERY>"], ["--limit", "--output"], ["search (type=service)"]),
         C("search workflow", "Find workflow types.", ["<QUERY>"], ["--limit", "--output"], ["search (type=workflow)"]),
 
-        C("get table", "Get table fields, relations, indexes, methods, and delete actions.", ["<NAME>"], ["--include", "--output", "--resolve-labels"], ["get_object_info (objectType=table)"]),
+        C("get table", "Get table fields, relations, indexes, methods, and delete actions; --merged folds in every extension.", ["<NAME>"], ["--include", "--merged", "--output", "--resolve-labels"], ["get_object_info (objectType=table)", "extension_info (mode=table-merge)"]),
         C("get edt", "Get an EDT definition.", ["<NAME>"], ["--output"], ["get_object_info (objectType=edt)"]),
         C("get class", "Get class metadata and method signatures.", ["<NAME>"], ["--output"], ["get_object_info (objectType=class)"]),
         C("get enum", "Get enum values.", ["<NAME>"], ["--output"], ["get_object_info (objectType=enum)"]),
@@ -184,7 +184,7 @@ public sealed class SchemaCommand : Command<SchemaCommand.Settings>
         C("find relations", "Find table relations.", ["<TABLE>"], ["--output"], ["get_object_info (objectType=table,relations)"]),
         C("find usages", "Find indexed entities whose names contain a substring.", ["<SYMBOL>"], ["--limit", "--output"], ["search (type=any)"]),
         C("find fields", "Find tables that declare a field name or EDT (exact match) — precise field-level lookup, not relation/FK or source-code search.", ["<NAME>"], ["--model", "--limit", "--output"], ["find_tables_by_field"]),
-        C("find extensions", "Find Table/Form/Edt/Enum extensions targeting an object; --merged adds the effective merged table schema.", ["<TARGET>"], ["--kind", "--merged", "--output"], ["extension_info (mode=points)", "extension_info (mode=table-merge)"]),
+        C("find extensions", "Find Table/Form/Edt/Enum extensions targeting an object.", ["<TARGET>"], ["--kind", "--output"], ["extension_info (mode=points)"]),
         C("find handlers", "Find event subscribers.", ["<OBJECT>"], ["--kind", "--output"], ["extension_info (mode=events)"]),
         C("find event-handlers", "Alias of `find handlers`.", ["<OBJECT>"], ["--kind", "--output"], ["extension_info (mode=events)"]),
         C("find refs", "Scan indexed X++ source for reverse references.", ["<NAME>"], ["--kind", "--model", "--limit", "--xref", "--output"], ["find_references"]),

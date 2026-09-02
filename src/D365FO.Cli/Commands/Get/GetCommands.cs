@@ -30,16 +30,11 @@ public sealed class GetTableCommand : Command<GetTableCommand.Settings>
         // cannot come from the bridge's single-object read — resolve it before that gate.
         if (settings.Merged)
         {
-            var mergeRepo = RepoFactory.Create();
-            var merged = D365FO.Core.Index.TableMergeAnalyzer.Merge(mergeRepo, settings.Name);
-            var mergeWarnings = merged.Unreadable.Count > 0
-                ? new List<string>
-                {
-                    $"{merged.Unreadable.Count} extension(s) could not be read, so this schema is INCOMPLETE: "
-                    + string.Join("; ", merged.Unreadable),
-                }
-                : null;
-            return RenderHelpers.Render(kind, ToolResult<object>.Success(merged, mergeWarnings));
+            // Through the shared answer, so `get table --merged` and the MCP
+            // extension_info(mode=table-merge) return the same document rather than two that
+            // agree by inspection.
+            return RenderHelpers.Render(kind,
+                D365FO.Core.Analysis.ExtensionAnswers.TableMerge(RepoFactory.Create(), settings.Name));
         }
 
         if (BridgeGate.ShouldTry())

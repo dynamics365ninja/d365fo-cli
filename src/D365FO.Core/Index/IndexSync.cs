@@ -125,26 +125,42 @@ public static class IndexSync
     }
 
     /// <summary>The model a path belongs to, or null when the path is not in the packages layout.</summary>
+    /// <remarks>
+    /// Anchored, not searched. The layout puts the doubled segment at a fixed depth —
+    /// <c>&lt;root&gt;/&lt;Model&gt;/&lt;Model&gt;/Ax&lt;Kind&gt;/&lt;Name&gt;.xml</c> — so a file's model is
+    /// exactly two levels up, through an <c>Ax*</c> folder. Walking up looking for any repeated
+    /// folder name finds one wherever a path happens to contain one: a CI checkout at
+    /// <c>/work/&lt;repo&gt;/&lt;repo&gt;</c> answered with the repository's own name for a path that had
+    /// nothing to do with D365FO.
+    /// </remarks>
     public static string? ModelFromPath(string fullPath)
     {
         try
         {
-            var current = Path.GetFullPath(fullPath);
-            // Walk up looking for the doubled <Model>\<Model> the layout repeats. Starting from
-            // a file this is two levels up; starting from a folder it may be one, so search
-            // rather than counting.
-            for (var i = 0; i < 8 && current is not null; i++)
-            {
-                var parent = Path.GetDirectoryName(current);
-                if (parent is null) break;
-                if (string.Equals(Path.GetFileName(current), Path.GetFileName(parent), StringComparison.OrdinalIgnoreCase)
-                    && Path.GetFileName(current).Length > 0)
-                    return Path.GetFileName(current);
-                current = parent;
-            }
+            if (string.IsNullOrWhiteSpace(fullPath)) return null;
+
+            // The model folder named directly: <Model>/<Model>.
+            var asFolder = Doubled(fullPath.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
+            if (asFolder is not null) return asFolder;
+
+            // A file inside it: the parent is the AOT subfolder, the model is above that.
+            var axFolder = Path.GetDirectoryName(fullPath);
+            if (axFolder is null) return null;
+            if (!Path.GetFileName(axFolder).StartsWith("Ax", StringComparison.OrdinalIgnoreCase)) return null;
+            return Doubled(Path.GetDirectoryName(axFolder));
         }
         catch { /* not a usable path */ }
         return null;
+    }
+
+    /// <summary>The folder's name when its parent repeats it, which is how a model announces itself.</summary>
+    private static string? Doubled(string? dir)
+    {
+        if (string.IsNullOrEmpty(dir)) return null;
+        var name = Path.GetFileName(dir);
+        var parent = Path.GetDirectoryName(dir);
+        if (name.Length == 0 || parent is null) return null;
+        return string.Equals(name, Path.GetFileName(parent), StringComparison.OrdinalIgnoreCase) ? name : null;
     }
 
     /// <summary>
