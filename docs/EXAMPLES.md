@@ -628,6 +628,42 @@ d365fo suggest extension CustTable  --kind Form   --output json
 
 Ranks extension strategies (`CoC`, `EventHandler`, `Extension`) by confidence based on what already exists in the codebase. Use before scaffolding.
 
+### `analyze patterns` — how a scenario is usually done here
+
+```sh
+# Which APIs does the code around this scenario reach for?
+d365fo analyze patterns "number sequence" --output json
+
+# Restrict to your own model to see how THIS codebase does it
+d365fo analyze patterns "posting" --model ConFleet --output json
+```
+
+Ranked by how many **distinct** objects use each API, so one verbose class cannot make its own
+habits look like the codebase's. Reads whole method bodies, not just the matching line — the line
+that mentions "number sequence" is usually a comment, and the call that answers the question is
+below it.
+
+Check `coverage.searched`: `false` means the corpus could not be read at all, which is a different
+answer from "nothing matches".
+
+### `analyze implementations` — who else implements this method
+
+```sh
+# Before writing an override or a CoC wrapper
+d365fo analyze implementations validateWrite --output json
+d365fo analyze implementations initValue --model ApplicationSuite --output json
+```
+
+### `analyze api-usage` — how an API is really reached
+
+```sh
+d365fo analyze api-usage NumberSeq --output json
+d365fo analyze api-usage DocumentManagement --limit 10 --output json
+```
+
+Separates construction from static calls from declarations. When an API is never constructed, it
+says so — a `new` is then the wrong shape.
+
 ### `analyze completeness` — cross-check project against index
 
 ```sh
@@ -667,6 +703,20 @@ d365fo label delete RenamedKey         --file path/Foo.en-us.label.txt
 `search label --fts` requires FTS5 (falls back to `LIKE` if unavailable). Write commands keep a `.bak` of the previous file.
 
 ---
+
+### `labels update` — correct an existing label
+
+```sh
+# One language
+d365fo labels update ConVehicle "Vehicle" --install-to ConFleet --lang en-us
+
+# Several: one --text per language
+d365fo labels update ConVehicle --install-to ConFleet --lang en-us,cs \
+  --text en-us=Vehicle --text cs=Vozidlo
+```
+
+Refuses a key that does not exist (that is `labels create`), and refuses one text for several
+languages — which would replace every other translation with this one's string.
 
 ## Journal / undo
 
@@ -709,6 +759,24 @@ Compare two revs with `--base main --head feature/my-branch`. Rules shipped toda
 - `DYNAMIC_QUERY` — dynamic `Query` construction (flag for security review).
 
 ---
+
+## Verify the project
+
+### `verify` — objects on disk, and in the `.rnrproj`
+
+```sh
+# The whole model
+d365fo verify ConFleet --output json
+
+# Just the objects you believe you created
+d365fo verify ConFleet --expect ConFleetVehicle --expect AxClass/ConFleetPosting --output json
+
+# A folder that is not under a configured packages path
+d365fo verify --path /repo/PackagesLocalDirectory/ConFleet/ConFleet --output json
+```
+
+`UNREGISTERED` means the file is there and the project does not list it, so it is never compiled —
+the failure mode nothing else reports. Exit code 2 when the model and the project disagree.
 
 ## Windows-only ops (D365FO VM)
 

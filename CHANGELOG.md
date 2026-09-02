@@ -19,6 +19,33 @@ was ported from.
 
 ## [Unreleased]
 
+### Fixed — what the wave-04 audit found
+Auditing the wave against the gap analysis turned up four defects, one of them in the wave's own
+new code.
+
+- **`labels update` wrote one language's text into every language file.** Targeting `en-us,cs`
+  with a single value replaced the Czech translation with the English string and reported
+  success — data loss dressed as a correction. A correction *is* a translation, so several
+  languages now need one `--text <LANG>=<VALUE>` each, and a single text for several languages is
+  refused with the arguments to pass instead.
+- **A search that read nothing reported a clean zero.** `find refs` on an index built elsewhere
+  (no source index, no source paths on this machine) answered `count: 0` — indistinguishable from
+  a codebase where the symbol is genuinely unused, which is how "no callers" becomes "safe to
+  delete". `SourceRefResult` now carries `searched` and a caveat, so `find refs`, the
+  `find_references` tool and the three `analyze` modes all say the same thing.
+- **`validate name` called the only extension-name shape Microsoft ships illegal.** The character
+  rule rejected the dot in `CustTable.FleetExtension` as an invalid character while the kind rule
+  in the same run recommended exactly that form. Counted on this host: of the **1 093**
+  `AxTableExtension` objects in the installation, **1 093** use `Base.Suffix` and none uses
+  `Base_Extension`. Extension kinds now accept one dot separating base from suffix; a second dot,
+  a space, or a dot on a non-extension kind still fail.
+- **A label file could be created under an id nothing can reference.** `--label-file "Con Fleet"`
+  wrote `Con Fleet.en-us.label.txt` and reported success, but no `@File:Id` token can name it, so
+  every use of the label resolves to nothing. Both surfaces now refuse an id that is not a
+  referenceable identifier.
+- Documentation the wave had left behind: `labels update` and `verify` were absent from
+  CAPABILITIES, and none of the five new commands had an entry in EXAMPLES.
+
 ### Added — wave 04: the rest of the surface
 The gap analysis's fourth wave: the MCP tools that had no CLI counterpart, plus the two write
 verbs whose absence forced a workaround.

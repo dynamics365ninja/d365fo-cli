@@ -16,12 +16,50 @@ public sealed record SourceRefHit(
     IReadOnlyList<SourceRefMatchLine> Matches);
 
 /// <summary>Result of a reverse-reference search over X++ method bodies.</summary>
+/// <param name="Needle">The symbol that was searched for.</param>
+/// <param name="Via">"fts" when served from MethodSourceFts, else "scan".</param>
+/// <param name="FilesScanned">Source files opened. Zero with no hits means nothing was read.</param>
+/// <param name="Truncated">The limit was reached, so there may be more.</param>
+/// <param name="Hits">The methods that reference the symbol.</param>
+/// <param name="Searched">
+/// False when the corpus could not be read at all — no FTS rows and no source file opened.
+/// </param>
+/// <param name="Caveat">
+/// Why an empty result is not evidence of absence, when it is not. Null when the search really
+/// did look.
+/// </param>
 public sealed record SourceRefResult(
     string Needle,
-    string Via,           // "fts" when served from MethodSourceFts, else "scan"
+    string Via,
     int FilesScanned,
     bool Truncated,
-    IReadOnlyList<SourceRefHit> Hits);
+    IReadOnlyList<SourceRefHit> Hits,
+    bool Searched = true,
+    string? Caveat = null)
+{
+    /// <summary>
+    /// The reachability verdict for a finished search.
+    /// </summary>
+    /// <remarks>
+    /// A search over method bodies returns nothing when nothing matches, and also when there was
+    /// nothing to search: no opt-in source index, and no source path on this machine — an index
+    /// built elsewhere looks exactly like a codebase where the symbol is unused. Reporting the
+    /// second as a clean zero is how "no callers" becomes "safe to delete".
+    /// </remarks>
+    public static SourceRefResult Finish(
+        string needle, string via, int filesScanned, bool truncated,
+        IReadOnlyList<SourceRefHit> hits, long ftsRows)
+    {
+        var searched = ftsRows > 0 || filesScanned > 0;
+        return new SourceRefResult(needle, via, filesScanned, truncated, hits, searched,
+            searched
+                ? null
+                : "Nothing was searched: the method-source index is empty and no source file could be opened. "
+                  + "An empty result here is not evidence that the symbol is unused — run "
+                  + "`d365fo index extract --index-source`, or point D365FO_PACKAGES_PATH at the installation "
+                  + "the index was built from.");
+    }
+}
 
 /// <summary>
 /// Shared reverse-reference search over X++ method bodies, used by both
@@ -76,7 +114,7 @@ public static class MethodSourceSearch
                 ScanSources(repo.EnumerateSourcePaths(model).Where(s => s.Kind == "Form"),
                             rx, limit, sampleLinesPerHit, hits, ref scanned, ref truncated);
 
-            return new SourceRefResult(needle, "fts", scanned, truncated, hits);
+            return SourceRefResult.Finish(needle, "fts", scanned, truncated, hits, repo.CountMethodSource());
         }
 
         // No FTS index: scan the whole corpus on disk.
@@ -84,7 +122,7 @@ public static class MethodSourceSearch
         if (normKind is not null)
             sources = sources.Where(s => string.Equals(s.Kind, normKind, StringComparison.OrdinalIgnoreCase)).ToList();
         ScanSources(sources, rx, limit, sampleLinesPerHit, hits, ref scanned, ref truncated);
-        return new SourceRefResult(needle, "scan", scanned, truncated, hits);
+        return SourceRefResult.Finish(needle, "scan", scanned, truncated, hits, ftsRows: 0);
     }
 
     private static void ScanSources(

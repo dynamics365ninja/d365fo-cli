@@ -32,20 +32,12 @@ public static class CodeAnalysis
     /// <param name="Caveat">Why an empty answer is not evidence of absence, when it is not.</param>
     public sealed record Coverage(string Via, int FilesScanned, bool Searched, string? Caveat);
 
-    private static Coverage CoverageOf(MetadataRepository repo, SourceRefResult result)
-    {
-        var ftsRows = repo.CountMethodSource();
-        var searched = ftsRows > 0 || result.FilesScanned > 0;
-        return new Coverage(
-            result.Via,
-            result.FilesScanned,
-            searched,
-            searched
-                ? null
-                : "Nothing was searched: the method-source index is empty and no source file could be opened. "
-                  + "This is not evidence of absence — run `d365fo index extract --index-source`, or point "
-                  + "D365FO_PACKAGES_PATH at the installation the index was built from.");
-    }
+    /// <remarks>
+    /// The verdict comes from the search itself rather than being recomputed here, so
+    /// <c>find refs</c> and these three modes cannot disagree about whether the corpus was read.
+    /// </remarks>
+    private static Coverage CoverageOf(MetadataRepository repo, SourceRefResult result) =>
+        new(result.Via, result.FilesScanned, result.Searched, result.Caveat);
 
     // ------------------------------------------------------------- patterns
 

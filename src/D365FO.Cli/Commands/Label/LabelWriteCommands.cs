@@ -380,6 +380,18 @@ internal static class LabelTargets
             }
         }
 
+        // An id no @File:Id token can name produces a label nothing can reference — the write
+        // succeeds and every use of it resolves to nothing.
+        var unreferenceable = files
+            .Select(LabelFileWriter.LabelFileIdOf)
+            .FirstOrDefault(id => !LabelFileWriter.IsReferenceableLabelFileId(id));
+        if (unreferenceable is not null)
+            return new Resolution([], ToolResult<object>.Fail(
+                "LABEL_FILE_UNREFERENCEABLE",
+                $"'{unreferenceable}' cannot be named by an @File:Id token, so a label written there could never be referenced.",
+                "A label file id is letters, digits and underscore, starting with a letter — no spaces, dots or dashes. "
+                + "Rename the target (e.g. --label-file ConFleet)."));
+
         if (!allowExtensionLabelFile)
         {
             var extFile = files.FirstOrDefault(LabelFileWriter.IsExtensionLabelFile);
@@ -412,9 +424,13 @@ public sealed class LabelUpdateCommand : Command<LabelUpdateCommand.Settings>
         [System.ComponentModel.Description("Label key to correct. Must already exist — this never creates.")]
         public string Key { get; init; } = "";
 
-        [CommandArgument(1, "<VALUE>")]
-        [System.ComponentModel.Description("The corrected text.")]
+        [CommandArgument(1, "[VALUE]")]
+        [System.ComponentModel.Description("The corrected text. Only for a SINGLE language — with several, give one --text per language.")]
         public string Value { get; init; } = "";
+
+        [CommandOption("--text <LANG=VALUE>")]
+        [System.ComponentModel.Description("Repeatable: the corrected text for one language, e.g. --text en-us=Vehicle --text cs=Vozidlo. Required when more than one language is targeted, because a translation is not the same string in every language.")]
+        public string[] Text { get; init; } = Array.Empty<string>();
 
         [CommandOption("--file <PATH>")]
         [System.ComponentModel.Description("Target <Name>.<lang>.label.txt file (absolute path). Required unless --install-to is used.")]
@@ -447,6 +463,42 @@ public sealed class LabelUpdateCommand : Command<LabelUpdateCommand.Settings>
             return RenderHelpers.Render(kind, ToolResult<object>.Fail(D365FoErrorCodes.BadInput,
                 "--file <PATH> or --install-to <MODEL> is required."));
 
+        // Per-language texts. A correction is a translation, and a translation is not the same
+        // string in every language — writing one value into every resolved file silently
+        // replaces every other language with this one's text and reports it as success.
+        var byLang = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var raw in settings.Text)
+        {
+            var eq = raw.IndexOf('=');
+            if (eq <= 0)
+                return RenderHelpers.Render(kind, ToolResult<object>.Fail(D365FoErrorCodes.BadInput,
+                    $"Malformed --text '{raw}'.", "Expected <LANG>=<VALUE>, e.g. --text cs=Vozidlo."));
+            byLang[raw[..eq].Trim()] = raw[(eq + 1)..];
+        }
+
+        var langs = (string.IsNullOrWhiteSpace(settings.Lang) ? "en-us" : settings.Lang!)
+            .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        var multiLingual = string.IsNullOrWhiteSpace(settings.File) && langs.Length > 1;
+
+        if (multiLingual && byLang.Count == 0)
+            return RenderHelpers.Render(kind, ToolResult<object>.Fail(D365FoErrorCodes.BadInput,
+                $"{langs.Length} languages were targeted but only one text was given.",
+                "A correction is a translation: pass one --text per language "
+                + $"(e.g. {string.Join(" ", langs.Select(l => $"--text {l}=<VALUE>"))}), or correct one language at a time. "
+                + "Writing the same string into every language would silently replace the other translations."));
+
+        if (byLang.Count == 0 && string.IsNullOrWhiteSpace(settings.Value))
+            return RenderHelpers.Render(kind, ToolResult<object>.Fail(D365FoErrorCodes.BadInput,
+                "The corrected text is required.", "Pass it as <VALUE>, or as --text <LANG>=<VALUE>."));
+
+        var untargeted = byLang.Keys
+            .Where(l => !langs.Contains(l, StringComparer.OrdinalIgnoreCase))
+            .ToList();
+        if (untargeted.Count > 0 && !string.IsNullOrWhiteSpace(settings.InstallTo))
+            return RenderHelpers.Render(kind, ToolResult<object>.Fail(D365FoErrorCodes.BadInput,
+                $"--text was given for {string.Join(", ", untargeted)}, which --lang does not target.",
+                $"--lang covers: {string.Join(", ", langs)}. Add the language there, or drop the --text."));
+
         var targets = LabelTargets.Resolve(
             settings.File, settings.InstallTo, settings.Lang, settings.LabelFile,
             settings.AllowExtensionLabelFile);
@@ -456,9 +508,18 @@ public sealed class LabelUpdateCommand : Command<LabelUpdateCommand.Settings>
         var missing = new List<string>();
         try
         {
-            foreach (var file in targets.Files)
+            for (var i = 0; i < targets.Files.Count; i++)
             {
-                var res = LabelFileWriter.Update(file, settings.Key, settings.Value);
+                var file = targets.Files[i];
+                // Files come back in --lang order, so the language a file carries is known
+                // without re-parsing its name.
+                var lang = string.IsNullOrWhiteSpace(settings.File) && i < langs.Length ? langs[i] : null;
+                var value = lang is not null && byLang.TryGetValue(lang, out var perLang)
+                    ? perLang
+                    : byLang.Count == 1 && langs.Length == 1 ? byLang.Values.First()
+                    : settings.Value;
+
+                var res = LabelFileWriter.Update(file, settings.Key, value);
                 if (res.Outcome == WriteOutcome.KeyMissing)
                 {
                     missing.Add(file);

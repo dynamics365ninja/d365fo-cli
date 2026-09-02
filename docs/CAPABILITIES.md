@@ -459,6 +459,48 @@ d365fo labels delete Key           --file path/Foo.en-us.label.txt
 
 ---
 
+### `verify` — does the model on disk match its project?
+
+```sh
+d365fo verify ConFleet --output json
+d365fo verify --path /repo/PackagesLocalDirectory/ConFleet/ConFleet --expect ConFleetVehicle
+```
+
+Two findings, both invisible otherwise:
+
+| Finding | What it means |
+|---|---|
+| `UNREGISTERED` | The XML is in the model folder and the `.rnrproj` does not list it, so it is **not compiled** — the AOT never sees the object and nothing anywhere reports that. |
+| `MISSING_FILE` | The project references a file that is gone; the build fails on a path rather than a reason. |
+
+`--expect <NAME>` answers by name (`ConFleetVehicle` or `AxTable/ConFleetVehicle`) for the objects
+you believe you just created. A project with **no explicit item list** is not judged: some project
+shapes glob their content, and calling every file unregistered there would be a wall of findings
+that are all wrong — the result says so instead.
+
+MCP parity: `verify_project` (`model` / `path`, `expect[]`).
+
+### `labels update` — correct a label that already exists
+
+```sh
+# One language: the corrected text is positional
+d365fo labels update ConVehicle "Vehicle" --install-to ConFleet --lang en-us
+
+# Several languages: one --text per language, because a translation is not the same string twice
+d365fo labels update ConVehicle --install-to ConFleet --lang en-us,cs \
+  --text en-us=Vehicle --text cs=Vozidlo
+```
+
+Deliberately **not** `labels create --overwrite`: create writes a *new* entry when the key is
+absent, so a mistyped key in a correction produces a second label and reports success. `update`
+refuses a key that is not there and leaves the file untouched.
+
+Targeting several languages with a single text is refused rather than applied — writing one
+language's string into every file silently replaces the other translations. The refusal names the
+`--text` arguments to pass instead.
+
+MCP parity: `labels (action=update)`.
+
 ## Modification journal & undo
 
 Every metadata write — `generate *`, `labels create\|rename\|delete`, and `delete` — appends

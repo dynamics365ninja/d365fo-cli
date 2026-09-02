@@ -1212,10 +1212,15 @@ public sealed partial class ToolHandlers
     /// Searches <c>D365FO_CUSTOM_PACKAGES_PATH</c> first (write target), then
     /// <c>D365FO_PACKAGES_PATH</c>. Returns <c>null</c> when neither is set.
     /// </summary>
+    /// <summary>
+    /// Resolve the label file for a model and language, or null when the id is one no
+    /// <c>@File:Id</c> token could name — a label written there could never be referenced.
+    /// </summary>
     private static string? ResolveLabelPath(string model, string lang, string? labelFile)
     {
         var cfg = D365FoSettings.FromEnvironment();
         var lf = string.IsNullOrWhiteSpace(labelFile) ? model : labelFile!;
+        if (!D365FO.Core.Labels.LabelFileWriter.IsReferenceableLabelFileId(lf)) return null;
         var candidates = cfg.CustomPackagesPaths.Concat(new[] { cfg.PackagesPath });
         foreach (var root in candidates)
         {
@@ -2574,10 +2579,11 @@ public sealed partial class ToolHandlers
             needle = result.Needle,
             via = result.Via,
             filesScanned = result.FilesScanned,
+            searched = result.Searched,
             count = items.Count,
             truncated = result.Truncated,
             items,
-        });
+        }, result.Caveat is null ? null : [result.Caveat]);
     }
 
     /// <summary>
