@@ -54,9 +54,10 @@ public class CodeAnalysisTests : IDisposable
         Assert.False(searched);
         Assert.NotNull(caveat);
         // The caveat has to be reachable as a warning too — a caller reading only the envelope
-        // must not take the empty list at face value.
+        // must not take the empty list at face value. The wording comes from the search itself,
+        // so `find refs` and these modes say the same thing.
         Assert.NotNull(result.Warnings);
-        Assert.Contains("not evidence of absence", result.Warnings![0], StringComparison.Ordinal);
+        Assert.Contains("not evidence", result.Warnings![0], StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]

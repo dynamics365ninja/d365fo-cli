@@ -1674,10 +1674,12 @@ public sealed partial class MetadataRepository
             return FindUsages(needle, limit);
 
         using var conn = OpenReadOnly();
-        var like = $"%{EscapeLike(needle)}%";
+        var tokens = QueryTokens(needle);
+        var like = $"%{EscapeLike(tokens.Length > 0 ? tokens[0] : needle)}%";
+        var sqlLimit = tokens.Length > 1 ? Math.Min(limit * 20, 5000) : limit;
         var sql = string.Join("\nUNION ALL\n", fragments) + "\nORDER BY Name\nLIMIT @limit";
-        var rows = conn.Query<UsageRow>(sql, new { like, limit });
-        return rows.Select(r => (r.Kind, r.Name, r.Model)).ToList();
+        var rows = conn.Query<UsageRow>(sql, new { like, limit = sqlLimit });
+        return KeepRowsCarryingEveryToken(rows, tokens, limit);
     }
 
     /// <summary>
@@ -2166,11 +2168,44 @@ public sealed partial class MetadataRepository
     /// `d365fo find usages` to approximate a cross-object search without
     /// loading X++ source itself.
     /// </summary>
+    /// <summary>
+    /// The words a free-text query is made of. An object name has no spaces, so a multi-word
+    /// query matched as one literal matches nothing at all — "agent feed" found none of the
+    /// three <c>AgentFeed*</c> tables. Every token has to appear, in any order.
+    /// </summary>
+    private static string[] QueryTokens(string needle) =>
+        (needle ?? "").Split(new[] { ' ', '\t' }, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+
+    /// <summary>Keep the rows whose name carries every token after the first.</summary>
+    /// <remarks>
+    /// The first token narrows in SQL, where the index can help; the rest filter here. The SQL
+    /// limit is widened for a multi-token query so a row that only the later tokens disqualify
+    /// cannot push a real match past the cap.
+    /// </remarks>
+    private static IReadOnlyList<(string Kind, string Name, string Model)> KeepRowsCarryingEveryToken(
+        IEnumerable<UsageRow> rows, string[] tokens, int limit)
+    {
+        var result = new List<(string, string, string)>();
+        foreach (var r in rows)
+        {
+            if (tokens.Length > 1 && !tokens.Skip(1).All(t =>
+                    r.Name.Contains(t, StringComparison.OrdinalIgnoreCase)))
+                continue;
+            result.Add((r.Kind, r.Name, r.Model));
+            if (result.Count >= limit) break;
+        }
+        return result;
+    }
+
     public IReadOnlyList<(string Kind, string Name, string Model)> FindUsages(string needle, int limit = 100)
     {
         limit = ClampLimit(limit, 100);
         using var conn = OpenReadOnly();
-        var like = $"%{EscapeLike(needle)}%";
+        var tokens = QueryTokens(needle);
+        var like = $"%{EscapeLike(tokens.Length > 0 ? tokens[0] : needle)}%";
+        // Widened only when there is a second token to filter on; a single-token query keeps
+        // exactly the cap the caller asked for.
+        var sqlLimit = tokens.Length > 1 ? Math.Min(limit * 20, 5000) : limit;
         var rows = conn.Query<UsageRow>(@"
             SELECT 'Table' AS Kind, t.Name AS Name, m.Name AS Model FROM Tables t JOIN Models m ON m.ModelId=t.ModelId WHERE t.Name LIKE @like ESCAPE '!'
             UNION ALL
@@ -2198,8 +2233,8 @@ public sealed partial class MetadataRepository
             UNION ALL
             SELECT 'Map', mp.Name, m.Name FROM Maps mp JOIN Models m ON m.ModelId=mp.ModelId WHERE mp.Name LIKE @like ESCAPE '!'
             ORDER BY Name
-            LIMIT @limit", new { like, limit });
-        return rows.Select(r => (r.Kind, r.Name, r.Model)).ToList();
+            LIMIT @limit", new { like, limit = sqlLimit });
+        return KeepRowsCarryingEveryToken(rows, tokens, limit);
     }
 
     /// <summary>

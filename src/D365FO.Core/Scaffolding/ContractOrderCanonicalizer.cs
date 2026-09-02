@@ -23,6 +23,24 @@ namespace D365FO.Core.Scaffolding;
 /// collection, which is data rather than contract.
 /// </para>
 /// </remarks>
+/// <remarks>
+/// <para>
+/// A note on the rule that is deliberately NOT here. Canonicalising order on write is cheap and
+/// safe, so this class does it. Turning the same knowledge into a validation rule — "this member
+/// arrives after one the contract declares later, so the reader will drop it" — was tried and
+/// withdrawn: run against the installation, it flagged files Microsoft ships. An
+/// <c>AxEnum</c> with <c>ConfigurationKey</c> after <c>UseEnumValue</c>, an <c>AccessGrant</c>
+/// with <c>Create</c> after <c>Update</c>, an <c>AxTableFieldString</c> with <c>Label</c> after
+/// <c>StringSize</c> — all shipped, all loading.
+/// </para>
+/// <para>
+/// So the member list this canonicaliser follows is a contract's declaration order, and the
+/// deserializer is evidently more tolerant of order than that list implies. Ordering the members
+/// we write remains worth doing; calling a document broken because its order differs is not
+/// something the evidence on this machine supports, and a rule that fails on Microsoft's own
+/// files is worse than no rule. <c>MetadataContractsAotTests</c> is what caught it.
+/// </para>
+/// </remarks>
 public static class ContractOrderCanonicalizer
 {
     private static readonly XNamespace Xsi = "http://www.w3.org/2001/XMLSchema-instance";

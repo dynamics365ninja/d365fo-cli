@@ -1545,8 +1545,8 @@ public static class XppValidator
     /// <summary>RPT101 — AxReport without a design node.</summary>
     private static void CheckReportHasDesign(string code, List<XppViolation> v)
     {
-        if (!Regex.IsMatch(code, @"<AxReport[\s>]", RegexOptions.IgnoreCase)) return;
-        if (Regex.IsMatch(code, @"<AxReportDesign\b", RegexOptions.IgnoreCase)) return;
+        if (!XmlScan.RootIs(code, "AxReport")) return;
+        if (XmlScan.ContainsElement(code, "AxReportDesign")) return;
         v.Add(new XppViolation("RPT101", "error", null, "<AxReport> — no <AxReportDesign>",
             "The report declares no design — ssrsReportStr(report, design) can never reference it and the report cannot run. " +
             "`d365fo generate report` scaffolds one auto design named \"AutoDesign\"."));
@@ -1555,7 +1555,7 @@ public static class XppValidator
     /// <summary>RPT102 — report dataset without a Query.</summary>
     private static void CheckReportDatasetShape(string code, List<XppViolation> v)
     {
-        if (!Regex.IsMatch(code, @"<AxReport[\s>]", RegexOptions.IgnoreCase)) return;
+        if (!XmlScan.RootIs(code, "AxReport")) return;
         foreach (Match m in Regex.Matches(code, @"<AxReportDataSet\b[\s\S]*?</AxReportDataSet>", RegexOptions.IgnoreCase))
         {
             if (Regex.IsMatch(m.Value, "<Query>", RegexOptions.IgnoreCase)) continue;
@@ -1570,8 +1570,8 @@ public static class XppValidator
 
     private static void CheckMissingAlternateKey(string code, List<XppViolation> v)
     {
-        var isExtension = Regex.IsMatch(code, @"<AxTableExtension[\s>]", RegexOptions.IgnoreCase);
-        var isBaseTable = Regex.IsMatch(code, @"<AxTable[\s>]", RegexOptions.IgnoreCase);
+        var isExtension = XmlScan.RootIs(code, "AxTableExtension");
+        var isBaseTable = XmlScan.RootIs(code, "AxTable");
         if (!isExtension && !isBaseTable) return;
 
         // A table extension merges into the base table it targets — it does not
@@ -1584,7 +1584,7 @@ public static class XppValidator
         // precondition (Microsoft Learn's Customization Analysis Report reference)
         // is "tables that have a unique index" — only hold the extension to this
         // rule once it actually introduces an index of its own.
-        if (isExtension && !Regex.IsMatch(code, @"<AxTableIndex[\s>]", RegexOptions.IgnoreCase)) return;
+        if (isExtension && !XmlScan.ContainsElement(code, "AxTableIndex")) return;
 
         if (!Regex.IsMatch(code, @"<AlternateKey>\s*Yes\s*</AlternateKey>", RegexOptions.IgnoreCase))
         {
@@ -1627,7 +1627,7 @@ public static class XppValidator
 
     private static void CheckTableProperties(string code, IPropertyStatsProvider? stats, List<XppViolation> v)
     {
-        if (!Regex.IsMatch(code, @"<AxTable[\s>]", RegexOptions.IgnoreCase)) return;
+        if (!XmlScan.RootIs(code, "AxTable")) return;
         var header = TableHeaderSegment(code);
 
         var label = PropertyRuleApplies(stats, "AxTable", "Label");
@@ -1668,7 +1668,7 @@ public static class XppValidator
 
     private static void CheckFieldEdt(string code, IPropertyStatsProvider? stats, List<XppViolation> v)
     {
-        if (!Regex.IsMatch(code, @"<AxTableField[\s>]", RegexOptions.IgnoreCase)) return;
+        if (!XmlScan.ContainsElement(code, "AxTableField")) return;
         var rule = PropertyRuleApplies(stats, "AxTableField", "ExtendedDataType");
         if (!rule.Applies) return;
 

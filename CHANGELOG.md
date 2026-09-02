@@ -19,6 +19,70 @@ was ported from.
 
 ## [Unreleased]
 
+### Fixed — the rest of the 1.16.0 ports
+The remainder of the upstream fixes the gap analysis lists under wave 04, each checked against
+this codebase before being ported: a fix for a defect we do not have is a change with no reason.
+
+- **A rule could read the document's root out of a comment.** The XML rules asked whether the
+  TEXT contained `<AxTable`, so `<!-- this was an <AxTable> before it was rewritten -->` above an
+  `AxClass` made every table rule fire on it — a finding naming a rule the document cannot break.
+  `XmlScan` reads the root by scanning tokens, skipping the prolog, comments, CDATA and
+  processing instructions; the six rules that guessed from text now ask it. Deleting the comments
+  first and re-scanning is the other tempting shape and is worse: it mutates the document being
+  judged, and a `-->` inside CDATA takes the deletion with it.
+- **`prepare create` on an extension asked about the wrong object.** Preparing
+  `CustTable.FleetExtension` reported "no collision, nothing similar" — true of a name that by
+  definition does not exist yet, and useless. It now grounds in the object being extended: does
+  it exist, which model owns it, what already extends it. A base that is not in the index is a
+  note rather than a veto — the index is a mirror of what was extracted, and the metadata
+  provider may well see the object.
+- **`get form` says when the file holds members the reader drops.** The reading half of the
+  silent-drop defect class: a form that reads as missing a datasource is indistinguishable from
+  one that never had it, and the caller goes looking for the wrong bug.
+
+### Not ported, and why
+- **Multi-line attribute blocks dropped on create** — this repository has no path that splits a
+  supplied X++ class body into methods, and `ExtractSignatureLine` already tracks bracket depth.
+- **Member list printing the signature instead of the name** — names and signatures are separate
+  columns here; verified against a real class, not assumed.
+- **The scaffold writing controls the platform cannot see** — the write path canonicalises member
+  order before writing; checked by generating all five form patterns and validating each.
+- **A form-order validation rule** was written and then **withdrawn**. Run against the
+  installation it flagged files Microsoft ships: an `AxEnum` with `ConfigurationKey` after
+  `UseEnumValue`, an `AccessGrant` with `Create` after `Update`, an `AxTableFieldString` with
+  `Label` after `StringSize` — all shipped, all loading. The contract's member list is
+  declaration order and the deserializer is more tolerant than that, so ordering what we write
+  stays and calling a document broken for its order does not. `MetadataContractsAotTests`, the
+  repository's own census over 10 028 shipped files, is what caught it; the reasoning is recorded
+  on `ContractOrderCanonicalizer` so the rule is not rediscovered and re-added.
+
+### Fixed — what the wave-04 audit found
+Auditing the wave against the gap analysis turned up four defects, one of them in the wave's own
+new code.
+
+- **`labels update` wrote one language's text into every language file.** Targeting `en-us,cs`
+  with a single value replaced the Czech translation with the English string and reported
+  success — data loss dressed as a correction. A correction *is* a translation, so several
+  languages now need one `--text <LANG>=<VALUE>` each, and a single text for several languages is
+  refused with the arguments to pass instead.
+- **A search that read nothing reported a clean zero.** `find refs` on an index built elsewhere
+  (no source index, no source paths on this machine) answered `count: 0` — indistinguishable from
+  a codebase where the symbol is genuinely unused, which is how "no callers" becomes "safe to
+  delete". `SourceRefResult` now carries `searched` and a caveat, so `find refs`, the
+  `find_references` tool and the three `analyze` modes all say the same thing.
+- **`validate name` called the only extension-name shape Microsoft ships illegal.** The character
+  rule rejected the dot in `CustTable.FleetExtension` as an invalid character while the kind rule
+  in the same run recommended exactly that form. Counted on this host: of the **1 093**
+  `AxTableExtension` objects in the installation, **1 093** use `Base.Suffix` and none uses
+  `Base_Extension`. Extension kinds now accept one dot separating base from suffix; a second dot,
+  a space, or a dot on a non-extension kind still fail.
+- **A label file could be created under an id nothing can reference.** `--label-file "Con Fleet"`
+  wrote `Con Fleet.en-us.label.txt` and reported success, but no `@File:Id` token can name it, so
+  every use of the label resolves to nothing. Both surfaces now refuse an id that is not a
+  referenceable identifier.
+- Documentation the wave had left behind: `labels update` and `verify` were absent from
+  CAPABILITIES, and none of the five new commands had an entry in EXAMPLES.
+
 ### Added — wave 04: the rest of the surface
 The gap analysis's fourth wave: the MCP tools that had no CLI counterpart, plus the two write
 verbs whose absence forced a workaround.

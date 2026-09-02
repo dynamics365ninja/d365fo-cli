@@ -46,6 +46,21 @@ public static class ObjectNamingRules
         return effective;
     }
 
+    /// <summary>
+    /// Kinds whose objects are named <c>&lt;Base&gt;.&lt;Suffix&gt;</c> — the element extensions.
+    /// </summary>
+    private static bool IsElementExtensionKind(string? kind) =>
+        // Case-insensitively: callers pass the kind as the user typed it, and
+        // `validate name tableextension` is how it arrives from the shell.
+        (kind ?? "").Trim().ToLowerInvariant() switch
+        {
+            "tableextension" or "formextension" or "edtextension" or "enumextension"
+                or "viewextension" or "mapextension" or "queryextension"
+                or "dataentityviewextension" or "menuextension" or "securityroleextension"
+                or "securitydutyextension" or "securityprivilegeextension" => true,
+            _ => false,
+        };
+
     public static IReadOnlyList<Violation> Validate(string kind, string name, string? prefix = null)
     {
         var v = new List<Violation>();
@@ -59,14 +74,27 @@ public static class ObjectNamingRules
             v.Add(new("NAME_TOO_LONG", "warn",
                 $"Name is {name.Length} chars (soft limit 80, metadata XML filename hits FS limits above 160)."));
 
-        foreach (var ch in name)
+        // An element extension is named <Base>.<Suffix>, and the dot is not a typo: of the 1 093
+        // AxTableExtension objects in a stock installation, 1 093 carry it and none use the
+        // underscore form. The character rule used to reject that dot outright, so the validator
+        // called the only shape Microsoft ships illegal — while the kind rule below recommended
+        // it in the same breath.
+        var extensionKind = IsElementExtensionKind(kind);
+        var dotAt = extensionKind ? name.IndexOf('.') : -1;
+        var dotIsSuffixSeparator = dotAt > 0 && dotAt < name.Length - 1
+                                   && name.IndexOf('.', dotAt + 1) < 0;
+
+        for (var i = 0; i < name.Length; i++)
         {
-            if (!(char.IsLetterOrDigit(ch) || ch == '_'))
-            {
-                v.Add(new("INVALID_CHARS", "error",
-                    $"Character '{ch}' is not allowed. Only letters, digits and underscore are legal."));
-                break;
-            }
+            var ch = name[i];
+            if (char.IsLetterOrDigit(ch) || ch == '_') continue;
+            if (ch == '.' && dotIsSuffixSeparator && i == dotAt) continue;
+
+            v.Add(new("INVALID_CHARS", "error", ch == '.' && extensionKind
+                ? "An extension name carries at most one '.', separating the base object from the suffix "
+                  + "(e.g. CustTable.FleetExtension)."
+                : $"Character '{ch}' is not allowed. Only letters, digits and underscore are legal."));
+            break;
         }
 
         if (char.IsDigit(name[0]))
@@ -85,7 +113,8 @@ public static class ObjectNamingRules
                 if (!name.Contains(".", StringComparison.Ordinal) &&
                     !name.EndsWith("_Extension", StringComparison.Ordinal))
                     v.Add(new("EXTENSION_SUFFIX", "warn",
-                        "Extension objects should either contain '.' (target.Suffix) or end with '_Extension'."));
+                        "Extension objects are named <Base>.<Suffix> — the form every shipped extension uses. "
+                        + "Base_Extension is also accepted, but nothing in a stock installation is named that way."));
                 break;
             case "Coc":
             case "CocClass":

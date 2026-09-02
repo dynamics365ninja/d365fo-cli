@@ -156,6 +156,33 @@ public static class LabelFileWriter
     /// extends a base file owned by another model, and writing there is what
     /// leads clients to wrongly prefix label IDs.
     /// </summary>
+    /// <summary>
+    /// Can an <c>@File:Id</c> token name this label file? Letters, digits and underscore only,
+    /// starting with a letter.
+    /// </summary>
+    /// <remarks>
+    /// The token grammar has no room for a space, a dot or a dash, so a file created under such
+    /// a name is a file nothing can reference: the write succeeds, the label exists on disk, and
+    /// every attempt to use it resolves to nothing. Refusing at write time is the only point
+    /// where the mistake is still cheap.
+    /// </remarks>
+    public static bool IsReferenceableLabelFileId(string? labelFileId)
+    {
+        if (string.IsNullOrWhiteSpace(labelFileId)) return false;
+        if (!char.IsLetter(labelFileId[0])) return false;
+        foreach (var ch in labelFileId)
+            if (!char.IsLetterOrDigit(ch) && ch != '_') return false;
+        return true;
+    }
+
+    /// <summary>The label file id a path names, i.e. the part before the first dot.</summary>
+    public static string LabelFileIdOf(string pathOrId)
+    {
+        var name = Path.GetFileName(pathOrId ?? "");
+        var dot = name.IndexOf('.');
+        return dot > 0 ? name[..dot] : name;
+    }
+
     public static bool IsExtensionLabelFile(string labelFileIdOrPath)
     {
         if (string.IsNullOrWhiteSpace(labelFileIdOrPath)) return false;
