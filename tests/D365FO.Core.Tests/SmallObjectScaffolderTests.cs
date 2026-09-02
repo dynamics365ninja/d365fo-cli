@@ -202,6 +202,84 @@ public class SmallObjectScaffolderTests
     }
 
     [Fact]
+    public void Menu_extension_nests_under_new_submenus_and_parents_onto_existing_elements()
+    {
+        var doc = NavigationScaffolder.MenuExtension("AccountsReceivable", "ConFleet",
+            submenus: [new MenuSubmenuSpec("ConFleet", "@FLM540")],
+            entries:
+            [
+                new MenuEntrySpec("ConFleet", MenuEntryKind.MenuItem, "FMVehicle"),
+                new MenuEntrySpec("ConFleet", MenuEntryKind.Tile, "FMClerkWorkspace"),
+                new MenuEntrySpec("Customers", MenuEntryKind.MenuItem, "FMCustomer", "Action"),
+                new MenuEntrySpec(null, MenuEntryKind.MenuReference, "SysMenuHelp"),
+            ],
+            placement: new MenuExtensionPlacement("AfterItem", "Customers"));
+
+        var xml = Written(doc);
+        XNamespace v1 = "Microsoft.Dynamics.AX.Metadata.V1";
+        var root = XDocument.Parse(xml).Root!;
+        Assert.Equal(v1 + "AxMenuExtension", root.Name);
+        Assert.Equal("AccountsReceivable.ConFleet", root.Element(v1 + "Name")!.Value);
+        Assert.NotNull(root.Element(v1 + "Customizations"));
+        Assert.NotNull(root.Element(v1 + "MenuElementModifications"));
+        Assert.NotNull(root.Element(v1 + "PropertyModifications"));
+
+        var wrappers = root.Element(v1 + "Elements")!.Elements().ToList();
+        Assert.Equal(3, wrappers.Count);
+        Assert.All(wrappers, w => Assert.Equal("", w.Name.NamespaceName));
+        Assert.All(wrappers, w => Assert.Equal("AxMenuExtensionElement", w.Name.LocalName));
+
+        // The new submenu: no Parent, nested content, positioned after the named sibling.
+        var sub = wrappers[0];
+        Assert.Null(sub.Element("Parent"));
+        Assert.Equal("AfterItem", sub.Element("PositionType")!.Value);
+        Assert.Equal("Customers", sub.Element("PreviousSibling")!.Value);
+        var subMenuEl = sub.Element("MenuElement")!;
+        Assert.Equal("AxMenuElementSubMenu", subMenuEl.Attribute(Xsi + "type")!.Value);
+        Assert.Equal(2, subMenuEl.Element("Elements")!.Elements().Count());
+
+        // An entry under a name this extension does not declare is parented onto the base menu.
+        var parented = wrappers[1];
+        Assert.Equal("Customers", parented.Element("Parent")!.Value);
+        Assert.Null(parented.Element("PositionType")); // placement names a root sibling; under a parent it does not apply
+        Assert.Null(parented.Element("PreviousSibling"));
+        Assert.Equal("Action", parented.Element("MenuElement")!.Element("MenuItemType")!.Value);
+
+        Assert.Null(wrappers[2].Element("Parent"));
+        Assert.Equal("AxMenuElementMenuReference", wrappers[2].Element("MenuElement")!.Attribute(Xsi + "type")!.Value);
+    }
+
+    [Fact]
+    public void Menu_extension_refuses_nothing_to_add_a_dotted_base_and_a_position_without_a_sibling()
+    {
+        Assert.Throws<ArgumentException>(() => NavigationScaffolder.MenuExtension("AccountsReceivable", "ConFleet"));
+        Assert.Throws<ArgumentException>(() => NavigationScaffolder.MenuExtension("AccountsReceivable.Other", "ConFleet",
+            entries: [new MenuEntrySpec(null, MenuEntryKind.MenuItem, "FMVehicle")]));
+        Assert.Throws<ArgumentException>(() => NavigationScaffolder.MenuExtension("AccountsReceivable", "ConFleet",
+            entries: [new MenuEntrySpec(null, MenuEntryKind.MenuItem, "FMVehicle")],
+            placement: new MenuExtensionPlacement("AfterItem")));
+        // The generic kind table knows the kind but refuses the empty shell.
+        Assert.Throws<ArgumentException>(() => XppScaffolder.Extension("menu", "AccountsReceivable", "ConFleet"));
+    }
+
+    [Fact]
+    public void Menu_specs_parse_the_same_way_on_every_surface()
+    {
+        Assert.True(MenuSpecs.TryParse(["Customers/ConFleet:@FLM540"], ["ConFleet/FMVehicle", "Setup/FMSetup:Action", "Root"], ["ConFleet/FMClerkWorkspace"], null,
+            out var subs, out var entries, out var error));
+        Assert.Null(error);
+        var s = Assert.Single(subs);
+        Assert.Equal(("ConFleet", "@FLM540", "Customers"), (s.Name, s.Label, s.Parent));
+        Assert.Equal(4, entries.Count);
+        Assert.Equal("Action", entries[1].MenuItemType);
+        Assert.Null(entries[2].Submenu);
+        Assert.Equal(new[] { "FMVehicle", "FMSetup", "Root" }, MenuSpecs.MenuItemsOf(entries));
+
+        Assert.False(MenuSpecs.TryParse(null, ["Setup/"], null, null, out _, out _, out var bad));
+        Assert.Contains("Invalid item", bad);
+    }
+
+    [Fact]
     public void Composite_entity_declares_the_attribute_and_nests_embedded_references()
     {
         var doc = EntityShapeScaffolder.CompositeDataEntityView("ConFmComposite",

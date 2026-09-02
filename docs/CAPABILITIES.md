@@ -213,7 +213,7 @@ All scaffolders write atomically (`.tmp` + move, `.bak` on overwrite). Pass `--i
 | `generate datasource-method` | Add/override a method on a form datasource (form-level `SourceCode`); `--list` shows overridable methods |
 | `generate control-method` | Add/override a method on a form control (form-level `SourceCode`); `--list` shows overridable methods |
 | `generate entity` | `AxDataEntityView` — fields, keys, `--relation` (constraint-joined), `--computed-field` (unmapped, method-backed). `--data-management` also emits the DMF staging table |
-| `generate extension` | `AxTableExtension` / `AxFormExtension` / `AxEdtExtension` / `AxEnumExtension` / `AxViewExtension` / `AxQuerySimpleExtension` / `AxDataEntityViewExtension` / `AxMapExtension` / `AxSecurityDutyExtension` / `AxSecurityRoleExtension` |
+| `generate extension` | `AxTableExtension` / `AxFormExtension` / `AxEdtExtension` / `AxEnumExtension` / `AxViewExtension` / `AxQuerySimpleExtension` / `AxDataEntityViewExtension` / `AxMapExtension` / `AxMenuExtension` (`--submenu`, `--item <Parent>/<MenuItem>`, `--after`) / `AxSecurityDutyExtension` / `AxSecurityRoleExtension` |
 | `generate event-handler` | X++ event subscriber class with correct attribute |
 | `generate privilege` | `AxSecurityPrivilege` (entry point and/or `--data-entity` OData/DMF grant) |
 | `generate duty` | `AxSecurityDuty` — privileges plus `--description`, `--context-string`, `--disabled` |

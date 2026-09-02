@@ -1,0 +1,21 @@
+{
+  "runId": "20260902T104538990Z__L1-map-basic__dd343eeb035a4a67a26e65cbb27bd787",
+  "caseId": "L1-map-basic",
+  "tier": 1,
+  "timestampUtc": "2026-09-02T10:45:38.9904304+00:00",
+  "source": "build-oracle",
+  "score": {
+    "xppErrors": 0,
+    "referenceErrors": 0,
+    "goldenMatch": true,
+    "goldenDiff": {
+      "missing": [],
+      "extra": [],
+      "changed": [],
+      "isMatch": true
+    },
+    "buildClean": true,
+    "buildErrors": 0,
+    "runtimeFailures": 0
+  }
+}

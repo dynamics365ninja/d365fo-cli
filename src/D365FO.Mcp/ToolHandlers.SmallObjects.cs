@@ -83,47 +83,15 @@ public sealed partial class ToolHandlers
     {
         if (string.IsNullOrWhiteSpace(name)) return Required("name", "objectType=menu");
 
-        var subs = new List<MenuSubmenuSpec>();
-        foreach (var raw in submenus ?? [])
-        {
-            var parts = raw.Split(':', 2, StringSplitOptions.TrimEntries);
-            if (string.IsNullOrEmpty(parts[0]))
-                return ToolResult<object>.Fail(D365FoErrorCodes.BadInput, $"Invalid submenu '{raw}'. Expected <name>[:<label>].");
-            subs.Add(new MenuSubmenuSpec(parts[0], parts.Length > 1 && parts[1].Length > 0 ? parts[1] : null));
-        }
-
-        var entries = new List<MenuEntrySpec>();
-        foreach (var raw in items ?? [])
-        {
-            var (sub, rest) = SplitSubmenu(raw);
-            var parts = rest.Split(':', 2, StringSplitOptions.TrimEntries);
-            if (string.IsNullOrEmpty(parts[0]))
-                return ToolResult<object>.Fail(D365FoErrorCodes.BadInput, $"Invalid item '{raw}'. Expected [<submenu>/]<menuItem>[:Display|Action|Output].");
-            entries.Add(new MenuEntrySpec(sub, MenuEntryKind.MenuItem, parts[0], parts.Length > 1 && parts[1].Length > 0 ? parts[1] : null));
-        }
-        foreach (var raw in tiles ?? [])
-        {
-            var (sub, target) = SplitSubmenu(raw);
-            if (string.IsNullOrEmpty(target))
-                return ToolResult<object>.Fail(D365FoErrorCodes.BadInput, $"Invalid tile '{raw}'. Expected [<submenu>/]<tile>.");
-            entries.Add(new MenuEntrySpec(sub, MenuEntryKind.Tile, target));
-        }
-        foreach (var raw in menuRefs ?? [])
-        {
-            var (sub, target) = SplitSubmenu(raw);
-            if (string.IsNullOrEmpty(target))
-                return ToolResult<object>.Fail(D365FoErrorCodes.BadInput, $"Invalid menuRef '{raw}'. Expected [<submenu>/]<menu>.");
-            entries.Add(new MenuEntrySpec(sub, MenuEntryKind.MenuReference, target));
-        }
+        if (!MenuSpecs.TryParse(submenus, items, tiles, menuRefs, out var subs, out var entries, out var specError))
+            return ToolResult<object>.Fail(D365FoErrorCodes.BadInput, specError!);
         if (entries.Count == 0 && subs.Count == 0)
             return ToolResult<object>.Fail(D365FoErrorCodes.BadInput, "A menu with nothing on it: pass items, tiles, menuRefs or submenus.");
 
         try
         {
             var doc = NavigationScaffolder.Menu(name, label, subs, entries, inContentArea, setCompany, configurationKey);
-            var unknown = entries.Where(e => e.Kind == MenuEntryKind.MenuItem).Select(e => e.Target)
-                .Distinct(StringComparer.OrdinalIgnoreCase)
-                .Where(m => !SafeMenuItemExists(m)).ToList();
+            var unknown = MenuSpecs.MenuItemsOf(entries).Where(m => !SafeMenuItemExists(m)).ToList();
             return ToolResult<object>.Success(new
             {
                 name, kind = "AxMenu",
@@ -313,11 +281,4 @@ public sealed partial class ToolHandlers
         catch { return true; } // an index that cannot answer cannot veto
     }
 
-    private static (string? Submenu, string Remainder) SplitSubmenu(string raw)
-    {
-        var slash = raw.IndexOf('/');
-        return slash < 0
-            ? (null, raw.Trim())
-            : (raw[..slash].Trim() is { Length: > 0 } s ? s : null, raw[(slash + 1)..].Trim());
-    }
 }

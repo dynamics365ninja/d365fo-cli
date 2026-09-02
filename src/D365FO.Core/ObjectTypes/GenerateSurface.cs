@@ -49,11 +49,11 @@ public static class GenerateSurface
         new("form-clone", "Copy of an existing AxForm under a new name, datasources optionally re-bound", [Root.Form]),
         new("simple-list", "Alias for `form --pattern SimpleList`", [Root.Form], Deprecated: true),
         new("entity", "AxDataEntityView over a table", [Root.DataEntityView]),
-        new("extension", "Table/Form/Edt/Enum/View/Query/Entity/Map/Duty/Role extension",
+        new("extension", "Table/Form/Edt/Enum/View/Query/Entity/Map/Menu/Duty/Role extension",
         [
             Root.TableExtension, Root.FormExtension, Root.EdtExtension, Root.EnumExtension,
             Root.ViewExtension, Root.QuerySimpleExtension, Root.DataEntityViewExtension,
-            Root.MapExtension, Root.SecurityDutyExtension, Root.SecurityRoleExtension,
+            Root.MapExtension, Root.MenuExtension, Root.SecurityDutyExtension, Root.SecurityRoleExtension,
         ]),
         new("event-handler", "Event subscriber class", [Root.Class]),
         new("privilege", "Security privilege over an entry point", [Root.SecurityPrivilege]),
@@ -149,5 +149,6 @@ public static class GenerateSurface
         public const string CompositeDataEntityView = ObjectTypeRegistry.Folders.CompositeDataEntityView;
         public const string AggregateDataEntity = ObjectTypeRegistry.Folders.AggregateDataEntity;
         public const string MapExtension = ObjectTypeRegistry.Folders.MapExtension;
+        public const string MenuExtension = ObjectTypeRegistry.Folders.MenuExtension;
     }
 }

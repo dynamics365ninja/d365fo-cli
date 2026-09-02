@@ -1,3 +1,4 @@
+using System.Xml.Linq;
 using D365FO.Core;
 using D365FO.Core.Scaffolding;
 using Spectre.Console.Cli;
@@ -313,7 +314,7 @@ public sealed class GenerateExtensionCommand : Command<GenerateExtensionCommand.
     public sealed class Settings : GenerateSettings
     {
         [CommandArgument(0, "<KIND>")]
-        [System.ComponentModel.Description("Extension kind: Table, Form, Edt, Enum, View, Query, DataEntityView, Map, SecurityDuty, SecurityRole.")]
+        [System.ComponentModel.Description("Extension kind: Table, Form, Edt, Enum, View, Query, DataEntityView, Map, Menu, SecurityDuty, SecurityRole.")]
         public string Kind { get; init; } = "";
 
         [CommandArgument(1, "<TARGET>")]
@@ -338,6 +339,34 @@ public sealed class GenerateExtensionCommand : Command<GenerateExtensionCommand.
         [CommandOption("--set-property <SPEC>")]
         [System.ComponentModel.Description("Repeatable; SecurityDuty/SecurityRole only: <Member>=<Value>. Overrides a property of the base object (Enabled, Label, Description, ContextString…) without overlaying it.")]
         public string[] PropertyModifications { get; init; } = Array.Empty<string>();
+
+        [CommandOption("--submenu <SPEC>")]
+        [System.ComponentModel.Description("Repeatable; Menu only: a NEW submenu the extension adds, [[<parentElement>/]]<name>[[:<label>]]. Items placed under its name nest inside it.")]
+        public string[] Submenus { get; init; } = Array.Empty<string>();
+
+        [CommandOption("--item <SPEC>")]
+        [System.ComponentModel.Description("Repeatable; Menu only: [[<parent>/]]<menuItem>[[:Display|Action|Output]]. <parent> is a submenu this extension adds or an EXISTING element of the base menu (written as Parent).")]
+        public string[] Items { get; init; } = Array.Empty<string>();
+
+        [CommandOption("--tile <SPEC>")]
+        [System.ComponentModel.Description("Repeatable; Menu only: [[<parent>/]]<tile>.")]
+        public string[] Tiles { get; init; } = Array.Empty<string>();
+
+        [CommandOption("--menu-ref <SPEC>")]
+        [System.ComponentModel.Description("Repeatable; Menu only: [[<parent>/]]<menu>.")]
+        public string[] MenuRefs { get; init; } = Array.Empty<string>();
+
+        [CommandOption("--in-content-area")]
+        [System.ComponentModel.Description("Menu only: stamp DisplayInContentArea=Yes on every added menu item.")]
+        public bool InContentArea { get; init; }
+
+        [CommandOption("--position <POS>")]
+        [System.ComponentModel.Description("Menu only: where ROOT-LEVEL additions land among the base menu's elements — Begin | End (default) | AfterItem (with --after). Additions under a parent land at the end of that parent.")]
+        public string? Position { get; init; }
+
+        [CommandOption("--after <ELEMENT>")]
+        [System.ComponentModel.Description("Menu only: the base-menu element the additions follow (implies --position AfterItem).")]
+        public string? After { get; init; }
     }
 
     /// <summary>
@@ -409,13 +438,14 @@ public sealed class GenerateExtensionCommand : Command<GenerateExtensionCommand.
             "query" => "AxQuerySimpleExtension",
             "dataentityview" => "AxDataEntityViewExtension",
             "map" => "AxMapExtension",
+            "menu" => "AxMenuExtension",
             "securityduty" => "AxSecurityDutyExtension",
             "securityrole" => "AxSecurityRoleExtension",
             _ => null,
         };
         if (axFolder is null)
             return RenderHelpers.Render(kind, ToolResult<object>.Fail(D365FoErrorCodes.BadInput,
-                $"Unsupported extension kind: {settings.Kind}. Expected Table|Form|Edt|Enum|View|Query|DataEntityView|Map|SecurityDuty|SecurityRole."));
+                $"Unsupported extension kind: {settings.Kind}. Expected Table|Form|Edt|Enum|View|Query|DataEntityView|Map|Menu|SecurityDuty|SecurityRole."));
 
         // A dotted target already names an extension (AOT object names never contain a dot) —
         // compose against its base so "CustTable.Ext" does not become "CustTable.Ext.Ext".
@@ -443,6 +473,17 @@ public sealed class GenerateExtensionCommand : Command<GenerateExtensionCommand.
                 $"--set-property applies to SecurityDuty and SecurityRole extensions only; {axFolder} has no PropertyModifications member, " +
                 "so the overrides would be dropped on read."));
 
+        // Menu additions: parsed once, the same spelling `generate menu` takes.
+        var hasMenuContent = settings.Submenus.Length + settings.Items.Length + settings.Tiles.Length + settings.MenuRefs.Length > 0
+                             || settings.InContentArea || settings.Position is not null || settings.After is not null;
+        if (hasMenuContent && axFolder != "AxMenuExtension")
+            return RenderHelpers.Render(kind, ToolResult<object>.Fail(
+                D365FoErrorCodes.BadInput,
+                $"--submenu/--item/--tile/--menu-ref/--in-content-area/--position/--after apply to Menu extensions only; {axFolder} has no Elements to add to."));
+        if (!MenuSpecs.TryParse(settings.Submenus, settings.Items, settings.Tiles, settings.MenuRefs,
+                out var menuSubmenus, out var menuEntries, out var menuSpecError))
+            return RenderHelpers.Render(kind, ToolResult<object>.Fail(D365FoErrorCodes.BadInput, menuSpecError!));
+
         var fieldSpecs = settings.Fields
             .Where(f => !string.IsNullOrWhiteSpace(f))
             .Select(ParseField)
@@ -461,8 +502,13 @@ public sealed class GenerateExtensionCommand : Command<GenerateExtensionCommand.
                 $"--field '{noEdt.Name}' has no EDT. Every field on a table extension needs one: <name>:<edt>[:mandatory].",
                 "Run `d365fo suggest edt <name>` to find one, or `d365fo generate edt` to create it."));
 
-        var doc = axFolder switch
+        XDocument doc;
+        try
         {
+            doc = axFolder switch
+            {
+            "AxMenuExtension" => NavigationScaffolder.MenuExtension(targetBase, suffix, menuSubmenus, menuEntries,
+                settings.InContentArea, new MenuExtensionPlacement(settings.Position ?? "End", settings.After)),
             "AxSecurityDutyExtension" => XppScaffolder.SecurityDutyExtension(targetBase, suffix, settings.Privileges, propertyMods),
             "AxSecurityRoleExtension" => XppScaffolder.SecurityRoleExtension(targetBase, suffix, settings.Duties, settings.Privileges, propertyMods),
             // The scaffolder takes the base kind, not the type name — and the two differ for
@@ -473,14 +519,22 @@ public sealed class GenerateExtensionCommand : Command<GenerateExtensionCommand.
             // concrete AxTableField* subtype per field. The other kinds ignore it.
             _ => XppScaffolder.Extension(axFolder["Ax".Length..^"Extension".Length], targetBase, suffix,
                      GenerateInstaller.BuildEdtBaseTypeResolver(), fieldSpecs),
-        };
+            };
+        }
+        catch (ArgumentException ex)
+        {
+            return RenderHelpers.Render(kind, ToolResult<object>.Fail(D365FoErrorCodes.BadInput, ex.Message));
+        }
 
         // Grounding gate: the target object must exist in the index; fail
         // closed under D365FO_GROUNDING_ENFORCE=true. The EDTs a field names are
-        // required too — a hallucinated EDT is the failure this gate exists for.
+        // required too — a hallucinated EDT is the failure this gate exists for —
+        // and so are the menu items a menu extension adds. The base menu itself is not
+        // a symbol the index carries (menus are not indexed), so it is not required.
         var gate = GenerateInstaller.Gate(settings, targetBase, doc,
-            requiredSymbols: new[] { targetBase }
+            requiredSymbols: (axFolder == "AxMenuExtension" ? Array.Empty<string>() : new[] { targetBase })
                 .Concat(fieldSpecs.Select(f => f.Edt!))
+                .Concat(MenuSpecs.MenuItemsOf(menuEntries))
                 .ToArray());
         if (gate.Failure is not null) return RenderHelpers.Render(kind, gate.Failure);
 

@@ -118,7 +118,16 @@ d365fo generate extension SecurityRole BudgetBudgetClerk --suffix Fleet --instal
 # Extend a shipped map (AxMapExtension) — a shell; the contract declares no
 # fields or mappings, and a stock installation ships no instance at all
 d365fo generate extension Map AssetTransMap --suffix Fleet --install-to FleetManagement
+
+# Add to a shipped menu (AxMenuExtension): the menu spellings, with a path prefix
+# naming a new --submenu or an EXISTING element of the base menu (written as Parent)
+d365fo generate extension Menu AccountsReceivable --suffix Fleet \
+  --submenu "Fleet:@Fleet:Fleet" --item Fleet/FmVehicleListPageMenuItem \
+  --item Customers/FmCustomer --after Customers --install-to FleetManagement
 ```
+
+A menu extension that adds nothing is refused rather than written as an inert
+shell; see `d365fo knowledge get forms-and-navigation` for the element shapes.
 
 ## What lands on disk
 
@@ -137,6 +146,7 @@ and the root element always agree, and the file name is `<Target>.<Suffix>.xml`:
 | `SecurityDuty` | `AxSecurityDutyExtension` |
 | `SecurityRole` | `AxSecurityRoleExtension` |
 | `Map` | `AxMapExtension` |
+| `Menu` | `AxMenuExtension` |
 
 `AxQuerySimpleExtension` is the one to watch: the folder, the root element and
 the metadata provider collection are all `QuerySimpleExtension(s)`. There is no

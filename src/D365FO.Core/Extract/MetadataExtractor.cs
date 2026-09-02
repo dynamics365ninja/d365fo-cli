@@ -170,6 +170,7 @@ public sealed class MetadataExtractor
                     (Folder("enumextension"),  "Enum"),
                     (Folder("viewextension"),  "View"),
                     (Folder("mapextension"),   "Map"),
+                    (Folder("menuextension"),  "Menu"),
                 })
                 {
                     var extDir = Path.Combine(modelRoot, dir);

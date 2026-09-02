@@ -1,0 +1,21 @@
+{
+  "runId": "20260902T104538991Z__L1-menu-basic__29dbfdfc183446b0bca9427708a76212",
+  "caseId": "L1-menu-basic",
+  "tier": 1,
+  "timestampUtc": "2026-09-02T10:45:38.9913839+00:00",
+  "source": "build-oracle",
+  "score": {
+    "xppErrors": 0,
+    "referenceErrors": 0,
+    "goldenMatch": true,
+    "goldenDiff": {
+      "missing": [],
+      "extra": [],
+      "changed": [],
+      "isMatch": true
+    },
+    "buildClean": true,
+    "buildErrors": 0,
+    "runtimeFailures": 0
+  }
+}

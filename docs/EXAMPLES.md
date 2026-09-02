@@ -566,6 +566,25 @@ d365fo generate extension Map AssetTransMap --suffix ConFm --install-to FleetMan
 The contract declares nothing beyond `Name`, and the installation ships no map
 extension at all (census: 0 files) — the object is the shell a later edit hangs on.
 
+### Menu extension — adding to a menu you do not own
+
+```sh
+d365fo generate extension Menu AccountsReceivable --suffix ConFleet \
+  --submenu "ConFleet:@FLM540" \
+  --item ConFleet/FMVehicle --tile ConFleet/FMClerkWorkspace \
+  --item Customers/FMCustomer \
+  --after Customers --install-to FleetManagement
+```
+
+The path prefix on `--item`/`--tile`/`--menu-ref` names either a sub-menu this
+extension adds (`--submenu`, nested inline) or an existing element of the base menu
+(written as `<Parent>`). `--after <element>` positions the additions `AfterItem`
+that sibling; `--position Begin` puts them first. Shipped shape, counted over 248
+menu extensions: `Parent` on 154, `PositionType` on 98. Every menu item named is a
+required symbol for the grounding gate — menu items are in `SymbolKinds` — so a
+hallucinated one is reported as `[unknown-type]` and refused under
+`D365FO_GROUNDING_ENFORCE=true`. An extension that adds nothing is refused.
+
 ### Security role (new or merge)
 
 ```sh

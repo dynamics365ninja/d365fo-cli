@@ -48,6 +48,10 @@ public class MetadataContractsAotTests
     private static IEnumerable<string> SampleFiles(string root, int perFolder)
     {
         foreach (var package in SafeDirs(root))
+        {
+            // "What Microsoft ships" — a developer VM's package root also holds what its
+            // developers and other tools wrote, and their defects are not this census's.
+            if (!ShippedAot.IsMicrosoftPackage(package)) continue;
             foreach (var model in SafeDirs(package))
                 foreach (var name in Interesting)
                 {
@@ -64,6 +68,7 @@ public class MetadataContractsAotTests
                         if (++taken >= perFolder) break;
                     }
                 }
+        }
 
         static IEnumerable<string> SafeDirs(string d)
         {

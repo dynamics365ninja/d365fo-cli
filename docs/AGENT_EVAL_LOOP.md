@@ -1,7 +1,7 @@
 # Self-improving agent eval loop — design spec
 
-**Status:** implemented — a 70-case catalog (L0–L2) replays in CI, and an L3 build
-oracle compiles every reviewed golden where a D365FO installation exists (70 of 70).
+**Status:** implemented — a 71-case catalog (L0–L2) replays in CI, and an L3 build
+oracle compiles every reviewed golden where a D365FO installation exists (71 of 71).
 L4 (runtime/SysTest) is still missing; `oracle runtime` is its groundwork, and
 [BACKLOG.md](BACKLOG.md) records what "still missing" costs. See [eval/README.md](../eval/README.md) for
 day-to-day mechanics and the open work queue.
@@ -296,7 +296,7 @@ convention is `NumberSeqModule<Module>`, and the wrapped `loadModule` is
 `protected`, not `public`. Four cases were also mis-authored: they extended a
 `NoYes` that is not extensible, added a privilege a duty already had, named a
 policy query nothing generates, and hung a number sequence off a module that does
-not exist. The catalog is now 70 of 70 clean.
+not exist. The catalog is now 71 of 71 clean.
 
 The eighth came from the same oracle, on a case authored later: a workflow type
 generated with its own approval AND task elements reported "Workflow approval

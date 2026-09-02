@@ -441,7 +441,9 @@ public static class ToolCatalog
             "Form|Class|Report|Query, `neededPermission`) · privilege (`entryPoint` + `entryKind`, or `dataEntity`; " +
             "`access` Read|Update|Create|Correct|Delete) · duty (`privileges`) · role (`duties`, `privileges`) · " +
             "entity (`table`, `fields` \"<entityField>[:<tableField>]\", `entityCategory`) · extension " +
-            "(`extensionKind` table|form|edt|enum|view|query|dataEntityView, `target`, `suffix`) · " +
+            "(`extensionKind` table|form|edt|enum|view|query|dataEntityView|map|menu, `target`, `suffix`; a menu extension " +
+            "takes the menu spellings — `submenus`, `items` \"[<parent>/]<menuItem>\" where <parent> is a new submenu or " +
+            "an existing element of the base menu, `tiles`, `menuRefs`, `position` Begin|End|AfterItem, `after`) · " +
             "event-handler (`sourceKind` Form|FormDataSource|FormControl|Table|Class, `sourceObject`, `event`, " +
             "`method`) · view (`query` — a view projects an AxQuery — plus `fields` \"<name>:<dataSource>" +
             "[:<dataField>]\" and `computed` \"<name>:<viewMethod>:<type>\", `configurationKey`) · map " +
@@ -517,6 +519,7 @@ public static class ToolCatalog
                    ("tileSize", "string", false), ("url", "string", false),
                    ("helpText", "string", false), ("image", "string", false), ("display", "string", false),
                    ("kpi", "string", false), ("module", "string", false), ("roots", "array", false),
+                   ("position", "string", false), ("after", "string", false),
                    ("embedded", "array", false), ("tags", "string", false), ("modules", "string", false),
                    ("measurement", "string", false), ("measures", "array", false), ("dimensions", "array", false),
                    ("installTo", "string", false), ("out", "string", false), ("overwrite", "boolean", false),
@@ -552,7 +555,9 @@ public static class ToolCatalog
                 "duty"            => h.GenerateDuty(Str(p, "name"), StrArray(p, "privileges"), StrOrNull(p, "label")),
                 "role"            => h.GenerateRole(Str(p, "name"), StrArray(p, "duties"), StrArray(p, "privileges"), StrOrNull(p, "label")),
                 "entity"          => h.GenerateEntity(Str(p, "name"), Str(p, "table"), StrArray(p, "fields"), StrOrNull(p, "entityCategory")),
-                "extension"       => h.GenerateExtension(Str(p, "extensionKind"), Str(p, "target"), StrOrNull(p, "suffix")),
+                "extension"       => h.GenerateExtension(Str(p, "extensionKind"), Str(p, "target"), StrOrNull(p, "suffix"),
+                                        StrArray(p, "submenus"), StrArray(p, "items"), StrArray(p, "tiles"), StrArray(p, "menuRefs"),
+                                        Bool(p, "inContentArea"), StrOrNull(p, "position"), StrOrNull(p, "after")),
                 "event-handler"   => h.GenerateEventHandler(Str(p, "name"), StrOrNull(p, "sourceKind"),
                                         StrOrNull(p, "sourceObject"), StrOrNull(p, "event"), StrOrNull(p, "method")),
                 "view"            => h.GenerateView(Str(p, "name"), StrOrNull(p, "query"), StrArray(p, "fields"),

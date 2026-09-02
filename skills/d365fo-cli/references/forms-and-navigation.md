@@ -133,7 +133,14 @@ element types are what `Microsoft.Dynamics.AX.Metadata.dll` declares;
   `Microsoft.Dynamics.AX.Metadata.V1`, its elements into no namespace.
 - Element `<Name>`s are the keys of the collection: the same name twice in one
   container is a document the reader silently halves.
-- The same applies to `AxMenuExtension` nesting into a standard menu.
+- **Adding to a menu you do not own is an `AxMenuExtension`**, never an edit of the
+  Microsoft file. Each addition is an `AxMenuExtensionElement` wrapping the same
+  element shapes, optionally with a `<Parent>` — an existing element of the base
+  menu — and a position (`Begin`, `End`, or `AfterItem` + `<PreviousSibling>`).
+  Counted: 248 shipped menu extensions, `Parent` on 154, `PositionType` on 98.
+  `generate extension Menu <BaseMenu> --suffix <S> --item <Parent>/<MenuItem>`;
+  a path naming a submenu the extension itself adds (`--submenu`) nests inside it
+  instead.
 
 ```sh
 d365fo generate menu-item FmVehicleListPageMenuItem --kind Display \
@@ -145,6 +152,12 @@ d365fo generate menu ConFleet --label "@Fleet:Fleet" \
   --submenu "Vehicles:@Fleet:Vehicles" \
   --item Vehicles/FmVehicleListPageMenuItem --item Setup/FmSetup:Action \
   --tile Workspaces/FmClerkWorkspace --in-content-area \
+  --install-to FleetManagement
+
+# Add to a standard menu: a new sub-menu after Customers, and one item under Customers
+d365fo generate extension Menu AccountsReceivable --suffix Fleet \
+  --submenu "Fleet:@Fleet:Fleet" --item Fleet/FmVehicleListPageMenuItem \
+  --item Customers/FmCustomer --after Customers \
   --install-to FleetManagement
 
 # Prove the result deserializes the way the AOS will read it

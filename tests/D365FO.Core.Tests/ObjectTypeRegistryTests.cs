@@ -227,6 +227,8 @@ public class ObjectTypeRegistryTests
     [InlineData("edt", "AxEdtExtension", "EdtExtensions")]
     [InlineData("view", "AxViewExtension", "ViewExtensions")]
     [InlineData("dataentityview", "AxDataEntityViewExtension", "DataEntityViewExtensions")]
+    [InlineData("map", "AxMapExtension", "MapExtensions")]
+    [InlineData("menu", "AxMenuExtension", "MenuExtensions")]
     public void ExtensionOf_resolves_the_root_and_collection(string baseKind, string root, string collection)
     {
         var extension = ObjectTypeRegistry.ExtensionOf(baseKind);
