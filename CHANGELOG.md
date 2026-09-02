@@ -19,6 +19,35 @@ was ported from.
 
 ## [Unreleased]
 
+### Fixed — the two 1.16.0 ports the parity audit found still missing
+
+Auditing the repository against the gap analysis, with each of its twelve upstream fixes probed
+on the live index rather than ticked off the list, found two that no wave had ported:
+
+- **A multi-word search answered nothing.** `search class "ProcessGuide AdjustIn"` returned
+  `count: 0` while `InventProcessGuideAdjustInController` sat in the index and the exact-name
+  search found it (upstream c43bf51). No AOT name contains a space, so a multi-word query never
+  meant one verbatim string; it means "a name carrying every token", in any order. Every
+  name-search method — classes, tables, EDTs, enums, queries, views, data entities, reports,
+  services, workflow types, maps, business events, security policies, configuration keys, tiles,
+  workspaces — now goes through one `NameFilter`, one `LIKE` per token ANDed; where a method
+  matches several columns (a data entity's public names) every token must land in the same
+  column. Label search is deliberately untouched: label text has spaces, and a multi-word label
+  query is verbatim.
+- **An extension's name was invisible to the collision check.** `prepare create
+  NumberSeqModule.Kitting --type enum` answered "No collision — does not exist in the index"
+  for an enum extension the installation ships, immediately before a write, and in the same
+  answer listed 25 sibling extensions spelled exactly that way while flagging the dot as
+  `INVALID_CHARS` (upstream 0b363e5). An extension row records the object it *extends*, so it
+  lived in none of the tables `SymbolKinds` consulted. It now reports as `<kind>-extension`, the
+  collision verdict says to modify the existing extension or pick another suffix, and a dotted
+  name under a base type is judged by the naming rules as the extension it is.
+
+Also brought back in line with the code: the README's token-economics section still carried the
+~1 800-tokens-per-turn estimate wave 06 had measured to be off by six times, and its adapter
+tool count (28) and `generate` command list (29 of 33) had drifted.
+
+
 ### Added — wave 06: the ten missing documents, and two of them generated
 
 The documentation set upstream has and this repository did not. Two are not written but

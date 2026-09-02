@@ -301,17 +301,17 @@ public sealed partial class MetadataRepository
     {
         limit = ClampLimit(limit, 50);
         using var conn = OpenReadOnly();
-        var like = $"%{EscapeLike(query)}%";
-        var sql = @"
+        var (nameWhere, p) = NameFilter(query, new { model, limit }, "c.Name");
+        var sql = $@"
             SELECT c.ClassId, c.Name, m.Name AS Model, c.ExtendsName AS Extends,
                    c.IsAbstract, c.IsFinal, c.SourcePath
             FROM Classes c
             JOIN Models m ON m.ModelId = c.ModelId
-            WHERE c.Name LIKE @like ESCAPE '!'
+            WHERE {nameWhere}
               AND (@model IS NULL OR m.Name = @model)
             ORDER BY m.IsCustom DESC, c.Name
             LIMIT @limit";
-        return conn.Query<ClassInfo>(sql, new { like, model, limit }).ToList();
+        return conn.Query<ClassInfo>(sql, p).ToList();
     }
 
     /// <summary>Maximum <c>extends</c> hops walked when collecting inherited methods.</summary>
@@ -1324,12 +1324,12 @@ public sealed partial class MetadataRepository
     {
         limit = ClampLimit(limit, 50);
         using var conn = OpenReadOnly();
-        var like = $"%{EscapeLike(query)}%";
-        return conn.Query<QueryInfo>(@"
+        var (nameWhere, p) = NameFilter(query, new { limit }, "q.Name");
+        return conn.Query<QueryInfo>($@"
             SELECT q.QueryId, q.Name, m.Name AS Model, q.SourcePath
             FROM Queries q JOIN Models m ON m.ModelId = q.ModelId
-            WHERE q.Name LIKE @like ESCAPE '!' ORDER BY m.IsCustom DESC, q.Name LIMIT @limit",
-            new { like, limit }).ToList();
+            WHERE {nameWhere} ORDER BY m.IsCustom DESC, q.Name LIMIT @limit",
+            p).ToList();
     }
 
     public QueryDetails? GetQuery(string name)
@@ -1350,12 +1350,12 @@ public sealed partial class MetadataRepository
     {
         limit = ClampLimit(limit, 50);
         using var conn = OpenReadOnly();
-        var like = $"%{EscapeLike(query)}%";
-        return conn.Query<ViewInfo>(@"
+        var (nameWhere, p) = NameFilter(query, new { limit }, "v.Name");
+        return conn.Query<ViewInfo>($@"
             SELECT v.ViewId, v.Name, m.Name AS Model, v.Label, v.QueryName, v.SourcePath
             FROM Views v JOIN Models m ON m.ModelId = v.ModelId
-            WHERE v.Name LIKE @like ESCAPE '!' ORDER BY m.IsCustom DESC, v.Name LIMIT @limit",
-            new { like, limit }).ToList();
+            WHERE {nameWhere} ORDER BY m.IsCustom DESC, v.Name LIMIT @limit",
+            p).ToList();
     }
 
     public ViewDetails? GetView(string name)
@@ -1376,14 +1376,14 @@ public sealed partial class MetadataRepository
     {
         limit = ClampLimit(limit, 50);
         using var conn = OpenReadOnly();
-        var like = $"%{EscapeLike(query)}%";
-        return conn.Query<DataEntityInfo>(@"
+        var (nameWhere, p) = NameFilter(query, new { limit }, "e.Name", "e.PublicEntityName", "e.PublicCollectionName");
+        return conn.Query<DataEntityInfo>($@"
             SELECT e.EntityId, e.Name, m.Name AS Model, e.PublicEntityName, e.PublicCollectionName,
                    e.StagingTable, e.QueryName, e.Label, e.SourcePath
             FROM DataEntities e JOIN Models m ON m.ModelId = e.ModelId
-            WHERE e.Name LIKE @like ESCAPE '!' OR e.PublicEntityName LIKE @like ESCAPE '!' OR e.PublicCollectionName LIKE @like ESCAPE '!'
+            WHERE {nameWhere}
             ORDER BY m.IsCustom DESC, e.Name LIMIT @limit",
-            new { like, limit }).ToList();
+            p).ToList();
     }
 
     public DataEntityDetails? GetDataEntity(string name)
@@ -1405,12 +1405,12 @@ public sealed partial class MetadataRepository
     {
         limit = ClampLimit(limit, 50);
         using var conn = OpenReadOnly();
-        var like = $"%{EscapeLike(query)}%";
-        return conn.Query<ReportInfo>(@"
+        var (nameWhere, p) = NameFilter(query, new { limit }, "r.Name");
+        return conn.Query<ReportInfo>($@"
             SELECT r.ReportId, r.Name, r.Kind, m.Name AS Model, r.SourcePath
             FROM Reports r JOIN Models m ON m.ModelId = r.ModelId
-            WHERE r.Name LIKE @like ESCAPE '!' ORDER BY m.IsCustom DESC, r.Name LIMIT @limit",
-            new { like, limit }).ToList();
+            WHERE {nameWhere} ORDER BY m.IsCustom DESC, r.Name LIMIT @limit",
+            p).ToList();
     }
 
     public ReportDetails? GetReport(string name)
@@ -1431,12 +1431,12 @@ public sealed partial class MetadataRepository
     {
         limit = ClampLimit(limit, 50);
         using var conn = OpenReadOnly();
-        var like = $"%{EscapeLike(query)}%";
-        return conn.Query<ServiceInfo>(@"
+        var (nameWhere, p) = NameFilter(query, new { limit }, "s.Name");
+        return conn.Query<ServiceInfo>($@"
             SELECT s.ServiceId, s.Name, s.Class, m.Name AS Model, s.SourcePath
             FROM Services s JOIN Models m ON m.ModelId = s.ModelId
-            WHERE s.Name LIKE @like ESCAPE '!' ORDER BY m.IsCustom DESC, s.Name LIMIT @limit",
-            new { like, limit }).ToList();
+            WHERE {nameWhere} ORDER BY m.IsCustom DESC, s.Name LIMIT @limit",
+            p).ToList();
     }
 
     public ServiceDetails? GetService(string name)
@@ -1471,13 +1471,13 @@ public sealed partial class MetadataRepository
     {
         limit = ClampLimit(limit, 50);
         using var conn = OpenReadOnly();
-        var like = $"%{EscapeLike(query)}%";
-        return conn.Query<WorkflowTypeInfo>(@"
+        var (nameWhere, p) = NameFilter(query, new { limit }, "w.Name", "w.DocumentClass");
+        return conn.Query<WorkflowTypeInfo>($@"
             SELECT w.Name, w.Category, w.DocumentClass, m.Name AS Model, w.SourcePath
             FROM WorkflowTypes w JOIN Models m ON m.ModelId = w.ModelId
-            WHERE w.Name LIKE @like ESCAPE '!' OR w.DocumentClass LIKE @like ESCAPE '!'
+            WHERE {nameWhere}
             ORDER BY m.IsCustom DESC, w.Name LIMIT @limit",
-            new { like, limit }).ToList();
+            p).ToList();
     }
 
     // ---- AxMap queries (v10) ----
@@ -1487,13 +1487,13 @@ public sealed partial class MetadataRepository
     {
         limit = ClampLimit(limit, 50);
         using var conn = OpenReadOnly();
-        var like = $"%{EscapeLike(query)}%";
-        return conn.Query<MapInfo>(@"
+        var (nameWhere, p) = NameFilter(query, new { limit }, "mp.Name");
+        return conn.Query<MapInfo>($@"
             SELECT mp.MapId, mp.Name, m.Name AS Model, mp.Label, mp.SourcePath
             FROM Maps mp JOIN Models m ON m.ModelId = mp.ModelId
-            WHERE mp.Name LIKE @like ESCAPE '!'
+            WHERE {nameWhere}
             ORDER BY m.IsCustom DESC, mp.Name LIMIT @limit",
-            new { like, limit }).ToList();
+            p).ToList();
     }
 
     /// <summary>Returns full details of an AxMap including fields and mapped tables.</summary>
@@ -1523,14 +1523,16 @@ public sealed partial class MetadataRepository
     {
         limit = ClampLimit(limit, 50);
         using var conn = OpenReadOnly();
-        var like = $"%{EscapeLike(query)}%";
-        return conn.Query<BusinessEventInfo>(@"
+        var (nameWhere, p) = NameFilter(query,
+            new { category, catLike = category is not null ? $"%{EscapeLike(category)}%" : null, limit },
+            "be.Name", "be.ContractClass");
+        return conn.Query<BusinessEventInfo>($@"
             SELECT be.Id, be.Name, be.Category, be.ContractClass, m.Name AS Model, be.SourcePath
             FROM BusinessEvents be JOIN Models m ON m.ModelId = be.ModelId
-            WHERE (be.Name LIKE @like ESCAPE '!' OR be.ContractClass LIKE @like ESCAPE '!')
+            WHERE {nameWhere}
               AND (@category IS NULL OR be.Category LIKE @catLike ESCAPE '!')
             ORDER BY m.IsCustom DESC, be.Name LIMIT @limit",
-            new { like, category, catLike = category is not null ? $"%{EscapeLike(category)}%" : null, limit }).ToList();
+            p).ToList();
     }
 
     public BusinessEventInfo? GetBusinessEvent(string name)
@@ -1546,14 +1548,14 @@ public sealed partial class MetadataRepository
     {
         limit = ClampLimit(limit, 50);
         using var conn = OpenReadOnly();
-        var like = $"%{EscapeLike(query)}%";
-        return conn.Query<SecurityPolicyInfo>(@"
+        var (nameWhere, p) = NameFilter(query, new { limit }, "sp.Name", "sp.ConstrainedTable");
+        return conn.Query<SecurityPolicyInfo>($@"
             SELECT sp.Id, sp.Name, sp.ConstrainedTable, sp.PolicyQuery, sp.OperationType, sp.ContextType,
                    sp.IsEnabled, sp.IsMandatory, m.Name AS Model, sp.SourcePath
             FROM SecurityPolicies sp JOIN Models m ON m.ModelId = sp.ModelId
-            WHERE sp.Name LIKE @like ESCAPE '!' OR sp.ConstrainedTable LIKE @like ESCAPE '!'
+            WHERE {nameWhere}
             ORDER BY m.IsCustom DESC, sp.Name LIMIT @limit",
-            new { like, limit }).ToList();
+            p).ToList();
     }
 
     public SecurityPolicyInfo? GetSecurityPolicy(string name)
@@ -1570,39 +1572,39 @@ public sealed partial class MetadataRepository
     {
         limit = ClampLimit(limit, 50);
         using var conn = OpenReadOnly();
-        var like = $"%{EscapeLike(query)}%";
-        return conn.Query<ConfigurationKeyInfo>(@"
+        var (nameWhere, p) = NameFilter(query, new { limit }, "ck.Name");
+        return conn.Query<ConfigurationKeyInfo>($@"
             SELECT ck.Id, ck.Name, ck.Label, ck.IsEnabled, ck.ParentKey, ck.LicenseCode, m.Name AS Model
             FROM ConfigurationKeys ck JOIN Models m ON m.ModelId = ck.ModelId
-            WHERE ck.Name LIKE @like ESCAPE '!'
+            WHERE {nameWhere}
             ORDER BY m.IsCustom DESC, ck.Name LIMIT @limit",
-            new { like, limit }).ToList();
+            p).ToList();
     }
 
     public IReadOnlyList<TileInfo> SearchTiles(string query, int limit = 50)
     {
         limit = ClampLimit(limit, 50);
         using var conn = OpenReadOnly();
-        var like = $"%{EscapeLike(query)}%";
-        return conn.Query<TileInfo>(@"
+        var (nameWhere, p) = NameFilter(query, new { limit }, "t.Name", "t.MenuItemName");
+        return conn.Query<TileInfo>($@"
             SELECT t.Id, t.Name, t.MenuItemName, t.MenuItemType, t.Label, t.TileType, m.Name AS Model, t.SourcePath
             FROM Tiles t JOIN Models m ON m.ModelId = t.ModelId
-            WHERE t.Name LIKE @like ESCAPE '!' OR t.MenuItemName LIKE @like ESCAPE '!'
+            WHERE {nameWhere}
             ORDER BY m.IsCustom DESC, t.Name LIMIT @limit",
-            new { like, limit }).ToList();
+            p).ToList();
     }
 
     public IReadOnlyList<WorkspaceInfo> SearchWorkspaces(string query, int limit = 50)
     {
         limit = ClampLimit(limit, 50);
         using var conn = OpenReadOnly();
-        var like = $"%{EscapeLike(query)}%";
-        return conn.Query<WorkspaceInfo>(@"
+        var (nameWhere, p) = NameFilter(query, new { limit }, "ws.Name");
+        return conn.Query<WorkspaceInfo>($@"
             SELECT ws.Id, ws.Name, ws.Label, m.Name AS Model, ws.SourcePath
             FROM Workspaces ws JOIN Models m ON m.ModelId = ws.ModelId
-            WHERE ws.Name LIKE @like ESCAPE '!'
+            WHERE {nameWhere}
             ORDER BY m.IsCustom DESC, ws.Name LIMIT @limit",
-            new { like, limit }).ToList();
+            p).ToList();
     }
 
     // ---- Phase 7: developer experience ----
@@ -1999,44 +2001,44 @@ public sealed partial class MetadataRepository
     {
         limit = ClampLimit(limit, 50);
         using var conn = OpenReadOnly();
-        var like = $"%{EscapeLike(query)}%";
-        return conn.Query<TableInfo>(@"
+        var (nameWhere, p) = NameFilter(query, new { model, limit }, "t.Name");
+        return conn.Query<TableInfo>($@"
             SELECT t.TableId, t.Name, m.Name AS Model, t.Label, t.SourcePath,
                    t.SaveDataPerCompany, t.CacheLookup, t.OccEnabled, t.ValidTimeStateFieldType,
                    t.TableExtends, t.AOSAuthorization, t.FormRef, t.ListPageRef, t.SystemTable
             FROM Tables t JOIN Models m ON m.ModelId = t.ModelId
-            WHERE t.Name LIKE @like ESCAPE '!'
+            WHERE {nameWhere}
               AND (@model IS NULL OR m.Name = @model)
             ORDER BY m.IsCustom DESC, t.Name
-            LIMIT @limit", new { like, model, limit }).ToList();
+            LIMIT @limit", p).ToList();
     }
 
     public IReadOnlyList<EdtInfo> SearchEdts(string query, int limit = 50)
     {
         limit = ClampLimit(limit, 50);
         using var conn = OpenReadOnly();
-        var like = $"%{EscapeLike(query)}%";
-        return conn.Query<EdtInfo>(@"
+        var (nameWhere, p) = NameFilter(query, new { limit }, "e.Name");
+        return conn.Query<EdtInfo>($@"
             SELECT e.Name, m.Name AS Model, e.ExtendsName AS Extends,
                    e.BaseType, e.Label, e.StringSize,
                    e.ReferenceTable, e.FormHelp, e.AnalysisUsage, e.EnumType
             FROM Edts e JOIN Models m ON m.ModelId = e.ModelId
-            WHERE e.Name LIKE @like ESCAPE '!'
+            WHERE {nameWhere}
             ORDER BY m.IsCustom DESC, e.Name
-            LIMIT @limit", new { like, limit }).ToList();
+            LIMIT @limit", p).ToList();
     }
 
     public IReadOnlyList<EnumInfo> SearchEnums(string query, int limit = 50)
     {
         limit = ClampLimit(limit, 50);
         using var conn = OpenReadOnly();
-        var like = $"%{EscapeLike(query)}%";
-        return conn.Query<EnumInfo>(@"
+        var (nameWhere, p) = NameFilter(query, new { limit }, "e.Name");
+        return conn.Query<EnumInfo>($@"
             SELECT e.Name, m.Name AS Model, e.Label
             FROM Enums e JOIN Models m ON m.ModelId = e.ModelId
-            WHERE e.Name LIKE @like ESCAPE '!'
+            WHERE {nameWhere}
             ORDER BY m.IsCustom DESC, e.Name
-            LIMIT @limit", new { like, limit }).ToList();
+            LIMIT @limit", p).ToList();
     }
 
     public EnumDetails? GetEnum(string name)
@@ -3152,6 +3154,42 @@ public sealed partial class MetadataRepository
     /// </summary>
     private static string EscapeLike(string value) =>
         value.Replace("!", "!!").Replace("%", "!%").Replace("_", "!_");
+
+    /// <summary>
+    /// The WHERE fragment that matches a name query against one or more columns, with its
+    /// parameters bound on the returned <see cref="DynamicParameters"/> alongside
+    /// <paramref name="extra"/> (the caller's other parameters, as an anonymous object).
+    /// </summary>
+    /// <remarks>
+    /// One word is one substring match, as it always was. A multi-word query never meant one
+    /// verbatim string — no AOT name contains a space — so <c>"ProcessGuide AdjustIn"</c> used to
+    /// match nothing while <c>InventProcessGuideAdjustInController</c> sat in the index and an
+    /// exact-name search found it. An agent reads that empty answer as evidence and targets
+    /// something else. It now means "a name carrying every token", in any order: one LIKE per
+    /// token, ANDed. Where a method matches several columns (a data entity's public names, a
+    /// tile's menu item), every token must land in the same column, so <c>Cust Entity</c> does
+    /// not match a row whose name has one word and whose public name has the other.
+    /// </remarks>
+    private static (string Where, DynamicParameters Params) NameFilter(string query, object? extra, params string[] columns)
+    {
+        var p = new DynamicParameters(extra);
+        var tokens = (query ?? "").Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        if (tokens.Length == 0) tokens = new[] { query ?? "" };
+
+        var perColumn = new List<string>(columns.Length);
+        foreach (var column in columns)
+        {
+            var perToken = new List<string>(tokens.Length);
+            for (var i = 0; i < tokens.Length; i++)
+            {
+                var key = i == 0 ? "like" : $"like{i}";
+                if (perColumn.Count == 0) p.Add(key, $"%{EscapeLike(tokens[i])}%");
+                perToken.Add($"{column} LIKE @{key} ESCAPE '!'");
+            }
+            perColumn.Add(perToken.Count == 1 ? perToken[0] : "(" + string.Join(" AND ", perToken) + ")");
+        }
+        return (perColumn.Count == 1 ? perColumn[0] : "(" + string.Join(" OR ", perColumn) + ")", p);
+    }
 
     /// <summary>
     /// Clamps a caller-supplied row limit into a sane range. SQLite treats a
