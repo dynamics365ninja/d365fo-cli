@@ -162,6 +162,13 @@ public sealed record EnumDetails(EnumInfo Enum, IReadOnlyList<EnumValueInfo> Val
 public sealed record LabelMatch(string File, string Language, string Key, string? Value);
 
 /// <summary>A method-body full-text hit from the opt-in <c>MethodSourceFts</c> index.</summary>
+/// <summary>One object's declaration of a method, from the index.</summary>
+/// <param name="Owner">Declaring object.</param>
+/// <param name="OwnerKind">class | table.</param>
+/// <param name="Model">Model the declaring object belongs to.</param>
+/// <param name="Signature">Signature as extracted, or null when the extractor captured none.</param>
+public sealed record MethodDeclaration(string Owner, string OwnerKind, string Model, string? Signature);
+
 public sealed record MethodSourceMatch(
     string Kind,
     string ObjectName,

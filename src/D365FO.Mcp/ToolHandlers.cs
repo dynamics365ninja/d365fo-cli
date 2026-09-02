@@ -580,6 +580,68 @@ public sealed partial class ToolHandlers
         return ToolResult<object>.Success(new { total = entries.Count, created, failed, results });
     }
 
+    /// <summary>
+    /// Correct the text of a label that already exists, in every language file it resolves to.
+    /// </summary>
+    /// <remarks>
+    /// Deliberately not <c>CreateLabel</c> with overwrite: that writes a new entry when the key
+    /// is absent, so a mistyped key in a correction produces a second label and reports success.
+    /// Nothing updated anywhere is a failure, because the caller believes a correction landed.
+    /// </remarks>
+    public ToolResult<object> UpdateLabel(
+        string? file, string key, string value, string? installTo, string? lang, string? labelFile)
+    {
+        if (string.IsNullOrWhiteSpace(key))
+            return ToolResult<object>.Fail(D365FoErrorCodes.BadInput, "key is required.");
+
+        var targets = new List<string>();
+        if (!string.IsNullOrWhiteSpace(file))
+        {
+            targets.Add(file!);
+        }
+        else if (!string.IsNullOrWhiteSpace(installTo))
+        {
+            foreach (var l in (string.IsNullOrWhiteSpace(lang) ? "en-us" : lang!)
+                     .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+            {
+                var path = ResolveLabelPath(installTo!, l, labelFile);
+                if (path is not null) targets.Add(path);
+            }
+        }
+
+        if (targets.Count == 0)
+            return ToolResult<object>.Fail(D365FoErrorCodes.BadInput,
+                "file or installTo is required, and installTo must resolve to a packages path.");
+
+        var updated = new List<object>();
+        var missing = new List<string>();
+        try
+        {
+            foreach (var path in targets)
+            {
+                var res = D365FO.Core.Labels.LabelFileWriter.Update(path, key, value);
+                if (res.Outcome == D365FO.Core.Labels.WriteOutcome.KeyMissing) { missing.Add(path); continue; }
+                D365FO.Core.Journal.LabelJournalRecorder.RecordCreateOrUpdate(res, "labels update");
+                updated.Add(new { file = res.Path, key = res.Key, oldValue = res.OldValue, newValue = res.NewValue });
+            }
+        }
+        catch (Exception ex)
+        {
+            return ToolResult<object>.Fail(D365FoErrorCodes.WriteFailed, ex.Message);
+        }
+
+        if (updated.Count == 0)
+            return ToolResult<object>.Fail("KEY_MISSING",
+                $"Label '{key}' is in none of the target files, so nothing was corrected.",
+                $"Checked: {string.Join(", ", targets)}. Use action=create to add it, or action=search to find "
+                + "the key it was actually written under.");
+
+        return ToolResult<object>.Success(new { key, updated = updated.Count, files = updated },
+            missing.Count > 0
+                ? [$"{missing.Count} target file(s) do not carry this key and were left alone: {string.Join(", ", missing)}"]
+                : null);
+    }
+
     public ToolResult<object> RenameLabel(string file, string oldKey, string newKey, bool overwrite = false)
     {
         if (string.IsNullOrWhiteSpace(file)) return ToolResult<object>.Fail(D365FoErrorCodes.BadInput, "file required");
@@ -856,6 +918,46 @@ public sealed partial class ToolHandlers
             return ToolResult<object>.Fail("FORM_NOT_FOUND", ex.Message,
                 "Run `d365fo index extract` (or refresh) and retry, or check the spelling with search(type=form).");
         }
+    }
+
+    /// <summary>How a scenario is usually done in THIS installation.</summary>
+    public ToolResult<object> AnalyzePatterns(string scenario, string? model, int limit)
+        => D365FO.Core.Analysis.CodeAnalysis.Patterns(_repo, scenario, model, limit);
+
+    /// <summary>Who else declares this method, and with what signature.</summary>
+    public ToolResult<object> AnalyzeImplementations(string method, string? model, int limit)
+        => D365FO.Core.Analysis.CodeAnalysis.Implementations(_repo, method, model, limit);
+
+    /// <summary>How an API is constructed and called here.</summary>
+    public ToolResult<object> AnalyzeApiUsage(string api, string? model, int limit)
+        => D365FO.Core.Analysis.CodeAnalysis.ApiUsage(_repo, api, model, limit);
+
+    /// <summary>
+    /// Cross-check a model folder against its <c>.rnrproj</c>: present on disk, and listed by the
+    /// project that compiles it.
+    /// </summary>
+    public ToolResult<object> VerifyProject(string? model, string? path, string[]? expect)
+    {
+        var folder = path;
+        if (string.IsNullOrWhiteSpace(folder))
+        {
+            if (string.IsNullOrWhiteSpace(model))
+                return ToolResult<object>.Fail(D365FoErrorCodes.BadInput,
+                    "A model name or a path to the model folder is required.");
+
+            var cfg = D365FoSettings.FromEnvironment();
+            folder = cfg.CustomPackagesPaths.Concat(new[] { cfg.PackagesPath })
+                .Where(r => !string.IsNullOrWhiteSpace(r) && Directory.Exists(r))
+                .SelectMany(r => D365FO.Core.Index.IndexSync.EnumerateModelDirs(r!, model))
+                .FirstOrDefault();
+
+            if (folder is null)
+                return ToolResult<object>.Fail("MODEL_NOT_FOUND",
+                    $"No model directory called '{model}' under any configured packages path.",
+                    "Set D365FO_PACKAGES_PATH (and D365FO_CUSTOM_PACKAGES_PATH for custom-model roots), or pass a path.");
+        }
+
+        return D365FO.Core.Journal.ProjectVerifier.Verify(folder!, expect);
     }
 
     public ToolResult<object> AnalyzeIntegration(string? model)

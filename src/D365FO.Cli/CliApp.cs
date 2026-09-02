@@ -157,6 +157,7 @@ public static class CliApp
                 b.AddCommand<ResolveLabelCommand>("resolve").WithDescription("Resolve a @SYS12345-style label token to its text across languages.");
                 b.AddCommand<GetLabelCommand>("info").WithDescription("Fetch one label entry by (file, language, key).");
                 b.AddCommand<D365FO.Cli.Commands.Label.LabelCreateCommand>("create").WithDescription("Create or update a label entry.");
+                b.AddCommand<D365FO.Cli.Commands.Label.LabelUpdateCommand>("update").WithDescription("Correct the text of a label that already exists — never creates, so a mistyped key is refused rather than added.");
                 b.AddCommand<D365FO.Cli.Commands.Label.LabelRenameCommand>("rename").WithDescription("Rename a label key.");
                 b.AddCommand<D365FO.Cli.Commands.Label.LabelDeleteCommand>("delete").WithDescription("Delete a label entry.");
             });
@@ -197,6 +198,7 @@ public static class CliApp
             {
                 b.SetDescription("Edit *.label.txt resource files in-place.");
                 b.AddCommand<D365FO.Cli.Commands.Label.LabelCreateCommand>("create").WithDescription("Create or update a label entry.");
+                b.AddCommand<D365FO.Cli.Commands.Label.LabelUpdateCommand>("update").WithDescription("Correct the text of a label that already exists.");
                 b.AddCommand<D365FO.Cli.Commands.Label.LabelRenameCommand>("rename").WithDescription("Rename a label key.");
                 b.AddCommand<D365FO.Cli.Commands.Label.LabelDeleteCommand>("delete").WithDescription("Delete a label entry.");
             });
@@ -303,6 +305,9 @@ public static class CliApp
                 b.AddCommand<AnalyzeCompletenessCommand>("completeness").WithDescription("Report broken EDT, label, security-role references in a project folder.");
                 b.AddCommand<AnalyzeIntegrationCommand>("integration").WithDescription("Cross-check data entities for OData / DMF integration readiness.");
                 b.AddCommand<AnalyzeImpactCommand>("impact").WithDescription("Change-impact analysis: list all downstream consumers of an AOT object.");
+                b.AddCommand<AnalyzePatternsCommand>("patterns").WithDescription("How a scenario is usually done HERE: the APIs the code around it reaches for, ranked by how many objects use each.");
+                b.AddCommand<AnalyzeImplementationsCommand>("implementations").WithDescription("Who else implements this method, with the signature each declared — read before writing an override or a CoC wrapper.");
+                b.AddCommand<AnalyzeApiUsageCommand>("api-usage").WithDescription("How an API is actually reached: constructed, called statically, or declared — with the lines that do it.");
             });
 
             cfg.AddCommand<ReportIntegrationsCommand>("report-integrations").WithDescription("Aggregated report of OData entities, services, business events, workflow types, and batch jobs.");
@@ -404,6 +409,7 @@ public static class CliApp
             cfg.AddCommand<BuildCommand>("build").WithDescription("Invoke MSBuild (Windows VM).");
             cfg.AddCommand<SyncCommand>("sync").WithDescription("Run DB sync (Windows VM).");
             cfg.AddCommand<D365FO.Cli.Commands.Connect.ConnectCommand>("connect").WithDescription("Point an editor's MCP config at a deployed `d365fo-mcp --http` server (probes /health, merges rather than clobbers).");
+            cfg.AddCommand<VerifyCommand>("verify").WithDescription("Do the model on disk and its .rnrproj agree? An object the project does not list is never compiled, and nothing else reports it.");
             cfg.AddCommand<DoctorCommand>("doctor").WithDescription("Diagnose environment.");
             cfg.AddCommand<InitCommand>("init").WithDescription("Interactive quickstart: detects PackagesLocalDirectory and prepares the index.");
             cfg.AddCommand<StatsCommand>("stats").WithDescription("Aggregate counters over the index (top tables / classes / CoC targets).");

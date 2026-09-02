@@ -143,6 +143,7 @@ public sealed class SchemaCommand : Command<SchemaCommand.Settings>
         C("labels resolve", "Resolve a @SYS12345-style label token across languages.", ["<TOKEN>"], ["--lang", "--raw-text", "--output"], ["labels (action=resolve)"], true),
         C("labels info", "Fetch one label entry by (file, language, key).", ["<FILE_OR_KEY>", "[KEY]"], ["--lang", "--raw-text", "--output"], ["labels (action=info)"], true),
         C("labels create", "Create or update a label entry.", ["<KEY>", "<VALUE>"], ["--file", "--overwrite", "--output"], ["labels (action=create)"], true),
+        C("labels update", "Correct the text of a label that already exists — never creates, so a mistyped key is refused rather than added.", ["<KEY>", "<VALUE>"], ["--file", "--install-to", "--lang", "--label-file", "--output"], ["labels (action=update)"], true),
         C("labels rename", "Rename a label key.", ["<OLD>", "<NEW>"], ["--file", "--overwrite", "--output"], ["labels (action=rename)"], true),
         C("labels delete", "Delete a label key.", ["<KEY>"], ["--file", "--output"], ["labels (action=delete)"], true),
         C("undo", "Revert the last N modification-journal entries (create removed, update/delete restored to their exact pre-image).", [], ["--steps", "--dry-run", "--db", "--output"], ["undo_last_modification"], true),
@@ -228,6 +229,9 @@ public sealed class SchemaCommand : Command<SchemaCommand.Settings>
         C("analyze completeness", "Cross-check a workspace folder's AOT XML against the index: broken EDT, label and security-role references.", ["<PATH>"], ["--skip-labels", "--skip-edts", "--skip-security", "--output"], ["analyze (mode=completeness)"]),
         C("analyze integration", "Cross-check data entities for OData/DMF readiness.", [], ["--model", "--output"], ["analyze (mode=integration)"]),
         C("analyze impact", "List downstream consumers of an AOT object.", ["<OBJECT>"], ["--output"], ["analyze (mode=impact)"]),
+        C("analyze patterns", "How a scenario is usually done HERE: the APIs that code reaches for, ranked by how many objects use each.", ["<SCENARIO>"], ["--model", "--limit", "--output"], ["analyze (mode=patterns)"]),
+        C("analyze implementations", "Who else implements this method, with the signature each declared.", ["<METHOD>"], ["--model", "--limit", "--output"], ["analyze (mode=implementations)"]),
+        C("analyze api-usage", "How an API is really reached: constructed, called statically, or declared.", ["<API>"], ["--model", "--limit", "--output"], ["analyze (mode=api-usage)"]),
         C("report-integrations", "Aggregated integration surface report.", [], ["--model", "--output"], ["analyze (mode=report)"]),
         C("review diff", "Inspect AOT changes vs. a git revision.", [], ["--base", "--head", "--repo", "--output"], ["get_workspace_info (changes=true)"]),
         C("build", "Invoke MSBuild on a D365FO project.", [], ["--msbuild", "--project", "--config", "--output"], ["sdlc (action=build)"]),
@@ -237,6 +241,7 @@ public sealed class SchemaCommand : Command<SchemaCommand.Settings>
         C("daemon start", "Start warm JSON-RPC daemon.", [], ["--db", "--packages", "--foreground", "--no-watch", "--watch-debounce"], []),
         C("daemon stop", "Stop daemon.", [], [], []),
         C("daemon status", "Report daemon status.", [], [], []),
+        C("verify", "Do the model on disk and its .rnrproj agree? An unlisted object is never compiled.", ["[MODEL]"], ["--path", "--expect", "--output"], ["verify_project"]),
         C("doctor", "Diagnose environment.", [], ["--output"], []),
         C("init", "Quickstart index/profile setup.", [], ["--packages", "--extra-packages", "--db", "--run-extract", "--dry-run", "--persist-profile"], []),
         C("version", "Print version information.", [], ["--output"], []),
@@ -262,6 +267,7 @@ public sealed class SchemaCommand : Command<SchemaCommand.Settings>
         C("resolve label", "Resolve @SYS12345-style label token to its text.", ["<TOKEN>"], ["--lang", "--output"], ["labels (action=resolve)"]),
 
         C("label create", "Create or update a label entry.", ["[KEY]", "[VALUE]"], ["--entry", "--file", "--install-to", "--lang", "--label-file", "--overwrite", "--allow-extension-label-file", "--output"], ["labels (action=create)"]),
+        C("label update", "Correct the text of a label that already exists.", ["<KEY>", "<VALUE>"], ["--file", "--install-to", "--lang", "--label-file", "--allow-extension-label-file", "--output"], ["labels (action=update)"]),
         C("label delete", "Delete a label entry.", ["<KEY>"], ["--file", "--output"], ["labels (action=delete)"]),
         C("label rename", "Rename a label key.", ["<OLD>", "<NEW>"], ["--file", "--overwrite", "--allow-extension-label-file", "--output"], ["labels (action=rename)"]),
 
