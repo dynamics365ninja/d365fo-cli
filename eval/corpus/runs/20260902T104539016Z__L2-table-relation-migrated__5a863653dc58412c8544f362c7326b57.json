@@ -1,0 +1,21 @@
+{
+  "runId": "20260902T104539016Z__L2-table-relation-migrated__5a863653dc58412c8544f362c7326b57",
+  "caseId": "L2-table-relation-migrated",
+  "tier": 2,
+  "timestampUtc": "2026-09-02T10:45:39.0161094+00:00",
+  "source": "build-oracle",
+  "score": {
+    "xppErrors": 0,
+    "referenceErrors": 0,
+    "goldenMatch": true,
+    "goldenDiff": {
+      "missing": [],
+      "extra": [],
+      "changed": [],
+      "isMatch": true
+    },
+    "buildClean": true,
+    "buildErrors": 0,
+    "runtimeFailures": 0
+  }
+}

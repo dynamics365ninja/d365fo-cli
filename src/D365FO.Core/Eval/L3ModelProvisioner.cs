@@ -10,6 +10,10 @@ namespace D365FO.Core.Eval;
 /// named <c>Target.Suffix</c>, and taking the file's stem would silently truncate it
 /// at the dot, so every diagnostic about it would land as unattributed.
 /// </param>
+/// <param name="CaseId">The eval case whose golden (or companion) this is.</param>
+/// <param name="SourcePath">The file it was copied from.</param>
+/// <param name="RelativePath">Where it sits under the model's content root.</param>
+/// <param name="RootElement">The AOT root element, which decided the folder.</param>
 public sealed record ProvisionedArtifact(string CaseId, string SourcePath, string RelativePath, string RootElement, string Name);
 
 /// <summary>

@@ -41,6 +41,7 @@ public class NameSearchAndExtensionSymbolTests : IDisposable
                 new ExtractedTable("CustTable", null, "/t2", Array.Empty<ExtractedTableField>()),
             },
             Enums = new[] { new ExtractedEnum("NumberSeqModule", null, Array.Empty<ExtractedEnumValue>()) },
+            MenuItems = new[] { new ExtractedMenuItem("FMVehicle", "Display", "FMVehicle", "Form", null) },
             Extensions = new[]
             {
                 new ExtractedObjectExtension("Enum", "NumberSeqModule", "NumberSeqModule.Kitting", "/e1"),
@@ -96,6 +97,11 @@ public class NameSearchAndExtensionSymbolTests : IDisposable
         Assert.Equal(new[] { "enum" }, repo.SymbolKinds("NumberSeqModule"));
         Assert.Equal(new[] { "enum-extension" }, repo.SymbolKinds("numberseqmodule.kitting"));
         Assert.Empty(repo.SymbolKinds("NumberSeqModule.ConDemoRent"));
+
+        // A menu item is a symbol too: a tile or menu entry that opens one the index has never
+        // heard of is what the grounding gate exists to catch, and the gate asks this method.
+        Assert.Equal(new[] { "menu-item" }, repo.SymbolKinds("fmvehicle"));
+        Assert.Empty(repo.SymbolKinds("FMVehicleNoSuchItem"));
     }
 
     [Fact]

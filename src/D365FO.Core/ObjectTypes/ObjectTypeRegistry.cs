@@ -185,6 +185,7 @@ namespace D365FO.Core.ObjectTypes
             public const string CompositeDataEntityView = "AxCompositeDataEntityView";
             public const string AggregateDataEntity = "AxAggregateDataEntity";
             public const string MapExtension = "AxMapExtension";
+            public const string MenuExtension = "AxMenuExtension";
         }
 
         private static readonly ObjectTypeInfo[] _all = BuildAll();
@@ -227,6 +228,7 @@ namespace D365FO.Core.ObjectTypes
                 // `generate extension` takes no Map kind — the null is the truth here, unlike
                 // the three rows above, which named no command while the command built them.
                 New("mapextension", "AxMapExtension", "MapExtensions", "extension", null, "MapExtension"),
+                New("menuextension", "AxMenuExtension", "MenuExtensions", "extension", null, "MenuExtension", ns: NsV1),
                 New("securitydutyextension", "AxSecurityDutyExtension", "SecurityDutyExtensions", "extension", null, "SecurityDutyExtension"),
                 New("securityroleextension", "AxSecurityRoleExtension", "SecurityRoleExtensions", "extension", null, "SecurityRoleExtension"),
 

@@ -14,7 +14,7 @@ Every column is derived — families from `ObjectTypeRegistry`, capabilities fro
 file cannot claim coverage that no longer exists. Regenerate with
 `d365fo eval coverage --write`; CI runs `--check`.
 
-**83 of 83 leaves complete.**
+**84 of 84 leaves complete.**
 
 ## AOT families
 
@@ -37,6 +37,7 @@ file cannot claim coverage that no longer exists. Regenerate with
 | `AxMap` | map | ✅ | ✅ | ✅ | `table-scaffolding` | `L1-map-basic`, `L1-map-multi-table` | generate map |
 | `AxMapExtension` | mapextension | ✅ | ✅ | ✅ | `object-extension-authoring` | `L2-map-extension` | generate extension |
 | `AxMenu` | menu | ✅ | ✅ | ✅ | `forms-and-navigation` | `L1-menu-basic` | generate menu |
+| `AxMenuExtension` | menuextension | ✅ | ✅ | ✅ | `forms-and-navigation`, `object-extension-authoring` | `L2-menu-extension` | generate extension |
 | `AxMenuItemAction` | menuitemaction | ✅ | ✅ | ✅ | `form-pattern-scaffolding` | `L1-menu-item-action` | generate menu-item |
 | `AxMenuItemDisplay` | menuitemdisplay | ✅ | ✅ | ✅ | `form-pattern-scaffolding` | `L1-menu-item-basic` | generate menu-item |
 | `AxMenuItemOutput` | menuitemoutput | ✅ | ✅ | ✅ | `form-pattern-scaffolding` | `L1-menu-item-output` | generate menu-item |
@@ -80,7 +81,7 @@ whether it is taught and proven.
 | `generate form-clone` | AxForm | ✅ | ✅ | `forms-and-navigation` | `L2-form-clone-basic` |
 | `generate simple-list` | deprecated alias | ✅ | ✅ | `form-pattern-scaffolding` | `L1-simple-list-alias` |
 | `generate entity` | AxDataEntityView | ✅ | ✅ | `data-entity-scaffolding`, `integration-dmf-dualwrite`, `integration-patterns` | `L2-virtual-entity-basic` |
-| `generate extension` | AxTableExtension, AxFormExtension, AxEdtExtension, AxEnumExtension, AxViewExtension, AxQuerySimpleExtension, AxDataEntityViewExtension, AxMapExtension, AxSecurityDutyExtension, AxSecurityRoleExtension | ✅ | ✅ | `forms-and-navigation`, `object-extension-authoring`, `security-modeling`, `xpp-best-practice-rules` | `L2-data-entity-extension`, `L2-edt-extension`, `L2-enum-extension`, `L2-form-extension-basic`, `L2-map-extension`, `L2-query-extension`, `L2-security-duty-extension`, `L2-security-role-extension`, `L2-table-extension`, `L2-view-extension` |
+| `generate extension` | AxTableExtension, AxFormExtension, AxEdtExtension, AxEnumExtension, AxViewExtension, AxQuerySimpleExtension, AxDataEntityViewExtension, AxMapExtension, AxMenuExtension, AxSecurityDutyExtension, AxSecurityRoleExtension | ✅ | ✅ | `forms-and-navigation`, `object-extension-authoring`, `security-modeling`, `xpp-best-practice-rules` | `L2-data-entity-extension`, `L2-edt-extension`, `L2-enum-extension`, `L2-form-extension-basic`, `L2-map-extension`, `L2-menu-extension`, `L2-query-extension`, `L2-security-duty-extension`, `L2-security-role-extension`, `L2-table-extension`, `L2-view-extension` |
 | `generate event-handler` | AxClass | ✅ | ✅ | `event-handler-authoring`, `forms-and-navigation`, `x++-class-authoring` | `L2-event-handler-basic` |
 | `generate privilege` | AxSecurityPrivilege | ✅ | ✅ | `security-hierarchy-trace`, `security-modeling` | `L1-privilege-basic`, `L1-privilege-data-entity` |
 | `generate duty` | AxSecurityDuty | ✅ | ✅ | `security-hierarchy-trace`, `security-modeling` | `L1-duty-basic` |

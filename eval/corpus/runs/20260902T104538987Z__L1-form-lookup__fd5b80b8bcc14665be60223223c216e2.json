@@ -1,0 +1,21 @@
+{
+  "runId": "20260902T104538987Z__L1-form-lookup__fd5b80b8bcc14665be60223223c216e2",
+  "caseId": "L1-form-lookup",
+  "tier": 1,
+  "timestampUtc": "2026-09-02T10:45:38.9872091+00:00",
+  "source": "build-oracle",
+  "score": {
+    "xppErrors": 0,
+    "referenceErrors": 0,
+    "goldenMatch": true,
+    "goldenDiff": {
+      "missing": [],
+      "extra": [],
+      "changed": [],
+      "isMatch": true
+    },
+    "buildClean": true,
+    "buildErrors": 0,
+    "runtimeFailures": 0
+  }
+}

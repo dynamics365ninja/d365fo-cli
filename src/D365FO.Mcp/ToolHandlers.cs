@@ -1203,15 +1203,33 @@ public sealed partial class ToolHandlers
         return ToolResult<object>.Success(new { name, table, xml = Aot(doc) });
     }
 
-    public ToolResult<object> GenerateExtension(string extensionKind, string target, string? suffix)
+    public ToolResult<object> GenerateExtension(string extensionKind, string target, string? suffix,
+        string[]? submenus = null, string[]? items = null, string[]? tiles = null, string[]? menuRefs = null,
+        bool inContentArea = false, string? position = null, string? after = null)
     {
         if (string.IsNullOrWhiteSpace(target))
             return ToolResult<object>.Fail("BAD_INPUT", "target is required: the object being extended.");
         try
         {
-            var doc = D365FO.Core.Scaffolding.XppScaffolder.Extension(
-                extensionKind ?? string.Empty, target, string.IsNullOrWhiteSpace(suffix) ? "Extension" : suffix!);
-            return ToolResult<object>.Success(new { name = $"{target}.{suffix ?? "Extension"}", xml = Aot(doc) });
+            var effectiveSuffix = string.IsNullOrWhiteSpace(suffix) ? "Extension" : suffix!;
+            if (string.Equals((extensionKind ?? "").Replace("-", ""), "menu", StringComparison.OrdinalIgnoreCase))
+            {
+                // A menu extension is its additions: the same spellings `generate menu` takes,
+                // with a path prefix naming a submenu this extension adds or an existing
+                // element of the base menu (written as Parent).
+                if (!D365FO.Core.Scaffolding.MenuSpecs.TryParse(submenus, items, tiles, menuRefs, out var subs, out var entries, out var specError))
+                    return ToolResult<object>.Fail("BAD_INPUT", specError!);
+                var menuDoc = D365FO.Core.Scaffolding.NavigationScaffolder.MenuExtension(target, effectiveSuffix, subs, entries,
+                    inContentArea, new D365FO.Core.Scaffolding.MenuExtensionPlacement(position ?? "End", after));
+                var unknown = D365FO.Core.Scaffolding.MenuSpecs.MenuItemsOf(entries).Where(m => !SafeMenuItemExists(m)).ToList();
+                return ToolResult<object>.Success(new
+                {
+                    name = $"{target}.{effectiveSuffix}", kind = "AxMenuExtension",
+                    unknownMenuItems = unknown.Count > 0 ? unknown : null, xml = Aot(menuDoc),
+                });
+            }
+            var doc = D365FO.Core.Scaffolding.XppScaffolder.Extension(extensionKind ?? string.Empty, target, effectiveSuffix);
+            return ToolResult<object>.Success(new { name = $"{target}.{effectiveSuffix}", xml = Aot(doc) });
         }
         catch (ArgumentException ex)
         {

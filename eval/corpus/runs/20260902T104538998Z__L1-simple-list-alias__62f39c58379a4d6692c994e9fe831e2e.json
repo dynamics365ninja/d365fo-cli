@@ -1,0 +1,21 @@
+{
+  "runId": "20260902T104538998Z__L1-simple-list-alias__62f39c58379a4d6692c994e9fe831e2e",
+  "caseId": "L1-simple-list-alias",
+  "tier": 1,
+  "timestampUtc": "2026-09-02T10:45:38.9981689+00:00",
+  "source": "build-oracle",
+  "score": {
+    "xppErrors": 0,
+    "referenceErrors": 0,
+    "goldenMatch": true,
+    "goldenDiff": {
+      "missing": [],
+      "extra": [],
+      "changed": [],
+      "isMatch": true
+    },
+    "buildClean": true,
+    "buildErrors": 0,
+    "runtimeFailures": 0
+  }
+}

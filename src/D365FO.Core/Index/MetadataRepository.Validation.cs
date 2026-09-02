@@ -20,6 +20,9 @@ public sealed partial class MetadataRepository : IReferenceIndex, IPropertyStats
     /// "no collision" for a name that is taken, immediately before a write (upstream 0b363e5).
     /// An extension reports as <c>&lt;kind&gt;-extension</c> (<c>enum-extension</c>,
     /// <c>table-extension</c>), so callers that look for a base kind by name are unaffected.
+    /// Menu items report as <c>menu-item</c>: a tile or menu entry that opens a menu item the
+    /// index has never heard of is exactly what the grounding gate exists to catch, and the gate
+    /// asks this method.
     /// </remarks>
     public IReadOnlyList<string> SymbolKinds(string name)
     {
@@ -34,6 +37,7 @@ public sealed partial class MetadataRepository : IReferenceIndex, IPropertyStats
             UNION SELECT 'view'         FROM Views        WHERE Name = @name COLLATE NOCASE
             UNION SELECT 'data-entity'  FROM DataEntities WHERE Name = @name COLLATE NOCASE
             UNION SELECT 'map'          FROM Maps         WHERE Name = @name COLLATE NOCASE
+            UNION SELECT 'menu-item'    FROM MenuItems    WHERE Name = @name COLLATE NOCASE
             UNION SELECT lower(Kind) || '-extension'
                                         FROM ObjectExtensions WHERE ExtensionName = @name COLLATE NOCASE",
             new { name }).ToList();

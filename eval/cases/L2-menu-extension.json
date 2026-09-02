@@ -1,0 +1,36 @@
+{
+  "id": "L2-menu-extension",
+  "title": "Extension of a shipped menu: a new submenu and an item under an existing one",
+  "tier": 2,
+  "instruction": "Extend the standard AccountsReceivable menu with suffix ConFleet: add a new ConFleet sub-menu (label @FLM540) placed after the existing Customers element, holding the FMVehicle list page and the FMClerkWorkspace tile, and add the FMCustomer menu item under the existing Customers element. Use only the d365fo CLI — do not hand-write XML.",
+  "canonical_args": [
+    "generate",
+    "extension",
+    "Menu",
+    "AccountsReceivable",
+    "--suffix",
+    "ConFleet",
+    "--submenu",
+    "ConFleet:@FLM540",
+    "--item",
+    "ConFleet/FMVehicle",
+    "--tile",
+    "ConFleet/FMClerkWorkspace",
+    "--item",
+    "Customers/FMCustomer",
+    "--after",
+    "Customers"
+  ],
+  "target_artifact_types": [
+    "AxMenuExtension"
+  ],
+  "golden_path": "L2-menu-extension",
+  "tags": [
+    "extension",
+    "menu",
+    "navigation"
+  ],
+  "ignore": [],
+  "requires_fixture_index": false,
+  "golden_pending": false
+}

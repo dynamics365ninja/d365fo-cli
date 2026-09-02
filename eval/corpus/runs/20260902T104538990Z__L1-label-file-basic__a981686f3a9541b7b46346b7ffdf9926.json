@@ -1,0 +1,21 @@
+{
+  "runId": "20260902T104538990Z__L1-label-file-basic__a981686f3a9541b7b46346b7ffdf9926",
+  "caseId": "L1-label-file-basic",
+  "tier": 1,
+  "timestampUtc": "2026-09-02T10:45:38.9900195+00:00",
+  "source": "build-oracle",
+  "score": {
+    "xppErrors": 0,
+    "referenceErrors": 0,
+    "goldenMatch": true,
+    "goldenDiff": {
+      "missing": [],
+      "extra": [],
+      "changed": [],
+      "isMatch": true
+    },
+    "buildClean": true,
+    "buildErrors": 0,
+    "runtimeFailures": 0
+  }
+}

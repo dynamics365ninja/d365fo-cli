@@ -19,6 +19,29 @@ was ported from.
 
 ## [Unreleased]
 
+### Added — `generate extension Menu`, and menu items as symbols
+
+- **`AxMenuExtension`** — the most common ISV navigation task, adding to a menu Microsoft owns,
+  had no path at all: not in the registry, not extracted, not generatable. Now
+  `generate extension Menu <BaseMenu> --suffix <S>` takes the same spellings as `generate menu`;
+  a path prefix names a sub-menu the extension adds (nested inline) or an existing element of the
+  base menu (written as `<Parent>`), and `--after <element>` / `--position Begin` place the
+  additions. Shape measured over the 248 shipped menu extensions (`Parent` on 154,
+  `PositionType` on 98, the two modification collections present and empty on 216). An extension
+  that adds nothing is refused. Menu extensions are now extracted into the index like the other
+  extension kinds, and reachable over MCP (`generate_object`, `extensionKind=menu`).
+- **Menu items are symbols.** `SymbolKinds` answers `menu-item`, so `generate tile`, `generate menu`
+  and `generate extension Menu` hand the menu items they reference to the grounding gate instead of
+  a private warning: an unknown one is `[unknown-type]` in `grounding`, and a refusal under
+  `D365FO_GROUNDING_ENFORCE=true`. `prepare create` sees the collision too.
+- One parser for the menu spellings (`MenuSpecs`), shared by both CLI commands and both MCP routes,
+  so a spelling cannot parse differently on two surfaces.
+- The two AOT census tests sample only packages whose descriptor names Microsoft as publisher.
+  A developer VM's package root also holds other tools' working models, and one of them carried
+  a report design with a member the contract does not have — a defect in that tool, which the
+  census reported as a rule being wrong about "a file Microsoft ships". It was not one.
+- Eval corpus 70 → 71 (`L2-menu-extension`, golden compiled by xppc); coverage 84 of 84 leaves, `AxMenuExtension` having joined the family table.
+
 ### Added — the ten `generate` subcommands the coverage report was waiting on
 
 The K∧E∧T report had ten AOT families with no generator, and each was marked "surface work,

@@ -1,0 +1,21 @@
+{
+  "runId": "20260902T104539011Z__L2-security-policy-basic__1c01fb9345ba4438ab93161fc9eb21f5",
+  "caseId": "L2-security-policy-basic",
+  "tier": 2,
+  "timestampUtc": "2026-09-02T10:45:39.0118898+00:00",
+  "source": "build-oracle",
+  "score": {
+    "xppErrors": 0,
+    "referenceErrors": 0,
+    "goldenMatch": true,
+    "goldenDiff": {
+      "missing": [],
+      "extra": [],
+      "changed": [],
+      "isMatch": true
+    },
+    "buildClean": true,
+    "buildErrors": 0,
+    "runtimeFailures": 0
+  }
+}

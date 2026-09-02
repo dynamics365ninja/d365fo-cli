@@ -59,7 +59,7 @@ jobs:
           dotnet-version: 10.0.x
       - name: Warning count must not rise
         shell: pwsh
-        run: ./scripts/check-build-warnings.ps1 -Baseline 109
+        run: ./scripts/check-build-warnings.ps1 -Baseline 101
 
   # What `dotnet test` builds is not what anybody installs. install.ps1/install.sh publish
   # self-contained, single-file and TRIMMED, and issue #182 showed that shape failing on

@@ -1,0 +1,21 @@
+{
+  "runId": "20260902T104538981Z__L0-enum-basic__f81f506f09d44408be85a69b04cdaa98",
+  "caseId": "L0-enum-basic",
+  "tier": 0,
+  "timestampUtc": "2026-09-02T10:45:38.9810649+00:00",
+  "source": "build-oracle",
+  "score": {
+    "xppErrors": 0,
+    "referenceErrors": 0,
+    "goldenMatch": true,
+    "goldenDiff": {
+      "missing": [],
+      "extra": [],
+      "changed": [],
+      "isMatch": true
+    },
+    "buildClean": true,
+    "buildErrors": 0,
+    "runtimeFailures": 0
+  }
+}

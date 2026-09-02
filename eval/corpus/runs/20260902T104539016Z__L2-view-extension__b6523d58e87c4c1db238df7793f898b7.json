@@ -1,0 +1,21 @@
+{
+  "runId": "20260902T104539016Z__L2-view-extension__b6523d58e87c4c1db238df7793f898b7",
+  "caseId": "L2-view-extension",
+  "tier": 2,
+  "timestampUtc": "2026-09-02T10:45:39.0165254+00:00",
+  "source": "build-oracle",
+  "score": {
+    "xppErrors": 0,
+    "referenceErrors": 0,
+    "goldenMatch": true,
+    "goldenDiff": {
+      "missing": [],
+      "extra": [],
+      "changed": [],
+      "isMatch": true
+    },
+    "buildClean": true,
+    "buildErrors": 0,
+    "runtimeFailures": 0
+  }
+}

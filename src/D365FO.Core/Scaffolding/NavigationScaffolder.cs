@@ -12,7 +12,18 @@ public sealed record MenuEntrySpec(string? Submenu, MenuEntryKind Kind, string T
 public enum MenuEntryKind { MenuItem, Tile, MenuReference }
 
 /// <summary>A submenu and its label; submenus are created in the order they are declared.</summary>
-public sealed record MenuSubmenuSpec(string Name, string? Label = null);
+/// <param name="Name">Submenu name — the key of the element in its container.</param>
+/// <param name="Label">Label token or text; <c>null</c> writes no label.</param>
+/// <param name="Parent">
+/// For a menu <em>extension</em>: an existing element of the base menu to nest the new submenu
+/// under. Ignored by <see cref="NavigationScaffolder.Menu"/>, whose submenus are always at the root.
+/// </param>
+public sealed record MenuSubmenuSpec(string Name, string? Label = null, string? Parent = null);
+
+/// <summary>Where an <c>AxMenuExtensionElement</c> lands among the base menu's elements.</summary>
+/// <param name="Position"><c>Begin</c>, <c>End</c> (the contract default, not written) or <c>AfterItem</c>.</param>
+/// <param name="PreviousSibling">For <c>AfterItem</c>: the element the new one follows.</param>
+public sealed record MenuExtensionPlacement(string Position = "End", string? PreviousSibling = null);
 
 /// <summary>
 /// Scaffolds the navigation objects that hang off menu items: <c>AxMenu</c>, <c>AxTile</c>
@@ -129,6 +140,128 @@ public static class NavigationScaffolder
 
         root.Add(elements);
         return new XDocument(root);
+    }
+
+    /// <summary>
+    /// An <c>AxMenuExtension</c>: what a model adds to a menu it does not own. Each addition is
+    /// an <c>AxMenuExtensionElement</c> wrapping the same <c>AxMenuElement</c> shapes a menu
+    /// carries, optionally under a <c>Parent</c> — an existing element of the base menu — and
+    /// optionally positioned <c>AfterItem</c> a <c>PreviousSibling</c>. Shipped counts (248 files):
+    /// <c>Parent</c> on 154, <c>PositionType</c> on 98 (AfterItem 166 elements, Begin 72), and
+    /// the two modification collections present but empty on 216.
+    /// </summary>
+    /// <param name="baseMenu">The menu being extended (the AOT name before the dot).</param>
+    /// <param name="suffix">The extension suffix (after the dot).</param>
+    /// <param name="placement">Where root-level additions land among the base menu's elements; additions under a <c>Parent</c> land at the end of that parent.</param>
+    /// <param name="submenus">
+    /// New submenus this extension adds. An entry whose <see cref="MenuEntrySpec.Submenu"/> names
+    /// one of these nests inside it; an entry naming anything else is placed under that name as
+    /// a <c>Parent</c> — an element the base menu already has.
+    /// </param>
+    /// <param name="entries">Menu items, tiles and menu references the extension adds.</param>
+    /// <param name="displayInContentArea">Stamp <c>DisplayInContentArea=Yes</c> on every added menu item.</param>
+    public static XDocument MenuExtension(
+        string baseMenu,
+        string suffix,
+        IEnumerable<MenuSubmenuSpec>? submenus = null,
+        IEnumerable<MenuEntrySpec>? entries = null,
+        bool displayInContentArea = false,
+        MenuExtensionPlacement? placement = null)
+    {
+        if (string.IsNullOrWhiteSpace(baseMenu))
+            throw new ArgumentException("The menu being extended is required.", nameof(baseMenu));
+        if (string.IsNullOrWhiteSpace(suffix))
+            throw new ArgumentException("An extension suffix is required.", nameof(suffix));
+        if (baseMenu.Contains('.'))
+            throw new ArgumentException($"'{baseMenu}' names an extension, not a menu; extend the base menu.", nameof(baseMenu));
+
+        placement ??= new MenuExtensionPlacement();
+        var position = placement.Position is null ? "End" : placement.Position.Trim();
+        if (!position.Equals("Begin", StringComparison.OrdinalIgnoreCase)
+            && !position.Equals("End", StringComparison.OrdinalIgnoreCase)
+            && !position.Equals("AfterItem", StringComparison.OrdinalIgnoreCase))
+            throw new ArgumentException($"Unknown position '{position}'. Expected Begin|End|AfterItem.", nameof(placement));
+        if (position.Equals("AfterItem", StringComparison.OrdinalIgnoreCase) && string.IsNullOrWhiteSpace(placement.PreviousSibling))
+            throw new ArgumentException("AfterItem needs the element the additions follow (--after <element>).", nameof(placement));
+        if (!position.Equals("AfterItem", StringComparison.OrdinalIgnoreCase) && !string.IsNullOrWhiteSpace(placement.PreviousSibling))
+            position = "AfterItem";
+
+        var subs = (submenus ?? []).ToList();
+        var all = (entries ?? []).ToList();
+        var declared = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var s in subs)
+        {
+            if (string.IsNullOrWhiteSpace(s.Name)) throw new ArgumentException("Every submenu needs a name.", nameof(submenus));
+            if (!declared.Add(s.Name)) throw new ArgumentException($"Submenu '{s.Name}' is declared twice.", nameof(submenus));
+        }
+        foreach (var e in all)
+        {
+            if (string.IsNullOrWhiteSpace(e.Target)) throw new ArgumentException("Every menu entry needs a target.", nameof(entries));
+            if (e.MenuItemType is not null && !MenuItemTypes.Contains(e.MenuItemType, StringComparer.OrdinalIgnoreCase))
+                throw new ArgumentException($"Menu item type '{e.MenuItemType}' is not one of {string.Join("|", MenuItemTypes)}.", nameof(entries));
+        }
+        if (subs.Count == 0 && all.Count == 0)
+            throw new ArgumentException("A menu extension that adds nothing: pass at least one submenu, item, tile or menu reference.", nameof(entries));
+
+        var elements = new XElement("Elements");
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        XElement Wrap(string? parent, XElement menuElement)
+        {
+            var wrapper = new XElement("AxMenuExtensionElement");
+            if (!string.IsNullOrEmpty(parent)) wrapper.Add(new XElement("Parent", parent));
+            // The placement names a sibling among the base menu's ROOT elements, so it applies
+            // to root-level additions only; an addition under a Parent lands at the end of that
+            // parent — "after Customers" inside Customers would name a sibling that is not there.
+            if (string.IsNullOrEmpty(parent))
+            {
+                if (!position.Equals("End", StringComparison.OrdinalIgnoreCase))
+                    wrapper.Add(new XElement("PositionType", position.Equals("Begin", StringComparison.OrdinalIgnoreCase) ? "Begin" : "AfterItem"));
+                if (position.Equals("AfterItem", StringComparison.OrdinalIgnoreCase))
+                    wrapper.Add(new XElement("PreviousSibling", placement.PreviousSibling));
+            }
+            menuElement.Name = "MenuElement";
+            wrapper.Add(menuElement);
+            return wrapper;
+        }
+
+        foreach (var s in subs)
+        {
+            if (!seen.Add(s.Name))
+                throw new ArgumentException($"'{s.Name}' is added twice by extension '{baseMenu}.{suffix}'.", nameof(submenus));
+            var subEl = new XElement("AxMenuElement",
+                new XAttribute(Xsi + "type", "AxMenuElementSubMenu"),
+                new XElement("Name", s.Name));
+            if (!string.IsNullOrEmpty(s.Label)) subEl.Add(new XElement("Label", s.Label));
+            var inner = new XElement("Elements");
+            var innerNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var e in all.Where(e => string.Equals(e.Submenu, s.Name, StringComparison.OrdinalIgnoreCase)))
+            {
+                if (!innerNames.Add(e.Target))
+                    throw new ArgumentException($"'{e.Target}' appears twice under submenu '{s.Name}'.", nameof(entries));
+                inner.Add(Entry(e, displayInContentArea));
+            }
+            subEl.Add(inner);
+            elements.Add(Wrap(s.Parent, subEl));
+        }
+
+        // Entries not under a submenu this extension declares go straight into the base menu:
+        // at its root, or under the existing element they name.
+        foreach (var e in all.Where(e => string.IsNullOrWhiteSpace(e.Submenu) || !declared.Contains(e.Submenu!)))
+        {
+            if (!seen.Add(e.Target))
+                throw new ArgumentException($"'{e.Target}' is added twice by extension '{baseMenu}.{suffix}'.", nameof(entries));
+            elements.Add(Wrap(e.Submenu, Entry(e, displayInContentArea)));
+        }
+
+        return new XDocument(
+            new XElement("AxMenuExtension",
+                new XAttribute(XNamespace.Xmlns + "i", Xsi.NamespaceName),
+                new XElement("Name", $"{baseMenu}.{suffix}"),
+                new XElement("Customizations"),
+                elements,
+                new XElement("MenuElementModifications"),
+                new XElement("PropertyModifications")));
     }
 
     private static XElement Entry(MenuEntrySpec e, bool displayInContentArea)

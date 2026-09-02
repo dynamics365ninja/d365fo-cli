@@ -248,7 +248,7 @@ public static class CliApp
                 b.AddCommand<GenerateFormCloneCommand>("form-clone").WithDescription("Clone an existing AxForm under a new name, optionally re-binding its datasources.");
                 b.AddCommand<GenerateSimpleListCommand>("simple-list").WithDescription("(Deprecated) Alias for `generate form --pattern SimpleList`.");
                 b.AddCommand<GenerateEntityCommand>("entity").WithDescription("Create an AxDataEntityView over a table.");
-                b.AddCommand<GenerateExtensionCommand>("extension").WithDescription("Create a Table/Form/Edt/Enum/View/Query/DataEntityView/Map/SecurityDuty/SecurityRole extension.");
+                b.AddCommand<GenerateExtensionCommand>("extension").WithDescription("Create a Table/Form/Edt/Enum/View/Query/DataEntityView/Map/Menu/SecurityDuty/SecurityRole extension.");
                 b.AddCommand<GenerateEventHandlerCommand>("event-handler").WithDescription("Create an event subscriber class.");
                 b.AddCommand<GeneratePrivilegeCommand>("privilege").WithDescription("Create a security privilege over an entry point.");
                 b.AddCommand<GenerateDutyCommand>("duty").WithDescription("Create a security duty grouping privileges.");

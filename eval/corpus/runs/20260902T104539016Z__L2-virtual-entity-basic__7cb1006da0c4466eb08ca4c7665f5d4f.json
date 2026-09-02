@@ -1,0 +1,21 @@
+{
+  "runId": "20260902T104539016Z__L2-virtual-entity-basic__7cb1006da0c4466eb08ca4c7665f5d4f",
+  "caseId": "L2-virtual-entity-basic",
+  "tier": 2,
+  "timestampUtc": "2026-09-02T10:45:39.0169757+00:00",
+  "source": "build-oracle",
+  "score": {
+    "xppErrors": 0,
+    "referenceErrors": 0,
+    "goldenMatch": true,
+    "goldenDiff": {
+      "missing": [],
+      "extra": [],
+      "changed": [],
+      "isMatch": true
+    },
+    "buildClean": true,
+    "buildErrors": 0,
+    "runtimeFailures": 0
+  }
+}
