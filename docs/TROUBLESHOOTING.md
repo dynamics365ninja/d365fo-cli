@@ -71,7 +71,7 @@ d365fo index extract `
     --extra-packages C:\LocalMetadata\PackagesLocalDirectory
 ```
 
-`D365FO_CUSTOM_PACKAGES_PATH` accepts semicolon- or comma-separated paths. Extra roots that don't exist are silently skipped. See [SETUP.md — UDE setup](SETUP.md#ude-unified-developer-experience-setup) for the full walkthrough.
+`D365FO_CUSTOM_PACKAGES_PATH` accepts semicolon- or comma-separated paths. Extra roots that don't exist are silently skipped. See [CUSTOM_EXTENSIONS.md — two package trees](CUSTOM_EXTENSIONS.md#two-package-trees-ude-and-split-setups) for the full walkthrough.
 
 ```sh
 # PowerShell — set for the current session

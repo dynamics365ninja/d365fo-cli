@@ -150,3 +150,26 @@ jobs:
         # Drift only proves the bytes match what the emitter produced — #172 shipped
         # frontmatter no YAML parser could read and this job stayed green. Parse it.
         run: python3 scripts/check-skill-frontmatter.py
+
+  # docs/MCP_TOOLS.md maps the adapter's tools onto the commands behind them, and is
+  # generated from both surfaces rather than kept by hand. The generator refuses to
+  # write a mapping where one side names something the other does not have, so this
+  # job is a parity gate as much as a docs gate.
+  mcp-tool-map:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.x"
+      - name: Build the CLI and the adapter
+        # One project per invocation: MSBuild answers "Only one project can be specified"
+        # to a list, and the generator needs both binaries.
+        run: |
+          dotnet build src/D365FO.Cli -c Release -nologo
+          dotnet build src/D365FO.Mcp -c Release -nologo
+      - name: docs/MCP_TOOLS.md must be current
+        run: python3 scripts/emit-mcp-tools.py --check

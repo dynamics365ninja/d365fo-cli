@@ -321,10 +321,17 @@ The full scenario-by-scenario decision table lives in **[docs/CAPABILITIES.md](d
 
 | Getting started | Reference | Operations |
 |-----------------|-----------|------------|
-| [Setup](docs/SETUP.md) — install, configure, verify | [Examples](docs/EXAMPLES.md) — one per command | [Troubleshooting](docs/TROUBLESHOOTING.md) |
-| [Migration from MCP](docs/MIGRATION_FROM_MCP.md) | [Architecture](docs/ARCHITECTURE.md) — index schema, AOT coverage, lint rules, daemon | [Token economics](docs/TOKEN_ECONOMICS.md) |
-| [Capabilities](docs/CAPABILITIES.md) — tool decision table | [Configuration](docs/CONFIGURATION.md) — env vars and profiles | |
-| | [Agent eval loop](docs/AGENT_EVAL_LOOP.md) — self-improving eval harness (`eval/README.md`) | |
+| [Quick start](docs/QUICK_START.md) — five minutes to the first answer | [Capabilities](docs/CAPABILITIES.md) — everything the tool does | [Troubleshooting](docs/TROUBLESHOOTING.md) |
+| [Setup](docs/SETUP.md) — install, configure, verify | [Examples](docs/EXAMPLES.md) — one per command | [Configuration](docs/CONFIGURATION.md) — env vars and profiles |
+| [Usage examples](docs/USAGE_EXAMPLES.md) — whole tasks, end to end | [Architecture](docs/ARCHITECTURE.md) — index schema, AOT coverage, lint rules, daemon | [Custom models](docs/CUSTOM_EXTENSIONS.md) — your code, UDE and split trees |
+| [Migration from MCP](docs/MIGRATION_FROM_MCP.md) | [MCP tools ↔ CLI](docs/MCP_TOOLS.md) — generated map | [MCP configuration](docs/MCP_CONFIG.md) — pointing a client at the adapter |
+| | [Token economics](docs/TOKEN_ECONOMICS.md) — measured, not estimated | [Shared deployment](docs/SETUP_AZURE.md) — one instance for a team |
+
+| Contributing | |
+|---|---|
+| [Testing](docs/TESTING.md) — the four layers and every gate | [New command checklist](docs/NEW_TOOL_CHECKLIST.md) |
+| [Knowledge authoring](docs/KNOWLEDGE_AUTHORING.md) — the corpus and its audit | [Agent eval loop](docs/AGENT_EVAL_LOOP.md) — self-improving eval harness (`eval/README.md`) |
+| [Backlog](docs/BACKLOG.md) — what is knowingly missing | [Changelog](CHANGELOG.md) · [Security](SECURITY.md) |
 
 ---
 
