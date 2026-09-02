@@ -173,6 +173,72 @@ public class SweepFalsePositiveTests
         Assert.Contains(Xpp(code), v => v.Rule == "FN001");
     }
 
+    /// <summary>
+    /// X++ allows a function to be declared inside a method body, and it takes precedence over
+    /// the predefined name — the compiler's own message says as much ("nor a previously defined
+    /// local function"). The platform's <c>BatchRun.runJob</c> declares <c>void info()</c> and
+    /// calls it twice.
+    /// </summary>
+    [Fact]
+    public void A_local_function_shadows_the_predefined_name()
+    {
+        const string code = """
+            public static void runJob()
+            {
+                void info()
+                {
+                    infolog.add(Exception::Info, 'x');
+                }
+
+                info();
+                info();
+            }
+            """;
+
+        Assert.DoesNotContain(Xpp(code), v => v.Rule == "FN001");
+    }
+
+    // ── RPT001: 1 finding ─────────────────────────────────────────────────
+
+    /// <summary>
+    /// An abstract DP is a base for concrete ones and carries no contract of its own — the
+    /// platform's CustVendAdvanceInvoiceDP reads parmDataContract() and declares none, because
+    /// CustAdvanceInvoiceDP and VendAdvanceInvoiceDP each declare their own.
+    /// </summary>
+    [Fact]
+    public void An_abstract_data_provider_is_not_missing_its_contract()
+    {
+        const string code = """
+            abstract class CustVendAdvanceInvoiceDP extends SRSReportDataProviderBase
+            {
+            }
+
+            public void processReport()
+            {
+                contract = this.parmDataContract() as CustVendAdvanceInvoiceContract;
+            }
+            """;
+
+        Assert.DoesNotContain(Xpp(code), v => v.Rule == "RPT001");
+    }
+
+    [Fact]
+    public void A_concrete_data_provider_without_a_contract_is_still_reported()
+    {
+        const string code = """
+            class FmVehicleReportDP extends SRSReportDataProviderBase
+            {
+            }
+
+            public void processReport()
+            {
+                contract = this.parmDataContract() as FmVehicleReportContract;
+            }
+            """;
+
+        Assert.Contains(Xpp(code), v => v.Rule == "RPT001");
+    }
+
     // ── SEL010: 15 findings ───────────────────────────────────────────────
 
     [Fact]

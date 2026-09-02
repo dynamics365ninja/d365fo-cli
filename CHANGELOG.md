@@ -79,6 +79,17 @@ silences a rule fails there rather than passing quietly.
   `order by`.
 - **COC003, 1 finding.** The `_Extension` suffix is now matched case-insensitively, as X++
   identifiers are — the platform ships `JournalCheckPostIV_extension`.
+- **FN001 again, 2 findings.** X++ allows a function to be declared inside a method body, and it
+  takes precedence over the predefined name of the same spelling — which the compiler's own
+  message says ("nor a previously defined local function"). `BatchRun.runJob` declares
+  `void info()` and calls it twice.
+- **RPT001, 1 finding.** An abstract data provider is a base for concrete ones and carries no
+  contract of its own; `CustVendAdvanceInvoiceDP` reads `parmDataContract()` and declares none,
+  because `CustAdvanceInvoiceDP` and `VendAdvanceInvoiceDP` each declare their own.
+
+Re-swept after each fix: the four rules above were the last errors on the installation. The
+warnings (41 475) are counted and left alone — they are style rules that shipped code
+legitimately breaks, and the bar was never about them.
 
 ### Added — the eval corpus reaches the artefacts nothing was checking
 

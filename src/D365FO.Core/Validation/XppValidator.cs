@@ -771,6 +771,14 @@ public static class XppValidator
     {
         var lines = code.Split('\n');
 
+        // Functions declared inside this source: `<type> name(args)` followed by a body. X++
+        // allows them inside a method body, and they take precedence over the predefined name
+        // of the same spelling.
+        var localFunctions = new HashSet<string>(
+            Regex.Matches(masked, @"\b[A-Za-z_]\w*\s+([A-Za-z_]\w*)\s*\([^)]*\)\s*\{")
+                .Select(d => d.Groups[1].Value),
+            StringComparer.OrdinalIgnoreCase);
+
         foreach (Match m in Regex.Matches(masked, @"\b([A-Za-z_]\w*)\s*\("))
         {
             var called = m.Groups[1].Value;
@@ -786,6 +794,11 @@ public static class XppValidator
             // `MyClass::year(…)` is that class's own static; only Global:: shares the
             // predefined names.
             if (before.EndsWith("::") && !Regex.IsMatch(before, @"\bGlobal\s*::$")) continue;
+            // A local function declared in this source shadows the predefined name — the
+            // compiler's own message says so ("nor a previously defined local function"). The
+            // platform's BatchRun.runJob declares `void info()` inside the method body and
+            // calls it twice.
+            if (localFunctions.Contains(called)) continue;
             // `new Info()` constructs the class of that name; a predefined function is never
             // reached through new. Shipped code carries seven of these (SysTest,
             // SysPrintArchive, …) and each was reported as info() called with no arguments.
@@ -1102,6 +1115,12 @@ public static class XppValidator
     {
         var extendsMatch = Regex.Match(masked, @"\bextends\s+(SRSReportDataProvider(?:Base|PreProcess(?:TempDB)?))\b", RegexOptions.IgnoreCase);
         if (!extendsMatch.Success) return;
+
+        // An abstract DP is a base for concrete ones, and the contract belongs on those: the
+        // platform's own CustVendAdvanceInvoiceDP reads parmDataContract() and declares none,
+        // because CustAdvanceInvoiceDP and VendAdvanceInvoiceDP each declare their own.
+        if (Regex.IsMatch(masked, @"\babstract\s+(?:final\s+)?class\b", RegexOptions.IgnoreCase)) return;
+
         var isPreProcess = extendsMatch.Groups[1].Value.Contains("PreProcess", StringComparison.OrdinalIgnoreCase);
 
         var parmContract = Regex.Match(masked, @"\bparmDataContract\s*\(", RegexOptions.IgnoreCase);
