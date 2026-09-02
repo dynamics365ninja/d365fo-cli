@@ -176,7 +176,9 @@ public static class ToolCatalog
             "info (all translations of a token like @SYS12345, or one entry by file+language+key) · " +
             "resolve (alias of info) · create (write a key=value; needs file or installTo; " +
             "pass `labels:[{key,value}, …]` for a bulk create with shared top-level fields) · " +
-            "rename (rename a key in place) · delete (remove a key). Values are sanitised unless raw=true.",
+            "update (correct the text of a key that MUST already exist — unlike create, which writes a new entry "
+            + "when the key is absent, so a mistyped key in a correction becomes a second label and reports "
+            + "success) · rename (rename a key in place) · delete (remove a key). Values are sanitised unless raw=true.",
             Schema(("action", "string", true), ("query", "string", false), ("token", "string", false),
                    ("languages", "array", false), ("limit", "integer", false), ("raw", "boolean", false),
                    ("file", "string", false), ("language", "string", false), ("key", "string", false),
@@ -207,6 +209,10 @@ public static class ToolCatalog
                                 Bool(p, "overwrite"),
                                 StrAliasOrNull(p, "installTo", "model"), StrAliasOrNull(p, "lang", "language"),
                                 StrAliasOrNull(p, "labelFile", "labelFileId")),
+                "update" => h.UpdateLabel(StrOrNull(p, "file"), StrAlias(p, "key", "labelId"),
+                            StrAlias(p, "value", "text", "label"),
+                            StrAliasOrNull(p, "installTo", "model"), StrAliasOrNull(p, "lang", "language"),
+                            StrAliasOrNull(p, "labelFile", "labelFileId")),
                 "rename" => h.RenameLabel(Str(p, "file"), Str(p, "oldKey"), Str(p, "newKey"), Bool(p, "overwrite")),
                 "delete" => h.DeleteLabel(Str(p, "file"), Str(p, "key")),
                 _        => h.SearchLabels(Str(p, "query"), StrArray(p, "languages"), Int(p, "limit", 100), Bool(p, "raw")),
@@ -642,16 +648,32 @@ public static class ToolCatalog
             "folder, a PackagesLocalDirectory or one AOT XML file — and report references that resolve to nothing: " +
             "MISSING_DUTY, MISSING_PRIVILEGE, MISSING_EDT, MISSING_LABEL; narrow with `skipLabels`/`skipEdts`/" +
             "`skipSecurity`. This is the only mode that reads the working tree, so it needs a local path). " +
-            "`model` scopes integration/report.",
+            "`model` scopes integration/report.\n"
+            + "Three modes read the X++ corpus rather than the object graph, and each reports what it could "
+            + "actually see in `coverage` — an empty answer from an unread corpus is not the same answer as an "
+            + "empty one from a read corpus, and only one of them means no:\n"
+            + "• patterns (`scenario` in the words the code would use — \"number sequence\", \"posting\") — the "
+            + "APIs that code reaches for, ranked by how many DISTINCT objects use each\n"
+            + "• implementations (`method`) — who else declares it, with the signature each declared; read this "
+            + "before writing an override or a CoC wrapper\n"
+            + "• api-usage (`api`) — how it is really reached: constructed, called statically, declared as a "
+            + "type; says so when an API is never constructed, which means a `new` is the wrong shape",
             Schema(("mode", "string", true), ("object", "string", false), ("model", "string", false),
                    ("path", "string", false), ("skipLabels", "boolean", false),
-                   ("skipEdts", "boolean", false), ("skipSecurity", "boolean", false)),
+                   ("skipEdts", "boolean", false), ("skipSecurity", "boolean", false),
+                   ("scenario", "string", false), ("method", "string", false), ("api", "string", false),
+                   ("limit", "integer", false)),
             (h, p) => StrOr(p, "mode", "integration").ToLowerInvariant() switch
             {
                 "impact" => h.AnalyzeImpact(Str(p, "object")),
                 "report" => h.ReportIntegrations(StrOrNull(p, "model")),
                 "completeness" => h.AnalyzeCompleteness(Str(p, "path"), Bool(p, "skipLabels"),
                                     Bool(p, "skipEdts"), Bool(p, "skipSecurity")),
+                "patterns" => h.AnalyzePatterns(Str(p, "scenario"), StrOrNull(p, "model"), Int(p, "limit", 20)),
+                "implementations" => h.AnalyzeImplementations(StrOr(p, "method", Str(p, "object")),
+                                        StrOrNull(p, "model"), Int(p, "limit", 20)),
+                "api-usage" or "api" => h.AnalyzeApiUsage(StrOr(p, "api", Str(p, "object")),
+                                        StrOrNull(p, "model"), Int(p, "limit", 25)),
                 _        => h.AnalyzeIntegration(StrOrNull(p, "model")),
             }),
 
@@ -705,6 +727,17 @@ public static class ToolCatalog
             "Current row counts of every entity table.",
             Schema(),
             (h, _) => h.IndexStatus()),
+
+        new Descriptor("verify_project",
+            "Do the model on disk and its Visual Studio project agree? Every object XML present, every "
+            + "`.rnrproj` entry pointing at a file that exists. An object the project does not list is NOT "
+            + "compiled — the AOT never sees it and nothing anywhere reports that; a project entry whose file is "
+            + "gone fails the build with a path rather than a reason. Name the `model` or pass a `path` to the "
+            + "inner <Model>/<Model> folder; `expect` (array) answers by name for the objects you believe you "
+            + "just created. A project with no explicit item list is not judged — some project shapes glob, and "
+            + "calling every file unregistered there would be a wall of false findings.",
+            Schema(("model", "string", false), ("path", "string", false), ("expect", "array", false)),
+            (h, p) => h.VerifyProject(StrOrNull(p, "model"), StrOrNull(p, "path"), StrArray(p, "expect"))),
 
         new Descriptor("index_sync",
             "Re-index ONE model after an edit made outside this server — in Visual Studio, by a git pull, by "

@@ -1,4 +1,4 @@
-using D365FO.Core;
+﻿using D365FO.Core;
 using D365FO.Core.Journal;
 using D365FO.Core.Labels;
 using Spectre.Console.Cli;
@@ -95,45 +95,11 @@ public sealed class LabelCreateCommand : Command<LabelCreateCommand.Settings>
                 "--file <PATH> or --install-to <MODEL> is required.",
                 hint: "Use --file for an explicit absolute path, or --install-to <MODEL> to resolve the path automatically from D365FO_CUSTOM_PACKAGES_PATH or D365FO_PACKAGES_PATH."));
 
-        var resolvedFiles = new List<string>();
-        if (hasFile)
-        {
-            resolvedFiles.Add(settings.File!);
-        }
-        else
-        {
-            var cfg = D365FoSettings.FromEnvironment();
-            // Search custom paths first (write target for git repo models), then standard path.
-            var allRoots = cfg.CustomPackagesPaths.Concat(new[] { cfg.PackagesPath });
-            var root = allRoots
-                .FirstOrDefault(r => !string.IsNullOrEmpty(r) && Directory.Exists(Path.Combine(r!, settings.InstallTo!)))
-                ?? cfg.CustomPackagesPaths.FirstOrDefault()
-                ?? cfg.PackagesPath;
-            if (string.IsNullOrEmpty(root))
-                return RenderHelpers.Render(kind, ToolResult<object>.Fail("INSTALL_FAILED",
-                    $"Cannot resolve label file path for model '{settings.InstallTo}': neither D365FO_CUSTOM_PACKAGES_PATH nor D365FO_PACKAGES_PATH is set.",
-                    hint: "Set D365FO_CUSTOM_PACKAGES_PATH to your git repo PackagesLocalDirectory, or use --file with an absolute path."));
-
-            var langs = (string.IsNullOrWhiteSpace(settings.Lang) ? "en-us" : settings.Lang!)
-                .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-            var lf = string.IsNullOrWhiteSpace(settings.LabelFile) ? settings.InstallTo! : settings.LabelFile!;
-            var resourcesDir = System.IO.Path.Combine(root!, settings.InstallTo!, settings.InstallTo!, "AxLabelFile", "LabelResources");
-            foreach (var lang in langs)
-            {
-                var diskLang = ResolveOnDiskCasing(resourcesDir, lang);
-                resolvedFiles.Add(System.IO.Path.Combine(resourcesDir, diskLang, $"{lf}.{diskLang}.label.txt"));
-            }
-        }
-
-        if (!settings.AllowExtensionLabelFile)
-        {
-            var extFile = resolvedFiles.FirstOrDefault(LabelFileWriter.IsExtensionLabelFile);
-            if (extFile is not null)
-                return RenderHelpers.Render(kind, ToolResult<object>.Fail(
-                    "EXTENSION_LABEL_FILE",
-                    $"'{System.IO.Path.GetFileName(extFile)}' is a label file EXTENSION — it only extends a base label file owned by another model. New labels belong in the model's ORIGINAL label file.",
-                    hint: "Target the model's own label file (e.g. --label-file <MODEL>), or pass --allow-extension-label-file to override."));
-        }
+        var targets = LabelTargets.Resolve(
+            settings.File, settings.InstallTo, settings.Lang, settings.LabelFile,
+            settings.AllowExtensionLabelFile);
+        if (targets.Failure is not null) return RenderHelpers.Render(kind, targets.Failure);
+        var resolvedFiles = targets.Files;
 
         if (!batchMode)
         {
@@ -365,5 +331,170 @@ public sealed class LabelDeleteCommand : Command<LabelDeleteCommand.Settings>
         {
             return RenderHelpers.Render(kind, ToolResult<object>.Fail(D365FoErrorCodes.WriteFailed, ex.Message));
         }
+    }
+}
+
+/// <summary>
+/// Where a label write lands: an explicit file, or one file per language under a model.
+/// </summary>
+/// <remarks>
+/// Shared by <c>labels create</c> and <c>labels update</c>. The two differ in what they do to
+/// an entry, not in where they look for it, and a second copy of "which file is this label in"
+/// is a second place for the on-disk locale casing rule to be got wrong.
+/// </remarks>
+internal static class LabelTargets
+{
+    internal sealed record Resolution(IReadOnlyList<string> Files, ToolResult<object>? Failure);
+
+    internal static Resolution Resolve(
+        string? file, string? installTo, string? lang, string? labelFile, bool allowExtensionLabelFile)
+    {
+        var files = new List<string>();
+
+        if (!string.IsNullOrWhiteSpace(file))
+        {
+            files.Add(file!);
+        }
+        else
+        {
+            var cfg = D365FoSettings.FromEnvironment();
+            // Search custom paths first (write target for git repo models), then standard path.
+            var allRoots = cfg.CustomPackagesPaths.Concat(new[] { cfg.PackagesPath });
+            var root = allRoots
+                .FirstOrDefault(r => !string.IsNullOrEmpty(r) && Directory.Exists(Path.Combine(r!, installTo!)))
+                ?? cfg.CustomPackagesPaths.FirstOrDefault()
+                ?? cfg.PackagesPath;
+            if (string.IsNullOrEmpty(root))
+                return new Resolution([], ToolResult<object>.Fail("INSTALL_FAILED",
+                    $"Cannot resolve label file path for model '{installTo}': neither D365FO_CUSTOM_PACKAGES_PATH nor D365FO_PACKAGES_PATH is set.",
+                    hint: "Set D365FO_CUSTOM_PACKAGES_PATH to your git repo PackagesLocalDirectory, or use --file with an absolute path."));
+
+            var langs = (string.IsNullOrWhiteSpace(lang) ? "en-us" : lang!)
+                .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+            var lf = string.IsNullOrWhiteSpace(labelFile) ? installTo! : labelFile!;
+            var resourcesDir = Path.Combine(root!, installTo!, installTo!, "AxLabelFile", "LabelResources");
+            foreach (var l in langs)
+            {
+                var diskLang = LabelCreateCommand.ResolveOnDiskCasing(resourcesDir, l);
+                files.Add(Path.Combine(resourcesDir, diskLang, $"{lf}.{diskLang}.label.txt"));
+            }
+        }
+
+        if (!allowExtensionLabelFile)
+        {
+            var extFile = files.FirstOrDefault(LabelFileWriter.IsExtensionLabelFile);
+            if (extFile is not null)
+                return new Resolution([], ToolResult<object>.Fail(
+                    "EXTENSION_LABEL_FILE",
+                    $"'{Path.GetFileName(extFile)}' is a label file EXTENSION — it only extends a base label file owned by another model. New labels belong in the model's ORIGINAL label file.",
+                    hint: "Target the model's own label file (e.g. --label-file <MODEL>), or pass --allow-extension-label-file to override."));
+        }
+
+        return new Resolution(files, null);
+    }
+}
+
+/// <summary>
+/// <c>d365fo labels update</c> — correct the text of a label that already exists.
+/// </summary>
+/// <remarks>
+/// Distinct from <c>labels create --overwrite</c> on purpose: create writes a new entry when the
+/// key is absent, so a mistyped key in a correction produces a second label instead of fixing the
+/// first — and the caller is told "created", which reads as success. Fixing a typo in a
+/// translation used to mean delete plus create, which loses the entry's position in the file and
+/// its comment block on the way.
+/// </remarks>
+public sealed class LabelUpdateCommand : Command<LabelUpdateCommand.Settings>
+{
+    public sealed class Settings : D365OutputSettings
+    {
+        [CommandArgument(0, "<KEY>")]
+        [System.ComponentModel.Description("Label key to correct. Must already exist — this never creates.")]
+        public string Key { get; init; } = "";
+
+        [CommandArgument(1, "<VALUE>")]
+        [System.ComponentModel.Description("The corrected text.")]
+        public string Value { get; init; } = "";
+
+        [CommandOption("--file <PATH>")]
+        [System.ComponentModel.Description("Target <Name>.<lang>.label.txt file (absolute path). Required unless --install-to is used.")]
+        public string? File { get; init; }
+
+        [CommandOption("--install-to <MODEL>")]
+        [System.ComponentModel.Description("Model name; resolves the label file per language, as `labels create` does.")]
+        public string? InstallTo { get; init; }
+
+        [CommandOption("--lang <LANG>")]
+        [System.ComponentModel.Description("Language code(s), comma-separated (default: en-us). Each is updated independently.")]
+        public string? Lang { get; init; }
+
+        [CommandOption("--label-file <NAME>")]
+        [System.ComponentModel.Description("Label file name (without extension) used with --install-to (default: model name).")]
+        public string? LabelFile { get; init; }
+
+        [CommandOption("--allow-extension-label-file")]
+        [System.ComponentModel.Description("Permit writing into a label file EXTENSION (…_Extension…).")]
+        public bool AllowExtensionLabelFile { get; init; }
+    }
+
+    public override int Execute(CommandContext ctx, Settings settings)
+    {
+        var kind = OutputMode.Resolve(settings.Output);
+
+        if (string.IsNullOrWhiteSpace(settings.Key))
+            return RenderHelpers.Render(kind, ToolResult<object>.Fail(D365FoErrorCodes.BadInput, "Label key required."));
+        if (string.IsNullOrWhiteSpace(settings.File) && string.IsNullOrWhiteSpace(settings.InstallTo))
+            return RenderHelpers.Render(kind, ToolResult<object>.Fail(D365FoErrorCodes.BadInput,
+                "--file <PATH> or --install-to <MODEL> is required."));
+
+        var targets = LabelTargets.Resolve(
+            settings.File, settings.InstallTo, settings.Lang, settings.LabelFile,
+            settings.AllowExtensionLabelFile);
+        if (targets.Failure is not null) return RenderHelpers.Render(kind, targets.Failure);
+
+        var results = new List<object>();
+        var missing = new List<string>();
+        try
+        {
+            foreach (var file in targets.Files)
+            {
+                var res = LabelFileWriter.Update(file, settings.Key, settings.Value);
+                if (res.Outcome == WriteOutcome.KeyMissing)
+                {
+                    missing.Add(file);
+                    continue;
+                }
+                LabelJournalRecorder.RecordCreateOrUpdate(res, "labels update");
+                results.Add(new
+                {
+                    outcome = res.Outcome.ToString(),
+                    file = res.Path,
+                    key = res.Key,
+                    oldValue = res.OldValue,
+                    newValue = res.NewValue,
+                });
+            }
+        }
+        catch (Exception ex)
+        {
+            return RenderHelpers.Render(kind, ToolResult<object>.Fail(D365FoErrorCodes.WriteFailed, ex.Message));
+        }
+
+        // Nothing updated anywhere is a failure, not an empty success: the caller believes a
+        // correction landed.
+        if (results.Count == 0)
+            return RenderHelpers.Render(kind, ToolResult<object>.Fail("KEY_MISSING",
+                $"Label '{settings.Key}' is in none of the target files, so nothing was corrected.",
+                hint: $"Checked: {string.Join(", ", targets.Files)}. Use `labels create` to add it, or "
+                    + "`labels search` to find the key it was actually written under."));
+
+        return RenderHelpers.Render(kind, ToolResult<object>.Success(new
+        {
+            key = settings.Key,
+            updated = results.Count,
+            files = results,
+        }, missing.Count > 0
+            ? [$"{missing.Count} target file(s) do not carry this key and were left alone: {string.Join(", ", missing)}"]
+            : null));
     }
 }

@@ -404,6 +404,21 @@ Runs integration-health checks against the index for a model: OData entities wit
 d365fo analyze integration [--model M] --output json
 ```
 
+### `analyze patterns` · `analyze implementations` · `analyze api-usage`
+
+Three readings of the X++ corpus, for grounding a change in what this installation actually does:
+
+| Command | Answers |
+|---|---|
+| `analyze patterns <SCENARIO>` | Which APIs the code around a scenario reaches for, ranked by how many distinct objects use each. Reads whole method bodies, not just the matching line. |
+| `analyze implementations <METHOD>` | Who else declares this method, with the signature each declared — before writing an override or a CoC wrapper. |
+| `analyze api-usage <API>` | Construction vs. static calls vs. declarations, with the lines that do it. Says so when an API is never constructed. |
+
+Each result carries a `coverage` block. A search over method bodies returns nothing when nothing
+matches — and also when the corpus could not be read at all, which is a different answer.
+`coverage.searched: false` means the second, and the result says so rather than letting an empty
+list read as "unused".
+
 ### `analyze impact`
 
 Change-impact graph for a named object: CoC wrappers, event handlers, object extensions, form datasources, data entities, and queries that reference it.
@@ -565,7 +580,7 @@ Returns `UNSUPPORTED_PLATFORM` on non-Windows.
 
 ## MCP server
 
-Exposes the same index and scaffolding surface as the CLI over the `ModelContextProtocol` C# SDK via stdio (default) or HTTP (`--http`, for a shared team deployment). The tool surface is **consolidated** into **31 discriminator-based tools** (`search`, `get_object_info`, `get_method`, `labels`, `security_info`, `extension_info`, `object_patterns`, `generate_object`, `modify_method`, `modify_object`, `get_knowledge`, `explain_build_error`, `analyze`, `models`, …) instead of one tool per object type — mirroring the upstream `d365fo-mcp-server` (which sits at 26). A single tool dispatches on a `type` / `objectType` / `mode` / `action` / `domain` / `include` field. See [MIGRATION_FROM_MCP.md](MIGRATION_FROM_MCP.md) for the full old→new mapping.
+Exposes the same index and scaffolding surface as the CLI over the `ModelContextProtocol` C# SDK via stdio (default) or HTTP (`--http`, for a shared team deployment). The tool surface is **consolidated** into **32 discriminator-based tools** (`search`, `get_object_info`, `get_method`, `labels`, `security_info`, `extension_info`, `object_patterns`, `generate_object`, `modify_method`, `modify_object`, `get_knowledge`, `explain_build_error`, `analyze`, `models`, …) instead of one tool per object type — mirroring the upstream `d365fo-mcp-server` (which sits at 26). A single tool dispatches on a `type` / `objectType` / `mode` / `action` / `domain` / `include` field. See [MIGRATION_FROM_MCP.md](MIGRATION_FROM_MCP.md) for the full old→new mapping.
 
 ### Keeping the two surfaces the same
 

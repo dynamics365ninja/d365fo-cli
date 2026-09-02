@@ -38,6 +38,61 @@ public sealed partial class MetadataRepository : IReferenceIndex, IPropertyStats
             new { name }) > 0;
     }
 
+    /// <summary>
+    /// Every object in the index that DECLARES a method of this name, with the signature it
+    /// declared — classes and tables alike.
+    /// </summary>
+    /// <remarks>
+    /// The inverse of <see cref="FindMethod"/>, which asks whether one owner has one method.
+    /// "Who else has implemented <c>validateWrite</c>, and with what signature" is the question
+    /// asked before writing an override, and it was not answerable from the index at all.
+    /// </remarks>
+    public IReadOnlyList<MethodDeclaration> FindMethodDeclarations(string methodName, string? model = null, int limit = 20)
+    {
+        if (string.IsNullOrWhiteSpace(methodName)) return Array.Empty<MethodDeclaration>();
+        limit = ClampLimit(limit, 20);
+
+        using var conn = OpenReadOnly();
+
+        // Read through a raw reader rather than Dapper's record materialiser: SQLite columns are
+        // typeless, and for a literal kind on an EMPTY result set Dapper infers byte[] and
+        // refuses to bind the record. It fails only when there are no rows — the case a test on
+        // an empty index hits first and a caller with data never sees. SearchMethodSource
+        // documents the same trap for the FTS columns.
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = @"
+            SELECT c.Name AS Owner, 'class' AS OwnerKind, mo.Name AS Model, m.Signature
+            FROM Methods m
+              JOIN Classes c ON m.ClassId = c.ClassId
+              JOIN Models  mo ON mo.ModelId = c.ModelId
+            WHERE m.Name = $method COLLATE NOCASE
+              AND ($model IS NULL OR mo.Name = $model COLLATE NOCASE)
+            UNION ALL
+            SELECT t.Name AS Owner, 'table' AS OwnerKind, mo.Name AS Model, tm.Signature
+            FROM TableMethods tm
+              JOIN Tables t  ON tm.TableId = t.TableId
+              JOIN Models mo ON mo.ModelId = t.ModelId
+            WHERE tm.Name = $method COLLATE NOCASE
+              AND ($model IS NULL OR mo.Name = $model COLLATE NOCASE)
+            ORDER BY Owner
+            LIMIT $limit";
+        cmd.Parameters.AddWithValue("$method", methodName);
+        cmd.Parameters.AddWithValue("$model", (object?)model ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("$limit", limit);
+
+        using var reader = cmd.ExecuteReader();
+        var rows = new List<MethodDeclaration>();
+        while (reader.Read())
+        {
+            rows.Add(new MethodDeclaration(
+                reader.GetString(0),
+                reader.GetString(1),
+                reader.GetString(2),
+                reader.IsDBNull(3) ? null : reader.GetString(3)));
+        }
+        return rows;
+    }
+
     /// <inheritdoc />
     public MethodLookup? FindMethod(string ownerName, string methodName)
     {

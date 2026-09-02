@@ -19,6 +19,40 @@ was ported from.
 
 ## [Unreleased]
 
+### Added — wave 04: the rest of the surface
+The gap analysis's fourth wave: the MCP tools that had no CLI counterpart, plus the two write
+verbs whose absence forced a workaround.
+
+- **`analyze patterns` / `analyze implementations` / `analyze api-usage`** — learn from the
+  installation rather than from training data. `patterns` takes a scenario in the words the code
+  would use and returns the APIs that code reaches for, ranked by how many DISTINCT objects use
+  each (one verbose class must not make its own habits look like the codebase's); it reads whole
+  method bodies, because the line that mentions "number sequence" is a comment and the
+  `NumberSeqGlobal` call that answers the question is three lines below it. `implementations`
+  answers "who else declares this, and with what signature" — the question before writing an
+  override or a CoC wrapper. `api-usage` separates construction from static calls from
+  declarations, and says so when an API is never constructed, which means a `new` is the wrong
+  shape.
+  All three report **what they could actually read** in `coverage`: a search over method bodies
+  returns nothing when nothing matches, and also when the corpus was unreadable — no source
+  index, no source paths on this machine — and reporting the second as an empty result is how
+  "no callers" comes to mean "unused" for something used everywhere.
+- **`labels update` / `labels (action=update)`** — correct the text of a label that already
+  exists. Distinct from `create --overwrite` on purpose: create writes a new entry when the key
+  is absent, so a mistyped key in a correction produces a *second* label and reports success.
+  Correcting a typo used to mean delete plus create, which loses the entry's position in the file
+  and the comment block attached to it.
+- **`verify` / `verify_project`** — do the model on disk and its `.rnrproj` agree? An object the
+  project does not list is never compiled: the AOT does not see it and nothing anywhere reports
+  that. A project entry whose file is gone fails the build with a path rather than a reason.
+  A project with no explicit item list is not judged, because some project shapes glob and
+  calling every file unregistered there would be a wall of false findings.
+- `MetadataRepository.FindMethodDeclarations` — the inverse of `FindMethod`: every object that
+  declares a method of this name. Read through a raw reader, because for a literal column on an
+  EMPTY result set Dapper infers `byte[]` and refuses to materialise the record — the same trap
+  `SearchMethodSource` documents for the FTS columns, and one that fails only when there are no
+  rows.
+
 ### Fixed — the CLI and the MCP server had drifted apart
 - **`modify_object` reached four of the engine's twenty operations, and mis-applied the rest.**
   An unknown `action` fell back to `SetProperty`, so `action="add-index"` did not fail — it set a

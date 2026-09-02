@@ -50,6 +50,35 @@ public static class LabelFileWriter
     }
 
     /// <summary>
+    /// Replace the text of an entry that must ALREADY exist.
+    /// </summary>
+    /// <remarks>
+    /// Not <see cref="CreateOrUpdate"/> with <c>overwrite</c>: that writes a new entry when the
+    /// key is absent, which turns a mistyped key in a correction into a second label rather than
+    /// a fix. Correcting a translation and creating one are different intents, and only one of
+    /// them should be able to invent a key.
+    /// </remarks>
+    public static WriteResult Update(string path, string key, string value)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(path);
+        ArgumentException.ThrowIfNullOrWhiteSpace(key);
+        if (key.Contains('=')) throw new ArgumentException("Label keys must not contain '='.", nameof(key));
+
+        if (!File.Exists(path))
+            return new WriteResult(path, WriteOutcome.KeyMissing, key, null, null);
+
+        var lines = File.ReadAllLines(path).ToList();
+        var existing = FindKey(lines, key);
+        if (existing.lineIdx < 0)
+            return new WriteResult(path, WriteOutcome.KeyMissing, key, null, null);
+
+        var prev = existing.existingValue;
+        lines[existing.lineIdx] = key + "=" + Sanitise(value);
+        AtomicWrite(path, lines);
+        return new WriteResult(path, WriteOutcome.Updated, key, prev, value);
+    }
+
+    /// <summary>
     /// Insert a new entry at its case-insensitive ORDINAL position among the
     /// existing key lines (upstream parity: culture-aware sorts put e.g.
     /// "Item_2" before "Item10" differently per OS locale, producing noisy
