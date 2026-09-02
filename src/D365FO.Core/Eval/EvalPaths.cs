@@ -30,6 +30,13 @@ public static class EvalPaths
     public static string GoldensDir(string repoRoot) => Path.Combine(repoRoot, "eval", "goldens");
     public static string CorpusRunsDir(string repoRoot) => Path.Combine(repoRoot, "eval", "corpus", "runs");
 
+    /// <summary>
+    /// Artefacts a case starts FROM rather than produces: the existing AxTable a
+    /// <c>--apply-to</c> command merges into. Copied into the replay's work directory, never
+    /// mutated in place.
+    /// </summary>
+    public static string SeedsDir(string repoRoot) => Path.Combine(repoRoot, "eval", "seeds");
+
     /// <summary>The checked-in mini-AOT fixture also used by MiniAotEndToEndTests / GoldenQualityGateTests.</summary>
     public static string FixtureDir(string repoRoot) => Path.Combine(repoRoot, "tests", "Samples", "MiniAot");
 

@@ -1,0 +1,26 @@
+{
+  "id": "L2-query-extension",
+  "title": "AxQuerySimpleExtension over an existing query",
+  "tier": 2,
+  "instruction": "Extend the FmVehicleQuery query with a range this model needs, without over-layering it. Scaffold the query extension with the ConFleet suffix. Note that a query extension's root element and AOT folder are both AxQuerySimpleExtension — there is no AxQueryExtension type. Use only the d365fo CLI — do not hand-write the XML.",
+  "canonical_args": [
+    "generate",
+    "extension",
+    "Query",
+    "FmVehicleQuery",
+    "--suffix",
+    "ConFleet"
+  ],
+  "target_artifact_types": [
+    "AxQuerySimpleExtension"
+  ],
+  "golden_path": "L2-query-extension",
+  "tags": [
+    "extension",
+    "query",
+    "metadata"
+  ],
+  "ignore": [],
+  "requires_fixture_index": true,
+  "golden_pending": false
+}

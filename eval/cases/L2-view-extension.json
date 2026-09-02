@@ -1,0 +1,26 @@
+{
+  "id": "L2-view-extension",
+  "title": "AxViewExtension over a shipped view",
+  "tier": 2,
+  "instruction": "The standard CustAccountName view has to carry an extra field for this model without being over-layered. Scaffold the view extension for it with the ConFleet suffix. Confirm what already extends it with `d365fo find extensions CustAccountName` before scaffolding, so a second extension with the same suffix is not created. Use only the d365fo CLI — do not hand-write the XML.",
+  "canonical_args": [
+    "generate",
+    "extension",
+    "View",
+    "CustAccountName",
+    "--suffix",
+    "ConFleet"
+  ],
+  "target_artifact_types": [
+    "AxViewExtension"
+  ],
+  "golden_path": "L2-view-extension",
+  "tags": [
+    "extension",
+    "view",
+    "metadata"
+  ],
+  "ignore": [],
+  "requires_fixture_index": false,
+  "golden_pending": false
+}

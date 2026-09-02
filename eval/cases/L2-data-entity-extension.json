@@ -1,0 +1,26 @@
+{
+  "id": "L2-data-entity-extension",
+  "title": "AxDataEntityViewExtension over a shipped data entity",
+  "tier": 2,
+  "instruction": "A field this model added to the customer master has to be exposed through the standard CustCustomerV3Entity data entity, which must not be over-layered. Scaffold the data entity extension with the ConFleet suffix. Use only the d365fo CLI — do not hand-write the XML.",
+  "canonical_args": [
+    "generate",
+    "extension",
+    "DataEntityView",
+    "CustCustomerV3Entity",
+    "--suffix",
+    "ConFleet"
+  ],
+  "target_artifact_types": [
+    "AxDataEntityViewExtension"
+  ],
+  "golden_path": "L2-data-entity-extension",
+  "tags": [
+    "extension",
+    "data-entity",
+    "metadata"
+  ],
+  "ignore": [],
+  "requires_fixture_index": false,
+  "golden_pending": false
+}

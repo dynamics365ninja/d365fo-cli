@@ -118,12 +118,15 @@ public class MiniAotEndToEndTests : IDisposable
     public void Repository_counts_match_fixture()
     {
         var counts = _repo.CountAll();
-        // FmVehicle (3 fields) + FmVehicleLine (3 fields). The second table exists
-        // so eval cases can exercise header/lines and join-shaped generators
-        // (query --join, form --pattern DetailsTransaction) against a real
-        // relation instead of a phantom target.
-        Assert.Equal(2, counts.Tables);
-        Assert.Equal(6, counts.Fields);
+        // FmVehicle (3 fields) + FmVehicleLine (3 fields) + FmServiceOrder (3 fields).
+        // The second table exists so eval cases can exercise header/lines and join-shaped
+        // generators (query --join, form --pattern DetailsTransaction) against a real
+        // relation instead of a phantom target. The third exists for the two table-augmenting
+        // generators: it carries an un-migrated EDT reference (the VIN EDT declares
+        // ReferenceTable) and its own alternate key, which is what `generate table-relation`
+        // and `generate find-methods` respectively derive from.
+        Assert.Equal(3, counts.Tables);
+        Assert.Equal(9, counts.Fields);
         Assert.Equal(1, counts.Classes);
     }
 
@@ -143,11 +146,16 @@ public class MiniAotEndToEndTests : IDisposable
         var ex = new MetadataExtractor();
         var batch = ex.ExtractAll(SamplesDir).Single();
 
-        var edt = Assert.Single(batch.Edts);
-        Assert.Equal("VinEdt", edt.Name);
+        var edt = Assert.Single(batch.Edts, e => e.Name == "VinEdt");
         Assert.Equal(
             edt.Name,
             batch.Tables.Single(t => t.Name == "FmVehicle").Fields.Single(f => f.Name == "VIN").EdtName);
+
+        // The second EDT is the one that carries a reference. `generate table-relation` reads
+        // exactly this to derive the relation D365FO requires in its place, so the extractor
+        // has to bring ReferenceTable across — an EDT indexed without it looks migrated.
+        var referencing = Assert.Single(batch.Edts, e => e.Name == "VIN");
+        Assert.Equal("FmVehicle", referencing.ReferenceTable);
 
         var @enum = Assert.Single(batch.Enums);
         Assert.Equal("FmVehicleStatus", @enum.Name);
@@ -243,8 +251,8 @@ public class MiniAotEndToEndTests : IDisposable
             _repo.ApplyExtract(b);
 
         var counts = _repo.CountAll();
-        Assert.Equal(2, counts.Tables);
-        Assert.Equal(6, counts.Fields);
+        Assert.Equal(3, counts.Tables);
+        Assert.Equal(9, counts.Fields);
         Assert.Equal(1, counts.Classes);
     }
 }

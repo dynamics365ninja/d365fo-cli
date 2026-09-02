@@ -99,6 +99,49 @@ d365fo generate extension Edt CustAccount --suffix Fleet --install-to FleetManag
 d365fo generate extension Enum NoYes --suffix Fleet --install-to FleetManagement
 ```
 
+Five more kinds take the same two positional arguments:
+
+```sh
+# Project an extra column through a standard view
+d365fo generate extension View CustAccountName --suffix Fleet --install-to FleetManagement
+
+# Add a range or data source to a standard query
+d365fo generate extension Query AccountingSourceExplorerQuery --suffix Fleet --install-to FleetManagement
+
+# Expose a model's field through a shipped data entity
+d365fo generate extension DataEntityView CustCustomerV3Entity --suffix Fleet --install-to FleetManagement
+
+# Add a privilege to a Microsoft duty / a duty to a Microsoft role
+d365fo generate extension SecurityDuty MaintainFA_RU --suffix Fleet --install-to FleetManagement
+d365fo generate extension SecurityRole BudgetBudgetClerk --suffix Fleet --install-to FleetManagement
+```
+
+## What lands on disk
+
+Recognise the root element before editing an extension by hand — the AOT folder
+and the root element always agree, and the file name is `<Target>.<Suffix>.xml`:
+
+| Kind | Root element / AOT folder |
+|---|---|
+| `Table` | `AxTableExtension` |
+| `Form` | `AxFormExtension` |
+| `Edt` | `AxEdtExtension` |
+| `Enum` | `AxEnumExtension` |
+| `View` | `AxViewExtension` |
+| `Query` | `AxQuerySimpleExtension` |
+| `DataEntityView` | `AxDataEntityViewExtension` |
+| `SecurityDuty` | `AxSecurityDutyExtension` |
+| `SecurityRole` | `AxSecurityRoleExtension` |
+
+`AxQuerySimpleExtension` is the one to watch: the folder, the root element and
+the metadata provider collection are all `QuerySimpleExtension(s)`. There is no
+`AxQueryExtension` type in the platform at all, so an extension written under
+that name resolves to nothing.
+
+There is no Map extension kind. `AxMapExtension` is a folder every model ships
+and no standard model has a file in — extend the tables the map is mapped onto
+instead.
+
 `generate extension` takes exactly two positional arguments (`<KIND> <TARGET>`);
 the suffix is a named `--suffix <SUFFIX>` option, not a third positional
 argument — passing it positionally fails with "Could not match '<value>' with

@@ -1,0 +1,137 @@
+<?xml version="1.0" encoding="utf-8"?>
+<AxForm xmlns:i="http://www.w3.org/2001/XMLSchema-instance" xmlns="Microsoft.Dynamics.AX.Metadata.V6">
+  <Name>ConFmVehicleSimpleList</Name>
+  <SourceCode>
+    <Methods xmlns="">
+      <Method>
+        <Name>classDeclaration</Name>
+        <Source><![CDATA[
+[Form]
+public class ConFmVehicleSimpleList extends FormRun
+{
+}
+
+]]></Source>
+      </Method>
+    </Methods>
+    <DataSources xmlns="" />
+    <DataControls xmlns="" />
+    <Members xmlns="" />
+  </SourceCode>
+  <DataSources>
+    <AxFormDataSource xmlns="">
+      <Name>FmVehicle</Name>
+      <Table>FmVehicle</Table>
+      <Fields />
+      <ReferencedDataSources />
+      <InsertIfEmpty>No</InsertIfEmpty>
+      <DataSourceLinks />
+      <DerivedDataSources />
+    </AxFormDataSource>
+  </DataSources>
+  <Design>
+    <!--
+      Layout properties the AOT pattern registry requires on a SimpleList design.
+      They are not decoration: the AOS validates them and the repairer would
+      otherwise rewrite every generated form. In contract order — ArrangeMethod
+      before Caption, Columns/ColumnsMode before DataSource.
+    -->
+    <ArrangeMethod xmlns="">Vertical</ArrangeMethod>
+    <Caption xmlns="">@Fleet:Vehicle</Caption>
+    <Columns xmlns="">1</Columns>
+    <ColumnsMode xmlns="">Fixed</ColumnsMode>
+    <DataSource xmlns="">FmVehicle</DataSource>
+    <HideIfEmpty xmlns="">No</HideIfEmpty>
+    <Pattern xmlns="">SimpleList</Pattern>
+    <PatternVersion xmlns="">1.1</PatternVersion>
+    <Style xmlns="">SimpleList</Style>
+    <TitleDataSource xmlns="">FmVehicle</TitleDataSource>
+    <Controls xmlns="">
+      <AxFormControl xmlns="" i:type="AxFormActionPaneControl">
+        <Name>ActionPane</Name>
+        <ElementPosition>134217727</ElementPosition>
+        <FilterExpression>%1</FilterExpression>
+        <!-- Registry part 'ApplicationBar': the sizing and style it requires. -->
+        <Height>-1</Height>
+        <HeightMode>SizeToContent</HeightMode>
+        <Type>ActionPane</Type>
+        <VerticalSpacing>-1</VerticalSpacing>
+        <Width>-1</Width>
+        <WidthMode>SizeToAvailable</WidthMode>
+        <FormControlExtension i:nil="true" />
+        <Controls>
+          <AxFormControl xmlns="" i:type="AxFormButtonGroupControl">
+            <Name>ButtonGroup</Name>
+            <Type>ButtonGroup</Type>
+            <FormControlExtension i:nil="true" />
+            <Controls />
+            <ArrangeMethod>Vertical</ArrangeMethod>
+          </AxFormControl>
+        </Controls>
+        <AlignChild>No</AlignChild>
+        <AlignChildren>No</AlignChildren>
+        <ArrangeMethod>Vertical</ArrangeMethod>
+        <Style>Standard</Style>
+      </AxFormControl>
+      <AxFormControl xmlns="" i:type="AxFormGroupControl">
+        <Name>CustomFilterGroup</Name>
+        <Pattern>CustomAndQuickFilters</Pattern>
+        <PatternVersion>1.1</PatternVersion>
+        <Type>Group</Type>
+        <WidthMode>SizeToAvailable</WidthMode>
+        <FormControlExtension i:nil="true" />
+        <Controls>
+          <AxFormControl>
+            <Name>QuickFilterControl</Name>
+            <FormControlExtension>
+              <Name>QuickFilterControl</Name>
+              <ExtensionComponents />
+              <ExtensionProperties>
+                <AxFormControlExtensionProperty>
+                  <Name>targetControlName</Name>
+                  <Type>String</Type>
+                  <Value>Grid</Value>
+                </AxFormControlExtensionProperty>
+                <AxFormControlExtensionProperty>
+                  <Name>defaultColumnName</Name>
+                  <Type>String</Type>
+                  <Value>Grid_FmVehicle</Value>
+                </AxFormControlExtensionProperty>
+                <AxFormControlExtensionProperty>
+                  <Name>placeholderText</Name>
+                  <Type>String</Type>
+                </AxFormControlExtensionProperty>
+              </ExtensionProperties>
+            </FormControlExtension>
+          </AxFormControl>
+        </Controls>
+        <ArrangeMethod>HorizontalLeft</ArrangeMethod>
+        <FrameType>None</FrameType>
+        <Style>CustomFilter</Style>
+        <ViewEditMode>Edit</ViewEditMode>
+      </AxFormControl>
+      <AxFormControl xmlns="" i:type="AxFormGridControl">
+        <Name>Grid</Name>
+        <ElementPosition>1431655764</ElementPosition>
+        <FilterExpression>%1</FilterExpression>
+        <!-- Registry part 'SimpleListGrid'. -->
+        <Height>-1</Height>
+        <HeightMode>SizeToAvailable</HeightMode>
+        <Type>Grid</Type>
+        <VerticalSpacing>-1</VerticalSpacing>
+        <Width>-1</Width>
+        <WidthMode>SizeToAvailable</WidthMode>
+        <FormControlExtension i:nil="true" />
+        <Controls>
+        </Controls>
+        <AlternateRowShading>No</AlternateRowShading>
+        <DataGroup>Overview</DataGroup>
+        <DataSource>FmVehicle</DataSource>
+        <MultiSelect>No</MultiSelect>
+        <ShowRowLabels>No</ShowRowLabels>
+        <Style>Tabular</Style>
+      </AxFormControl>
+    </Controls>
+  </Design>
+  <Parts />
+</AxForm>

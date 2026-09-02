@@ -1,0 +1,24 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<AxClass>
+  <Name>ConFmVehicleReportController</Name>
+  <SourceCode>
+    <Declaration><![CDATA[public class ConFmVehicleReportController extends SrsReportRunController
+{
+}
+]]></Declaration>
+    <Methods>
+      <Method>
+        <Name>main</Name>
+        <Source><![CDATA[public static void main(Args _args)
+{
+    ConFmVehicleReportController controller = new ConFmVehicleReportController();
+
+    controller.parmReportName(ssrsReportStr(ConFmVehicleReport, AutoDesign));
+    controller.parmArgs(_args);
+    controller.startOperation();
+}
+]]></Source>
+      </Method>
+    </Methods>
+  </SourceCode>
+</AxClass>

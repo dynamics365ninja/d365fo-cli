@@ -1,0 +1,57 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<AxClass>
+  <Name>ConFmVehicleParamReportDP</Name>
+  <SourceCode>
+    <Declaration><![CDATA[[SRSReportParameterAttribute(classStr(ConFmVehicleParamReportDPContract))]
+class ConFmVehicleParamReportDP extends SrsReportDataProviderBase
+{
+    ConFmVehicleParamReportDPTmp conFmVehicleParamReportDPTmp;
+    ConFmVehicleSummaryDPTmp conFmVehicleSummaryDPTmp;
+}
+]]></Declaration>
+    <Methods>
+      <Method>
+        <Name>getConFmVehicleParamReportDPTmp</Name>
+        <Source><![CDATA[[SRSReportDataSet("ConFmVehicleParamReportDS")]
+public ConFmVehicleParamReportDPTmp getConFmVehicleParamReportDPTmp()
+{
+    select conFmVehicleParamReportDPTmp;
+    return conFmVehicleParamReportDPTmp;
+}
+]]></Source>
+      </Method>
+      <Method>
+        <Name>getConFmVehicleSummaryDPTmp</Name>
+        <Source><![CDATA[[SRSReportDataSet("ConFmVehicleSummaryDS")]
+public ConFmVehicleSummaryDPTmp getConFmVehicleSummaryDPTmp()
+{
+    select conFmVehicleSummaryDPTmp;
+    return conFmVehicleSummaryDPTmp;
+}
+]]></Source>
+      </Method>
+      <Method>
+        <Name>processReport</Name>
+        <Source><![CDATA[public void processReport()
+{
+
+    ConFmVehicleParamReportDPContract contract = this.parmDataContract() as ConFmVehicleParamReportDPContract;
+    QueryRun qr = new QueryRun(this.parmQuery());
+
+    ttsbegin;
+    while (qr.next())
+    {
+        // Retrieve the primary source buffer:
+        // MyTable src = qr.get(tableNum(MyTable));
+
+        // Populate the staging table and insert:
+        // conFmVehicleParamReportDPTmp.Field1 = src.Field1;
+        // conFmVehicleParamReportDPTmp.insert();
+    }
+    ttscommit;
+}
+]]></Source>
+      </Method>
+    </Methods>
+  </SourceCode>
+</AxClass>

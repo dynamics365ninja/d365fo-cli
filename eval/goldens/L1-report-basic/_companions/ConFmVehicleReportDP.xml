@@ -1,0 +1,44 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<AxClass>
+  <Name>ConFmVehicleReportDP</Name>
+  <SourceCode>
+    <Declaration><![CDATA[class ConFmVehicleReportDP extends SrsReportDataProviderBase
+{
+    ConFmVehicleReportDPTmp conFmVehicleReportDPTmp;
+}
+]]></Declaration>
+    <Methods>
+      <Method>
+        <Name>getConFmVehicleReportDPTmp</Name>
+        <Source><![CDATA[[SRSReportDataSet("ConFmVehicleReportDS")]
+public ConFmVehicleReportDPTmp getConFmVehicleReportDPTmp()
+{
+    select conFmVehicleReportDPTmp;
+    return conFmVehicleReportDPTmp;
+}
+]]></Source>
+      </Method>
+      <Method>
+        <Name>processReport</Name>
+        <Source><![CDATA[public void processReport()
+{
+
+    QueryRun qr = new QueryRun(this.parmQuery());
+
+    ttsbegin;
+    while (qr.next())
+    {
+        // Retrieve the primary source buffer:
+        // MyTable src = qr.get(tableNum(MyTable));
+
+        // Populate the staging table and insert:
+        // conFmVehicleReportDPTmp.Field1 = src.Field1;
+        // conFmVehicleReportDPTmp.insert();
+    }
+    ttscommit;
+}
+]]></Source>
+      </Method>
+    </Methods>
+  </SourceCode>
+</AxClass>

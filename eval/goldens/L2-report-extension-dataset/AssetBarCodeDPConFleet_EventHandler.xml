@@ -1,0 +1,56 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<AxClass>
+  <Name>AssetBarCodeDPConFleet_EventHandler</Name>
+  <SourceCode>
+    <Declaration><![CDATA[/// <summary>
+/// Fills the column(s) this model added to <c>AssetBarCodeTmp</c>, after <c>AssetBarCodeDP</c>
+/// has finished building its rows.
+/// </summary>
+public final class AssetBarCodeDPConFleet_EventHandler
+{
+}
+]]></Declaration>
+    <Methods>
+      <Method>
+        <Name>AssetBarCodeDP_Post_processReport</Name>
+        <Source><![CDATA[/// <summary>
+/// Runs after AssetBarCodeDP has populated its dataset.
+/// </summary>
+/// <remarks>
+/// The parameter type is fixed: anything but XppPrePostArgs is a COMPILE error
+/// ("cannot be used as an event handler ... because the parameter profile does
+/// not match"). getThis() is typed Object, so the provider is downcast before
+/// use, and the temp table instance is SHARED through linkPhysicalTableInstance —
+/// a buffer merely declared here would be a different, empty table, and this
+/// handler would appear to work while updating nothing.
+/// </remarks>
+[PostHandlerFor(classStr(AssetBarCodeDP), methodStr(AssetBarCodeDP, processReport))]
+public static void AssetBarCodeDP_Post_processReport(XppPrePostArgs _args)
+{
+    AssetBarCodeDP dataProvider = _args.getThis() as AssetBarCodeDP;
+    AssetBarCodeTmp providerRows;
+    AssetBarCodeTmp tmpUpdate;
+
+    if (!dataProvider)
+    {
+        return;
+    }
+
+    providerRows = dataProvider.geAssetBarCodeTmp();
+    tmpUpdate.linkPhysicalTableInstance(providerRows);
+
+    ttsbegin;
+
+    while select forupdate tmpUpdate
+    {
+        // TODO: set the field(s) your table extension added to AssetBarCodeTmp.
+        tmpUpdate.update();
+    }
+
+    ttscommit;
+}
+]]></Source>
+      </Method>
+    </Methods>
+  </SourceCode>
+</AxClass>

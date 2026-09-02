@@ -1,4 +1,4 @@
-<AxTable>
+<AxTable xmlns:i="http://www.w3.org/2001/XMLSchema-instance">
   <Name>FmVehicle</Name>
   <Label>@Fleet:Vehicle</Label>
   <!--
@@ -62,17 +62,17 @@
     </AxTableFieldGroup>
   </FieldGroups>
   <Fields>
-    <AxTableField xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:type="AxTableFieldString">
+    <AxTableField i:type="AxTableFieldString">
       <Name>VIN</Name>
       <ExtendedDataType>VinEdt</ExtendedDataType>
       <Mandatory>Yes</Mandatory>
       <StringSize>17</StringSize>
     </AxTableField>
-    <AxTableField xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:type="AxTableFieldString">
+    <AxTableField i:type="AxTableFieldString">
       <Name>Make</Name>
       <ExtendedDataType>Name</ExtendedDataType>
     </AxTableField>
-    <AxTableField xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:type="AxTableFieldInt">
+    <AxTableField i:type="AxTableFieldInt">
       <Name>Year</Name>
     </AxTableField>
   </Fields>

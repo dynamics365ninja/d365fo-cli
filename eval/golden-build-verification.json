@@ -1,12 +1,12 @@
 {
-  "capturedUtc": "2026-08-31T19:54:06.5940508+00:00",
+  "capturedUtc": "2026-09-02T06:22:09.6575032+00:00",
   "host": "D365ASLDEV2-1",
   "packagesRoot": "K:\\AosService\\PackagesLocalDirectory",
   "compiler": "K:\\AosService\\PackagesLocalDirectory\\Bin\\xppc.exe",
-  "compilerArgs": "-metadata=C:\\Users\\Admin7e00859cee\\AppData\\Local\\Temp\\2\\d365fo-l3-39cc692c101e4d1ba6b900d6996e43e5 -modelmodule=D365FoCliEvalGoldens -output=C:\\Users\\Admin7e00859cee\\AppData\\Local\\Temp\\2\\d365fo-l3-39cc692c101e4d1ba6b900d6996e43e5\\bin -referencefolder=K:\\AosService\\PackagesLocalDirectory -refPath=C:\\Users\\Admin7e00859cee\\AppData\\Local\\Temp\\2\\d365fo-l3-39cc692c101e4d1ba6b900d6996e43e5\\bin -log=C:\\Users\\Admin7e00859cee\\AppData\\Local\\Temp\\2\\d365fo-l3-39cc692c101e4d1ba6b900d6996e43e5\\Dynamics.AX.D365FoCliEvalGoldens.xppc.log",
+  "compilerArgs": "-metadata=C:\\Users\\Admin7e00859cee\\AppData\\Local\\Temp\\2\\d365fo-l3-47c7a7f066514250a1b5fff46193659e -modelmodule=D365FoCliEvalGoldens -output=C:\\Users\\Admin7e00859cee\\AppData\\Local\\Temp\\2\\d365fo-l3-47c7a7f066514250a1b5fff46193659e\\bin -referencefolder=K:\\AosService\\PackagesLocalDirectory -refPath=C:\\Users\\Admin7e00859cee\\AppData\\Local\\Temp\\2\\d365fo-l3-47c7a7f066514250a1b5fff46193659e\\bin -log=C:\\Users\\Admin7e00859cee\\AppData\\Local\\Temp\\2\\d365fo-l3-47c7a7f066514250a1b5fff46193659e\\Dynamics.AX.D365FoCliEvalGoldens.xppc.log",
   "modelName": "D365FoCliEvalGoldens",
-  "total": 52,
-  "clean": 52,
+  "total": 60,
+  "clean": 60,
   "failed": 0,
   "skipped": 0,
   "cases": [
@@ -259,6 +259,14 @@
       "messages": []
     },
     {
+      "caseId": "L1-simple-list-alias",
+      "verdict": "clean",
+      "errors": 0,
+      "warnings": 0,
+      "ruleIds": [],
+      "messages": []
+    },
+    {
       "caseId": "L1-sysoperation-basic",
       "verdict": "clean",
       "errors": 0,
@@ -307,6 +315,14 @@
       "messages": []
     },
     {
+      "caseId": "L1-workflow-approval-task",
+      "verdict": "clean",
+      "errors": 0,
+      "warnings": 13,
+      "ruleIds": [],
+      "messages": []
+    },
+    {
       "caseId": "L1-workflow-basic",
       "verdict": "clean",
       "errors": 0,
@@ -324,6 +340,14 @@
     },
     {
       "caseId": "L2-control-method-basic",
+      "verdict": "clean",
+      "errors": 0,
+      "warnings": 0,
+      "ruleIds": [],
+      "messages": []
+    },
+    {
+      "caseId": "L2-data-entity-extension",
       "verdict": "clean",
       "errors": 0,
       "warnings": 0,
@@ -363,6 +387,14 @@
       "messages": []
     },
     {
+      "caseId": "L2-find-methods-basic",
+      "verdict": "clean",
+      "errors": 0,
+      "warnings": 0,
+      "ruleIds": [],
+      "messages": []
+    },
+    {
       "caseId": "L2-form-clone-basic",
       "verdict": "clean",
       "errors": 0,
@@ -380,6 +412,22 @@
     },
     {
       "caseId": "L2-numberseq-basic",
+      "verdict": "clean",
+      "errors": 0,
+      "warnings": 0,
+      "ruleIds": [],
+      "messages": []
+    },
+    {
+      "caseId": "L2-query-extension",
+      "verdict": "clean",
+      "errors": 0,
+      "warnings": 0,
+      "ruleIds": [],
+      "messages": []
+    },
+    {
+      "caseId": "L2-report-extension-dataset",
       "verdict": "clean",
       "errors": 0,
       "warnings": 0,
@@ -412,6 +460,22 @@
     },
     {
       "caseId": "L2-table-extension",
+      "verdict": "clean",
+      "errors": 0,
+      "warnings": 0,
+      "ruleIds": [],
+      "messages": []
+    },
+    {
+      "caseId": "L2-table-relation-migrated",
+      "verdict": "clean",
+      "errors": 0,
+      "warnings": 0,
+      "ruleIds": [],
+      "messages": []
+    },
+    {
+      "caseId": "L2-view-extension",
       "verdict": "clean",
       "errors": 0,
       "warnings": 0,

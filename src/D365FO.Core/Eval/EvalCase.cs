@@ -15,4 +15,5 @@ public sealed record EvalCase(
     IReadOnlyList<string> Tags,
     IReadOnlyList<string> Ignore,
     bool RequiresFixtureIndex,
-    bool GoldenPending);
+    bool GoldenPending,
+    string? ApplyToSeed = null);

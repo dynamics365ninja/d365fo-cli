@@ -1,6 +1,6 @@
 {
-  "capturedAt": "2026-09-01T16:08:15.2062917Z",
-  "indexedAt": "2026-09-01T15:30:37.8522496Z",
+  "capturedAt": "2026-09-02T05:49:11.2566625Z",
+  "indexedAt": "2026-09-01T17:31:30.2827165Z",
   "ok": [
     "analytics-and-er|static-call|ERModelDefinitionInputParametersAction::addParameter",
     "analytics-and-er|static-call|ERObjectsFactory::createFormatMappingRunByFormatMappingId",
@@ -201,6 +201,7 @@
     "x\u002B\u002B-class-authoring|attribute|SysOperationContractProcessingAttribute",
     "x\u002B\u002B-class-authoring|declaration|NumberSeq",
     "x\u002B\u002B-class-authoring|extends|NumberSeqApplicationModule",
+    "x\u002B\u002B-class-authoring|extends|RunBaseBatch",
     "x\u002B\u002B-class-authoring|intrinsic|NumberSeqModuleCustomer",
     "x\u002B\u002B-class-authoring|static-call|CustParameters::numRefCustAccount",
     "x\u002B\u002B-class-authoring|static-call|NumberSeq::newGetNum",

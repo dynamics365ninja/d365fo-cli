@@ -1,0 +1,24 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<AxClass>
+  <Name>ConFmVehicleParamReportDPContract</Name>
+  <SourceCode>
+    <Declaration><![CDATA[[DataContractAttribute]
+public class ConFmVehicleParamReportDPContract
+{
+    utcDateTime fromDate;
+}
+]]></Declaration>
+    <Methods>
+      <Method>
+        <Name>parmFromDate</Name>
+        <Source><![CDATA[[DataMemberAttribute('FromDate')]
+public utcDateTime parmFromDate(utcDateTime _fromDate = fromDate)
+{
+    fromDate = _fromDate;
+    return fromDate;
+}
+]]></Source>
+      </Method>
+    </Methods>
+  </SourceCode>
+</AxClass>

@@ -14,7 +14,7 @@ public class EvalCaseCatalogTests
         var (cases, errors) = EvalCaseCatalog.LoadAll(EvalPaths.CasesDir(RepoRoot));
 
         Assert.Empty(errors);
-        Assert.Equal(52, cases.Count);
+        Assert.Equal(60, cases.Count);
         Assert.Contains(cases, c => c.Id == "L0-edt-basic");
         Assert.Contains(cases, c => c.Id == "L0-enum-basic");
         Assert.Contains(cases, c => c.Id == "L1-table-basic");
@@ -50,7 +50,7 @@ public class EvalCaseCatalogTests
     public void Only_cases_grounded_against_the_FmVehicle_fixture_require_the_fixture_index()
     {
         var (cases, _) = EvalCaseCatalog.LoadAll(EvalPaths.CasesDir(RepoRoot));
-        string[] fixtureObjects = { "FmVehicleService", "FmVehicleLine", "FmVehicle" };
+        string[] fixtureObjects = { "FmVehicleService", "FmVehicleLine", "FmServiceOrder", "FmVehicle" };
 
         foreach (var c in cases.Where(c => c.RequiresFixtureIndex))
         {
@@ -76,6 +76,11 @@ public class EvalCaseCatalogTests
     [InlineData("tier-mismatch.json", "{\"id\":\"L1-x\",\"title\":\"x\",\"tier\":2,\"instruction\":\"x\",\"target_artifact_types\":[\"AxEdt\"],\"golden_path\":\"x\"}", "does not match id prefix")]
     [InlineData("missing-title.json", "{\"id\":\"L1-x\",\"tier\":1,\"instruction\":\"x\",\"target_artifact_types\":[\"AxEdt\"],\"golden_path\":\"x\"}", "'title' is required")]
     [InlineData("missing-types.json", "{\"id\":\"L1-x\",\"title\":\"x\",\"tier\":1,\"instruction\":\"x\",\"target_artifact_types\":[],\"golden_path\":\"x\"}", "'target_artifact_types' must be non-empty")]
+    // `eval run` appends the output options itself. A case carrying one would either fight it
+    // or, on --install-to, write into a real model from a replay.
+    [InlineData("owns-the-output.json", "{\"id\":\"L1-x\",\"title\":\"x\",\"tier\":1,\"instruction\":\"x\",\"canonical_args\":[\"generate\",\"edt\",\"X\",\"--out\",\"x.xml\"],\"target_artifact_types\":[\"AxEdt\"],\"golden_path\":\"x\"}", "canonical_args must not carry '--out'")]
+    // A seed is a bare file name under eval/seeds/ — a path would let a case read anywhere.
+    [InlineData("seed-with-a-path.json", "{\"id\":\"L1-x\",\"title\":\"x\",\"tier\":1,\"instruction\":\"x\",\"target_artifact_types\":[\"AxTable\"],\"golden_path\":\"x\",\"apply_to_seed\":\"../../secrets.xml\"}", "must be a bare file name")]
     public void Rejects_malformed_case_files_with_a_specific_reason(string fileName, string json, string expectedFragment)
     {
         var dir = Path.Combine(Path.GetTempPath(), $"d365fo-eval-catalog-{Guid.NewGuid():N}");

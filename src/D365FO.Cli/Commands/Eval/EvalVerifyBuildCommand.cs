@@ -119,11 +119,20 @@ public sealed class EvalVerifyBuildCommand : Command<EvalVerifyBuildCommand.Sett
             ? Path.Combine(Path.GetTempPath(), $"d365fo-l3-{Guid.NewGuid():N}")
             : Path.GetFullPath(settings.WorkDir!);
 
+        // Resolved before provisioning, because it decides the model's reference list. A
+        // missing installation is not fatal here: --provision-only is meant to run anywhere.
+        var packagesRoot = settings.PackagesPath ?? D365FoSettings.Resolve("D365FO_PACKAGES_PATH");
+
         try
         {
             Directory.CreateDirectory(workDir);
 
-            var model = L3ModelProvisioner.Provision(cases, EvalPaths.GoldensDir(root!), workDir, modelName);
+            // Every package on the installation, not the usual three: a golden that EXTENDS a
+            // standard object drags in whatever that object references, which is not confined to
+            // ApplicationSuite/Foundation/Platform.
+            var model = L3ModelProvisioner.Provision(
+                cases, EvalPaths.GoldensDir(root!), workDir, modelName,
+                moduleReferences: L3ModelProvisioner.ModulesIn(packagesRoot ?? ""));
 
             // The fixture's objects go into the same module as the goldens: the goldens
             // bind to its tables, and one module has no cross-module visibility question
@@ -153,8 +162,6 @@ public sealed class EvalVerifyBuildCommand : Command<EvalVerifyBuildCommand.Sett
             var guard = SdlcRunner.WindowsGuard("d365fo eval verify-build");
             if (guard is not null) return RenderHelpers.Render(kind, guard);
 
-            var packagesRoot = settings.PackagesPath
-                ?? D365FoSettings.Resolve("D365FO_PACKAGES_PATH");
             if (string.IsNullOrWhiteSpace(packagesRoot) || !Directory.Exists(packagesRoot))
             {
                 return RenderHelpers.Render(kind, ToolResult<object>.Fail(

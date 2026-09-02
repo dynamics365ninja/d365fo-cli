@@ -63,6 +63,22 @@ d365fo generate duty FmVehicleMaintenanceDuty \
 d365fo generate role FmFleetClerk --duty FmVehicleMaintenanceDuty --install-to FleetManagement
 ```
 
+Extending a Microsoft duty or role goes through the same `generate extension`
+command as every other extension — kind first, target second:
+
+```sh
+d365fo generate extension SecurityDuty MaintainFA_RU   --suffix Fleet --install-to FleetManagement
+
+d365fo generate extension SecurityRole BudgetBudgetClerk   --suffix Fleet --install-to FleetManagement
+```
+
+The scaffolds are `AxSecurityDutyExtension` and `AxSecurityRoleExtension` —
+root element and AOT folder in both cases — named `<Target>.<Suffix>`. Add the
+privilege (duty extension) or the duty (role extension) to the scaffold; the
+standard element itself stays untouched, which is what keeps the customisation
+upgradeable and what `d365fo security role <Role>` will read back as the merged
+result.
+
 ## 3. Tracing what a user can actually reach
 
 The chain is only as good as its weakest link, and reading it from XML is
