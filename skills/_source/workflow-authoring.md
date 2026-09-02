@@ -17,11 +17,22 @@ appliesWhen: User intent mentions workflow, approval, workflow template, workflo
 ## The object stack
 
 ```
+AxWorkflowCategory          ← the module bucket the type is filed under
 AxWorkflowTemplate          ← the AOT element ("workflow type" in the UI)
   ├── document class        ← extends WorkflowDocument: which fields are conditions
   ├── AxWorkflowApproval    ← an approval step
   ├── AxWorkflowTask        ← a task step
   └── event handler classes ← started / canceled / completed, per element
+```
+
+The template's `Category` names an `AxWorkflowCategory`, whose `<Module>` is a
+`ModuleAxapta` value (`PurchaseOrder`, `Ledger`, `Basic` …) — that is how the
+workflow configuration form groups types by module. Create the category before
+the template when the module has none of yours:
+
+```sh
+d365fo generate workflow-category FmVehicleServiceCategory --module Basic \
+  --label "@Fleet:VehicleWorkflows" --install-to FleetManagement
 ```
 
 **The AOT folder is `AxWorkflowTemplate`.** There is no `AxWorkflowType` folder on

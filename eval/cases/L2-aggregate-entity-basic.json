@@ -1,0 +1,29 @@
+{
+  "id": "L2-aggregate-entity-basic",
+  "title": "Aggregate data entity over an aggregate measurement",
+  "tier": 2,
+  "instruction": "Create a read-only aggregate data entity named ConFmRentalsByColor over the FMAggregateMeasurements measurement: the NoRentals measure from the FMRentalCharges group (EDT BIRCount) and the VehicleColor attribute of the FMVehicle dimension (EDT FMColorName) from the same group. Use only the d365fo CLI — do not hand-write XML.",
+  "canonical_args": [
+    "generate",
+    "aggregate-entity",
+    "ConFmRentalsByColor",
+    "--measurement",
+    "FMAggregateMeasurements",
+    "--measure",
+    "NoRentals:FMRentalCharges:NoRentals:BIRCount",
+    "--dimension",
+    "VehicleColor:FMRentalCharges:FMVehicle:VehicleColor:FMColorName"
+  ],
+  "target_artifact_types": [
+    "AxAggregateDataEntity"
+  ],
+  "golden_path": "L2-aggregate-entity-basic",
+  "tags": [
+    "aggregate-entity",
+    "analytics",
+    "data-entity"
+  ],
+  "ignore": [],
+  "requires_fixture_index": false,
+  "golden_pending": false
+}

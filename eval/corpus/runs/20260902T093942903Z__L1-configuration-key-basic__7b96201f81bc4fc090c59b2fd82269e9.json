@@ -1,0 +1,21 @@
+{
+  "runId": "20260902T093942903Z__L1-configuration-key-basic__7b96201f81bc4fc090c59b2fd82269e9",
+  "caseId": "L1-configuration-key-basic",
+  "tier": 1,
+  "timestampUtc": "2026-09-02T09:39:42.9039175+00:00",
+  "source": "build-oracle",
+  "score": {
+    "xppErrors": 0,
+    "referenceErrors": 0,
+    "goldenMatch": true,
+    "goldenDiff": {
+      "missing": [],
+      "extra": [],
+      "changed": [],
+      "isMatch": true
+    },
+    "buildClean": true,
+    "buildErrors": 0,
+    "runtimeFailures": 0
+  }
+}

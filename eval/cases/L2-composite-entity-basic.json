@@ -1,0 +1,29 @@
+{
+  "id": "L2-composite-entity-basic",
+  "title": "Composite data entity bundling a header entity and its lines",
+  "tier": 2,
+  "instruction": "Create a composite data entity named ConFmTestCompositeEntity labeled 'Test header and lines' with DMFTestHeaderEntity as the root and DMFTestLineEntity embedded under it through the line entity's DMFTestHeader relation, for header/lines import through Data management. Use only the d365fo CLI — do not hand-write XML.",
+  "canonical_args": [
+    "generate",
+    "composite-entity",
+    "ConFmTestCompositeEntity",
+    "--root",
+    "DMFTestHeaderEntity",
+    "--embedded",
+    "DMFTestLineEntity:DMFTestHeader",
+    "--label",
+    "Test header and lines"
+  ],
+  "target_artifact_types": [
+    "AxCompositeDataEntityView"
+  ],
+  "golden_path": "L2-composite-entity-basic",
+  "tags": [
+    "composite-entity",
+    "data-entity",
+    "dmf"
+  ],
+  "ignore": [],
+  "requires_fixture_index": false,
+  "golden_pending": false
+}

@@ -1,0 +1,21 @@
+{
+  "runId": "20260902T093942964Z__L1-resource-basic__fbb95db245d843ae9fcb1b91708af11f",
+  "caseId": "L1-resource-basic",
+  "tier": 1,
+  "timestampUtc": "2026-09-02T09:39:42.9640615+00:00",
+  "source": "build-oracle",
+  "score": {
+    "xppErrors": 0,
+    "referenceErrors": 0,
+    "goldenMatch": true,
+    "goldenDiff": {
+      "missing": [],
+      "extra": [],
+      "changed": [],
+      "isMatch": true
+    },
+    "buildClean": true,
+    "buildErrors": 0,
+    "runtimeFailures": 0
+  }
+}

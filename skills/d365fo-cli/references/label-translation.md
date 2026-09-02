@@ -20,7 +20,24 @@ d365fo labels resolve @SYS4724 --lang en-us,cs --output json     # confirm an ex
   explicitly asks for raw bytes (labels originate from customer data and may
   contain crafted control sequences).
 
-## 2. Create a new label entry
+## 2. Create a new label file
+
+A label file is one `AxLabelFile` manifest **per language** plus the
+`.label.txt` it points at, under `AxLabelFile/LabelResources/<lang>/`. The
+manifest is named `<FileId>_<lang>` and its `RelativeUriInModelStore` is the
+model-store path of the content file.
+
+```sh
+d365fo generate label-file Fleet --language en-US \
+    --entry "Vehicles=Fleet vehicles" --install-to FleetManagement
+```
+
+- The file id is what `@Fleet:Key` names: letters, digits and underscore,
+  starting with a letter. An id a token cannot spell is refused.
+- `--entry Key=Text` seeds the content file; the manifest never carries label
+  text, so the honesty check does not look for it there.
+
+## 3. Create a new label entry
 
 ```sh
 d365fo labels create "@FleetManagement:VehicleVin" "VIN" \
@@ -37,7 +54,7 @@ d365fo labels create "@FleetManagement:VehicleVin" "VIN" \
   target file already existed, on both first-write-to-existing-file and
   `--overwrite`).
 
-## 3. Rename a label key (refactor across the model)
+## 4. Rename a label key (refactor across the model)
 
 ```sh
 d365fo labels rename @FleetManagement:OldKey @FleetManagement:NewKey \
@@ -49,7 +66,7 @@ old key are NOT rewritten. After the rename, run a project-wide search and
 update them yourself, then `d365fo index refresh --model <Model>` so
 `BPErrorUnknownLabel` gates pick up the new state.
 
-## 4. Delete a label entry
+## 5. Delete a label entry
 
 ```sh
 d365fo labels delete @FleetManagement:DeprecatedKey --file <path>.label.txt

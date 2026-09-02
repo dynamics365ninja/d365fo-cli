@@ -215,7 +215,7 @@ public sealed class EvalRunCommand : Command<EvalRunCommand.Settings>
                 args = @case.CanonicalArgs!.Concat(new[] { "--out", outPath, "--overwrite", "--output", "json" }).ToArray();
             }
 
-            var (exitCode, replayError) = RunReplay(dllPath, dbPath, args);
+            var (exitCode, replayError) = RunReplay(dllPath, dbPath, args, root);
 
             if (replayError is not null)
                 return (null, new ReplayFailure("EVAL_GENERATE_FAILED", $"Replay of `d365fo {string.Join(' ', args)}` threw: {replayError}"));
@@ -306,7 +306,7 @@ public sealed class EvalRunCommand : Command<EvalRunCommand.Settings>
     /// is passed via the child's environment rather than the parent's, so nothing
     /// here needs to save/restore process-wide state either.
     /// </summary>
-    private static (int ExitCode, string? Error) RunReplay(string dllPath, string dbPath, string[] args)
+    private static (int ExitCode, string? Error) RunReplay(string dllPath, string dbPath, string[] args, string root)
     {
         try
         {
@@ -317,6 +317,10 @@ public sealed class EvalRunCommand : Command<EvalRunCommand.Settings>
                 RedirectStandardError = true,
                 UseShellExecute = false,
                 CreateNoWindow = true,
+                // Canonical args may name files the repository ships (`--source eval/seeds/…`),
+                // so the child resolves relative paths against the repository root rather than
+                // wherever the runner happened to be started from.
+                WorkingDirectory = root,
             };
             psi.ArgumentList.Add(dllPath);
             foreach (var a in args) psi.ArgumentList.Add(a);

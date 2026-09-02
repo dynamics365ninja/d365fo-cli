@@ -462,7 +462,16 @@ public static class ToolCatalog
             "AxTableRelation fragments derived from the EDTs the fields use) · form-clone (`from` an indexed form " +
             "name or an XML path, `rebind` \"<OldTable>=<NewTable>\") · datasource-method / control-method " +
             "(`form` plus `dataSource`/`control`; omit `method` to list what is overridable, pass it to get the " +
-            "whole form back with the method injected).",
+            "whole form back with the method injected) · configuration-key (`label`, `parentKey`, `licenseCode`, " +
+            "`disabledByDefault`) · form-part (`form`, `caption`) · label-file (`name` is the label file id, " +
+            "`language`, `model`, `entries` \"<Key>=<Text>\"; returns the manifest plus the content to write beside " +
+            "it) · menu (`submenus` \"<name>[:<label>]\", `items` \"[<submenu>/]<menuItem>[:Action|Output]\", " +
+            "`tiles`, `menuRefs`, `inContentArea`, `setCompany`) · resource (`fileName`, `model`, `resourceType`; " +
+            "the content file is yours to place) · tile (`menuItem`, `tileType` Standard|Count|KPI|Link, `size`, " +
+            "`image`, `display`, `query`, `kpi`) · workflow-category (`module` — a ModuleAxapta value, checked " +
+            "against the index) · composite-entity (`roots` \"<entity>[:<ref>]\", `embedded` " +
+            "\"<entity>:<relation>[:<parentRef>]\") · aggregate-entity (`measurement`, `measures` " +
+            "\"<field>:<group>:<measure>:<edt>\", `dimensions` \"<field>:<group>:<dimension>:<attribute>:<edt>\").",
             Schema(("objectType", "string", true), ("name", "string", false), ("label", "string", false),
                    ("fields", "array", false), ("pattern", "string", false),
                    ("extends", "string", false), ("nonFinal", "boolean", false),
@@ -498,6 +507,16 @@ public static class ToolCatalog
                    ("from", "string", false), ("rebind", "array", false), ("form", "string", false),
                    ("dataSource", "string", false), ("control", "string", false), ("returnType", "string", false),
                    ("body", "string", false),
+                   ("parentKey", "string", false), ("licenseCode", "string", false), ("description", "string", false),
+                   ("disabledByDefault", "boolean", false), ("language", "string", false), ("model", "string", false),
+                   ("entries", "array", false), ("submenus", "array", false), ("items", "array", false),
+                   ("tiles", "array", false), ("menuRefs", "array", false), ("inContentArea", "boolean", false),
+                   ("setCompany", "boolean", false), ("fileName", "string", false), ("resourceType", "string", false),
+                   ("menuItem", "string", false), ("menuItemType", "string", false), ("tileType", "string", false),
+                   ("helpText", "string", false), ("image", "string", false), ("display", "string", false),
+                   ("kpi", "string", false), ("module", "string", false), ("roots", "array", false),
+                   ("embedded", "array", false), ("tags", "string", false), ("modules", "string", false),
+                   ("measurement", "string", false), ("measures", "array", false), ("dimensions", "array", false),
                    ("installTo", "string", false), ("out", "string", false), ("overwrite", "boolean", false),
                    ("groundingToken", "string", false)),
             (h, p) => StrOr(p, "objectType", "").ToLowerInvariant() switch
@@ -565,12 +584,30 @@ public static class ToolCatalog
                                         null, StrOrNull(p, "method"), StrOrNull(p, "returnType"), StrOrNull(p, "body")),
                 "control-method"  => h.GenerateFormMethod(StrOr(p, "form", Str(p, "name")), null, StrOrNull(p, "control"),
                                         StrOrNull(p, "method"), StrOrNull(p, "returnType"), StrOrNull(p, "body")),
+                "configuration-key" => h.GenerateConfigurationKey(Str(p, "name"), StrOrNull(p, "label"), StrOrNull(p, "parentKey"),
+                                        StrOrNull(p, "licenseCode"), StrOrNull(p, "description"), Bool(p, "disabledByDefault")),
+                "form-part"       => h.GenerateFormPart(Str(p, "name"), StrOrNull(p, "form"), StrOrNull(p, "caption")),
+                "label-file"      => h.GenerateLabelFile(Str(p, "name"), StrOrNull(p, "language"), StrOrNull(p, "model"), StrArray(p, "entries")),
+                "menu"            => h.GenerateMenu(Str(p, "name"), StrOrNull(p, "label"), StrArray(p, "submenus"), StrArray(p, "items"),
+                                        StrArray(p, "tiles"), StrArray(p, "menuRefs"), Bool(p, "inContentArea"), Bool(p, "setCompany"),
+                                        StrOrNull(p, "configurationKey")),
+                "resource"        => h.GenerateResource(Str(p, "name"), StrOrNull(p, "fileName"), StrOrNull(p, "model"),
+                                        StrOrNull(p, "resourceType"), StrOrNull(p, "label")),
+                "tile"            => h.GenerateTile(Str(p, "name"), StrOrNull(p, "menuItem"), StrOrNull(p, "tileType"), StrOrNull(p, "label"),
+                                        StrOrNull(p, "size"), StrOrNull(p, "image"), StrOrNull(p, "display"), StrOrNull(p, "query"),
+                                        StrOrNull(p, "kpi"), StrOrNull(p, "configurationKey"), StrOrNull(p, "menuItemType"), StrOrNull(p, "helpText")),
+                "workflow-category" => h.GenerateWorkflowCategory(Str(p, "name"), StrOrNull(p, "module"), StrOrNull(p, "label"), StrOrNull(p, "helpText")),
+                "composite-entity" => h.GenerateCompositeEntity(Str(p, "name"), StrArray(p, "roots"), StrArray(p, "embedded"),
+                                        StrOrNull(p, "label"), StrOrNull(p, "tags"), StrOrNull(p, "modules"), StrOrNull(p, "entityCategory")),
+                "aggregate-entity" => h.GenerateAggregateEntity(Str(p, "name"), StrOrNull(p, "measurement"), StrArray(p, "measures"),
+                                        StrArray(p, "dimensions"), StrOrNull(p, "label")),
                 _ => D365FO.Core.ToolResult<object>.Fail("BAD_INPUT",
                         $"Unknown objectType '{Str(p, "objectType")}' for generate_object.",
                         "Write: table, class, coc, form. XML-only: edt, enum, query, sysoperation, business-event, runbase, "
                         + "security-policy, menu-item, privilege, duty, role, entity, extension, event-handler, view, map, "
                         + "systest, migration-script, custom-service, number-sequence, workflow, report, report-extension, "
-                        + "find-methods, table-relation, form-clone, datasource-method, control-method."),
+                        + "find-methods, table-relation, form-clone, datasource-method, control-method, configuration-key, "
+                        + "form-part, label-file, menu, resource, tile, workflow-category, composite-entity, aggregate-entity."),
             }),
 
         new Descriptor("modify_method",

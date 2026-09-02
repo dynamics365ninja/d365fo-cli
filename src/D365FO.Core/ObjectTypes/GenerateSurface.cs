@@ -49,11 +49,11 @@ public static class GenerateSurface
         new("form-clone", "Copy of an existing AxForm under a new name, datasources optionally re-bound", [Root.Form]),
         new("simple-list", "Alias for `form --pattern SimpleList`", [Root.Form], Deprecated: true),
         new("entity", "AxDataEntityView over a table", [Root.DataEntityView]),
-        new("extension", "Table/Form/Edt/Enum/View/Query/Entity/Duty/Role extension",
+        new("extension", "Table/Form/Edt/Enum/View/Query/Entity/Map/Duty/Role extension",
         [
             Root.TableExtension, Root.FormExtension, Root.EdtExtension, Root.EnumExtension,
             Root.ViewExtension, Root.QuerySimpleExtension, Root.DataEntityViewExtension,
-            Root.SecurityDutyExtension, Root.SecurityRoleExtension,
+            Root.MapExtension, Root.SecurityDutyExtension, Root.SecurityRoleExtension,
         ]),
         new("event-handler", "Event subscriber class", [Root.Class]),
         new("privilege", "Security privilege over an entry point", [Root.SecurityPrivilege]),
@@ -79,6 +79,15 @@ public static class GenerateSurface
         new("runbase", "RunBase/RunBaseBatch class with dialog and pack/unpack", [Root.Class]),
         new("security-policy", "AxSecurityPolicy (XDS)", [Root.SecurityPolicy]),
         new("systest", "ATL-ready SysTestCase class", [Root.Class]),
+        new("configuration-key", "AxConfigurationKey, optionally under a parent key", [Root.ConfigurationKey]),
+        new("form-part", "AxFormPart registering a form as a hostable part", [Root.FormPart]),
+        new("label-file", "AxLabelFile manifest for one language plus its .label.txt", [Root.LabelFile]),
+        new("menu", "AxMenu with sub-menus, menu items, tiles and menu references", [Root.Menu]),
+        new("resource", "AxResource manifest for a file shipped in the model", [Root.Resource]),
+        new("tile", "AxTile bound to a menu item: Standard, Count, KPI or Link", [Root.Tile]),
+        new("workflow-category", "AxWorkflowCategory under a ModuleAxapta module", [Root.WorkflowCategory]),
+        new("composite-entity", "AxCompositeDataEntityView bundling root and embedded entities", [Root.CompositeDataEntityView]),
+        new("aggregate-entity", "AxAggregateDataEntity projecting an aggregate measurement", [Root.AggregateDataEntity]),
     ];
 
     /// <summary>Every generate subcommand, in the order <c>CliApp</c> registers them.</summary>
@@ -129,5 +138,16 @@ public static class GenerateSurface
         public const string WorkflowTemplate = ObjectTypeRegistry.Folders.WorkflowTemplate;
         public const string WorkflowApproval = ObjectTypeRegistry.Folders.WorkflowApproval;
         public const string WorkflowTask = ObjectTypeRegistry.Folders.WorkflowTask;
+        public const string WorkflowCategory = ObjectTypeRegistry.Folders.WorkflowCategory;
+
+        public const string ConfigurationKey = ObjectTypeRegistry.Folders.ConfigurationKey;
+        public const string LabelFile = ObjectTypeRegistry.Folders.LabelFile;
+        public const string Resource = ObjectTypeRegistry.Folders.Resource;
+        public const string Tile = ObjectTypeRegistry.Folders.Tile;
+        public const string Menu = ObjectTypeRegistry.Folders.Menu;
+        public const string FormPart = ObjectTypeRegistry.Folders.FormPart;
+        public const string CompositeDataEntityView = ObjectTypeRegistry.Folders.CompositeDataEntityView;
+        public const string AggregateDataEntity = ObjectTypeRegistry.Folders.AggregateDataEntity;
+        public const string MapExtension = ObjectTypeRegistry.Folders.MapExtension;
     }
 }

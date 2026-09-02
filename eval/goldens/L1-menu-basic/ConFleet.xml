@@ -1,0 +1,37 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<AxMenu xmlns:i="http://www.w3.org/2001/XMLSchema-instance" xmlns="Microsoft.Dynamics.AX.Metadata.V1">
+  <Name>ConFleet</Name>
+  <Label>@FLM540</Label>
+  <Elements>
+    <AxMenuElement i:type="AxMenuElementSubMenu" xmlns="">
+      <Name>Vehicles</Name>
+      <Label>@FLM95</Label>
+      <Elements>
+        <AxMenuElement i:type="AxMenuElementMenuItem">
+          <Name>FMVehicle</Name>
+          <DisplayInContentArea>Yes</DisplayInContentArea>
+          <MenuItemName>FMVehicle</MenuItemName>
+        </AxMenuElement>
+      </Elements>
+    </AxMenuElement>
+    <AxMenuElement i:type="AxMenuElementSubMenu" xmlns="">
+      <Name>Setup</Name>
+      <Elements>
+        <AxMenuElement i:type="AxMenuElementMenuItem">
+          <Name>FMSetup</Name>
+          <DisplayInContentArea>Yes</DisplayInContentArea>
+          <MenuItemName>FMSetup</MenuItemName>
+        </AxMenuElement>
+      </Elements>
+    </AxMenuElement>
+    <AxMenuElement i:type="AxMenuElementSubMenu" xmlns="">
+      <Name>Workspaces</Name>
+      <Elements>
+        <AxMenuElement i:type="AxMenuElementTile">
+          <Name>FMClerkWorkspace</Name>
+          <Tile>FMClerkWorkspace</Tile>
+        </AxMenuElement>
+      </Elements>
+    </AxMenuElement>
+  </Elements>
+</AxMenu>

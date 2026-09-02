@@ -1,0 +1,21 @@
+{
+  "runId": "20260902T093942851Z__L0-edt-basic__7b38a11879574ae6a639870b5c78b1f9",
+  "caseId": "L0-edt-basic",
+  "tier": 0,
+  "timestampUtc": "2026-09-02T09:39:42.8553147+00:00",
+  "source": "build-oracle",
+  "score": {
+    "xppErrors": 0,
+    "referenceErrors": 0,
+    "goldenMatch": true,
+    "goldenDiff": {
+      "missing": [],
+      "extra": [],
+      "changed": [],
+      "isMatch": true
+    },
+    "buildClean": true,
+    "buildErrors": 0,
+    "runtimeFailures": 0
+  }
+}

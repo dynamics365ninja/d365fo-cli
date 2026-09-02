@@ -1,0 +1,21 @@
+{
+  "runId": "20260902T093942985Z__L2-composite-entity-basic__5ff76470d6604c268367492110e6aafe",
+  "caseId": "L2-composite-entity-basic",
+  "tier": 2,
+  "timestampUtc": "2026-09-02T09:39:42.9856973+00:00",
+  "source": "build-oracle",
+  "score": {
+    "xppErrors": 0,
+    "referenceErrors": 0,
+    "goldenMatch": true,
+    "goldenDiff": {
+      "missing": [],
+      "extra": [],
+      "changed": [],
+      "isMatch": true
+    },
+    "buildClean": true,
+    "buildErrors": 0,
+    "runtimeFailures": 0
+  }
+}

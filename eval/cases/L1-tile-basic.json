@@ -1,0 +1,29 @@
+{
+  "id": "L1-tile-basic",
+  "title": "Workspace tile bound to a menu item",
+  "tier": 1,
+  "instruction": "Create a wide workspace tile named ConFmVehiclesTile labeled 'Fleet vehicles' that opens the FMVehicle menu item. Use only the d365fo CLI — do not hand-write XML.",
+  "canonical_args": [
+    "generate",
+    "tile",
+    "ConFmVehiclesTile",
+    "--menu-item",
+    "FMVehicle",
+    "--label",
+    "Fleet vehicles",
+    "--size",
+    "Wide"
+  ],
+  "target_artifact_types": [
+    "AxTile"
+  ],
+  "golden_path": "L1-tile-basic",
+  "tags": [
+    "tile",
+    "workspace",
+    "metadata"
+  ],
+  "ignore": [],
+  "requires_fixture_index": false,
+  "golden_pending": false
+}

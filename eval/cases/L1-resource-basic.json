@@ -1,0 +1,26 @@
+{
+  "id": "L1-resource-basic",
+  "title": "Image resource manifest with its content file",
+  "tier": 1,
+  "instruction": "Ship the image eval/seeds/ConFmLogo.png as an AOT resource named ConFmLogo in model D365FoCliEvalGoldens: the AxResource manifest plus the file copied into ResourceContent/Images. Use only the d365fo CLI — do not hand-write XML.",
+  "canonical_args": [
+    "generate",
+    "resource",
+    "ConFmLogo",
+    "--source",
+    "eval/seeds/ConFmLogo.png",
+    "--model",
+    "D365FoCliEvalGoldens"
+  ],
+  "target_artifact_types": [
+    "AxResource"
+  ],
+  "golden_path": "L1-resource-basic",
+  "tags": [
+    "resource",
+    "metadata"
+  ],
+  "ignore": [],
+  "requires_fixture_index": false,
+  "golden_pending": false
+}

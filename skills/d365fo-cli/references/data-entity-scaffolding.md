@@ -40,6 +40,26 @@ The CLI returns `{kind, name, table, path, bytes, fieldCount, fieldsFromTable}`
 (plus `backup` when `--overwrite` replaces an existing file). Never request
 the full XML back.
 
+### Composite entities (header + lines in one import)
+
+An `AxCompositeDataEntityView` bundles **existing** entities for Data
+management: one or more root references, each with entities embedded under it,
+every embedded one bound to its parent through a **relation on the child
+entity**. It has no fields of its own; its X++ declaration carries
+`[CompositeDataEntityView]` and does not extend `common`.
+
+```sh
+d365fo generate composite-entity FmRentalCompositeEntity \
+    --root FmCustomerEntity \
+    --embedded FmRentalEntity:FmCustomer \
+    --label "@Fleet:CustomerRentals" --install-to FleetManagement
+```
+
+`--embedded <entity>:<relation>[:<parentReference>]` nests under the first root
+unless a parent is named. Every referenced entity must exist — generate them
+first. For analytical shapes over an aggregate measurement see
+`AxAggregateDataEntity` in `d365fo knowledge get analytics-and-er`.
+
 ## OData naming conventions (D365FO)
 
 | AOT property | Convention | Used for |

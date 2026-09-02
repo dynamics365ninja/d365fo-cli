@@ -132,6 +132,21 @@ public static class L3ModelProvisioner
 
             files.AddRange(Companions(caseDir));
 
+            // The scored golden's AOT folder is where content companions land: a label
+            // file's .label.txt, a resource's .png. Resolved before the loop so a skipped
+            // golden cannot leave the content pointing at nothing.
+            var (mainRoot, _, _) = ReadIdentity(files[0]);
+            var mainFolder = mainRoot is null ? null : ObjectTypeRegistry.Find(mainRoot)?.AotSubfolder;
+            foreach (var (content, relativeUnderCompanions) in ContentCompanions(caseDir))
+            {
+                if (mainFolder is null) break;
+                var destination = Path.Combine(contentRoot, mainFolder, relativeUnderCompanions);
+                Directory.CreateDirectory(Path.GetDirectoryName(destination)!);
+                CopyWritable(content, destination);
+                artifacts.Add(new ProvisionedArtifact(@case.Id, content,
+                    Path.Combine(mainFolder, relativeUnderCompanions), mainRoot!, Path.GetFileName(content)));
+            }
+
             foreach (var file in files)
             {
                 var (root, name, error) = ReadIdentity(file);
@@ -194,6 +209,27 @@ public static class L3ModelProvisioner
         return Directory.Exists(dir)
             ? Directory.GetFiles(dir, "*.xml").OrderBy(f => f, StringComparer.Ordinal).ToList()
             : Array.Empty<string>();
+    }
+
+    /// <summary>
+    /// The non-XML files a golden's command also produces, kept under sub-folders of
+    /// <c>_companions</c> that mirror their place beside the artefact: an
+    /// <c>AxLabelFile</c>'s <c>LabelResources/en-US/ConFleet.en-US.label.txt</c>, an
+    /// <c>AxResource</c>'s <c>ResourceContent/Images/ConFmLogo.png</c>. The compiler checks
+    /// that the content a manifest names exists ("Resource content file 'ConFmLogo.png' not
+    /// found" is a Metadata Error), so a manifest golden without its content is a golden that
+    /// cannot pass the build oracle. Each is returned with its path relative to
+    /// <c>_companions</c>, which is also its path relative to the artefact's AOT folder.
+    /// </summary>
+    public static IReadOnlyList<(string Path, string RelativeUnderCompanions)> ContentCompanions(string caseDir)
+    {
+        var dir = Path.Combine(caseDir, CompanionFolder);
+        if (!Directory.Exists(dir)) return Array.Empty<(string, string)>();
+        return Directory.GetDirectories(dir)
+            .SelectMany(sub => Directory.GetFiles(sub, "*", SearchOption.AllDirectories))
+            .OrderBy(f => f, StringComparer.Ordinal)
+            .Select(f => (f, Path.GetRelativePath(dir, f)))
+            .ToList();
     }
 
     /// <summary>

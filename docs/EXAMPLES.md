@@ -494,6 +494,71 @@ Both write straight to disk — the metadata bridge's `createObject` only accept
 class/table/EDT/enum/form, so `--install-to` resolves the model folder and the
 scaffold is written there (same as `generate query`).
 
+### Navigation: menu, tile, form part
+
+```sh
+# A module menu: sub-menus in the order declared, items under them by path
+d365fo generate menu ConFleet --label "@FLM540"   --submenu "Vehicles:@FLM95"   --item Vehicles/FMVehicle --item Setup/FMSetup:Action   --tile Workspaces/FMClerkWorkspace   --in-content-area --install-to FleetManagement
+
+# A wide tile that opens a menu item; --type Count with --query makes it a cue
+d365fo generate tile ConFmVehiclesTile --menu-item FMVehicle   --label "@FLM95" --size Wide --install-to FleetManagement
+
+# Register a form as a hostable part (preview pane, fact box)
+d365fo generate form-part ConFmVehiclePreviewPart --form FMVehicle   --caption "@FLM95" --install-to FleetManagement
+```
+
+`--item [<submenu>/]<menuItem>[:Display|Action|Output]`: Display is the contract
+default and is not written. A menu item the index does not know is reported in
+`unknownMenuItems` rather than refused — the index is a mirror, and the item may
+live in a model that has not been extracted.
+
+### Configuration key, workflow category, label file, resource
+
+```sh
+d365fo generate configuration-key ConFmFleetTrial --label "@FLM1"   --parent-key Bank --install-to FleetManagement
+
+# --module is a ModuleAxapta value and is checked against the enum in the index
+d365fo generate workflow-category ConFmVehicleWfCategory --module Basic   --label "@FLM2" --help-text "@FLM3" --install-to FleetManagement
+
+# One AxLabelFile per language; the .label.txt lands under LabelResources/<lang>/
+d365fo generate label-file ConFleet --language en-US   --entry "Vehicles=Fleet vehicles" --install-to FleetManagement
+
+# The manifest plus the file, copied to AxResource/ResourceContent/Images/
+d365fo generate resource ConFmLogo --source ./assets/ConFmLogo.png   --install-to FleetManagement
+```
+
+A resource whose content file is missing is a **Metadata Error** at compile time
+("Resource content file 'ConFmLogo.png' not found"), not a deployment surprise, so
+the command warns when it writes a manifest without `--source`.
+
+### Composite and aggregate data entities
+
+```sh
+# Header/lines bundle for Data management: the relation is the one on the LINE
+# entity that binds it to its parent
+d365fo generate composite-entity ConFmTestCompositeEntity   --root DMFTestHeaderEntity   --embedded DMFTestLineEntity:DMFTestHeader   --label "Test header and lines" --install-to FleetManagement
+
+# Read-only projection of an aggregate measurement
+d365fo generate aggregate-entity ConFmRentalsByColor   --measurement FMAggregateMeasurements   --measure NoRentals:FMRentalCharges:NoRentals:BIRCount   --dimension VehicleColor:FMRentalCharges:FMVehicle:VehicleColor:FMColorName   --install-to FleetManagement
+```
+
+The composite's X++ declaration carries `[CompositeDataEntityView]` and does not
+extend `common`; the aggregate's does. An aggregate field pins
+`i:type="d3p1:AxAggregateDataEntityMappedField"` and writes its mapping members in
+the `Microsoft.Dynamics.AX.Metadata.V2` namespace, exactly as the platform does —
+unprefixed, the reader keeps the field and drops every mapping on it. The
+measurement, its groups and attributes are not in the index, so the command says
+they were not verified; `d365fo build` is what proves them.
+
+### Map extension
+
+```sh
+d365fo generate extension Map AssetTransMap --suffix ConFm --install-to FleetManagement
+```
+
+The contract declares nothing beyond `Name`, and the installation ships no map
+extension at all (census: 0 files) — the object is the shell a later edit hangs on.
+
 ### Security role (new or merge)
 
 ```sh

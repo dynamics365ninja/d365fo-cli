@@ -143,6 +143,15 @@ Configuration keys and Feature Management solve different problems:
 - **For a new feature, prefer Feature Management** — see
   `d365fo knowledge get runtime-frameworks`.
 
+The key itself is an `AxConfigurationKey`: `<Name>`, `<Label>` (463 of 472
+shipped keys carry one), an optional `<ParentKey>` (349 do) and, on ISV keys, a
+`<LicenseCode>`. `EnabledByDefault` is written only as the opt-out `No`.
+
+```sh
+d365fo generate configuration-key FmFleetTrial --label "@Fleet:TrialFeatures" \
+  --parent-key Bank --install-to FleetManagement
+```
+
 ```xpp
 if (isConfigurationKeyEnabled(configurationKeyNum(WHSAdvanced)))
 {

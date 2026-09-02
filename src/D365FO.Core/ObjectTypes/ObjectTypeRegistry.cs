@@ -174,6 +174,17 @@ namespace D365FO.Core.ObjectTypes
             public const string WorkflowTemplate = "AxWorkflowTemplate";
             public const string WorkflowApproval = "AxWorkflowApproval";
             public const string WorkflowTask = "AxWorkflowTask";
+            public const string WorkflowCategory = "AxWorkflowCategory";
+
+            public const string ConfigurationKey = "AxConfigurationKey";
+            public const string LabelFile = "AxLabelFile";
+            public const string Resource = "AxResource";
+            public const string Tile = "AxTile";
+            public const string Menu = "AxMenu";
+            public const string FormPart = "AxFormPart";
+            public const string CompositeDataEntityView = "AxCompositeDataEntityView";
+            public const string AggregateDataEntity = "AxAggregateDataEntity";
+            public const string MapExtension = "AxMapExtension";
         }
 
         private static readonly ObjectTypeInfo[] _all = BuildAll();
@@ -215,7 +226,7 @@ namespace D365FO.Core.ObjectTypes
                 // Folder ships in every model; no standard model has a file in it yet, and
                 // `generate extension` takes no Map kind — the null is the truth here, unlike
                 // the three rows above, which named no command while the command built them.
-                New("mapextension", "AxMapExtension", "MapExtensions", null, null, "MapExtension"),
+                New("mapextension", "AxMapExtension", "MapExtensions", "extension", null, "MapExtension"),
                 New("securitydutyextension", "AxSecurityDutyExtension", "SecurityDutyExtensions", "extension", null, "SecurityDutyExtension"),
                 New("securityroleextension", "AxSecurityRoleExtension", "SecurityRoleExtensions", "extension", null, "SecurityRoleExtension"),
 
@@ -236,15 +247,15 @@ namespace D365FO.Core.ObjectTypes
                 New("workflowtask", "AxWorkflowTask", "WorkflowTasks", "workflow", null, "WorkflowTask", ns: NsV2),
 
                 // ── Read-only types the index knows but nothing generates ───────────
-                New("workflowcategory", "AxWorkflowCategory", "WorkflowCategories", null, null, "WorkflowCategory", indexed: false, ns: NsV2),
-                New("configurationkey", "AxConfigurationKey", "ConfigurationKeys", null, null, "ConfigurationKey"),
-                New("labelfile", "AxLabelFile", "LabelFiles", null, null, "LabelFile"),
-                New("tile", "AxTile", "Tiles", null, null, "Tile", ns: NsV1),
-                New("menu", "AxMenu", "Menus", null, null, "Menu", indexed: false, ns: NsV1),
-                New("compositedataentityview", "AxCompositeDataEntityView", "CompositeDataEntityViews", null, null, "CompositeDataEntityView", indexed: false),
-                New("aggregatedataentity", "AxAggregateDataEntity", "AggregateDataEntities", null, null, "AggregateDataEntity", indexed: false),
-                New("formpart", "AxFormPart", "FormParts", null, null, "FormPart", indexed: false),
-                New("resource", "AxResource", "Resources", null, null, "Resource", indexed: false),
+                New("workflowcategory", "AxWorkflowCategory", "WorkflowCategories", "workflow-category", null, "WorkflowCategory", indexed: false, ns: NsV2),
+                New("configurationkey", "AxConfigurationKey", "ConfigurationKeys", "configuration-key", null, "ConfigurationKey"),
+                New("labelfile", "AxLabelFile", "LabelFiles", "label-file", null, "LabelFile"),
+                New("tile", "AxTile", "Tiles", "tile", null, "Tile", ns: NsV1),
+                New("menu", "AxMenu", "Menus", "menu", null, "Menu", indexed: false, ns: NsV1),
+                New("compositedataentityview", "AxCompositeDataEntityView", "CompositeDataEntityViews", "composite-entity", null, "CompositeDataEntityView", indexed: false),
+                New("aggregatedataentity", "AxAggregateDataEntity", "AggregateDataEntities", "aggregate-entity", null, "AggregateDataEntity", indexed: false),
+                New("formpart", "AxFormPart", "FormParts", "form-part", null, "FormPart", indexed: false),
+                New("resource", "AxResource", "Resources", "resource", null, "Resource", indexed: false),
 
                 // ── Names that exist in this codebase but not on any AOS ────────────
                 // Kept so the parity test can assert nothing reads them: an extractor

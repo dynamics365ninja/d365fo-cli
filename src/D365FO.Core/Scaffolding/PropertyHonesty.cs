@@ -50,6 +50,16 @@ public static class PropertyHonesty
     private static readonly char[] CompositeSeparators = [':', ',', ';', '|', '=', '/'];
 
     /// <summary>
+    /// Options whose value is written somewhere other than the AOT XML — the label text
+    /// <c>generate label-file --entry Key=Text</c> puts into the <c>.label.txt</c> beside the
+    /// manifest. The manifest cannot carry it, so its absence there is not a dropped value.
+    /// </summary>
+    private static readonly HashSet<string> ContentOptions = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "--entry",
+    };
+
+    /// <summary>
     /// Requested values that did not reach <paramref name="writtenXml"/>.
     /// </summary>
     /// <param name="requested">Option name → value, as supplied on the command line.</param>
@@ -66,6 +76,7 @@ public static class PropertyHonesty
         foreach (var (option, value) in requested)
         {
             if (string.IsNullOrWhiteSpace(value)) continue;
+            if (ContentOptions.Contains(option)) continue;
             if (LooksLikeAPath(value)) continue;
 
             foreach (var part in Parts(value))

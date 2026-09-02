@@ -1,0 +1,8 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<AxLabelFile xmlns:i="http://www.w3.org/2001/XMLSchema-instance">
+  <Name>ConFleet_en-US</Name>
+  <LabelContentFileName>ConFleet.en-US.label.txt</LabelContentFileName>
+  <LabelFileId>ConFleet</LabelFileId>
+  <Language>en-US</Language>
+  <RelativeUriInModelStore>D365FoCliEvalGoldens\D365FoCliEvalGoldens\AxLabelFile\LabelResources\en-US\ConFleet.en-US.label.txt</RelativeUriInModelStore>
+</AxLabelFile>
