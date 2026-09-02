@@ -1,0 +1,73 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<AxTable xmlns:i="http://www.w3.org/2001/XMLSchema-instance">
+  <Name>ConFmVehicleSummaryDPTmp</Name>
+  <ClusteredIndex>PrimaryIdx</ClusteredIndex>
+  <TableType>TempDB</TableType>
+  <FieldGroups>
+    <AxTableFieldGroup>
+      <Name>AutoReport</Name>
+      <Fields />
+    </AxTableFieldGroup>
+    <AxTableFieldGroup>
+      <Name>AutoLookup</Name>
+      <Fields />
+    </AxTableFieldGroup>
+    <AxTableFieldGroup>
+      <Name>AutoIdentification</Name>
+      <AutoPopulate>Yes</AutoPopulate>
+      <Fields />
+    </AxTableFieldGroup>
+    <AxTableFieldGroup>
+      <Name>AutoSummary</Name>
+      <Fields />
+    </AxTableFieldGroup>
+    <AxTableFieldGroup>
+      <Name>AutoBrowse</Name>
+      <Fields />
+    </AxTableFieldGroup>
+    <AxTableFieldGroup>
+      <Name>Overview</Name>
+      <Fields>
+        <AxTableFieldGroupField>
+          <DataField>VIN</DataField>
+        </AxTableFieldGroupField>
+        <AxTableFieldGroupField>
+          <DataField>Make</DataField>
+        </AxTableFieldGroupField>
+      </Fields>
+    </AxTableFieldGroup>
+    <AxTableFieldGroup>
+      <Name>General</Name>
+      <Fields>
+        <AxTableFieldGroupField>
+          <DataField>VIN</DataField>
+        </AxTableFieldGroupField>
+        <AxTableFieldGroupField>
+          <DataField>Make</DataField>
+        </AxTableFieldGroupField>
+      </Fields>
+    </AxTableFieldGroup>
+  </FieldGroups>
+  <Fields>
+    <AxTableField i:type="AxTableFieldString">
+      <Name>VIN</Name>
+      <ExtendedDataType>Description255</ExtendedDataType>
+    </AxTableField>
+    <AxTableField i:type="AxTableFieldString">
+      <Name>Make</Name>
+      <ExtendedDataType>Description255</ExtendedDataType>
+    </AxTableField>
+  </Fields>
+  <Indexes>
+    <AxTableIndex>
+      <Name>PrimaryIdx</Name>
+      <AllowDuplicates>No</AllowDuplicates>
+      <AlternateKey>Yes</AlternateKey>
+      <Fields>
+        <AxTableIndexField>
+          <DataField>VIN</DataField>
+        </AxTableIndexField>
+      </Fields>
+    </AxTableIndex>
+  </Indexes>
+</AxTable>

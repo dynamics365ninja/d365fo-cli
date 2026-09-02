@@ -1,0 +1,19 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<AxWorkflowTask xmlns="Microsoft.Dynamics.AX.Metadata.V2">
+  <Name>ConFmVehicleServiceTask</Name>
+  <Document>ConFmVehicleServiceWorkflowDocument</Document>
+  <DocumentMenuItem>ConFmVehicleServiceWorkflowMenuItem</DocumentMenuItem>
+  <WorkflowOutcomes>
+    <AxWorkflowOutcome xmlns="">
+      <Name>Complete</Name>
+    </AxWorkflowOutcome>
+    <AxWorkflowOutcome xmlns="">
+      <Name>Reject</Name>
+      <Type>Return</Type>
+    </AxWorkflowOutcome>
+    <AxWorkflowOutcome xmlns="">
+      <Name>RequestChange</Name>
+      <Type>RequestChange</Type>
+    </AxWorkflowOutcome>
+  </WorkflowOutcomes>
+</AxWorkflowTask>

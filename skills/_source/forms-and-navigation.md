@@ -81,6 +81,41 @@ d365fo generate event-handler --source-kind Form --source CustTable \
 `d365fo form-pattern spec <Pattern> --output json` lists the structure the pattern
 requires before you start.
 
+### Overrides on the form itself
+
+When the method belongs on the form rather than in an extension class — a new
+form, or one this model owns — write it into the AxForm XML through the two
+method scaffolders instead of by hand. Both take the form's XML file as their
+first argument and merge into it:
+
+```sh
+# Data source override: init, active, validateWrite, initValue, executeQuery, write, delete …
+d365fo generate datasource-method c:/AOT/MyModel/AxForm/FmVehicleList.xml   --datasource FmVehicle --method validateWrite
+
+# Control event: clicked, modified, lookup, enter, leave …
+d365fo generate control-method c:/AOT/MyModel/AxForm/FmVehicleList.xml   --control Grid_VIN --method clicked
+```
+
+The scaffold carries the correct signature and the `super()` call the override
+needs — the two things that are easy to get wrong from memory and that decide
+whether the form still saves. A method the form already declares is left alone
+rather than overwritten.
+
+### Starting from a form that already works
+
+`generate form-clone` copies an existing AxForm under a new name, keeping its
+pattern, controls and data source wiring, and optionally re-pointing the data
+sources at other tables:
+
+```sh
+d365fo generate form-clone FmServiceOrderInquiry   --from FmVehicleServiceOrder   --rebind FmVehicleLine=FmServiceOrder   --install-to FleetManagement
+```
+
+`--from` takes a form name resolved through the index, or a path to an AxForm
+XML file. `--rebind <OldTable>=<NewTable>` is repeatable and moves the data
+sources; everything the clone keeps is what the original had, so start from a
+form whose pattern is the one you want rather than from the nearest one.
+
 ## 3. Menus and menu items
 
 An `AxMenu` is a flat `<Elements>` collection of `AxMenuElement` entries. Which

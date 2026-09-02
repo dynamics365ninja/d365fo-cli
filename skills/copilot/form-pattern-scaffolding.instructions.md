@@ -123,6 +123,15 @@ d365fo generate form FmFleetWorkspace \
 `--field <F>` is repeatable — these become grid / detail columns. The
 section template is `--section Name:Caption` (split on the first `:`).
 
+## The deprecated alias
+
+`d365fo generate simple-list <Name> --table <T>` still exists and produces exactly
+what `generate form <Name> --pattern SimpleList --table <T>` produces — it is a
+kept-for-compatibility alias, not a second scaffolder. Prefer the `--pattern` form:
+the alias reaches one of the nine patterns and cannot express any of the other
+eight, so a workflow built on it has to be rewritten the moment the form turns
+out to want SimpleListDetails or ListPage.
+
 ## Hard rules
 
 - Never hand-roll AxForm XML — always use `--pattern`.

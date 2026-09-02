@@ -50,6 +50,44 @@ public static class L3ModelProvisioner
     public static readonly IReadOnlyList<string> StandardModuleReferences =
         ["ApplicationPlatform", "ApplicationFoundation", "ApplicationSuite"];
 
+    /// <summary>
+    /// Every package in an installation, for goldens that extend a standard object.
+    /// </summary>
+    /// <remarks>
+    /// Extending a shipped element pulls in what that element references, and it does not stay
+    /// inside the three modules above: a view extension over <c>CustAccountName</c> needs
+    /// <c>DirPartyTable</c>, which is in <c>Directory</c>, and a data-entity extension over
+    /// <c>CustCustomerV3Entity</c> reaches a dozen packages further. Guessing the transitive set
+    /// per case is a maintenance trap — the list here is read off the installation, and a
+    /// package on the reference list that nothing uses costs the compiler nothing.
+    /// </remarks>
+    public static IReadOnlyList<string> ModulesIn(string packagesRoot)
+    {
+        if (string.IsNullOrWhiteSpace(packagesRoot) || !Directory.Exists(packagesRoot))
+            return StandardModuleReferences;
+
+        try
+        {
+            // A package is a directory with a bin — which is what the compiler resolves a module
+            // reference to. The root also holds DataStack, GeneratedXppSource, InstallationRecords,
+            // Plugins, StaticMetadata, the shared bin, and (on this machine) a directory whose name
+            // is a path with its separators removed; referencing any of them earns a warning per
+            // compile and resolves nothing.
+            var all = Directory.EnumerateDirectories(packagesRoot)
+                .Where(d => Directory.Exists(Path.Combine(d, "bin")))
+                .Select(Path.GetFileName)
+                .Where(n => !string.IsNullOrEmpty(n))
+                .Select(n => n!)
+                .OrderBy(n => n, StringComparer.Ordinal)
+                .ToList();
+            return all.Count == 0 ? StandardModuleReferences : all;
+        }
+        catch
+        {
+            return StandardModuleReferences;
+        }
+    }
+
     public static ProvisionedModel Provision(
         IReadOnlyList<EvalCase> cases,
         string goldensDir,
@@ -264,6 +302,19 @@ public static class L3ModelProvisioner
     /// arrays namespace. Members are emitted in contract (alphabetical) order for
     /// the same reason every other writer in this repo does.
     /// </remarks>
+    /// <summary>
+    /// Write the model descriptor for a throwaway model built around arbitrary artefacts.
+    /// </summary>
+    /// <remarks>
+    /// Same descriptor the golden provisioner writes, exposed because the single-artefact probe
+    /// builds its model the same way and a second descriptor writer would be a second place for
+    /// the module reference list to go stale.
+    /// </remarks>
+    public static void WriteDescriptorFor(
+        string modelRoot, string modelName, string publisher = "d365fo-cli", string layer = "usr",
+        IReadOnlyList<string>? moduleReferences = null)
+        => WriteDescriptor(modelRoot, modelName, publisher, layer, moduleReferences ?? StandardModuleReferences);
+
     private static void WriteDescriptor(
         string modelRoot, string modelName, string publisher, string layer, IReadOnlyList<string> moduleReferences)
     {

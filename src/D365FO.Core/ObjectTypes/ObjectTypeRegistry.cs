@@ -206,13 +206,15 @@ namespace D365FO.Core.ObjectTypes
                 // declares no AxEdt*Extension subtypes, so an i:type here would name nothing.
                 New("edtextension", "AxEdtExtension", "EdtExtensions", "extension", null, "EdtExtension", xsi: true),
                 New("enumextension", "AxEnumExtension", "EnumExtensions", "extension", null, "EnumExtension"),
-                New("viewextension", "AxViewExtension", "ViewExtensions", null, null, "ViewExtension"),
+                New("viewextension", "AxViewExtension", "ViewExtensions", "extension", null, "ViewExtension"),
                 // Query extensions are concrete on disk: folder and root element are both
                 // AxQuerySimpleExtension, and the provider property is QuerySimpleExtensions.
                 // There is no AxQueryExtension type at all — the bridge used to name one.
-                New("queryextension", "AxQuerySimpleExtension", "QuerySimpleExtensions", null, null, "QueryExtension"),
-                New("dataentityviewextension", "AxDataEntityViewExtension", "DataEntityViewExtensions", null, null, "DataEntityViewExtension"),
-                // Folder ships in every model; no standard model has a file in it yet.
+                New("queryextension", "AxQuerySimpleExtension", "QuerySimpleExtensions", "extension", null, "QueryExtension"),
+                New("dataentityviewextension", "AxDataEntityViewExtension", "DataEntityViewExtensions", "extension", null, "DataEntityViewExtension"),
+                // Folder ships in every model; no standard model has a file in it yet, and
+                // `generate extension` takes no Map kind — the null is the truth here, unlike
+                // the three rows above, which named no command while the command built them.
                 New("mapextension", "AxMapExtension", "MapExtensions", null, null, "MapExtension"),
                 New("securitydutyextension", "AxSecurityDutyExtension", "SecurityDutyExtensions", "extension", null, "SecurityDutyExtension"),
                 New("securityroleextension", "AxSecurityRoleExtension", "SecurityRoleExtensions", "extension", null, "SecurityRoleExtension"),

@@ -111,6 +111,24 @@ public static class EvalCaseCatalog
             return false;
         }
 
+        // The replay supplies the output option itself — a case that also carries one would
+        // either fight it or, worse, write somewhere real.
+        var reserved = new[] { "--out", "--overwrite", "--install-to", "--output", "--apply-to" };
+        var offending = (dto.CanonicalArgs ?? Array.Empty<string>())
+            .FirstOrDefault(a => reserved.Contains(a, StringComparer.OrdinalIgnoreCase));
+        if (offending is not null)
+        {
+            error = $"{fileName}: canonical_args must not carry '{offending}' — `eval run` supplies the output options";
+            return false;
+        }
+
+        if (!string.IsNullOrWhiteSpace(dto.ApplyToSeed)
+            && Path.GetFileName(dto.ApplyToSeed) != dto.ApplyToSeed)
+        {
+            error = $"{fileName}: apply_to_seed '{dto.ApplyToSeed}' must be a bare file name under eval/seeds/";
+            return false;
+        }
+
         result = new EvalCase(
             Id: dto.Id!,
             Title: dto.Title!,
@@ -122,7 +140,8 @@ public static class EvalCaseCatalog
             Tags: dto.Tags ?? Array.Empty<string>(),
             Ignore: dto.Ignore ?? Array.Empty<string>(),
             RequiresFixtureIndex: dto.RequiresFixtureIndex,
-            GoldenPending: dto.GoldenPending);
+            GoldenPending: dto.GoldenPending,
+            ApplyToSeed: string.IsNullOrWhiteSpace(dto.ApplyToSeed) ? null : dto.ApplyToSeed);
         error = null;
         return true;
     }
@@ -140,5 +159,6 @@ public static class EvalCaseCatalog
         [JsonPropertyName("ignore")] public string[]? Ignore { get; set; }
         [JsonPropertyName("requires_fixture_index")] public bool RequiresFixtureIndex { get; set; }
         [JsonPropertyName("golden_pending")] public bool GoldenPending { get; set; }
+        [JsonPropertyName("apply_to_seed")] public string? ApplyToSeed { get; set; }
     }
 }

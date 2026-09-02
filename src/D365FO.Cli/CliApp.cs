@@ -348,6 +348,16 @@ public static class CliApp
                 b.AddCommand<D365FO.Cli.Commands.Journal.JournalListCommand>("list").WithDescription("List journal entries, most-recent-first.");
             });
 
+            cfg.AddBranch("oracle", b =>
+            {
+                b.SetDescription("Measure the tool against the installation: the checks that judge the validator rather than what it produces.");
+                b.AddCommand<OracleSweepCommand>("sweep").WithDescription("Run every rule over every shipped file. The bar is ZERO errors on Microsoft's own code — a rule that fires there is wrong, not strict.");
+                b.AddCommand<OracleCensusCommand>("census").WithDescription("What the installation actually writes for one element — the measurement that has to precede a rule.");
+                b.AddCommand<OracleMembersCommand>("members").WithDescription("The metadata contract's declared members against the ones shipped files carry: dead declarations one way, catalog drift the other.");
+                b.AddCommand<OracleProbeCommand>("probe").WithDescription("Compile ONE artefact with the real xppc — the claim the offline validator cannot make. Windows + a D365FO installation.");
+                b.AddCommand<OracleRuntimeCommand>("runtime").WithDescription("Is the SysTest runner wired to a database, and can it tell a pass from a fail? --configure derives the settings from the AOS; --negative-control emits the class that proves discrimination.");
+            });
+
             cfg.AddBranch("eval", b =>
             {
                 b.SetDescription("Self-improving agent eval loop: run/score catalog cases against golden metadata (docs/AGENT_EVAL_LOOP.md).");

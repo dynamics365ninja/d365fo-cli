@@ -453,7 +453,9 @@ public static class XppValidator
             var decl = ClassDeclarationAfter(maskedLines, i);
             if (decl is null) continue;
             var m = Regex.Match(decl.Value.Text, @"\bclass\s+(\w+)", RegexOptions.IgnoreCase);
-            if (m.Success && !m.Groups[1].Value.EndsWith("_Extension", StringComparison.Ordinal))
+            // Case-insensitively: X++ identifiers are, and the platform ships
+            // `JournalCheckPostIV_extension`, which compiles and IS named after the convention.
+            if (m.Success && !m.Groups[1].Value.EndsWith("_Extension", StringComparison.OrdinalIgnoreCase))
             {
                 v.Add(new XppViolation("COC003", "error", decl.Value.Index + 1,
                     (decl.Value.Index < lines.Length ? lines[decl.Value.Index] : decl.Value.Text).Trim(),
@@ -769,6 +771,14 @@ public static class XppValidator
     {
         var lines = code.Split('\n');
 
+        // Functions declared inside this source: `<type> name(args)` followed by a body. X++
+        // allows them inside a method body, and they take precedence over the predefined name
+        // of the same spelling.
+        var localFunctions = new HashSet<string>(
+            Regex.Matches(masked, @"\b[A-Za-z_]\w*\s+([A-Za-z_]\w*)\s*\([^)]*\)\s*\{")
+                .Select(d => d.Groups[1].Value),
+            StringComparer.OrdinalIgnoreCase);
+
         foreach (Match m in Regex.Matches(masked, @"\b([A-Za-z_]\w*)\s*\("))
         {
             var called = m.Groups[1].Value;
@@ -784,6 +794,15 @@ public static class XppValidator
             // `MyClass::year(…)` is that class's own static; only Global:: shares the
             // predefined names.
             if (before.EndsWith("::") && !Regex.IsMatch(before, @"\bGlobal\s*::$")) continue;
+            // A local function declared in this source shadows the predefined name — the
+            // compiler's own message says so ("nor a previously defined local function"). The
+            // platform's BatchRun.runJob declares `void info()` inside the method body and
+            // calls it twice.
+            if (localFunctions.Contains(called)) continue;
+            // `new Info()` constructs the class of that name; a predefined function is never
+            // reached through new. Shipped code carries seven of these (SysTest,
+            // SysPrintArchive, …) and each was reported as info() called with no arguments.
+            if (Regex.IsMatch(before, @"\bnew\s*$")) continue;
             // A DECLARATION, not a call: `public IntEditAdaptor Year()` in a form adaptor
             // reads as a call to the predefined year() unless the preceding token is
             // recognised as a type name. In a call the previous token is an operator, a
@@ -964,41 +983,53 @@ public static class XppValidator
     /// </summary>
     private static void CheckCSharpIsms(string masked, List<XppViolation> v)
     {
-        var patterns = new (string Re, RegexOptions Options, string Fix)[]
+        // A file may ALIAS a CLR type into scope — `using string = System.String;` — and then
+        // `string groupKey` is a declaration of that alias, not C# that fails to compile. The
+        // platform's GlobalUnifiedPricing classes do exactly this to implement Commerce runtime
+        // interfaces, and were the only files on a stock installation this rule fired on.
+        var aliased = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (Match u in Regex.Matches(masked, @"^\s*using\s+([A-Za-z_]\w*)\s*=", RegexOptions.Multiline))
+            aliased.Add(u.Groups[1].Value);
+
+        // `About` names the C# type a pattern is about, when it is about one — read from the
+        // tuple rather than dug back out of the regex, where a leading  left the name without
+        // a word boundary in front of it and the alias never matched.
+        var patterns = new (string Re, RegexOptions Options, string Fix, string? About)[]
         {
             (@"\$""", RegexOptions.None,
-                "X++ has no string interpolation ($\"…\") — use strFmt(\"%1 / %2\", a, b)."),
+                "X++ has no string interpolation ($\"…\") — use strFmt(\"%1 / %2\", a, b).", null),
             (@"=>", RegexOptions.None,
-                "X++ has no lambdas/anonymous methods (=>) — use a named (private) method, or a delegate plus an eventhandler subscription."),
+                "X++ has no lambdas/anonymous methods (=>) — use a named (private) method, or a delegate plus an eventhandler subscription.", null),
             (@"\bforeach\b", RegexOptions.None,
-                "X++ has no foreach — iterate collections with their Enumerator (while (en.moveNext()) { en.current(); }) and tables with while select."),
+                "X++ has no foreach — iterate collections with their Enumerator (while (en.moveNext()) { en.current(); }) and tables with while select.", null),
             (@"\?\?", RegexOptions.None,
-                "X++ has no null-coalescing operator (??) — value types hold null-EQUIVALENT values (0, empty string, 1900-01-01); test explicitly."),
+                "X++ has no null-coalescing operator (??) — value types hold null-EQUIVALENT values (0, empty string, 1900-01-01); test explicitly.", null),
             (@"\bstring\s+\w+\s*[;=]", RegexOptions.None,
-                "The X++ string type is str (or an EDT) — \"string\" is C#."),
+                "The X++ string type is str (or an EDT) — \"string\" is C#.", "string"),
             // xppc: "The name 'bool' does not denote a class, a table, or an extended data type."
             (@"\b(?:bool|decimal|double|long|uint)\s+\w+\s*[;=,)]", RegexOptions.None,
                 "C# primitive names do not exist in X++: use boolean, real, int64 and int. " +
-                "There are no unsigned types."),
+                "There are no unsigned types.", "bool|decimal|double|long|uint"),
             // xppc: "';' expected." — X++ has no override/virtual; every non-final
             // instance method is virtual and redeclaring the signature overrides it.
             (@"\b(?:public|protected|private|internal)\s+(?:override|virtual)\b", RegexOptions.None,
                 "X++ has no override/virtual keywords — redeclare the method with the same signature " +
-                "to override it, and mark it final to forbid further overriding."),
+                "to override it, and mark it final to forbid further overriding.", null),
             // xppc: "Conflicting modifiers 'protected private'."
             (@"\bprivate\s+protected\b", RegexOptions.None,
                 "private protected is not an X++ access combination (\"Conflicting modifiers\"). " +
-                "protected internal does compile."),
+                "protected internal does compile.", null),
             // NO generics rule — ApplicationSuite ships `private List<str> …;`, so an offline
             // rule would report Microsoft's own compiling code (see upstream note).
             // xppc: "')' expected." — the catch variable must be DECLARED first and then
             // named alone: `System.Exception ex; … catch (ex)`.
             (@"\bcatch\s*\(\s*(?:System|Microsoft)\.[\w.]+\s+\w+\s*\)", RegexOptions.None,
                 "X++ cannot declare the exception variable in the catch: declare it first " +
-                "(\"System.ArgumentException ex;\") and write catch (ex)."),
+                "(\"System.ArgumentException ex;\") and write catch (ex).", null),
         };
-        foreach (var (re, options, fix) in patterns)
+        foreach (var (re, options, fix, about) in patterns)
         {
+            if (about is not null && about.Split('|').Any(aliased.Contains)) continue;
             MatchAll(masked, re, "CS001", "error", fix, v, options: options);
         }
     }
@@ -1084,6 +1115,12 @@ public static class XppValidator
     {
         var extendsMatch = Regex.Match(masked, @"\bextends\s+(SRSReportDataProvider(?:Base|PreProcess(?:TempDB)?))\b", RegexOptions.IgnoreCase);
         if (!extendsMatch.Success) return;
+
+        // An abstract DP is a base for concrete ones, and the contract belongs on those: the
+        // platform's own CustVendAdvanceInvoiceDP reads parmDataContract() and declares none,
+        // because CustAdvanceInvoiceDP and VendAdvanceInvoiceDP each declare their own.
+        if (Regex.IsMatch(masked, @"\babstract\s+(?:final\s+)?class\b", RegexOptions.IgnoreCase)) return;
+
         var isPreProcess = extendsMatch.Groups[1].Value.Contains("PreProcess", StringComparison.OrdinalIgnoreCase);
 
         var parmContract = Regex.Match(masked, @"\bparmDataContract\s*\(", RegexOptions.IgnoreCase);
@@ -1161,7 +1198,14 @@ public static class XppValidator
     {
         foreach (Match m in Regex.Matches(masked, @"\bselect\b[^;{]*[;{]", RegexOptions.IgnoreCase))
         {
-            yield return (m.Value, m.Index);
+            // A select inside a #localmacro body has no terminator, so the match ran on into
+            // the NEXT macro and read two statements as one — which is how a `where` in one
+            // macro and an `order by` in the next were reported as a clause-order error in
+            // shipped platform code. A directive at the start of a line ends the statement.
+            var text = m.Value;
+            var directive = Regex.Match(text, @"\n[ \t]*#");
+            if (directive.Success) text = text[..directive.Index];
+            yield return (text, m.Index);
         }
     }
 
@@ -1316,6 +1360,12 @@ public static class XppValidator
         // expected") are all parse errors.
         foreach (Match m in Regex.Matches(masked, @"\bvalidTimeState\s*\(([^)]*)\)", RegexOptions.IgnoreCase))
         {
+            // The rule is about the SELECT clause. The same name is a method on the query
+            // classes (`query.validTimeState(range)`) and a parameter name on their own
+            // declarations (`public ... validTimeState(SysDaValidTimeState _v = null)`) —
+            // both correct code, and both of which this fired on across the platform packages.
+            if (!InSelectClause(masked, m.Index)) continue;
+
             var operands = m.Groups[1].Value.Split(',').Select(s => s.Trim()).Where(s => s.Length > 0).ToList();
             if (operands.Count > 0 && operands.All(o => Regex.IsMatch(o, @"^[A-Za-z_]\w*$"))) continue;
             v.Add(new XppViolation("SEL010", "error", LineNumber(masked, m.Index), m.Value.Trim(),
@@ -1323,6 +1373,24 @@ public static class XppValidator
                 "not a field (\"Invalid token '.'\") and not a date literal (\"'identifier' expected\"). " +
                 "Assign it first: \"utcdatetime asOf = DateTimeUtil::utcNow(); select validTimeState(asOf) t;\"."));
         }
+    }
+
+    /// <summary>
+    /// True when the offset sits in the clause list of a <c>select</c>, rather than in a method
+    /// call or a declaration that happens to use a clause keyword as a name.
+    /// </summary>
+    /// <remarks>
+    /// Backwards to the start of the statement — a <c>;</c>, a brace, or the start of the text —
+    /// and the statement has to contain <c>select</c>. A dot immediately before settles it the
+    /// other way: <c>x.validTimeState(…)</c> is a method on the query classes, which is how the
+    /// platform's own query builders use the name.
+    /// </remarks>
+    private static bool InSelectClause(string masked, int at)
+    {
+        var head = masked.LastIndexOfAny([';', '{', '}'], Math.Max(0, at - 1));
+        var statement = masked[(head + 1)..at];
+        if (statement.TrimEnd().EndsWith('.')) return false;
+        return Regex.IsMatch(statement, @"\bselect\b", RegexOptions.IgnoreCase);
     }
 
     /// <summary>Values an attribute argument may take: the compiler stores literals, nothing else.</summary>
@@ -1448,8 +1516,14 @@ public static class XppValidator
             }
             if (buf.Trim().Length > 0) args.Add(buf.Trim());
 
-            foreach (var arg in args)
+            foreach (var raw in args)
             {
+                // Masking blanks a comment's content AND its closing delimiter, keeping only
+                // the opening `/*`, so `[SysSetupConfig(true /*ContinueOnError*/, 600)]` — which
+                // the platform ships — reached the literal test as the argument "true /*". A
+                // comment is not part of the argument the compiler stores, so it goes: to its
+                // close where one survives, and to the end of the argument where it does not.
+                var arg = Regex.Replace(raw, @"/\*[\s\S]*?(?:\*/|$)|//[^\n]*", " ").Trim();
                 if (arg.Length == 0) continue;
                 if (AttributeLiteralRe.IsMatch(arg)) continue;
                 var call = Regex.Match(arg, @"^([A-Za-z_]\w*)\s*\(");
@@ -1633,7 +1707,11 @@ public static class XppValidator
         var label = PropertyRuleApplies(stats, "AxTable", "Label");
         if (label.Applies && !Regex.IsMatch(header, @"<Label>[^<]+</Label>", RegexOptions.IgnoreCase))
         {
-            v.Add(new XppViolation("XML002", "error", null, "<AxTable> — missing <Label>",
+            // Warning, not error. The rule is a majority convention — the evidence string says
+            // so — and the minority is Microsoft's own: a full sweep of this installation found
+            // 229 shipped tables in ApplicationFoundation alone with no <Label>, all of which
+            // build and run. An error claims the artefact does not work.
+            v.Add(new XppViolation("XML002", "warning", null, "<AxTable> — missing <Label>",
                 $"Add <Label>@YourModel:TableLabel</Label> to the table header (create the label first via `d365fo label create`). Evidence: {label.Evidence}."));
         }
 
@@ -1654,7 +1732,9 @@ public static class XppValidator
                 }
                 catch { /* keep static suggestion */ }
             }
-            v.Add(new XppViolation("XML003", "error", null, "<AxTable> — missing <TableGroup>",
+            // Warning for the same reason as XML002: a property most standard tables set is not
+            // a property a table must set to work.
+            v.Add(new XppViolation("XML003", "warning", null, "<AxTable> — missing <TableGroup>",
                 $"Add <TableGroup> to the table header. Most common standard values: {suggestion}. Evidence: {tableGroup.Evidence}."));
         }
 

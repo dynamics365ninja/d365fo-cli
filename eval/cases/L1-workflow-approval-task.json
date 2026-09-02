@@ -1,0 +1,33 @@
+{
+  "id": "L1-workflow-approval-task",
+  "title": "Workflow type with its own approval and task elements",
+  "tier": 1,
+  "instruction": "Create an approval workflow type named ConFmVehicleServiceWorkflow driven by the FmVehicle table in the existing FixedAssets workflow category, and give it its own approval element ConFmVehicleServiceApproval and task element ConFmVehicleServiceTask. Confirm the table with `d365fo get table FmVehicle` before generating. AxWorkflowTemplate.Category is required — a workflow type without one does not build, and the approval and task elements have to be referenced by the template, not merely created. Use only the d365fo CLI — do not hand-write XML.",
+  "canonical_args": [
+    "generate",
+    "workflow",
+    "ConFmVehicleServiceWorkflow",
+    "--table",
+    "FmVehicle",
+    "--category",
+    "FixedAssets",
+    "--approval-name",
+    "ConFmVehicleServiceApproval",
+    "--task-name",
+    "ConFmVehicleServiceTask"
+  ],
+  "target_artifact_types": [
+    "AxWorkflowTemplate",
+    "AxWorkflowApproval",
+    "AxWorkflowTask"
+  ],
+  "golden_path": "L1-workflow-approval-task",
+  "tags": [
+    "workflow",
+    "metadata",
+    "companions"
+  ],
+  "ignore": [],
+  "requires_fixture_index": true,
+  "golden_pending": false
+}

@@ -1,0 +1,7 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<AxMenuItemOutput xmlns="Microsoft.Dynamics.AX.Metadata.V1">
+  <Name>ConFmVehicleParamReportMenuItem</Name>
+  <Label>Fleet vehicle parameter report</Label>
+  <Object>ConFmVehicleParamReportController</Object>
+  <ObjectType>Class</ObjectType>
+</AxMenuItemOutput>

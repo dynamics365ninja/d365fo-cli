@@ -44,7 +44,16 @@ This builds a throwaway temp SQLite index (plus fixture data from
 scores the produced XML against `eval/goldens/<id>/` — `validate xpp` and
 `validate references` are called directly against the Core APIs
 (`D365FO.Core.Validation.XppValidator` / `ReferenceResolver`), not via a
-subprocess. `--write` appends a record to `eval/corpus/runs/`.
+subprocess. The artifacts the command writes *beside* its main one are scored
+too, against `eval/goldens/<id>/_companions/`: one the golden names and the run
+did not produce is missing, one the run produced that no golden names is extra.
+`--write` appends a record to `eval/corpus/runs/`.
+
+A case that AUGMENTS an existing artifact rather than producing one — `generate
+table-relation`, `generate find-methods`, both of which refuse `--out` — names an
+`apply_to_seed` instead. The replay copies that file out of `eval/seeds/` into its
+work directory as the run's output file and points `--apply-to` at it, so the
+golden is the merged artifact and the seed itself is never touched.
 
 Agent-driven run (what actually tests "can an agent use this tool
 correctly" — the loop's real purpose): the **eval-runner** agent
@@ -87,7 +96,7 @@ returns `EVAL_BUILD_INVOCATION` and writes **no** verdicts — an argument mista
 must never be recorded as a broken golden. `EvalScoreCard.BuildClean` is `null`
 wherever no compiler ran; it is never `false` by default.
 
-Current baseline: **51 of 51 goldens compile clean**, with **zero unattributed
+Current baseline: **60 of 60 goldens compile clean**, with **zero unattributed
 diagnostics** — every complaint the compiler makes is blamed on the case that
 produced the object it names.
 

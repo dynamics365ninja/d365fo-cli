@@ -1,0 +1,21 @@
+{
+  "runId": "20260902T062209733Z__L1-systest-basic__35d94d38c4f84b66b79442bd77ab0b70",
+  "caseId": "L1-systest-basic",
+  "tier": 1,
+  "timestampUtc": "2026-09-02T06:22:09.7337495+00:00",
+  "source": "build-oracle",
+  "score": {
+    "xppErrors": 0,
+    "referenceErrors": 0,
+    "goldenMatch": true,
+    "goldenDiff": {
+      "missing": [],
+      "extra": [],
+      "changed": [],
+      "isMatch": true
+    },
+    "buildClean": true,
+    "buildErrors": 0,
+    "runtimeFailures": 0
+  }
+}

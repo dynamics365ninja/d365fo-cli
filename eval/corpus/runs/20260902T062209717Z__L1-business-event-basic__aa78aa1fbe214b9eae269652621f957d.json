@@ -1,0 +1,21 @@
+{
+  "runId": "20260902T062209717Z__L1-business-event-basic__aa78aa1fbe214b9eae269652621f957d",
+  "caseId": "L1-business-event-basic",
+  "tier": 1,
+  "timestampUtc": "2026-09-02T06:22:09.7177105+00:00",
+  "source": "build-oracle",
+  "score": {
+    "xppErrors": 0,
+    "referenceErrors": 0,
+    "goldenMatch": true,
+    "goldenDiff": {
+      "missing": [],
+      "extra": [],
+      "changed": [],
+      "isMatch": true
+    },
+    "buildClean": true,
+    "buildErrors": 0,
+    "runtimeFailures": 0
+  }
+}

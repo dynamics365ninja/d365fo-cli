@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<AxEdt xmlns:i="http://www.w3.org/2001/XMLSchema-instance" i:type="AxEdtString">
+  <Name>VIN</Name>
+  <Label>@Fleet:VIN</Label>
+  <!--
+    The EDT that CARRIES a reference, as opposed to the plain VinEdt beside it. D365FO
+    requires such a reference to be migrated to an explicit table relation
+    (BPErrorEDTNotMigrated), and `generate table-relation` derives that relation from exactly
+    these two elements — so the fixture has to contain one for the case to be about anything.
+    The EDT is named after FmVehicle's key field because that convention is what supplies the
+    constraint's RelatedField.
+  -->
+  <ReferenceTable>FmVehicle</ReferenceTable>
+  <StringSize>17</StringSize>
+</AxEdt>

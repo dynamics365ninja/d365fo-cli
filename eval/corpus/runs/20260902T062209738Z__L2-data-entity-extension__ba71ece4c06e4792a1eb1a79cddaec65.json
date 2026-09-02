@@ -1,0 +1,21 @@
+{
+  "runId": "20260902T062209738Z__L2-data-entity-extension__ba71ece4c06e4792a1eb1a79cddaec65",
+  "caseId": "L2-data-entity-extension",
+  "tier": 2,
+  "timestampUtc": "2026-09-02T06:22:09.738042+00:00",
+  "source": "build-oracle",
+  "score": {
+    "xppErrors": 0,
+    "referenceErrors": 0,
+    "goldenMatch": true,
+    "goldenDiff": {
+      "missing": [],
+      "extra": [],
+      "changed": [],
+      "isMatch": true
+    },
+    "buildClean": true,
+    "buildErrors": 0,
+    "runtimeFailures": 0
+  }
+}

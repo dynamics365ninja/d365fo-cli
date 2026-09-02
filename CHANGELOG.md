@@ -19,6 +19,105 @@ was ported from.
 
 ## [Unreleased]
 
+### Added — wave 05: oracles, and what the first one found
+
+Five `oracle` commands that measure this tool against the installation it claims to understand,
+plus the corpus work that the measurement made possible. None is published over MCP: they are a
+measurement of `d365fo-cli`, not an operation on anyone's X++.
+
+- **`oracle sweep`** — every rule over every AOT file in a PackagesLocalDirectory. The bar is
+  **zero errors on Microsoft's own X++**, not "few": a rule that fires on shipped code teaches a
+  caller to ignore findings. `--dry` sweeps the checked-in fixtures so CI without an installation
+  can still run it; findings are tallied per rule with a few samples each, because an
+  installation is a quarter of a million files and keeping every finding to group at the end
+  costs gigabytes and says nothing the counters do not.
+- **`oracle census` / `oracle members`** — what shipped XML actually carries, member by member,
+  against what the metadata contract declares. This is where compiler and metadata facts come
+  from instead of from guessing.
+- **`oracle probe`** — compiles one artefact (or a handful) with the real `xppc.exe` in a
+  throwaway model. An xppc that rejects its argument list prints usage, which parses as "no
+  diagnostics", so that case is reported as a failure of the probe rather than as a pass.
+- **`oracle runtime`** — whether `SysTestConsole.exe` is wired to a database (its keys are in the
+  AOS `web.config`, so the answer is derivable rather than guessable, and `--configure` copies
+  only the missing ones, keeping a `.bak`), and `--negative-control`, a test class whose three
+  methods pass, fail and throw on purpose. "All tests passed" is also what a runner prints when
+  it ran nothing.
+
+### Fixed — every rule that fired on Microsoft's own code
+
+The first full sweep of a live installation (242 858 files, 107 241 X++ blocks) reported
+**4 674 errors**. Every one was the validator being wrong. `SweepFalsePositiveTests` pins each
+with the count it accounted for, alongside the code the rule exists for — so a "fix" that
+silences a rule fails there rather than passing quietly.
+
+- **XML007, 4 574 findings.** A member name that is also a type name was read as the type. The
+  catalog has exactly two such collisions; one of them is `DataSource`, declared by
+  `AxQueryExtensionEmbeddedDataSource` as an `AxQuerySimpleEmbeddedDataSource` while an unrelated
+  three-member type of that name exists — so every real data-source property under it was
+  reported as unknown. What the parent declares now beats what the name coincides with.
+- **XML007 again, 1 463 in one model.** The rule descended into documents whose root it did not
+  recognise, which is how the BP suppression list every model ships got judged against the
+  metadata contracts. It now stops at an unknown root, as its own documentation always claimed,
+  and skips `IgnoreDiagnostics` explicitly: those entries really do carry members
+  `AxIgnoreDiagnosticItem` does not declare (reflected off the assembly — it has seven), and the
+  file is read by the best-practice tooling rather than by the metadata serializer.
+- **XML002 / XML003, 229 in one model, downgraded to warnings.** Both are majority conventions
+  mined from standard models, and the minority is Microsoft's own. A convention most artefacts
+  follow is not a defect in the ones that do not.
+- **ATTR001, 72 findings.** Masking blanks a comment's content *and* its closing delimiter, so
+  `[SysSetupConfig(true /*ContinueOnError*/, 600)]` reached the literal test as the argument
+  `true /*`.
+- **SEL010, 15 findings.** `validTimeState` is also a method on the query classes and a parameter
+  name on their declarations; the rule is about the select clause and now only looks there.
+- **FN001, 7 findings.** `new Info()` constructs the class of that name — a predefined function
+  is never reached through `new`.
+- **CS001, 3 findings.** A file may alias a CLR type into scope (`using string = System.String;`),
+  which is what the platform's Commerce pricing classes do; `string groupKey` is then a
+  declaration of that alias, not the C# keyword.
+- **SEL008, 1 finding.** A select inside a `#localmacro` has no terminating semicolon, so the
+  statement scan ran into the next macro and paired one macro's `where` with the next one's
+  `order by`.
+- **COC003, 1 finding.** The `_Extension` suffix is now matched case-insensitively, as X++
+  identifiers are — the platform ships `JournalCheckPostIV_extension`.
+- **FN001 again, 2 findings.** X++ allows a function to be declared inside a method body, and it
+  takes precedence over the predefined name of the same spelling — which the compiler's own
+  message says ("nor a previously defined local function"). `BatchRun.runJob` declares
+  `void info()` and calls it twice.
+- **RPT001, 1 finding.** An abstract data provider is a base for concrete ones and carries no
+  contract of its own; `CustVendAdvanceInvoiceDP` reads `parmDataContract()` and declares none,
+  because `CustAdvanceInvoiceDP` and `VendAdvanceInvoiceDP` each declare their own.
+
+Re-swept after each fix: the four rules above were the last errors on the installation. The
+warnings (41 475) are counted and left alone — they are style rules that shipped code
+legitimately breaks, and the bar was never about them.
+
+### Added — the eval corpus reaches the artefacts nothing was checking
+
+- **Companions are scored.** A report is a report plus a TempDB table, a DP, a controller and an
+  output menu item; only the main artefact used to be diffed, so companions were captured once
+  and never checked again. Turning it on immediately found ten companions across the two report
+  cases that no golden had pinned. A companion the golden names and the run did not produce is
+  missing; one the run produced and the golden does not name is extra.
+- **Cases can start from an artefact.** `generate table-relation` and `generate find-methods`
+  augment a table that already exists and refuse `--out` outright, so neither was reachable by a
+  replay. A case may now name an `apply_to_seed` under `eval/seeds/`, which the replay copies in
+  as its output file and merges into.
+- **Eight new cases**, goldens captured on this VM through the real CLI, taking the corpus from
+  52 to 60: the workflow approval/task elements, the service group, the deprecated `simple-list`
+  alias, a report dataset extension, view/query/data-entity extensions, and the two table
+  augmenters above.
+- **Three families gained the command that builds them.** `AxViewExtension`,
+  `AxQuerySimpleExtension` and `AxDataEntityViewExtension` were reported as having no generator
+  while `generate extension` was building all three.
+- **Knowledge for twelve leaves the corpus taught nothing about**: the remaining extension kinds
+  and their root elements, security duty/role extensions, `AxView` and `AxMap` with the commands
+  that build them, the plain `generate class`, the two form-method scaffolders and `form-clone`.
+
+Coverage: **64 of 74 leaves** are now K ∧ E ∧ T, up from 42. The remaining ten
+(`AxAggregateDataEntity`, `AxCompositeDataEntityView`, `AxConfigurationKey`, `AxFormPart`,
+`AxLabelFile`, `AxMapExtension`, `AxMenu`, `AxResource`, `AxTile`, `AxWorkflowCategory`) are
+blocked on a `generate` subcommand that does not exist yet — surface work, not corpus work.
+
 ### Fixed — the rest of the 1.16.0 ports
 The remainder of the upstream fixes the gap analysis lists under wave 04, each checked against
 this codebase before being ported: a fix for a defect we do not have is a change with no reason.

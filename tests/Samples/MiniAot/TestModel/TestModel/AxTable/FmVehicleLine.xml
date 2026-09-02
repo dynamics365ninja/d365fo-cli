@@ -1,4 +1,4 @@
-<AxTable>
+<AxTable xmlns:i="http://www.w3.org/2001/XMLSchema-instance">
   <Name>FmVehicleLine</Name>
   <Label>@Fleet:VehicleLine</Label>
   <!-- See the note on FmVehicle: Overview/General are what generated forms bind to. -->
@@ -54,16 +54,16 @@
     </AxTableFieldGroup>
   </FieldGroups>
   <Fields>
-    <AxTableField xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:type="AxTableFieldString">
+    <AxTableField i:type="AxTableFieldString">
       <Name>VIN</Name>
       <ExtendedDataType>VinEdt</ExtendedDataType>
       <Mandatory>Yes</Mandatory>
       <StringSize>17</StringSize>
     </AxTableField>
-    <AxTableField xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:type="AxTableFieldInt">
+    <AxTableField i:type="AxTableFieldInt">
       <Name>LineNum</Name>
     </AxTableField>
-    <AxTableField xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:type="AxTableFieldString">
+    <AxTableField i:type="AxTableFieldString">
       <Name>ServiceNote</Name>
       <ExtendedDataType>Notes</ExtendedDataType>
     </AxTableField>
@@ -91,7 +91,7 @@
       <RelatedTableCardinality>ExactlyOne</RelatedTableCardinality>
       <RelationshipType>Association</RelationshipType>
       <Constraints>
-        <AxTableRelationConstraint xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:type="AxTableRelationConstraintField">
+        <AxTableRelationConstraint i:type="AxTableRelationConstraintField">
           <Name>VIN</Name>
           <Field>VIN</Field>
           <RelatedField>VIN</RelatedField>

@@ -223,8 +223,18 @@ public static class WorkflowScaffolder
     /// after the element kind followed by the element name
     /// (<c>ApprovalBankReconciliationApproval</c> → <c>BankReconciliationApproval</c>).
     /// </summary>
+    /// <remarks>
+    /// The kind is carried by <c>&lt;Type&gt;</c>, and only for the kinds that are not the
+    /// default: across the templates on a live installation the element carries <c>Task</c> 49
+    /// times and <c>AutomatedTask</c> 28, and is absent 117 times — absent meaning approval.
+    /// Written without it, a task reference is read as an approval and xppc answers
+    /// "Workflow approval '&lt;task&gt;' does not exist", naming a kind the file never mentions.
+    /// The L3 build oracle is what caught it: the offline rules cannot know this, and the
+    /// document is otherwise perfectly well-formed.
+    /// </remarks>
     private static XElement ElementReference(string kind, string elementName) =>
         new("AxWorkflowElementReference",
             new XElement("Name", kind + elementName),
-            new XElement("ElementName", elementName));
+            new XElement("ElementName", elementName),
+            kind == "Approval" ? null : new XElement("Type", kind));
 }

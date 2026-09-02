@@ -1,0 +1,31 @@
+{
+  "id": "L2-report-extension-dataset",
+  "title": "Dataset post-handler extending a shipped report's data provider",
+  "tier": 2,
+  "instruction": "A table extension has added fields to the AssetBarCodeTmp temp table, and the shipped AssetBarCodeDP data provider has to populate them without the report being over-layered. Generate the dataset extension for it. Read the dataset accessor off the DP with `d365fo get class AssetBarCodeDP` rather than deriving it from the temp-table name: the platform ships it misspelled as geAssetBarCodeTmp, and a handler that calls the name you would expect does not compile. Use only the d365fo CLI — do not hand-write the class.",
+  "canonical_args": [
+    "generate",
+    "report-extension",
+    "dataset",
+    "--dp",
+    "AssetBarCodeDP",
+    "--tmp-table",
+    "AssetBarCodeTmp",
+    "--dataset-accessor",
+    "geAssetBarCodeTmp",
+    "--suffix",
+    "ConFleet"
+  ],
+  "target_artifact_types": [
+    "AxClass"
+  ],
+  "golden_path": "L2-report-extension-dataset",
+  "tags": [
+    "report-extension",
+    "report",
+    "xpp"
+  ],
+  "ignore": [],
+  "requires_fixture_index": false,
+  "golden_pending": false
+}

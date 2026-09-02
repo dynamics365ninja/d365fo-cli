@@ -245,16 +245,28 @@ report a verdict nobody collected*:
 - a diagnostic naming an object no case provisioned is reported as *unattributed*
   rather than spread across every case.
 
-**Companions.** A case scores exactly one artifact — `EvalScorer` rejects a golden
-directory holding more, and rightly so. But one generate command usually ships
+**Companions.** A case's golden directory holds exactly one artifact — `EvalScorer`
+rejects one holding more, and rightly so. But one generate command usually ships
 several: `generate custom-service` writes the `AxService` *and* the class it names;
 `generate business-event` writes the event and its contract. Compiling the scored
 file alone left those siblings dangling and reported five cases red for objects the
-tool does in fact generate. Sibling artifacts now live in a `_companions` subfolder
-of the case's golden directory — invisible to the scorer, which enumerates the case
-directory non-recursively, and compiled by the oracle. They are captured from the
-same command run as the golden, so a companion that drifts fails the build exactly
-like the golden does.
+tool does in fact generate. Sibling artifacts live in a `_companions` subfolder of
+the case's golden directory — outside the single-golden rule, which enumerates the
+case directory non-recursively — and are captured from the same command run as the
+golden.
+
+They are **also diffed**, which they were not at first. Being merely captured meant
+they were reviewed once and then never checked again: any later drift in them was
+invisible to the whole corpus, and a case's `target_artifact_types` was half true,
+because the families it named were the companions' families and nothing compared
+them to anything. The scorer now matches each golden companion to the file of the
+same name in the run's own work directory, prefixes every diff line with the
+companion's name, reports a companion the golden names and the run did not produce
+as **missing**, and one the run produced that no golden names as **extra** — a new
+file appearing unannounced being exactly the drift worth failing on. Turning this on
+found ten unpinned companions across the two report cases on the first run. The
+extras half needs a directory the caller owns, so it applies to the replay and not
+to scoring a file an agent left somewhere.
 
 Its first runs found seven shipping defects the offline loop had no way to see —
 every generated `AxQuery` crashed the metadata reader; a generated event handler
@@ -283,7 +295,21 @@ convention is `NumberSeqModule<Module>`, and the wrapped `loadModule` is
 `protected`, not `public`. Four cases were also mis-authored: they extended a
 `NoYes` that is not extensible, added a privilege a duty already had, named a
 policy query nothing generates, and hung a number sequence off a module that does
-not exist. The catalog is now 51 of 51 clean.
+not exist. The catalog is now 60 of 60 clean.
+
+The eighth came from the same oracle, on a case authored later: a workflow type
+generated with its own approval AND task elements reported "Workflow approval
+'<task>' does not exist" — a kind the file never mentions. `AxWorkflowElementReference`
+carries the kind in `<Type>`, and only for the kinds that are not the default (across a
+live installation: `Task` 49 times, `AutomatedTask` 28, absent 117, absent meaning
+approval). Written without it, the task reference was read as an approval. No offline
+rule can know that, and the document is otherwise perfectly well-formed.
+
+The reference list moved with it: a golden that EXTENDS a standard object drags in what
+that object references, which does not stay inside ApplicationSuite/Foundation/Platform —
+a view extension over `CustAccountName` needs `DirPartyTable` from `Directory`. The
+throwaway model now references every package in the installation, read off the disk
+rather than guessed at per case.
 
 **Attribution is the load-bearing part.** Every diagnostic must land on the case
 whose golden produced the object it names, and the parser must recognise the shapes
@@ -319,6 +345,18 @@ library is used anywhere else in this repo):
   "golden_pending": false
 }
 ```
+
+`apply_to_seed` is the one field not shown above. A few commands augment an artifact
+that already exists — `generate table-relation` and `generate find-methods` merge into
+a table's XML and refuse `--out`/`--install-to` outright, because accepting a
+scaffold-output option and quietly dropping it would be worse than refusing it. A case
+for either therefore starts *from* an artifact instead of producing one: it names a
+bare file name under `eval/seeds/`, which the replay copies into its work directory as
+the run's output file and points `--apply-to` at, so the golden is the merged artifact
+and the seed is never mutated in place. A seed whose name matches an `AxTable` in the
+MiniAot fixture has to stay byte-identical to it — the index the replay builds comes
+from that fixture, and a drifted seed would be a case merging into a table the tool
+never saw.
 
 `canonical_args` is optional — cases meant only for the eval-runner agent
 (not yet reproducible deterministically, or deliberately testing whether an

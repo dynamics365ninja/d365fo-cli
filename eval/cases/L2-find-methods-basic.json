@@ -1,0 +1,24 @@
+{
+  "id": "L2-find-methods-basic",
+  "title": "Standard find()/exists()/findRecId() keyed on the table's alternate key",
+  "tier": 2,
+  "instruction": "Add the standard static find(), exists() and findRecId() methods to the FmServiceOrder table, keyed on its alternate-key index, and merge them into the table's source code. Do not invent the key — read it off the table with `d365fo get table FmServiceOrder`. Use only the d365fo CLI — do not hand-write the X++.",
+  "canonical_args": [
+    "generate",
+    "find-methods",
+    "FmServiceOrder"
+  ],
+  "target_artifact_types": [
+    "AxTable"
+  ],
+  "golden_path": "L2-find-methods-basic",
+  "tags": [
+    "find-methods",
+    "xpp",
+    "apply-to"
+  ],
+  "ignore": [],
+  "requires_fixture_index": true,
+  "apply_to_seed": "FmServiceOrder.xml",
+  "golden_pending": false
+}

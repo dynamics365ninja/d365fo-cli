@@ -25,7 +25,7 @@
     "canonical_args": {
       "type": ["array", "null"],
       "items": { "type": "string" },
-      "description": "Optional. Full `d365fo` args (e.g. [\"generate\", \"edt\", \"Name\", \"--base-type\", \"String\"]) for the deterministic `eval run` replay path. Must NOT include --out/--overwrite/--install-to/--output — `eval run` supplies those (the last forced to json, so the replay never touches Spectre's AnsiConsole). Omit for instruction-only cases (agent-driven via `eval score` only)."
+      "description": "Optional. Full `d365fo` args (e.g. [\"generate\", \"edt\", \"Name\", \"--base-type\", \"String\"]) for the deterministic `eval run` replay path. Must NOT include --out/--overwrite/--install-to/--output/--apply-to — `eval run` supplies those (the last forced to json, so the replay never touches Spectre's AnsiConsole). Omit for instruction-only cases (agent-driven via `eval score` only)."
     },
     "target_artifact_types": {
       "type": "array",
@@ -47,6 +47,10 @@
       "type": "boolean",
       "default": false,
       "description": "True when the case extends/references an object from tests/Samples/MiniAot (e.g. a CoC wrapper). `eval run` builds a disposable temp index from that fixture before replaying."
+    },
+    "apply_to_seed": {
+      "type": "string",
+      "description": "Bare file name under eval/seeds/. For commands that AUGMENT an existing artifact (generate table-relation, generate find-methods) and therefore refuse --out: `eval run` copies the seed into its work directory as the run's output file and passes --apply-to at it, so the golden is the merged artifact. A seed named after a MiniAot AxTable must stay byte-identical to it."
     },
     "golden_pending": {
       "type": "boolean",

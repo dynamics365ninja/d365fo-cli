@@ -1,0 +1,23 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<AxWorkflowApproval xmlns="Microsoft.Dynamics.AX.Metadata.V2">
+  <Name>ConFmVehicleServiceApproval</Name>
+  <Document>ConFmVehicleServiceWorkflowDocument</Document>
+  <DocumentMenuItem>ConFmVehicleServiceWorkflowMenuItem</DocumentMenuItem>
+  <Approve>
+    <Name xmlns="">Approve</Name>
+  </Approve>
+  <Deny>
+    <Name xmlns="">Deny</Name>
+    <Enabled xmlns="">No</Enabled>
+    <Type xmlns="">Deny</Type>
+  </Deny>
+  <Reject>
+    <Name xmlns="">Reject</Name>
+    <Type xmlns="">Return</Type>
+  </Reject>
+  <RequestChange>
+    <Name xmlns="">RequestChange</Name>
+    <Enabled xmlns="">No</Enabled>
+    <Type xmlns="">RequestChange</Type>
+  </RequestChange>
+</AxWorkflowApproval>

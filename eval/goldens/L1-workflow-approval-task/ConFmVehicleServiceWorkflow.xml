@@ -1,0 +1,20 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<AxWorkflowTemplate xmlns="Microsoft.Dynamics.AX.Metadata.V2">
+  <Name>ConFmVehicleServiceWorkflow</Name>
+  <Category>FixedAssets</Category>
+  <Document>ConFmVehicleServiceWorkflowDocument</Document>
+  <DocumentMenuItem>ConFmVehicleServiceWorkflowMenuItem</DocumentMenuItem>
+  <SubmitToWorkflowMenuItem>ConFmVehicleServiceWorkflowSubmit</SubmitToWorkflowMenuItem>
+  <LineItemWorkflows />
+  <SupportedElements>
+    <AxWorkflowElementReference xmlns="">
+      <Name>ApprovalConFmVehicleServiceApproval</Name>
+      <ElementName>ConFmVehicleServiceApproval</ElementName>
+    </AxWorkflowElementReference>
+    <AxWorkflowElementReference xmlns="">
+      <Name>TaskConFmVehicleServiceTask</Name>
+      <ElementName>ConFmVehicleServiceTask</ElementName>
+      <Type>Task</Type>
+    </AxWorkflowElementReference>
+  </SupportedElements>
+</AxWorkflowTemplate>

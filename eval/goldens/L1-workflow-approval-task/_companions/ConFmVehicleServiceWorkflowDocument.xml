@@ -1,0 +1,20 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<AxClass>
+  <Name>ConFmVehicleServiceWorkflowDocument</Name>
+  <SourceCode>
+    <Declaration><![CDATA[class ConFmVehicleServiceWorkflowDocument extends WorkflowDocument
+{
+}
+]]></Declaration>
+    <Methods>
+      <Method>
+        <Name>getQueryName</Name>
+        <Source><![CDATA[public QueryName getQueryName()
+{
+    return queryStr(ConFmVehicleServiceWorkflowQuery);
+}
+]]></Source>
+      </Method>
+    </Methods>
+  </SourceCode>
+</AxClass>

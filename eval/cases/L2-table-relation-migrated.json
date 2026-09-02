@@ -1,0 +1,26 @@
+{
+  "id": "L2-table-relation-migrated",
+  "title": "Explicit AxTableRelation derived from an un-migrated EDT reference",
+  "tier": 2,
+  "instruction": "The FmServiceOrder table has a VIN field whose EDT still carries the reference to FmVehicle instead of an explicit table relation, which D365FO rejects as BPErrorEDTNotMigrated. Derive the relation and merge it into the table. Use `d365fo get table FmServiceOrder` and `d365fo get edt VIN` first to confirm what the reference actually points at. Use only the d365fo CLI — do not hand-write the relation XML.",
+  "canonical_args": [
+    "generate",
+    "table-relation",
+    "FmServiceOrder",
+    "--field",
+    "VIN"
+  ],
+  "target_artifact_types": [
+    "AxTable"
+  ],
+  "golden_path": "L2-table-relation-migrated",
+  "tags": [
+    "table-relation",
+    "metadata",
+    "apply-to"
+  ],
+  "ignore": [],
+  "requires_fixture_index": true,
+  "apply_to_seed": "FmServiceOrder.xml",
+  "golden_pending": false
+}

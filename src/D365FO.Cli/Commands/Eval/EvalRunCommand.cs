@@ -198,7 +198,23 @@ public sealed class EvalRunCommand : Command<EvalRunCommand.Settings>
                     repo.ApplyExtract(batch);
             }
 
-            var args = @case.CanonicalArgs!.Concat(new[] { "--out", outPath, "--overwrite", "--output", "json" }).ToArray();
+            // A case that augments an existing table starts FROM an artefact instead of producing
+            // one: the seed is copied in as the run's output file and merged into in place, so
+            // everything downstream (scoring, capture) sees the same actual.xml it always did.
+            string[] args;
+            if (@case.ApplyToSeed is { Length: > 0 } seedName)
+            {
+                var seed = Path.Combine(EvalPaths.SeedsDir(root), seedName);
+                if (!File.Exists(seed))
+                    return (null, new ReplayFailure("EVAL_SEED_MISSING", $"Seed artefact not found: {seed}"));
+                File.Copy(seed, outPath);
+                args = @case.CanonicalArgs!.Concat(new[] { "--apply-to", outPath, "--output", "json" }).ToArray();
+            }
+            else
+            {
+                args = @case.CanonicalArgs!.Concat(new[] { "--out", outPath, "--overwrite", "--output", "json" }).ToArray();
+            }
+
             var (exitCode, replayError) = RunReplay(dllPath, dbPath, args);
 
             if (replayError is not null)
@@ -206,7 +222,7 @@ public sealed class EvalRunCommand : Command<EvalRunCommand.Settings>
             if (exitCode != 0 || !File.Exists(outPath))
                 return (null, new ReplayFailure("EVAL_GENERATE_FAILED", $"`d365fo {string.Join(' ', args)}` exited {exitCode} or produced no output file at {outPath}."));
 
-            var score = EvalScorer.Score(@case, outPath, EvalPaths.GoldensDir(root), repo);
+            var score = EvalScorer.Score(@case, outPath, EvalPaths.GoldensDir(root), repo, producedDir: workDir);
 
             if (write)
             {

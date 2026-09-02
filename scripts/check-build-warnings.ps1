@@ -21,7 +21,7 @@
 #>
 [CmdletBinding()]
 param(
-    [int]$Baseline = 117,
+    [int]$Baseline = 114,
     [string]$Solution = "d365fo-cli.slnx",
     [string]$Configuration = "Release"
 )

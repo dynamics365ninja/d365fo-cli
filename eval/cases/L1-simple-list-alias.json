@@ -1,0 +1,25 @@
+{
+  "id": "L1-simple-list-alias",
+  "title": "The simple-list alias produces the SimpleList form pattern",
+  "tier": 1,
+  "instruction": "Create a SimpleList form named ConFmVehicleSimpleList over the FmVehicle table using the simple-list command. Confirm the table exists with `d365fo get table FmVehicle` first. Use only the d365fo CLI — do not hand-write XML.",
+  "canonical_args": [
+    "generate",
+    "simple-list",
+    "ConFmVehicleSimpleList",
+    "--table",
+    "FmVehicle"
+  ],
+  "target_artifact_types": [
+    "AxForm"
+  ],
+  "golden_path": "L1-simple-list-alias",
+  "tags": [
+    "simple-list",
+    "form",
+    "deprecated-alias"
+  ],
+  "ignore": [],
+  "requires_fixture_index": true,
+  "golden_pending": false
+}

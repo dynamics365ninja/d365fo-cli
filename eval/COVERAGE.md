@@ -14,53 +14,53 @@ Every column is derived — families from `ObjectTypeRegistry`, capabilities fro
 file cannot claim coverage that no longer exists. Regenerate with
 `d365fo eval coverage --write`; CI runs `--check`.
 
-**42 of 74 leaves complete.**
+**64 of 74 leaves complete.**
 
 ## AOT families
 
 | Root element | Kind | K | E | T | Topics | Cases | Built by |
 |---|---|:-:|:-:|:-:|---|---|---|
 | `AxAggregateDataEntity` | aggregatedataentity | — | — | — | — | — | — |
-| `AxClass` | class | ✅ | ✅ | ✅ | `analytics-and-er`, `business-events-authoring`, `coc-extension-authoring`, `custom-service-authoring`, `data-entity-scaffolding`, `event-handler-authoring`, `form-pattern-scaffolding`, `global-class-statics`, `integration-patterns`, `label-translation`, `model-dependency-and-coupling`, `object-extension-authoring`, `report-print-destinations`, `review-and-checkpoint-workflow`, `security-hierarchy-trace`, `ssrs-report-authoring`, `system-objects`, `table-scaffolding`, `testing-and-quality`, `x++-class-authoring`, `xpp-best-practice-rules`, `xpp-class-and-method-rules`, `xpp-database-queries`, `xpp-statement-and-type-rules` | `L1-business-event-basic`, `L1-class-basic`, `L1-migration-script-basic`, `L1-runbase-basic`, `L1-sysoperation-basic`, `L1-systest-basic`, `L2-coc-extension`, `L2-event-handler-basic`, `L2-numberseq-basic` | generate class |
+| `AxClass` | class | ✅ | ✅ | ✅ | `analytics-and-er`, `business-events-authoring`, `coc-extension-authoring`, `custom-service-authoring`, `data-entity-scaffolding`, `event-handler-authoring`, `form-pattern-scaffolding`, `global-class-statics`, `integration-patterns`, `label-translation`, `model-dependency-and-coupling`, `object-extension-authoring`, `report-print-destinations`, `review-and-checkpoint-workflow`, `security-hierarchy-trace`, `ssrs-report-authoring`, `system-objects`, `table-scaffolding`, `testing-and-quality`, `x++-class-authoring`, `xpp-best-practice-rules`, `xpp-class-and-method-rules`, `xpp-database-queries`, `xpp-statement-and-type-rules` | `L1-business-event-basic`, `L1-class-basic`, `L1-custom-service-basic`, `L1-migration-script-basic`, `L1-runbase-basic`, `L1-sysoperation-basic`, `L1-systest-basic`, `L2-coc-extension`, `L2-event-handler-basic`, `L2-numberseq-basic`, `L2-report-extension-dataset` | generate class |
 | `AxCompositeDataEntityView` | compositedataentityview | — | — | — | — | — | — |
 | `AxConfigurationKey` | configurationkey | — | — | — | — | — | — |
 | `AxDataEntityView` | dataentityview | ✅ | ✅ | ✅ | `data-entity-scaffolding`, `integration-dmf-dualwrite`, `integration-patterns` | `L2-virtual-entity-basic` | generate entity |
-| `AxDataEntityViewExtension` | dataentityviewextension | — | — | — | — | — | — |
+| `AxDataEntityViewExtension` | dataentityviewextension | ✅ | ✅ | ✅ | `object-extension-authoring` | `L2-data-entity-extension` | generate extension |
 | `AxEdt` | edt | ✅ | ✅ | ✅ | `object-extension-authoring`, `system-objects`, `table-scaffolding` | `L0-edt-basic`, `L0-edt-extends` | generate edt |
-| `AxEdtExtension` | edtextension | — | ✅ | ✅ | — | `L2-edt-extension` | generate extension |
+| `AxEdtExtension` | edtextension | ✅ | ✅ | ✅ | `object-extension-authoring` | `L2-edt-extension` | generate extension |
 | `AxEnum` | enum | ✅ | ✅ | ✅ | `event-handler-authoring`, `object-extension-authoring`, `report-print-destinations`, `system-objects` | `L0-enum-basic`, `L0-enum-non-extensible` | generate enum |
-| `AxEnumExtension` | enumextension | — | ✅ | ✅ | — | `L2-enum-extension` | generate extension |
-| `AxForm` | form | ✅ | ✅ | ✅ | `coc-extension-authoring`, `data-entity-scaffolding`, `event-handler-authoring`, `form-pattern-scaffolding`, `label-translation`, `model-dependency-and-coupling`, `object-extension-authoring`, `review-and-checkpoint-workflow`, `security-hierarchy-trace`, `table-scaffolding`, `x++-class-authoring`, `xpp-best-practice-rules`, `xpp-class-and-method-rules`, `xpp-database-queries`, `xpp-statement-and-type-rules` | `L1-form-basic`, `L1-form-details-master`, `L1-form-details-transaction`, `L1-form-dialog`, `L1-form-list-page`, `L1-form-lookup`, `L1-form-simplelist-details`, `L1-form-table-of-contents`, `L1-form-workspace`, `L2-control-method-basic`, `L2-datasource-method-basic`, `L2-form-clone-basic` | generate form |
-| `AxFormExtension` | formextension | ✅ | ✅ | ✅ | `form-pattern-scaffolding`, `review-and-checkpoint-workflow` | `L2-form-extension-basic` | generate extension |
+| `AxEnumExtension` | enumextension | ✅ | ✅ | ✅ | `object-extension-authoring` | `L2-enum-extension` | generate extension |
+| `AxForm` | form | ✅ | ✅ | ✅ | `coc-extension-authoring`, `data-entity-scaffolding`, `event-handler-authoring`, `form-pattern-scaffolding`, `forms-and-navigation`, `label-translation`, `model-dependency-and-coupling`, `object-extension-authoring`, `review-and-checkpoint-workflow`, `security-hierarchy-trace`, `table-scaffolding`, `x++-class-authoring`, `xpp-best-practice-rules`, `xpp-class-and-method-rules`, `xpp-database-queries`, `xpp-statement-and-type-rules` | `L1-form-basic`, `L1-form-details-master`, `L1-form-details-transaction`, `L1-form-dialog`, `L1-form-list-page`, `L1-form-lookup`, `L1-form-simplelist-details`, `L1-form-table-of-contents`, `L1-form-workspace`, `L1-simple-list-alias`, `L2-control-method-basic`, `L2-datasource-method-basic`, `L2-form-clone-basic` | generate form |
+| `AxFormExtension` | formextension | ✅ | ✅ | ✅ | `form-pattern-scaffolding`, `object-extension-authoring`, `review-and-checkpoint-workflow` | `L2-form-extension-basic` | generate extension |
 | `AxFormPart` | formpart | — | — | — | — | — | — |
 | `AxLabelFile` | labelfile | ✅ | — | — | `label-translation` | — | — |
-| `AxMap` | map | — | ✅ | ✅ | — | `L1-map-basic`, `L1-map-multi-table` | generate map |
-| `AxMapExtension` | mapextension | — | — | — | — | — | — |
+| `AxMap` | map | ✅ | ✅ | ✅ | `table-scaffolding` | `L1-map-basic`, `L1-map-multi-table` | generate map |
+| `AxMapExtension` | mapextension | ✅ | — | — | `object-extension-authoring` | — | — |
 | `AxMenu` | menu | ✅ | — | — | `forms-and-navigation` | — | — |
 | `AxMenuItemAction` | menuitemaction | ✅ | ✅ | ✅ | `form-pattern-scaffolding` | `L1-menu-item-action` | generate menu-item |
 | `AxMenuItemDisplay` | menuitemdisplay | ✅ | ✅ | ✅ | `form-pattern-scaffolding` | `L1-menu-item-basic` | generate menu-item |
 | `AxMenuItemOutput` | menuitemoutput | ✅ | ✅ | ✅ | `form-pattern-scaffolding` | `L1-menu-item-output` | generate menu-item |
 | `AxQuery` | query | ✅ | ✅ | ✅ | `object-extension-authoring`, `table-scaffolding` | `L1-query-basic`, `L1-query-join` | generate query |
-| `AxQuerySimpleExtension` | queryextension | — | — | — | — | — | — |
+| `AxQuerySimpleExtension` | queryextension | ✅ | ✅ | ✅ | `object-extension-authoring` | `L2-query-extension` | generate extension |
 | `AxReport` | report | ✅ | ✅ | ✅ | `rdl-design-expressions`, `ssrs-report-authoring` | `L1-report-basic`, `L1-report-parameters` | generate report |
 | `AxResource` | resource | — | — | — | — | — | — |
 | `AxSecurityDuty` | securityduty | ✅ | ✅ | ✅ | `security-modeling` | `L1-duty-basic` | generate duty |
-| `AxSecurityDutyExtension` | securitydutyextension | — | ✅ | ✅ | — | `L2-security-duty-extension` | generate extension |
+| `AxSecurityDutyExtension` | securitydutyextension | ✅ | ✅ | ✅ | `object-extension-authoring`, `security-modeling` | `L2-security-duty-extension` | generate extension |
 | `AxSecurityPolicy` | securitypolicy | ✅ | ✅ | ✅ | `object-extension-authoring`, `security-modeling` | `L2-security-policy-basic` | generate security-policy |
 | `AxSecurityPrivilege` | securityprivilege | ✅ | ✅ | ✅ | `security-hierarchy-trace`, `security-modeling` | `L1-privilege-basic`, `L1-privilege-data-entity` | generate privilege |
 | `AxSecurityRole` | securityrole | ✅ | ✅ | ✅ | `security-hierarchy-trace`, `security-modeling` | `L1-role-basic` | generate role |
-| `AxSecurityRoleExtension` | securityroleextension | — | ✅ | ✅ | — | `L2-security-role-extension` | generate extension |
+| `AxSecurityRoleExtension` | securityroleextension | ✅ | ✅ | ✅ | `object-extension-authoring`, `security-modeling` | `L2-security-role-extension` | generate extension |
 | `AxService` | service | ✅ | ✅ | ✅ | `custom-service-authoring`, `integration-patterns` | `L1-custom-service-basic` | generate custom-service |
-| `AxServiceGroup` | servicegroup | ✅ | — | ✅ | `custom-service-authoring`, `integration-patterns` | — | generate custom-service |
-| `AxTable` | table | ✅ | ✅ | ✅ | `coc-extension-authoring`, `data-entity-scaffolding`, `event-handler-authoring`, `form-pattern-scaffolding`, `integration-dmf-dualwrite`, `label-translation`, `model-dependency-and-coupling`, `object-extension-authoring`, `review-and-checkpoint-workflow`, `security-hierarchy-trace`, `ssrs-report-authoring`, `system-objects`, `table-scaffolding`, `x++-class-authoring`, `xpp-best-practice-rules`, `xpp-class-and-method-rules`, `xpp-database-queries`, `xpp-statement-and-type-rules` | `L1-table-basic`, `L1-table-tempdb` | generate table |
-| `AxTableExtension` | tableextension | ✅ | ✅ | ✅ | `review-and-checkpoint-workflow` | `L2-table-extension` | generate extension |
+| `AxServiceGroup` | servicegroup | ✅ | ✅ | ✅ | `custom-service-authoring`, `integration-patterns` | `L1-custom-service-basic` | generate custom-service |
+| `AxTable` | table | ✅ | ✅ | ✅ | `coc-extension-authoring`, `data-entity-scaffolding`, `event-handler-authoring`, `form-pattern-scaffolding`, `integration-dmf-dualwrite`, `label-translation`, `model-dependency-and-coupling`, `object-extension-authoring`, `review-and-checkpoint-workflow`, `security-hierarchy-trace`, `ssrs-report-authoring`, `system-objects`, `table-scaffolding`, `x++-class-authoring`, `xpp-best-practice-rules`, `xpp-class-and-method-rules`, `xpp-database-queries`, `xpp-statement-and-type-rules` | `L1-table-basic`, `L1-table-tempdb`, `L2-find-methods-basic`, `L2-table-relation-migrated` | generate table |
+| `AxTableExtension` | tableextension | ✅ | ✅ | ✅ | `object-extension-authoring`, `review-and-checkpoint-workflow` | `L2-table-extension` | generate extension |
 | `AxTile` | tile | ✅ | — | — | `analytics-and-er` | — | — |
-| `AxView` | view | — | ✅ | ✅ | — | `L1-view-basic`, `L1-view-computed` | generate view |
-| `AxViewExtension` | viewextension | — | — | — | — | — | — |
-| `AxWorkflowApproval` | workflowapproval | ✅ | — | ✅ | `workflow-authoring` | — | generate workflow |
+| `AxView` | view | ✅ | ✅ | ✅ | `table-scaffolding` | `L1-view-basic`, `L1-view-computed` | generate view |
+| `AxViewExtension` | viewextension | ✅ | ✅ | ✅ | `object-extension-authoring` | `L2-view-extension` | generate extension |
+| `AxWorkflowApproval` | workflowapproval | ✅ | ✅ | ✅ | `workflow-authoring` | `L1-workflow-approval-task` | generate workflow |
 | `AxWorkflowCategory` | workflowcategory | — | — | — | — | — | — |
-| `AxWorkflowTask` | workflowtask | ✅ | — | ✅ | `workflow-authoring` | — | generate workflow |
-| `AxWorkflowTemplate` | workflowtemplate | ✅ | ✅ | ✅ | `workflow-authoring` | `L1-workflow-basic` | generate workflow |
+| `AxWorkflowTask` | workflowtask | ✅ | ✅ | ✅ | `workflow-authoring` | `L1-workflow-approval-task` | generate workflow |
+| `AxWorkflowTemplate` | workflowtemplate | ✅ | ✅ | ✅ | `workflow-authoring` | `L1-workflow-approval-task`, `L1-workflow-basic` | generate workflow |
 
 ## `generate` capabilities
 
@@ -70,32 +70,32 @@ whether it is taught and proven.
 | Subcommand | Emits | K | E | Topics | Cases |
 |---|---|:-:|:-:|---|---|
 | `generate table` | AxTable | ✅ | ✅ | `label-translation`, `performance-and-caching`, `table-scaffolding`, `xpp-best-practice-rules` | `L1-table-basic`, `L1-table-tempdb` |
-| `generate table-relation` | AxTable | ✅ | — | `table-scaffolding` | — |
-| `generate find-methods` | AxTable | ✅ | — | `table-scaffolding` | — |
-| `generate class` | AxClass | — | ✅ | — | `L1-class-basic` |
-| `generate coc` | AxClass | ✅ | ✅ | `coc-extension-authoring`, `object-extension-authoring` | `L2-coc-extension` |
-| `generate form` | AxForm | ✅ | ✅ | `form-pattern-scaffolding` | `L1-form-basic`, `L1-form-details-master`, `L1-form-details-transaction`, `L1-form-dialog`, `L1-form-list-page`, `L1-form-lookup`, `L1-form-simplelist-details`, `L1-form-table-of-contents`, `L1-form-workspace` |
-| `generate datasource-method` | AxForm | — | ✅ | — | `L2-datasource-method-basic` |
-| `generate control-method` | AxForm | — | ✅ | — | `L2-control-method-basic` |
-| `generate form-clone` | AxForm | — | ✅ | — | `L2-form-clone-basic` |
-| `generate simple-list` | deprecated alias | — | — | — | — |
+| `generate table-relation` | AxTable | ✅ | ✅ | `table-scaffolding` | `L2-table-relation-migrated` |
+| `generate find-methods` | AxTable | ✅ | ✅ | `table-scaffolding` | `L2-find-methods-basic` |
+| `generate class` | AxClass | ✅ | ✅ | `x++-class-authoring` | `L1-class-basic` |
+| `generate coc` | AxClass | ✅ | ✅ | `coc-extension-authoring`, `object-extension-authoring`, `x++-class-authoring` | `L2-coc-extension` |
+| `generate form` | AxForm | ✅ | ✅ | `form-pattern-scaffolding`, `forms-and-navigation` | `L1-form-basic`, `L1-form-details-master`, `L1-form-details-transaction`, `L1-form-dialog`, `L1-form-list-page`, `L1-form-lookup`, `L1-form-simplelist-details`, `L1-form-table-of-contents`, `L1-form-workspace` |
+| `generate datasource-method` | AxForm | ✅ | ✅ | `forms-and-navigation` | `L2-datasource-method-basic` |
+| `generate control-method` | AxForm | ✅ | ✅ | `forms-and-navigation` | `L2-control-method-basic` |
+| `generate form-clone` | AxForm | ✅ | ✅ | `forms-and-navigation` | `L2-form-clone-basic` |
+| `generate simple-list` | deprecated alias | ✅ | ✅ | `form-pattern-scaffolding` | `L1-simple-list-alias` |
 | `generate entity` | AxDataEntityView | ✅ | ✅ | `data-entity-scaffolding`, `integration-dmf-dualwrite`, `integration-patterns` | `L2-virtual-entity-basic` |
-| `generate extension` | AxTableExtension, AxFormExtension, AxEdtExtension, AxEnumExtension, AxViewExtension, AxQuerySimpleExtension, AxDataEntityViewExtension, AxSecurityDutyExtension, AxSecurityRoleExtension | ✅ | ✅ | `forms-and-navigation`, `object-extension-authoring`, `xpp-best-practice-rules` | `L2-edt-extension`, `L2-enum-extension`, `L2-form-extension-basic`, `L2-security-duty-extension`, `L2-security-role-extension`, `L2-table-extension` |
-| `generate event-handler` | AxClass | ✅ | ✅ | `event-handler-authoring`, `forms-and-navigation` | `L2-event-handler-basic` |
+| `generate extension` | AxTableExtension, AxFormExtension, AxEdtExtension, AxEnumExtension, AxViewExtension, AxQuerySimpleExtension, AxDataEntityViewExtension, AxSecurityDutyExtension, AxSecurityRoleExtension | ✅ | ✅ | `forms-and-navigation`, `object-extension-authoring`, `security-modeling`, `xpp-best-practice-rules` | `L2-data-entity-extension`, `L2-edt-extension`, `L2-enum-extension`, `L2-form-extension-basic`, `L2-query-extension`, `L2-security-duty-extension`, `L2-security-role-extension`, `L2-table-extension`, `L2-view-extension` |
+| `generate event-handler` | AxClass | ✅ | ✅ | `event-handler-authoring`, `forms-and-navigation`, `x++-class-authoring` | `L2-event-handler-basic` |
 | `generate privilege` | AxSecurityPrivilege | ✅ | ✅ | `security-hierarchy-trace`, `security-modeling` | `L1-privilege-basic`, `L1-privilege-data-entity` |
 | `generate duty` | AxSecurityDuty | ✅ | ✅ | `security-hierarchy-trace`, `security-modeling` | `L1-duty-basic` |
 | `generate role` | AxSecurityRole | ✅ | ✅ | `security-hierarchy-trace`, `security-modeling` | `L1-role-basic` |
 | `generate report` | AxReport, AxTable, AxClass, AxMenuItemOutput | ✅ | ✅ | `ssrs-report-authoring` | `L1-report-basic`, `L1-report-parameters` |
-| `generate report-extension` | AxClass | ✅ | — | `ssrs-report-authoring` | — |
+| `generate report-extension` | AxClass | ✅ | ✅ | `ssrs-report-authoring` | `L2-report-extension-dataset` |
 | `generate sysoperation` | AxClass | ✅ | ✅ | `sysoperation-batch-patterns`, `x++-class-authoring` | `L1-sysoperation-basic` |
 | `generate number-sequence` | AxClass, AxEdt | ✅ | ✅ | `number-sequence-patterns`, `table-scaffolding` | `L2-numberseq-basic` |
-| `generate workflow` | AxWorkflowTemplate, AxWorkflowApproval, AxWorkflowTask, AxClass | ✅ | ✅ | `workflow-authoring` | `L1-workflow-basic` |
+| `generate workflow` | AxWorkflowTemplate, AxWorkflowApproval, AxWorkflowTask, AxClass | ✅ | ✅ | `workflow-authoring` | `L1-workflow-approval-task`, `L1-workflow-basic` |
 | `generate menu-item` | AxMenuItemDisplay, AxMenuItemAction, AxMenuItemOutput | ✅ | ✅ | `form-pattern-scaffolding`, `forms-and-navigation` | `L1-menu-item-action`, `L1-menu-item-basic`, `L1-menu-item-output` |
 | `generate edt` | AxEdt | ✅ | ✅ | `object-extension-authoring`, `xpp-best-practice-rules` | `L0-edt-basic`, `L0-edt-extends` |
 | `generate enum` | AxEnum | ✅ | ✅ | `object-extension-authoring` | `L0-enum-basic`, `L0-enum-non-extensible` |
 | `generate query` | AxQuery | ✅ | ✅ | `object-extension-authoring`, `table-scaffolding`, `xpp-database-queries` | `L1-query-basic`, `L1-query-join` |
-| `generate view` | AxView | — | ✅ | — | `L1-view-basic`, `L1-view-computed` |
-| `generate map` | AxMap | — | ✅ | — | `L1-map-basic`, `L1-map-multi-table` |
+| `generate view` | AxView | ✅ | ✅ | `table-scaffolding` | `L1-view-basic`, `L1-view-computed` |
+| `generate map` | AxMap | ✅ | ✅ | `table-scaffolding` | `L1-map-basic`, `L1-map-multi-table` |
 | `generate business-event` | AxClass | ✅ | ✅ | `business-events-authoring`, `integration-patterns` | `L1-business-event-basic` |
 | `generate custom-service` | AxService, AxServiceGroup, AxClass | ✅ | ✅ | `custom-service-authoring`, `integration-patterns` | `L1-custom-service-basic` |
 | `generate migration-script` | AxClass | ✅ | ✅ | `sysoperation-batch-patterns` | `L1-migration-script-basic` |
@@ -105,25 +105,4 @@ whether it is taught and proven.
 
 ## Open gaps
 
-Leaves the tool builds but knowledge or evals do not yet cover. Families the tool
-cannot build at all are omitted — they are a generation gap, not a coverage gap.
-
-- **class** (capability) — no topic names it
-- **control-method** (capability) — no topic names it
-- **datasource-method** (capability) — no topic names it
-- **find-methods** (capability) — no case with a reviewed golden
-- **form-clone** (capability) — no topic names it
-- **map** (capability) — no topic names it
-- **report-extension** (capability) — no case with a reviewed golden
-- **simple-list** (capability) — no topic names it; no case with a reviewed golden
-- **table-relation** (capability) — no case with a reviewed golden
-- **view** (capability) — no topic names it
-- **AxEdtExtension** (family) — no topic names it
-- **AxEnumExtension** (family) — no topic names it
-- **AxMap** (family) — no topic names it
-- **AxSecurityDutyExtension** (family) — no topic names it
-- **AxSecurityRoleExtension** (family) — no topic names it
-- **AxServiceGroup** (family) — no case with a reviewed golden
-- **AxView** (family) — no topic names it
-- **AxWorkflowApproval** (family) — no case with a reviewed golden
-- **AxWorkflowTask** (family) — no case with a reviewed golden
+None: every leaf the tool can build is both taught and proven.

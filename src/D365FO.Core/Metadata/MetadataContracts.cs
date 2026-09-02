@@ -166,10 +166,21 @@ public static class MetadataContracts
         var local = element.Name.LocalName;
         var xsiType = element.Attribute(XsiType)?.Value;
 
-        if (!string.IsNullOrEmpty(xsiType) || Find(local) is not null)
+        if (!string.IsNullOrEmpty(xsiType))
             return ForElement(local, xsiType);
 
-        return MemberContract(parent, local);
+        // A name that is BOTH a member of the parent and a type in the catalog is a member:
+        // what the parent says it holds beats what the name happens to collide with. Two names
+        // collide this way in the whole catalog (DataSource, Method), and one of them cost
+        // 4 574 findings on a stock installation — <DataSource> inside
+        // AxQueryExtensionEmbeddedDataSource is declared as an AxQuerySimpleEmbeddedDataSource,
+        // but there is also a type called DataSource (the form data-source property collection,
+        // three members), so every real data-source property under it was judged against a type
+        // it has nothing to do with.
+        var declared = MemberContract(parent, local);
+        if (declared is not null) return declared;
+
+        return Find(local) is not null ? ForElement(local, xsiType) : null;
     }
 
     private static readonly XName XsiType =

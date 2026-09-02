@@ -59,6 +59,16 @@ public class CliMcpParityTests
         ["index export"] = "Index transport for CI caching.",
         ["index import"] = "Index transport for CI caching.",
         ["validate form-pattern-repair"] = "Alias of `form-pattern repair`, published under its own branch.",
+        ["oracle sweep"] = "Oracle harness — runs this tool's own validator over an installation to find rules that "
+            + "fire on correct Microsoft code. A measurement of the tool, not an operation on the user's X++.",
+        ["oracle census"] = "Oracle harness — measures what shipped AOT XML actually contains, which is where this "
+            + "tool's metadata facts come from.",
+        ["oracle members"] = "Oracle harness — the per-member half of the census.",
+        ["oracle probe"] = "Oracle harness — compiles a throwaway model with xppc to check a scaffold against the "
+            + "real compiler. An agent that wants its work compiled has `build`, which builds the model it "
+            + "installed into rather than a temporary copy of it.",
+        ["oracle runtime"] = "Oracle harness — diagnoses whether the SysTest runner is wired to a database and can "
+            + "tell a passing test from a failing one. Configures a Microsoft-installed file; an operator task.",
     };
 
     /// <summary>
