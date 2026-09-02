@@ -42,6 +42,7 @@ public static class ContractShapeRules
     /// <summary>A value outside its enum — the whole document fails to deserialize.</summary>
     public const string RuleInvalidEnumValue = "XML008";
 
+
     /// <summary>Appends any contract-shape violations found in <paramref name="xml"/>.</summary>
     public static void Check(string xml, List<XppViolation> violations)
     {

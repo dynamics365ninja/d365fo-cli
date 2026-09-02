@@ -19,6 +19,43 @@ was ported from.
 
 ## [Unreleased]
 
+### Fixed — the rest of the 1.16.0 ports
+The remainder of the upstream fixes the gap analysis lists under wave 04, each checked against
+this codebase before being ported: a fix for a defect we do not have is a change with no reason.
+
+- **A rule could read the document's root out of a comment.** The XML rules asked whether the
+  TEXT contained `<AxTable`, so `<!-- this was an <AxTable> before it was rewritten -->` above an
+  `AxClass` made every table rule fire on it — a finding naming a rule the document cannot break.
+  `XmlScan` reads the root by scanning tokens, skipping the prolog, comments, CDATA and
+  processing instructions; the six rules that guessed from text now ask it. Deleting the comments
+  first and re-scanning is the other tempting shape and is worse: it mutates the document being
+  judged, and a `-->` inside CDATA takes the deletion with it.
+- **`prepare create` on an extension asked about the wrong object.** Preparing
+  `CustTable.FleetExtension` reported "no collision, nothing similar" — true of a name that by
+  definition does not exist yet, and useless. It now grounds in the object being extended: does
+  it exist, which model owns it, what already extends it. A base that is not in the index is a
+  note rather than a veto — the index is a mirror of what was extracted, and the metadata
+  provider may well see the object.
+- **`get form` says when the file holds members the reader drops.** The reading half of the
+  silent-drop defect class: a form that reads as missing a datasource is indistinguishable from
+  one that never had it, and the caller goes looking for the wrong bug.
+
+### Not ported, and why
+- **Multi-line attribute blocks dropped on create** — this repository has no path that splits a
+  supplied X++ class body into methods, and `ExtractSignatureLine` already tracks bracket depth.
+- **Member list printing the signature instead of the name** — names and signatures are separate
+  columns here; verified against a real class, not assumed.
+- **The scaffold writing controls the platform cannot see** — the write path canonicalises member
+  order before writing; checked by generating all five form patterns and validating each.
+- **A form-order validation rule** was written and then **withdrawn**. Run against the
+  installation it flagged files Microsoft ships: an `AxEnum` with `ConfigurationKey` after
+  `UseEnumValue`, an `AccessGrant` with `Create` after `Update`, an `AxTableFieldString` with
+  `Label` after `StringSize` — all shipped, all loading. The contract's member list is
+  declaration order and the deserializer is more tolerant than that, so ordering what we write
+  stays and calling a document broken for its order does not. `MetadataContractsAotTests`, the
+  repository's own census over 10 028 shipped files, is what caught it; the reasoning is recorded
+  on `ContractOrderCanonicalizer` so the rule is not rediscovered and re-added.
+
 ### Fixed — what the wave-04 audit found
 Auditing the wave against the gap analysis turned up four defects, one of them in the wave's own
 new code.

@@ -162,12 +162,60 @@ public sealed partial class ToolHandlers
 
     // ---- Parity tools (forms / queries / views / entities / reports / services / workflows) ----
 
+    /// <summary>
+    /// A form's metadata, with a warning when the file on disk holds members the platform
+    /// cannot see.
+    /// </summary>
+    /// <remarks>
+    /// The reading half of the out-of-order defect. A member that appears after one the contract
+    /// declares later is dropped by the deserializer without a word, so a form that reads as
+    /// missing a datasource or a design is indistinguishable from a form that never had one —
+    /// and the caller goes looking for the wrong bug. The check costs one parse and only runs
+    /// when the source file is reachable.
+    /// </remarks>
     public ToolResult<object> GetForm(string name)
     {
         var f = _repo.GetForm(name);
-        return f is null
-            ? ToolResult<object>.Fail("FORM_NOT_FOUND", $"Form '{name}' not found.")
-            : ToolResult<object>.Success(f);
+        if (f is null) return ToolResult<object>.Fail("FORM_NOT_FOUND", $"Form '{name}' not found.");
+
+        return ToolResult<object>.Success(f, InvisibleMemberWarnings(f.Form.SourcePath));
+    }
+
+    /// <summary>
+    /// The order violations in a document on disk, phrased for someone reading the object rather
+    /// than writing it. Null when the file is unreachable or clean — an unreadable file is not a
+    /// finding.
+    /// </summary>
+    private static List<string>? InvisibleMemberWarnings(string? sourcePath)
+    {
+        if (string.IsNullOrWhiteSpace(sourcePath) || !File.Exists(sourcePath)) return null;
+
+        try
+        {
+            var violations = new List<D365FO.Core.Validation.XppViolation>();
+            D365FO.Core.Validation.ContractShapeRules.Check(File.ReadAllText(sourcePath), violations);
+
+            var dropped = violations
+                .Where(v => v.Rule == D365FO.Core.Validation.ContractShapeRules.RuleUnknownMember)
+                .Select(v => v.Excerpt)
+                .Distinct(StringComparer.Ordinal)
+                .Take(10)
+                .ToList();
+
+            if (dropped.Count == 0) return null;
+
+            return
+            [
+                $"The file on disk holds {dropped.Count} member(s) the metadata reader DROPS, so what is "
+                + $"reported here is not all of what the file contains: {string.Join(", ", dropped)}. "
+                + "Run `d365fo validate xpp <path> --code-type xml-any` for the detail — this is a defect in "
+                + "the file, not in the object it describes.",
+            ];
+        }
+        catch
+        {
+            return null; // the file is not readable as XML; other paths report that
+        }
     }
 
     public ToolResult<object> SearchQueries(string query, int limit = 50)
@@ -2134,6 +2182,25 @@ public sealed partial class ToolHandlers
     /// grounding token. Backs the unified <c>prepare</c> MCP tool
     /// (<c>mode=create</c>) and the CLI <c>prepare create</c> command.
     /// </summary>
+    /// <summary>
+    /// The object an extension extends, or null when this is not an extension.
+    /// </summary>
+    /// <remarks>
+    /// Both shapes the platform accepts: <c>Base.Suffix</c>, which every shipped extension uses,
+    /// and <c>Base_Extension</c>. The type alone is not enough to tell — a caller naming
+    /// <c>CustTable.Fleet</c> without a type is still creating an extension.
+    /// </remarks>
+    private static string? ExtensionBaseOf(string objectType, string name)
+    {
+        var looksLikeExtension = objectType.Contains("extension", StringComparison.OrdinalIgnoreCase)
+                                 || name.Contains('.')
+                                 || name.EndsWith("_Extension", StringComparison.OrdinalIgnoreCase);
+        if (!looksLikeExtension) return null;
+
+        var normalized = ObjectNamingRules.NormalizeExtensionTarget(name, out _);
+        return string.Equals(normalized, name, StringComparison.Ordinal) ? null : normalized;
+    }
+
     public ToolResult<object> PrepareCreate(string name, string type, string? goal, string[]? fields, string? prefix)
     {
         if (string.IsNullOrWhiteSpace(name))
@@ -2162,7 +2229,40 @@ public sealed partial class ToolHandlers
         };
         var violations = ObjectNamingRules.Validate(namingKind, finalName, prefix);
 
-        var similar = _repo.FindSimilarObjects(objectType, LastToken(baseName))
+        // An extension is created against an object that already exists, and everything worth
+        // knowing before writing one is about THAT object: does it exist, what model owns it,
+        // and who is already extending it. Grounding on the extension's own name asks about a
+        // name that by definition is not there yet, and answers "no collision, nothing similar"
+        // — true, and useless.
+        var extendedObject = ExtensionBaseOf(objectType, baseName);
+        object? extensionBase = null;
+        if (extendedObject is not null)
+        {
+            var kinds = _repo.SymbolKinds(extendedObject);
+            var existing = _repo.FindExtensions(extendedObject)
+                .Select(e => new { name = e.ExtensionName, e.Model, e.Kind })
+                .ToList();
+
+            extensionBase = new
+            {
+                name = extendedObject,
+                indexed = kinds.Count > 0,
+                existsAs = kinds.Count > 0 ? kinds : null,
+                existingExtensions = existing.Count,
+                extensions = existing.Take(10),
+                // Not being in the index is not a veto: the index is a mirror, and the bridge
+                // reads the live provider. Refusing here would block a legitimate write on a
+                // model that has simply not been extracted.
+                note = kinds.Count > 0
+                    ? "Extend this object rather than copying it — an extension merges into the base at build time."
+                    : $"\"{extendedObject}\" is not in the index. That is not proof it does not exist: the index is "
+                      + "a mirror of what was extracted, and the metadata provider may still see it. Run "
+                      + "`d365fo index sync <model>` if it should be there.",
+            };
+        }
+
+        // Similar objects: the peers of the BASE for an extension, of the name itself otherwise.
+        var similar = _repo.FindSimilarObjects(objectType, LastToken(extendedObject ?? baseName))
             .Select(s => new { s.Name, s.Model })
             .ToList();
 
@@ -2225,7 +2325,10 @@ public sealed partial class ToolHandlers
             collisions = collisions.Count > 0 ? collisions : null,
             collisionVerdict = collisions.Count > 0
                 ? "Name already exists — pick a different name or extend the existing object instead."
-                : $"No collision — neither \"{finalName}\" nor \"{baseName}\" exists in the index.",
+                : string.Equals(finalName, baseName, StringComparison.Ordinal)
+                    ? $"No collision — \"{finalName}\" does not exist in the index."
+                    : $"No collision — neither \"{finalName}\" nor \"{baseName}\" exists in the index.",
+            extensionBase,
             namingViolations = violations.Select(v => new { code = v.Code, severity = v.Severity, message = v.Message }),
             similarObjects = similar,
             fieldEdtSuggestions = fieldSuggestions.Count > 0 ? fieldSuggestions : null,
