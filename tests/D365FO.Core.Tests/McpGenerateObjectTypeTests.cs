@@ -251,4 +251,43 @@ public class McpGenerateObjectTypeTests : IDisposable
                  })
             Assert.Contains(objectType, hint, StringComparison.Ordinal);
     }
+
+    /// <summary>
+    /// The nine object types the coverage report was waiting on: each answers with the AOT root
+    /// the CLI subcommand of the same name writes, not with an envelope.
+    /// </summary>
+    [Theory]
+    [InlineData("configuration-key", """{"objectType":"configuration-key","name":"ConFmTrial","label":"@FLM1","parentKey":"Bank"}""", "AxConfigurationKey")]
+    [InlineData("form-part", """{"objectType":"form-part","name":"ConFmPart","form":"FMVehicle","caption":"@FLM2"}""", "AxFormPart")]
+    [InlineData("label-file", """{"objectType":"label-file","name":"ConFleet","language":"en-US","model":"Contoso","entries":["Vehicles=Fleet vehicles"]}""", "AxLabelFile")]
+    [InlineData("menu", """{"objectType":"menu","name":"ConFleet","label":"@FLM540","submenus":["Vehicles:@FLM95"],"items":["Vehicles/FMVehicle","Setup/FMSetup:Action"],"tiles":["Workspaces/FMClerkWorkspace"]}""", "AxMenu")]
+    [InlineData("resource", """{"objectType":"resource","name":"ConFmLogo","fileName":"ConFmLogo.png","model":"Contoso"}""", "AxResource")]
+    [InlineData("tile", """{"objectType":"tile","name":"ConFmTile","menuItem":"FMVehicle","tileType":"Count","query":"FMVehicleQuery","size":"Wide"}""", "AxTile")]
+    [InlineData("workflow-category", """{"objectType":"workflow-category","name":"ConFmWf","module":"Basic","label":"@FLM3"}""", "AxWorkflowCategory")]
+    [InlineData("composite-entity", """{"objectType":"composite-entity","name":"ConFmComposite","roots":["DMFTestHeaderEntity"],"embedded":["DMFTestLineEntity:DMFTestHeader"]}""", "AxCompositeDataEntityView")]
+    [InlineData("aggregate-entity", """{"objectType":"aggregate-entity","name":"ConFmRentals","measurement":"FMAggregateMeasurements","measures":["NoRentals:FMRentalCharges:NoRentals:BIRCount"]}""", "AxAggregateDataEntity")]
+    public void Small_object_types_return_the_document_their_cli_subcommand_writes(string objectType, string arguments, string expectedRoot)
+    {
+        var envelope = Generate(arguments);
+        AssertOk(envelope);
+        var data = envelope.GetProperty("data");
+        Assert.Equal(expectedRoot, data.GetProperty("kind").GetString());
+        var xml = data.GetProperty("xml").GetString()!;
+        AssertAotDocument(xml);
+        Assert.Equal(expectedRoot, XDocument.Parse(xml).Root!.Name.LocalName);
+        _ = objectType;
+    }
+
+    [Fact]
+    public void Label_file_over_mcp_hands_back_the_content_it_cannot_write()
+    {
+        var envelope = Generate("""{"objectType":"label-file","name":"ConFleet","model":"Contoso","entries":["Vehicles=Fleet vehicles","Make=Make"]}""");
+        AssertOk(envelope);
+        var data = envelope.GetProperty("data");
+        Assert.Equal("AxLabelFile/LabelResources/en-US/ConFleet.en-US.label.txt", data.GetProperty("contentFile").GetString());
+        Assert.Contains("Vehicles=Fleet vehicles", data.GetProperty("content").GetString());
+        // An id no @File:Id token can spell is refused on this surface too.
+        var bad = Generate("""{"objectType":"label-file","name":"Con Fleet","model":"Contoso"}""");
+        Assert.False(bad.GetProperty("ok").GetBoolean());
+    }
 }

@@ -1,0 +1,25 @@
+{
+  "id": "L2-map-extension",
+  "title": "Extension of a shipped map",
+  "tier": 2,
+  "instruction": "Create an extension of the standard AssetTransMap map with the suffix ConFm. Use only the d365fo CLI — do not hand-write XML.",
+  "canonical_args": [
+    "generate",
+    "extension",
+    "Map",
+    "AssetTransMap",
+    "--suffix",
+    "ConFm"
+  ],
+  "target_artifact_types": [
+    "AxMapExtension"
+  ],
+  "golden_path": "L2-map-extension",
+  "tags": [
+    "extension",
+    "map"
+  ],
+  "ignore": [],
+  "requires_fixture_index": false,
+  "golden_pending": false
+}

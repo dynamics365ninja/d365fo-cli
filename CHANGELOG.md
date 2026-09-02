@@ -19,6 +19,71 @@ was ported from.
 
 ## [Unreleased]
 
+### Added — the ten `generate` subcommands the coverage report was waiting on
+
+The K∧E∧T report had ten AOT families with no generator, and each was marked "surface work,
+not corpus work". This is the surface work: **43 `generate` subcommands** (was 33), every new
+shape measured on a live installation with `d365fo oracle census` before it was written, and
+every golden compiled by the real `xppc`.
+
+- **`generate configuration-key`** — `AxConfigurationKey` with label, parent key, license code;
+  `EnabledByDefault` is written only as the opt-out `No`, as 472 shipped keys do.
+- **`generate form-part`** — `AxFormPart` (`Name`, `Caption`, `Form`: the three members all 222
+  shipped parts carry). The hosted form is a required symbol.
+- **`generate label-file`** — `AxLabelFile` manifest for one language plus the `.label.txt` it
+  points at under `LabelResources/<lang>/`; `--entry Key=Text` seeds the content. The file id
+  is refused when no `@File:Id` token could name it.
+- **`generate menu`** — `AxMenu` with sub-menus (`--submenu`), menu items placed by path
+  (`--item Vehicles/FMVehicle[:Action|Output]`), tiles and menu references. Element names are
+  the collection's keys, so a duplicate in one container is refused rather than silently halved.
+- **`generate resource`** — `AxResource` manifest; `--source` copies the file into
+  `ResourceContent/<Type>/`. A manifest whose content is missing is a **Metadata Error** at
+  compile time ("Resource content file 'X.png' not found"), which the first L3 run proved.
+- **`generate tile`** — `AxTile` bound to a menu item; `Type` written only when not `Standard`,
+  a KPI tile needs `--kpi`. The menu item is checked against the index and reported in
+  `unknownMenuItems` rather than refused.
+- **`generate workflow-category`** — `AxWorkflowCategory` (V2 namespace) whose `--module` is
+  validated against `ModuleAxapta` in the index; the contract types it as a string and the
+  platform does not.
+- **`generate composite-entity`** — `AxCompositeDataEntityView`: root references with embedded
+  entities bound by a relation on the child; `[CompositeDataEntityView]` on a declaration that
+  does not extend `common`.
+- **`generate aggregate-entity`** — `AxAggregateDataEntity` over a measurement: read-only, the
+  five automatic field groups, and mapped fields whose members are written in the
+  `Microsoft.Dynamics.AX.Metadata.V2` namespace with the `d3p1:` prefix every shipped file
+  carries — unprefixed, the reader keeps the field and drops every mapping on it.
+- **`generate extension Map`** — `AxMapExtension`, the shell the contract declares (`Name`
+  only; the installation ships no instance).
+
+Around them:
+
+- **Eval corpus 60 → 70 cases**, coverage **83 of 83 leaves** (was 64 of 74; nine new
+  capability rows joined the table). Goldens captured on this VM through the real CLI; all 70
+  compile clean under `eval verify-build`.
+- **Content companions.** A golden's `_companions/` may now hold non-XML files under
+  sub-folders mirroring their place beside the artefact (`LabelResources/en-US/*.label.txt`,
+  `ResourceContent/Images/*.png`); the L3 provisioner copies them into the artefact's AOT
+  folder, because the compiler checks that the content a manifest names exists.
+- The eval replay's child process now runs from the repository root, so canonical args may
+  name files the repository ships (`--source eval/seeds/ConFmLogo.png`).
+- `PropertyHonesty` skips `--entry`: its value lands in the `.label.txt`, and the manifest
+  cannot carry it.
+- Every new subcommand is also a `generate_object` objectType over MCP (XML-only, like the rest
+  of that surface); `label-file` and `resource` hand back the content file's path — and, for
+  labels, its text — because the manifest is one file of two. `docs/MCP_TOOLS.md` regenerated:
+  187 command routes.
+
+### Fixed — what the census said about menus
+
+`forms-and-navigation` taught that a sub-menu is nested through a `<SubMenu>` member and that
+`AxMenuElementMenuReference` was "a different, legacy concept". Counted on the installation:
+of 81 shipped menus, 60 nest sub-menus **inline** — `AxMenuElementSubMenu` carries its own
+`<Elements>` — one references another menu through `AxMenuElementMenuReference/<MenuName>`,
+and **no file carries a `<SubMenu>` member**; the contract declares none. The topic now says
+what the files say. The tile size list lost its `Small` (the `TileSize` enum has none) and
+`object-extension-authoring` no longer claims there is no Map extension kind.
+
+
 ### Fixed — the two 1.16.0 ports the parity audit found still missing
 
 Auditing the repository against the gap analysis, with each of its twelve upstream fixes probed

@@ -1,0 +1,34 @@
+{
+  "id": "L1-menu-basic",
+  "title": "Navigation menu with sub-menus, menu items and a workspace tile",
+  "tier": 1,
+  "instruction": "Create a navigation menu named ConFleet labeled @FLM540 with a Vehicles sub-menu (label @FLM95) holding the FMVehicle list page, a Setup sub-menu holding FMSetup, and a Workspaces sub-menu holding the FMClerkWorkspace tile. The list pages open in the content area. Use only the d365fo CLI — do not hand-write XML.",
+  "canonical_args": [
+    "generate",
+    "menu",
+    "ConFleet",
+    "--label",
+    "@FLM540",
+    "--submenu",
+    "Vehicles:@FLM95",
+    "--item",
+    "Vehicles/FMVehicle",
+    "--item",
+    "Setup/FMSetup",
+    "--tile",
+    "Workspaces/FMClerkWorkspace",
+    "--in-content-area"
+  ],
+  "target_artifact_types": [
+    "AxMenu"
+  ],
+  "golden_path": "L1-menu-basic",
+  "tags": [
+    "menu",
+    "navigation",
+    "metadata"
+  ],
+  "ignore": [],
+  "requires_fixture_index": false,
+  "golden_pending": false
+}

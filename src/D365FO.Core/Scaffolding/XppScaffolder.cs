@@ -674,8 +674,12 @@ public static class XppScaffolder
             "view"            => "AxViewExtension",
             "query"           => "AxQuerySimpleExtension",
             "dataentityview"  => "AxDataEntityViewExtension",
+            // The contract declares nothing beyond Name, IsObsolete, Visibility and Tags, and
+            // the installation ships no instance at all (census: 0 files) — a map extension is
+            // the shell a later edit hangs on, not a carrier of modifications.
+            "map"             => "AxMapExtension",
             _ => throw new ArgumentException(
-                $"Unsupported extension kind: {kind}. Extensible: table, form, edt, enum, view, query, dataEntityView.",
+                $"Unsupported extension kind: {kind}. Extensible: table, form, edt, enum, view, query, dataEntityView, map.",
                 nameof(kind)),
         };
 

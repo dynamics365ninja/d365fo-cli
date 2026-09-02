@@ -1,0 +1,29 @@
+{
+  "id": "L1-label-file-basic",
+  "title": "Label file manifest for one language with an initial entry",
+  "tier": 1,
+  "instruction": "Create a new label file with id ConFleet for language en-US in model D365FoCliEvalGoldens, with one initial label Vehicles = 'Fleet vehicles'. The result is the AxLabelFile manifest plus the .label.txt it points at. Use only the d365fo CLI — do not hand-write XML.",
+  "canonical_args": [
+    "generate",
+    "label-file",
+    "ConFleet",
+    "--language",
+    "en-US",
+    "--model",
+    "D365FoCliEvalGoldens",
+    "--entry",
+    "Vehicles=Fleet vehicles"
+  ],
+  "target_artifact_types": [
+    "AxLabelFile"
+  ],
+  "golden_path": "L1-label-file-basic",
+  "tags": [
+    "label-file",
+    "labels",
+    "metadata"
+  ],
+  "ignore": [],
+  "requires_fixture_index": false,
+  "golden_pending": false
+}

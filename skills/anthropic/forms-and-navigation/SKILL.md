@@ -110,27 +110,34 @@ form whose pattern is the one you want rather than from the nearest one.
 
 ## 3. Menus and menu items
 
-An `AxMenu` is a flat `<Elements>` collection of `AxMenuElement` entries. Which
-*kind* of element you write decides whether it works:
+An `AxMenu` is an `<Elements>` collection of `AxMenuElement` entries, and a
+sub-menu is **not** a separate object: `AxMenuElementSubMenu` carries its own
+nested `<Elements>` inline, with a `<Label>`. Which *kind* of element you write
+decides whether it works:
 
 | Element type | Purpose | Key field |
 |---|---|---|
-| `AxMenuElementMenuItem` | reference a display/action/output menu item | `<MenuItemName>` |
-| `AxMenuElementSubMenu` | nest **another menu** as a folder ("Inquiries and reports") | `<SubMenu>` |
+| `AxMenuElementMenuItem` | a display/action/output menu item | `<MenuItemName>` (+ `<MenuItemType>` for Action/Output; Display is the default and is not written) |
+| `AxMenuElementSubMenu` | a folder ("Inquiries and reports") holding its own `<Elements>` | `<Name>`, `<Label>`, nested `<Elements>` |
+| `AxMenuElementTile` | a workspace tile | `<Tile>` |
+| `AxMenuElementMenuReference` | pull in **another `AxMenu`** by name | `<MenuName>` |
 | `AxMenuElementSeparator` | visual separator | — |
-| `AxMenuElementTile` | a tile | — |
-| `AxMenuElementMenuReference` | a different, legacy concept — **not** plain nesting | — |
 
-- The submenu field is `<SubMenu>`. It is **not** `<MenuName>` and **not**
-  `<MenuItemName>`; `AxMenuElementMenu` is not a type at all. These names are
-  verified against `Microsoft.Dynamics.AX.Metadata.dll`.
+Counted on a stock installation (81 menus): 60 nest sub-menus inline this way,
+1 references another menu through `AxMenuElementMenuReference`/`<MenuName>`,
+and **no file carries a `<SubMenu>` member** — the type declares none. The
+element types are what `Microsoft.Dynamics.AX.Metadata.dll` declares;
+`AxMenuElementMenu` is not one of them.
+
 - A wrong element-type name is **not caught by xppc**. It surfaces only when the
   metadata generation step tries to deserialize the file
   ("cannot be deserialized as AxMenu … no knowledge of any type that maps to this
   name"). `d365fo validate metadata <file>` asks the provider the same question
   offline from the build.
-- A submenu is an ordinary `AxMenu` object: build its own items first, then add
-  the `AxMenuElementSubMenu` reference from the parent menu.
+- Every `AxMenuElement` is written with `xmlns=""` — the menu contracts into
+  `Microsoft.Dynamics.AX.Metadata.V1`, its elements into no namespace.
+- Element `<Name>`s are the keys of the collection: the same name twice in one
+  container is a document the reader silently halves.
 - The same applies to `AxMenuExtension` nesting into a standard menu.
 
 ```sh
@@ -138,9 +145,33 @@ d365fo generate menu-item FmVehicleListPageMenuItem --kind Display \
   --object FmVehicleListPage --object-type Form \
   --label "@Fleet:Vehicles" --install-to FleetManagement
 
+# The menu itself: sub-menus in the order declared, items placed by path
+d365fo generate menu ConFleet --label "@Fleet:Fleet" \
+  --submenu "Vehicles:@Fleet:Vehicles" \
+  --item Vehicles/FmVehicleListPageMenuItem --item Setup/FmSetup:Action \
+  --tile Workspaces/FmClerkWorkspace --in-content-area \
+  --install-to FleetManagement
+
 # Prove the result deserializes the way the AOS will read it
 d365fo validate metadata <path-to-menu-xml> --output json
 ```
+
+### Tiles, form parts and image resources
+
+- A **tile** (`AxTile`) opens a menu item and sits on a workspace; every one of
+  the 775 the platform ships carries `<MenuItemName>`. `generate tile <Name>
+  --menu-item <MenuItem> [--type Count --query <AxQuery>]` — see
+  `d365fo knowledge get analytics-and-er` for cues and KPIs.
+- A **form part** (`AxFormPart`) registers a form so another form can host it as
+  an info part, fact box or preview pane. Three members, all mandatory in
+  practice: `<Name>`, `<Caption>`, `<Form>`.
+  `generate form-part <Name> --form <AxForm> --caption <label>`.
+- An **image** for a tile or menu is an `AxResource` manifest plus the file under
+  `AxResource/ResourceContent/Images/`. The compiler checks that the file the
+  manifest names exists ("Resource content file 'X.png' not found" is a Metadata
+  Error). `generate resource <Name> --source ./X.png` writes both; `--type`
+  selects the `ResourceContent` folder for non-image resources (`XmlDoc`, `Data`,
+  `PowerBIReport` …).
 
 ## 4. Args — the record, caller and parameters an object is opened with
 

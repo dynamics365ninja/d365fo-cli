@@ -102,6 +102,10 @@ d365fo generate extension DataEntityView CustCustomerV3Entity --suffix Fleet --i
 # Add a privilege to a Microsoft duty / a duty to a Microsoft role
 d365fo generate extension SecurityDuty MaintainFA_RU --suffix Fleet --install-to FleetManagement
 d365fo generate extension SecurityRole BudgetBudgetClerk --suffix Fleet --install-to FleetManagement
+
+# Extend a shipped map (AxMapExtension) — a shell; the contract declares no
+# fields or mappings, and a stock installation ships no instance at all
+d365fo generate extension Map AssetTransMap --suffix Fleet --install-to FleetManagement
 ```
 
 ## What lands on disk
@@ -120,15 +124,18 @@ and the root element always agree, and the file name is `<Target>.<Suffix>.xml`:
 | `DataEntityView` | `AxDataEntityViewExtension` |
 | `SecurityDuty` | `AxSecurityDutyExtension` |
 | `SecurityRole` | `AxSecurityRoleExtension` |
+| `Map` | `AxMapExtension` |
 
 `AxQuerySimpleExtension` is the one to watch: the folder, the root element and
 the metadata provider collection are all `QuerySimpleExtension(s)`. There is no
 `AxQueryExtension` type in the platform at all, so an extension written under
 that name resolves to nothing.
 
-There is no Map extension kind. `AxMapExtension` is a folder every model ships
-and no standard model has a file in — extend the tables the map is mapped onto
-instead.
+`AxMapExtension` is the thinnest of them: the contract declares only `Name`,
+`IsObsolete`, `Visibility` and `Tags` — no fields, no mappings — and a stock
+installation ships **no instance at all** (census over 200+ packages: 0 files).
+The scaffold is therefore a shell for later edits; to change what a map maps
+onto, extend the tables it is mapped to instead.
 
 `generate extension` takes exactly two positional arguments (`<KIND> <TARGET>`);
 the suffix is a named `--suffix <SUFFIX>` option, not a third positional

@@ -22,7 +22,7 @@ metadata-only — no X++ required.
 
 | Element | Properties that matter |
 |---|---|
-| `AxTile` | `Label`, `Query` (the AOT query whose row count shows), `MenuItemName` (what opens on click), `Size` (Small / Medium / Wide / Large) |
+| `AxTile` | `Label`, `Query` (the AOT query whose row count shows), `MenuItemName` (what opens on click), `Size` (Medium / Wide / ShortWide / Large — the `TileSize` enum has no Small) |
 | `AxKPI` | `Measurement`, `Value` (Measure + MeasureGroup), `Goal`, `ScoringPattern` (LessIsBetter / MoreIsBetter / CloserIsBetter), `RefreshFrequency`, `ShowStatus` |
 
 - A tile **without** a `Query` is a link tile; **with** one it becomes a cue and
@@ -40,6 +40,18 @@ metadata-only — no X++ required.
   A Microsoft tile's query cannot be redefined in place.
 - Consider whether a saved view or an embedded Power BI report delivers the same
   insight without the entity-store dependency — for most custom work it does.
+
+```sh
+# A cue: Count tile over a query, opening the list page
+d365fo generate tile FmOverdueRentalsTile --menu-item FmRental \
+  --type Count --query FmOverdueRentalsQuery --label "@Fleet:OverdueRentals" \
+  --install-to FleetManagement
+```
+
+`Type` is written only when it is not the default `Standard`; a KPI tile needs
+`--kpi <AxKPI>`. The command checks the menu item against the index and reports
+one it cannot find in `unknownMenuItems` rather than refusing — the index is a
+mirror of what was extracted.
 
 ## 2. Aggregate measurements and the entity store
 
@@ -69,6 +81,33 @@ entity store (AxDW).
   output (`d365fo knowledge get ssrs-report-authoring`).
 - There is **no aggregate-measurement extension element**: adding a measure group
   to a Microsoft measurement means creating your own.
+
+### Aggregate data entities
+
+An **aggregate data entity** (`AxAggregateDataEntity`) is the read-only entity
+that exposes a measurement's measures and dimension attributes to workspaces,
+Power BI and OData. It is not a view over tables: its single
+`AggregateViewDataSource` names the **measurement**, and each field is an
+`AxAggregateDataEntityMappedField` bound to a measure or a dimension attribute
+inside one measure group.
+
+```sh
+d365fo generate aggregate-entity FmRentalsByColor \
+  --measurement FMAggregateMeasurements \
+  --measure NoRentals:FMRentalCharges:NoRentals:BIRCount \
+  --dimension VehicleColor:FMRentalCharges:FMVehicle:VehicleColor:FMColorName \
+  --install-to FleetManagement
+```
+
+- The mapped field's members (`Measure`, `Dimension`, `Attribute`,
+  `MeasureGroup`, `ExtendedDataType`) belong to the
+  `Microsoft.Dynamics.AX.Metadata.V2` contract namespace and are written with
+  its prefix, as every shipped file does. Unprefixed, the reader keeps the field
+  and **drops every mapping on it**.
+- The measurement and its groups are not in the symbol index, so the scaffold
+  cannot prove them — the build does. Compile before relying on the entity.
+- Shipped ones are `IsReadOnly = Yes` and carry the five automatic field groups
+  (`AutoReport`, `AutoLookup`, `AutoIdentification`, `AutoSummary`, `AutoBrowse`).
 
 ## 3. Electronic Reporting (ER)
 

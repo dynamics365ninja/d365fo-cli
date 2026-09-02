@@ -1,0 +1,21 @@
+{
+  "runId": "20260902T093942931Z__L1-form-basic__1be0dc91fefb4aa8b92ef3b83934c74d",
+  "caseId": "L1-form-basic",
+  "tier": 1,
+  "timestampUtc": "2026-09-02T09:39:42.9315029+00:00",
+  "source": "build-oracle",
+  "score": {
+    "xppErrors": 0,
+    "referenceErrors": 0,
+    "goldenMatch": true,
+    "goldenDiff": {
+      "missing": [],
+      "extra": [],
+      "changed": [],
+      "isMatch": true
+    },
+    "buildClean": true,
+    "buildErrors": 0,
+    "runtimeFailures": 0
+  }
+}

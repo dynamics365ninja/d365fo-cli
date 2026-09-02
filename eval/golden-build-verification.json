@@ -1,12 +1,12 @@
 {
-  "capturedUtc": "2026-09-02T06:22:09.6575032+00:00",
+  "capturedUtc": "2026-09-02T09:39:42.7980211+00:00",
   "host": "D365ASLDEV2-1",
   "packagesRoot": "K:\\AosService\\PackagesLocalDirectory",
   "compiler": "K:\\AosService\\PackagesLocalDirectory\\Bin\\xppc.exe",
-  "compilerArgs": "-metadata=C:\\Users\\Admin7e00859cee\\AppData\\Local\\Temp\\2\\d365fo-l3-47c7a7f066514250a1b5fff46193659e -modelmodule=D365FoCliEvalGoldens -output=C:\\Users\\Admin7e00859cee\\AppData\\Local\\Temp\\2\\d365fo-l3-47c7a7f066514250a1b5fff46193659e\\bin -referencefolder=K:\\AosService\\PackagesLocalDirectory -refPath=C:\\Users\\Admin7e00859cee\\AppData\\Local\\Temp\\2\\d365fo-l3-47c7a7f066514250a1b5fff46193659e\\bin -log=C:\\Users\\Admin7e00859cee\\AppData\\Local\\Temp\\2\\d365fo-l3-47c7a7f066514250a1b5fff46193659e\\Dynamics.AX.D365FoCliEvalGoldens.xppc.log",
+  "compilerArgs": "-metadata=C:\\Users\\Admin7e00859cee\\AppData\\Local\\Temp\\2\\d365fo-l3-cf1eab0d7ce24bea9d9fbd4239ca2594 -modelmodule=D365FoCliEvalGoldens -output=C:\\Users\\Admin7e00859cee\\AppData\\Local\\Temp\\2\\d365fo-l3-cf1eab0d7ce24bea9d9fbd4239ca2594\\bin -referencefolder=K:\\AosService\\PackagesLocalDirectory -refPath=C:\\Users\\Admin7e00859cee\\AppData\\Local\\Temp\\2\\d365fo-l3-cf1eab0d7ce24bea9d9fbd4239ca2594\\bin -log=C:\\Users\\Admin7e00859cee\\AppData\\Local\\Temp\\2\\d365fo-l3-cf1eab0d7ce24bea9d9fbd4239ca2594\\Dynamics.AX.D365FoCliEvalGoldens.xppc.log",
   "modelName": "D365FoCliEvalGoldens",
-  "total": 60,
-  "clean": 60,
+  "total": 70,
+  "clean": 70,
   "failed": 0,
   "skipped": 0,
   "cases": [
@@ -52,6 +52,14 @@
     },
     {
       "caseId": "L1-class-basic",
+      "verdict": "clean",
+      "errors": 0,
+      "warnings": 0,
+      "ruleIds": [],
+      "messages": []
+    },
+    {
+      "caseId": "L1-configuration-key-basic",
       "verdict": "clean",
       "errors": 0,
       "warnings": 0,
@@ -123,6 +131,14 @@
       "messages": []
     },
     {
+      "caseId": "L1-form-part-basic",
+      "verdict": "clean",
+      "errors": 0,
+      "warnings": 0,
+      "ruleIds": [],
+      "messages": []
+    },
+    {
       "caseId": "L1-form-simplelist-details",
       "verdict": "clean",
       "errors": 0,
@@ -147,6 +163,14 @@
       "messages": []
     },
     {
+      "caseId": "L1-label-file-basic",
+      "verdict": "clean",
+      "errors": 0,
+      "warnings": 0,
+      "ruleIds": [],
+      "messages": []
+    },
+    {
       "caseId": "L1-map-basic",
       "verdict": "clean",
       "errors": 0,
@@ -156,6 +180,14 @@
     },
     {
       "caseId": "L1-map-multi-table",
+      "verdict": "clean",
+      "errors": 0,
+      "warnings": 0,
+      "ruleIds": [],
+      "messages": []
+    },
+    {
+      "caseId": "L1-menu-basic",
       "verdict": "clean",
       "errors": 0,
       "warnings": 0,
@@ -243,6 +275,14 @@
       "messages": []
     },
     {
+      "caseId": "L1-resource-basic",
+      "verdict": "clean",
+      "errors": 0,
+      "warnings": 0,
+      "ruleIds": [],
+      "messages": []
+    },
+    {
       "caseId": "L1-role-basic",
       "verdict": "clean",
       "errors": 0,
@@ -299,6 +339,14 @@
       "messages": []
     },
     {
+      "caseId": "L1-tile-basic",
+      "verdict": "clean",
+      "errors": 0,
+      "warnings": 0,
+      "ruleIds": [],
+      "messages": []
+    },
+    {
       "caseId": "L1-view-basic",
       "verdict": "clean",
       "errors": 0,
@@ -331,7 +379,31 @@
       "messages": []
     },
     {
+      "caseId": "L1-workflow-category-basic",
+      "verdict": "clean",
+      "errors": 0,
+      "warnings": 0,
+      "ruleIds": [],
+      "messages": []
+    },
+    {
+      "caseId": "L2-aggregate-entity-basic",
+      "verdict": "clean",
+      "errors": 0,
+      "warnings": 0,
+      "ruleIds": [],
+      "messages": []
+    },
+    {
       "caseId": "L2-coc-extension",
+      "verdict": "clean",
+      "errors": 0,
+      "warnings": 0,
+      "ruleIds": [],
+      "messages": []
+    },
+    {
+      "caseId": "L2-composite-entity-basic",
       "verdict": "clean",
       "errors": 0,
       "warnings": 0,
@@ -404,6 +476,14 @@
     },
     {
       "caseId": "L2-form-extension-basic",
+      "verdict": "clean",
+      "errors": 0,
+      "warnings": 0,
+      "ruleIds": [],
+      "messages": []
+    },
+    {
+      "caseId": "L2-map-extension",
       "verdict": "clean",
       "errors": 0,
       "warnings": 0,

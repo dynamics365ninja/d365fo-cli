@@ -14,7 +14,7 @@ public class EvalCaseCatalogTests
         var (cases, errors) = EvalCaseCatalog.LoadAll(EvalPaths.CasesDir(RepoRoot));
 
         Assert.Empty(errors);
-        Assert.Equal(60, cases.Count);
+        Assert.Equal(70, cases.Count);
         Assert.Contains(cases, c => c.Id == "L0-edt-basic");
         Assert.Contains(cases, c => c.Id == "L0-enum-basic");
         Assert.Contains(cases, c => c.Id == "L1-table-basic");

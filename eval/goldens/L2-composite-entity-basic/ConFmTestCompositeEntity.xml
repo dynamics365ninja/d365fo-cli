@@ -1,0 +1,29 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<AxCompositeDataEntityView xmlns:i="http://www.w3.org/2001/XMLSchema-instance">
+  <Name>ConFmTestCompositeEntity</Name>
+  <SourceCode>
+    <Declaration><![CDATA[
+[CompositeDataEntityView]
+public class ConFmTestCompositeEntity
+{
+}
+
+]]></Declaration>
+    <Methods />
+  </SourceCode>
+  <Label>Test header and lines</Label>
+  <RootDataEntities>
+    <AxDataEntityViewReferenceRoot>
+      <Name>DMFTestHeaderEntity</Name>
+      <DataEntity>DMFTestHeaderEntity</DataEntity>
+      <EmbeddedDataEntities>
+        <AxDataEntityViewReferenceEmbedded>
+          <Name>DMFTestLineEntity</Name>
+          <DataEntity>DMFTestLineEntity</DataEntity>
+          <EmbeddedDataEntities />
+          <Relation>DMFTestHeader</Relation>
+        </AxDataEntityViewReferenceEmbedded>
+      </EmbeddedDataEntities>
+    </AxDataEntityViewReferenceRoot>
+  </RootDataEntities>
+</AxCompositeDataEntityView>

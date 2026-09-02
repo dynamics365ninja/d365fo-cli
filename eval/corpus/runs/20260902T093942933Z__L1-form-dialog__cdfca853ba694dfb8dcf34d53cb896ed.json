@@ -1,0 +1,21 @@
+{
+  "runId": "20260902T093942933Z__L1-form-dialog__cdfca853ba694dfb8dcf34d53cb896ed",
+  "caseId": "L1-form-dialog",
+  "tier": 1,
+  "timestampUtc": "2026-09-02T09:39:42.9331121+00:00",
+  "source": "build-oracle",
+  "score": {
+    "xppErrors": 0,
+    "referenceErrors": 0,
+    "goldenMatch": true,
+    "goldenDiff": {
+      "missing": [],
+      "extra": [],
+      "changed": [],
+      "isMatch": true
+    },
+    "buildClean": true,
+    "buildErrors": 0,
+    "runtimeFailures": 0
+  }
+}

@@ -1,0 +1,21 @@
+{
+  "runId": "20260902T093942904Z__L1-custom-service-basic__e393b5d69bf0444684d3d436201ddf14",
+  "caseId": "L1-custom-service-basic",
+  "tier": 1,
+  "timestampUtc": "2026-09-02T09:39:42.904445+00:00",
+  "source": "build-oracle",
+  "score": {
+    "xppErrors": 0,
+    "referenceErrors": 0,
+    "goldenMatch": true,
+    "goldenDiff": {
+      "missing": [],
+      "extra": [],
+      "changed": [],
+      "isMatch": true
+    },
+    "buildClean": true,
+    "buildErrors": 0,
+    "runtimeFailures": 0
+  }
+}

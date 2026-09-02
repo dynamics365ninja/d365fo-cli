@@ -1,0 +1,21 @@
+{
+  "runId": "20260902T093942997Z__L2-map-extension__5b3b3964310240359e3c977bcd09a08c",
+  "caseId": "L2-map-extension",
+  "tier": 2,
+  "timestampUtc": "2026-09-02T09:39:42.9976963+00:00",
+  "source": "build-oracle",
+  "score": {
+    "xppErrors": 0,
+    "referenceErrors": 0,
+    "goldenMatch": true,
+    "goldenDiff": {
+      "missing": [],
+      "extra": [],
+      "changed": [],
+      "isMatch": true
+    },
+    "buildClean": true,
+    "buildErrors": 0,
+    "runtimeFailures": 0
+  }
+}

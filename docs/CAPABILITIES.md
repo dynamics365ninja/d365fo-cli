@@ -213,7 +213,7 @@ All scaffolders write atomically (`.tmp` + move, `.bak` on overwrite). Pass `--i
 | `generate datasource-method` | Add/override a method on a form datasource (form-level `SourceCode`); `--list` shows overridable methods |
 | `generate control-method` | Add/override a method on a form control (form-level `SourceCode`); `--list` shows overridable methods |
 | `generate entity` | `AxDataEntityView` — fields, keys, `--relation` (constraint-joined), `--computed-field` (unmapped, method-backed). `--data-management` also emits the DMF staging table |
-| `generate extension` | `AxTableExtension` / `AxFormExtension` / `AxEdtExtension` / `AxEnumExtension` / `AxSecurityDutyExtension` / `AxSecurityRoleExtension` |
+| `generate extension` | `AxTableExtension` / `AxFormExtension` / `AxEdtExtension` / `AxEnumExtension` / `AxViewExtension` / `AxQuerySimpleExtension` / `AxDataEntityViewExtension` / `AxMapExtension` / `AxSecurityDutyExtension` / `AxSecurityRoleExtension` |
 | `generate event-handler` | X++ event subscriber class with correct attribute |
 | `generate privilege` | `AxSecurityPrivilege` (entry point and/or `--data-entity` OData/DMF grant) |
 | `generate duty` | `AxSecurityDuty` — privileges plus `--description`, `--context-string`, `--disabled` |
@@ -225,6 +225,15 @@ All scaffolders write atomically (`.tmp` + move, `.bak` on overwrite). Pass `--i
 | `generate query` | `AxQuery` with root datasource and optional nested joins |
 | `generate view` | `AxView` projecting a query: bound and computed fields |
 | `generate map` | `AxMap` field template plus table mappings |
+| `generate configuration-key` | `AxConfigurationKey` — label, parent key, license code, `--disabled-by-default` |
+| `generate form-part` | `AxFormPart` registering a form as a hostable part (info part, fact box, preview pane) |
+| `generate label-file` | `AxLabelFile` manifest for one language plus the `.label.txt` it points at (`--entry Key=Text`) |
+| `generate menu` | `AxMenu` — sub-menus, menu items (`[<submenu>/]<item>[:Action|Output]`), tiles, menu references |
+| `generate resource` | `AxResource` manifest; `--source` copies the file into `ResourceContent/<Type>/` |
+| `generate tile` | `AxTile` bound to a menu item — Standard / Count (`--query`) / KPI (`--kpi`) / Link |
+| `generate workflow-category` | `AxWorkflowCategory` under a `ModuleAxapta` module (validated against the enum) |
+| `generate composite-entity` | `AxCompositeDataEntityView` — root entities with embedded entities bound by relation |
+| `generate aggregate-entity` | `AxAggregateDataEntity` — read-only projection of an aggregate measurement's measures and dimension attributes |
 | `generate sysoperation` | Contract + Service + Controller class triple |
 | `generate number-sequence` | Module extension + EDT + form handler class |
 | `generate workflow` | `AxWorkflowTemplate` + document class + submit stub, plus `AxWorkflowApproval` / `AxWorkflowTask` elements when named |

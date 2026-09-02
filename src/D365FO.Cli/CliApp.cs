@@ -248,7 +248,7 @@ public static class CliApp
                 b.AddCommand<GenerateFormCloneCommand>("form-clone").WithDescription("Clone an existing AxForm under a new name, optionally re-binding its datasources.");
                 b.AddCommand<GenerateSimpleListCommand>("simple-list").WithDescription("(Deprecated) Alias for `generate form --pattern SimpleList`.");
                 b.AddCommand<GenerateEntityCommand>("entity").WithDescription("Create an AxDataEntityView over a table.");
-                b.AddCommand<GenerateExtensionCommand>("extension").WithDescription("Create a Table/Form/Edt/Enum extension.");
+                b.AddCommand<GenerateExtensionCommand>("extension").WithDescription("Create a Table/Form/Edt/Enum/View/Query/DataEntityView/Map/SecurityDuty/SecurityRole extension.");
                 b.AddCommand<GenerateEventHandlerCommand>("event-handler").WithDescription("Create an event subscriber class.");
                 b.AddCommand<GeneratePrivilegeCommand>("privilege").WithDescription("Create a security privilege over an entry point.");
                 b.AddCommand<GenerateDutyCommand>("duty").WithDescription("Create a security duty grouping privileges.");
@@ -270,6 +270,15 @@ public static class CliApp
                 b.AddCommand<GenerateRunBaseCommand>("runbase").WithDescription("Scaffold a RunBase/RunBaseBatch class with dialog and pack/unpack.");
                 b.AddCommand<GenerateSecurityPolicyCommand>("security-policy").WithDescription("Scaffold an AxSecurityPolicy (XDS) XML.");
                 b.AddCommand<GenerateSysTestCommand>("systest").WithDescription("Scaffold an ATL-ready SysTestCase class (Arrange/Act/Assert skeleton).");
+                b.AddCommand<GenerateConfigurationKeyCommand>("configuration-key").WithDescription("Create an AxConfigurationKey, optionally under a parent key.");
+                b.AddCommand<GenerateFormPartCommand>("form-part").WithDescription("Create an AxFormPart registering a form as a hostable part (info part, fact box, preview pane).");
+                b.AddCommand<GenerateLabelFileCommand>("label-file").WithDescription("Create an AxLabelFile manifest for one language and its .label.txt content file.");
+                b.AddCommand<GenerateMenuCommand>("menu").WithDescription("Create an AxMenu with sub-menus, menu items, tiles and menu references.");
+                b.AddCommand<GenerateResourceCommand>("resource").WithDescription("Create an AxResource manifest for a file shipped in the model (image, XmlDoc, data ...).");
+                b.AddCommand<GenerateTileCommand>("tile").WithDescription("Create an AxTile bound to a menu item (Standard, Count, KPI or Link).");
+                b.AddCommand<GenerateWorkflowCategoryCommand>("workflow-category").WithDescription("Create an AxWorkflowCategory under a ModuleAxapta module.");
+                b.AddCommand<GenerateCompositeEntityCommand>("composite-entity").WithDescription("Create an AxCompositeDataEntityView bundling root and embedded data entities.");
+                b.AddCommand<GenerateAggregateEntityCommand>("aggregate-entity").WithDescription("Create an AxAggregateDataEntity projecting an aggregate measurement's measures and dimensions.");
             });
 
             cfg.AddBranch("modify", b =>

@@ -1,0 +1,29 @@
+{
+  "id": "L1-workflow-category-basic",
+  "title": "Workflow category under a module",
+  "tier": 1,
+  "instruction": "Create a workflow category named ConFmVehicleWfCategory in the Basic module, labeled 'Fleet vehicles' with help text 'Workflows for fleet vehicles', so fleet workflow types have a bucket in the workflow configuration form. Use only the d365fo CLI — do not hand-write XML.",
+  "canonical_args": [
+    "generate",
+    "workflow-category",
+    "ConFmVehicleWfCategory",
+    "--module",
+    "Basic",
+    "--label",
+    "Fleet vehicles",
+    "--help-text",
+    "Workflows for fleet vehicles"
+  ],
+  "target_artifact_types": [
+    "AxWorkflowCategory"
+  ],
+  "golden_path": "L1-workflow-category-basic",
+  "tags": [
+    "workflow",
+    "workflow-category",
+    "metadata"
+  ],
+  "ignore": [],
+  "requires_fixture_index": false,
+  "golden_pending": false
+}

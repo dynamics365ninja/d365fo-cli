@@ -1,0 +1,21 @@
+{
+  "runId": "20260902T093942979Z__L1-workflow-approval-task__9725c5bdd1e14ef4a09ca584fbfc6f9b",
+  "caseId": "L1-workflow-approval-task",
+  "tier": 1,
+  "timestampUtc": "2026-09-02T09:39:42.9795872+00:00",
+  "source": "build-oracle",
+  "score": {
+    "xppErrors": 0,
+    "referenceErrors": 0,
+    "goldenMatch": true,
+    "goldenDiff": {
+      "missing": [],
+      "extra": [],
+      "changed": [],
+      "isMatch": true
+    },
+    "buildClean": true,
+    "buildErrors": 0,
+    "runtimeFailures": 0
+  }
+}

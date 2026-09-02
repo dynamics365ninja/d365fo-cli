@@ -1,0 +1,26 @@
+{
+  "id": "L1-form-part-basic",
+  "title": "Form part registering a form as a hostable part",
+  "tier": 1,
+  "instruction": "Register the form FMVehicle as a hostable form part named ConFmVehiclePreviewPart with the caption 'Vehicle preview', so it can be placed as a preview pane or fact box on another form. Use only the d365fo CLI — do not hand-write XML.",
+  "canonical_args": [
+    "generate",
+    "form-part",
+    "ConFmVehiclePreviewPart",
+    "--form",
+    "FMVehicle",
+    "--caption",
+    "Vehicle preview"
+  ],
+  "target_artifact_types": [
+    "AxFormPart"
+  ],
+  "golden_path": "L1-form-part-basic",
+  "tags": [
+    "form-part",
+    "metadata"
+  ],
+  "ignore": [],
+  "requires_fixture_index": false,
+  "golden_pending": false
+}

@@ -1,0 +1,26 @@
+{
+  "id": "L1-configuration-key-basic",
+  "title": "Configuration key under a parent key",
+  "tier": 1,
+  "instruction": "Create a configuration key named ConFmFleetTrial labeled 'Fleet trial features', parented under the Bank configuration key so that disabling Bank disables it too. Use only the d365fo CLI (search/get/generate/validate) — do not hand-write XML.",
+  "canonical_args": [
+    "generate",
+    "configuration-key",
+    "ConFmFleetTrial",
+    "--label",
+    "Fleet trial features",
+    "--parent-key",
+    "Bank"
+  ],
+  "target_artifact_types": [
+    "AxConfigurationKey"
+  ],
+  "golden_path": "L1-configuration-key-basic",
+  "tags": [
+    "configuration-key",
+    "metadata"
+  ],
+  "ignore": [],
+  "requires_fixture_index": false,
+  "golden_pending": false
+}

@@ -313,7 +313,7 @@ public sealed class GenerateExtensionCommand : Command<GenerateExtensionCommand.
     public sealed class Settings : GenerateSettings
     {
         [CommandArgument(0, "<KIND>")]
-        [System.ComponentModel.Description("Extension kind: Table, Form, Edt, Enum, View, Query, DataEntityView, SecurityDuty, SecurityRole.")]
+        [System.ComponentModel.Description("Extension kind: Table, Form, Edt, Enum, View, Query, DataEntityView, Map, SecurityDuty, SecurityRole.")]
         public string Kind { get; init; } = "";
 
         [CommandArgument(1, "<TARGET>")]
@@ -408,13 +408,14 @@ public sealed class GenerateExtensionCommand : Command<GenerateExtensionCommand.
             // type and no folder of that name on any AOS.
             "query" => "AxQuerySimpleExtension",
             "dataentityview" => "AxDataEntityViewExtension",
+            "map" => "AxMapExtension",
             "securityduty" => "AxSecurityDutyExtension",
             "securityrole" => "AxSecurityRoleExtension",
             _ => null,
         };
         if (axFolder is null)
             return RenderHelpers.Render(kind, ToolResult<object>.Fail(D365FoErrorCodes.BadInput,
-                $"Unsupported extension kind: {settings.Kind}. Expected Table|Form|Edt|Enum|View|Query|DataEntityView|SecurityDuty|SecurityRole."));
+                $"Unsupported extension kind: {settings.Kind}. Expected Table|Form|Edt|Enum|View|Query|DataEntityView|Map|SecurityDuty|SecurityRole."));
 
         // A dotted target already names an extension (AOT object names never contain a dot) —
         // compose against its base so "CustTable.Ext" does not become "CustTable.Ext.Ext".

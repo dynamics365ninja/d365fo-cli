@@ -3,7 +3,7 @@
 
 Every tool the bundled `d365fo-mcp` adapter advertises, and the `d365fo` commands that reach the same handler. Both columns are read from the running code — the command manifest (`d365fo schema --full`) and the adapter's own `tools/list` — so a tool that stops matching a command fails the generator rather than quietly outliving the mapping.
 
-**32 tools · 178 command routes · 11 commands with no MCP route.**
+**32 tools · 187 command routes · 11 commands with no MCP route.**
 
 The adapter is consolidated on purpose: one tool dispatches on a `type` / `objectType` / `mode` / `action` discriminator instead of shipping one tool per object kind. That keeps the schema payload a host injects every turn from growing with the object model — see [TOKEN_ECONOMICS.md](TOKEN_ECONOMICS.md) for what that payload actually measures.
 
@@ -83,9 +83,12 @@ Scaffold an AOT object from `objectType`. Every objectType that WRITES runs the 
 
 | CLI command | Discriminator |
 |---|---|
+| `d365fo generate aggregate-entity` | `objectType=aggregate-entity` |
 | `d365fo generate business-event` | `objectType=business-event` |
 | `d365fo generate class` | `objectType=class` |
 | `d365fo generate coc` | `objectType=coc` |
+| `d365fo generate composite-entity` | `objectType=composite-entity` |
+| `d365fo generate configuration-key` | `objectType=configuration-key` |
 | `d365fo generate control-method` | `objectType=control-method` |
 | `d365fo generate custom-service` | `objectType=custom-service` |
 | `d365fo generate datasource-method` | `objectType=datasource-method` |
@@ -98,7 +101,10 @@ Scaffold an AOT object from `objectType`. Every objectType that WRITES runs the 
 | `d365fo generate find-methods` | `objectType=find-methods` |
 | `d365fo generate form` | `objectType=form` |
 | `d365fo generate form-clone` | `objectType=form-clone` |
+| `d365fo generate form-part` | `objectType=form-part` |
+| `d365fo generate label-file` | `objectType=label-file` |
 | `d365fo generate map` | `objectType=map` |
+| `d365fo generate menu` | `objectType=menu` |
 | `d365fo generate menu-item` | `objectType=menu-item` |
 | `d365fo generate migration-script` | `objectType=migration-script` |
 | `d365fo generate number-sequence` | `objectType=number-sequence` |
@@ -106,6 +112,7 @@ Scaffold an AOT object from `objectType`. Every objectType that WRITES runs the 
 | `d365fo generate query` | `objectType=query` |
 | `d365fo generate report` | `objectType=report` |
 | `d365fo generate report-extension` | `objectType=report-extension` |
+| `d365fo generate resource` | `objectType=resource` |
 | `d365fo generate role` | `objectType=role` |
 | `d365fo generate runbase` | `objectType=runbase` |
 | `d365fo generate security-policy` | `objectType=security-policy` |
@@ -114,8 +121,10 @@ Scaffold an AOT object from `objectType`. Every objectType that WRITES runs the 
 | `d365fo generate systest` | `objectType=systest` |
 | `d365fo generate table` | `objectType=table` |
 | `d365fo generate table-relation` | `objectType=table-relation` |
+| `d365fo generate tile` | `objectType=tile` |
 | `d365fo generate view` | `objectType=view` |
 | `d365fo generate workflow` | `objectType=workflow` |
+| `d365fo generate workflow-category` | `objectType=workflow-category` |
 
 ### `get_knowledge`
 
