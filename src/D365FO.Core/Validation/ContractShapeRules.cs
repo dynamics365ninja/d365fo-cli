@@ -56,12 +56,28 @@ public static class ContractShapeRules
             return; // Not well-formed — other rules and the parser report that.
         }
 
-        if (doc.Root is not null)
-            CheckElement(
-                doc.Root,
-                doc.Root.Name.LocalName,
-                MetadataContracts.GoverningContract(doc.Root, parent: null),
-                violations);
+        if (doc.Root is null) return;
+
+        // An unrecognised root means this is not an AOT document, and nothing inside it is
+        // governed by the metadata contracts — descending anyway made the rule speak about
+        // whatever element name happened to collide with a type name. That is not hypothetical:
+        // every model ships a BP suppression list (AxIgnoreDiagnosticList/<Model>_BPSuppressions.xml,
+        // root <IgnoreDiagnostics>), whose <Diagnostic> entries collided with the catalog's
+        // Diagnostic type and produced 1 463 findings in one model alone.
+        var rootContract = MetadataContracts.GoverningContract(doc.Root, parent: null);
+        if (rootContract is null) return;
+
+        // A BP suppression list is not read by the metadata serializer. Every model ships one
+        // (AxIgnoreDiagnosticList/<Model>_BPSuppressions.xml), and every entry in it carries
+        // <ItemSpecific> and <Line>, which AxIgnoreDiagnosticItem genuinely does not declare —
+        // reflected off Microsoft.Dynamics.AX.Metadata.dll on a live installation, the type has
+        // exactly seven members and neither is among them. So the elements ARE outside that
+        // contract, and the file is still correct: it is written and read by the best-practice
+        // tooling, not by the metadata provider. Saying "dropped on read" about it would be
+        // stating a consequence that does not follow, 1 463 times in one model.
+        if (string.Equals(doc.Root.Name.LocalName, "IgnoreDiagnostics", StringComparison.Ordinal)) return;
+
+        CheckElement(doc.Root, doc.Root.Name.LocalName, rootContract, violations);
     }
 
     private static void CheckElement(XElement element, string path, MetadataContract? contract, List<XppViolation> violations)
@@ -73,8 +89,12 @@ public static class ContractShapeRules
 
             // An element named after a type is a collection item or a nested object, not a
             // member of the enclosing one — judging <AxTableField> as a member of AxTableField
-            // would flag every collection in every file.
-            var isMember = MetadataContracts.Find(name) is null;
+            // would flag every collection in every file. Unless the enclosing type declares a
+            // member by that name, in which case that is what it is: a handful of member names
+            // collide with type names, and reading them as types judged their contents against
+            // an unrelated contract.
+            var isMember = MetadataContracts.Find(name) is null
+                || (contract is not null && MetadataContracts.AcceptsMember(contract, name));
 
             if (contract is not null && isMember)
             {

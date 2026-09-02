@@ -70,7 +70,9 @@ public class TablePatternScaffoldingTests
     /// `validate xpp` raises XML003 on that table, so `generate table` warns about
     /// the consequence instead of leaving the caller to hit it one command later.
     /// This test pins the tension the warning describes: if XML003 ever stops
-    /// firing here, the warning is stale and must go.
+    /// firing here, the warning is stale and must go. It fires as a WARNING: a full
+    /// sweep of a live installation found hundreds of shipped tables with no
+    /// TableGroup, so a majority convention is what it is — not a defect.
     /// </summary>
     [Fact]
     public void Pattern_None_table_trips_the_XML003_rule_the_command_warns_about()
@@ -78,7 +80,7 @@ public class TablePatternScaffoldingTests
         var withoutPattern = XppScaffolder.Table("FmThing", label: "@Fm:Thing").ToString();
         var violations = D365FO.Core.Validation.XppValidator.Validate(
             withoutPattern, D365FO.Core.Validation.XppValidator.CodeTypeXmlTable);
-        Assert.Contains(violations, v => v.Rule == "XML003" && v.Severity == "error");
+        Assert.Contains(violations, v => v.Rule == "XML003" && v.Severity == "warning");
 
         var withPattern = XppScaffolder.Table("FmThing", label: "@Fm:Thing",
             pattern: TablePattern.Miscellaneous).ToString();
