@@ -620,6 +620,40 @@ Returns `UNSUPPORTED_PLATFORM` on non-Windows.
 
 ---
 
+## Oracles (`oracle`) — measuring the tool against the platform
+
+A green test suite proves the code does what its author expected. These five commands ask a
+different question: does what this tool believes match what the installation actually contains,
+compiles and runs? They are maintainer tools — a measurement of `d365fo-cli`, not an operation
+on your X++ — and none of them is published over MCP.
+
+```powershell
+d365fo oracle sweep                       # every rule over every AOT file in the installation
+d365fo oracle sweep --model ApplicationFoundation --warnings
+d365fo oracle sweep --dry                 # the checked-in fixtures, for CI with no installation
+d365fo oracle census AxTable              # what shipped XML actually carries, member by member
+d365fo oracle members AxTable             # declared-but-never-seen and seen-but-not-declared
+d365fo oracle probe MyClass.xml           # compile one artefact with the real xppc.exe
+d365fo oracle runtime                     # is SysTestConsole wired to a database, and does it discriminate?
+d365fo oracle runtime --negative-control  # a test class that passes, fails and throws on purpose
+```
+
+**The bar for `sweep` is zero errors on Microsoft's own X++.** Not "few": a rule that fires on
+shipped code teaches a caller to ignore findings, which costs more than the rule ever earned.
+Warnings are counted separately and do not fail the bar — several are style rules that shipped
+code legitimately breaks. The first full run (242 858 files) reported 4 674 errors, every one of
+them the validator being wrong; `SweepFalsePositiveTests` pins each with the count it accounted
+for.
+
+`probe` compiles into a throwaway model built around the artefact, so a clean result means the
+compiler ran and said nothing — an xppc that rejects its own argument list prints usage, which
+parses as "no diagnostics", and that case is reported as a failure of the probe rather than a
+pass. `runtime` answers the question nobody asks about a green suite: "all tests passed" is also
+what a runner prints when it ran nothing, so the negative control has to fail before any pass
+means anything.
+
+---
+
 ## MCP server
 
 Exposes the same index and scaffolding surface as the CLI over the `ModelContextProtocol` C# SDK via stdio (default) or HTTP (`--http`, for a shared team deployment). The tool surface is **consolidated** into **32 discriminator-based tools** (`search`, `get_object_info`, `get_method`, `labels`, `security_info`, `extension_info`, `object_patterns`, `generate_object`, `modify_method`, `modify_object`, `get_knowledge`, `explain_build_error`, `analyze`, `models`, …) instead of one tool per object type — mirroring the upstream `d365fo-mcp-server` (which sits at 26). A single tool dispatches on a `type` / `objectType` / `mode` / `action` / `domain` / `include` field. See [MIGRATION_FROM_MCP.md](MIGRATION_FROM_MCP.md) for the full old→new mapping.

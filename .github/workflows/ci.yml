@@ -59,7 +59,7 @@ jobs:
           dotnet-version: 10.0.x
       - name: Warning count must not rise
         shell: pwsh
-        run: ./scripts/check-build-warnings.ps1 -Baseline 117
+        run: ./scripts/check-build-warnings.ps1 -Baseline 114
 
   # What `dotnet test` builds is not what anybody installs. install.ps1/install.sh publish
   # self-contained, single-file and TRIMMED, and issue #182 showed that shape failing on
@@ -115,6 +115,13 @@ jobs:
         run: dotnet run --project src/D365FO.Cli -c Release -- eval run --all --output json
       - name: Check the K/E/T coverage report
         run: dotnet run --project src/D365FO.Cli -c Release --no-build -- eval coverage --check --output json
+      # The oracle's bar without an installation: every rule over the checked-in fixtures,
+      # zero errors. It cannot catch what a sweep of a real PackagesLocalDirectory catches
+      # — that needs 242 858 shipped files and a VM — but it does catch a rule that starts
+      # firing on the corpus's own reference material, which is the same failure in
+      # miniature and the reason the fixtures are XML the tool itself would accept.
+      - name: Sweep the fixtures with every rule
+        run: dotnet run --project src/D365FO.Cli -c Release --no-build -- oracle sweep --dry --output json
 
   skills:
     runs-on: ubuntu-latest
