@@ -166,6 +166,10 @@ jobs:
         with:
           python-version: "3.x"
       - name: Build the CLI and the adapter
-        run: dotnet build src/D365FO.Cli src/D365FO.Mcp -c Release -nologo
+        # One project per invocation: MSBuild answers "Only one project can be specified"
+        # to a list, and the generator needs both binaries.
+        run: |
+          dotnet build src/D365FO.Cli -c Release -nologo
+          dotnet build src/D365FO.Mcp -c Release -nologo
       - name: docs/MCP_TOOLS.md must be current
         run: python3 scripts/emit-mcp-tools.py --check
