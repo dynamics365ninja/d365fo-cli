@@ -641,9 +641,10 @@ d365fo oracle runtime --negative-control  # a test class that passes, fails and 
 **The bar for `sweep` is zero errors on Microsoft's own X++.** Not "few": a rule that fires on
 shipped code teaches a caller to ignore findings, which costs more than the rule ever earned.
 Warnings are counted separately and do not fail the bar — several are style rules that shipped
-code legitimately breaks. The first full run (242 858 files) reported 4 674 errors, every one of
-them the validator being wrong; `SweepFalsePositiveTests` pins each with the count it accounted
-for.
+code legitimately breaks. The first full run (242 858 files, 107 241 X++ blocks) reported 4 674
+errors, every one of them the validator being wrong; `SweepFalsePositiveTests` pins each with the
+count it accounted for. The bar holds as of that work: the same sweep now reports **zero errors**
+in 48 minutes.
 
 `probe` compiles into a throwaway model built around the artefact, so a clean result means the
 compiler ran and said nothing — an xppc that rejects its own argument list prints usage, which

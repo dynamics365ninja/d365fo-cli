@@ -87,9 +87,10 @@ silences a rule fails there rather than passing quietly.
   contract of its own; `CustVendAdvanceInvoiceDP` reads `parmDataContract()` and declares none,
   because `CustAdvanceInvoiceDP` and `VendAdvanceInvoiceDP` each declare their own.
 
-Re-swept after each fix: the four rules above were the last errors on the installation. The
-warnings (41 475) are counted and left alone — they are style rules that shipped code
-legitimately breaks, and the bar was never about them.
+Re-swept end to end after the last fix: **242 858 files, 107 241 X++ blocks, zero errors** —
+the bar holds on Microsoft's own X++, in 48 minutes. The 41 473 warnings are counted and left
+alone; they are style rules that shipped code legitimately breaks, and the bar was never about
+them.
 
 ### Added — the eval corpus reaches the artefacts nothing was checking
 
