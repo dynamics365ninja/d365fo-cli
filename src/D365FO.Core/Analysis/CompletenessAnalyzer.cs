@@ -33,6 +33,7 @@ public static class CompletenessAnalyzer
     /// <param name="Code">Machine-readable check id, e.g. MISSING_EDT.</param>
     /// <param name="File">File name alone, for display.</param>
     /// <param name="FilePath">Full path, for acting on.</param>
+    /// <param name="Message">What is wrong, in the words a reader can act on.</param>
     public sealed record Issue(string Severity, string Code, string File, string FilePath, string Message);
 
     public sealed record Report(

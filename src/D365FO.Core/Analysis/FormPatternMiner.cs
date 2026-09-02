@@ -18,7 +18,11 @@ public static class FormPatternMiner
     /// <param name="Mode">summary (no filter) | filter | similar.</param>
     /// <param name="TotalForms">Summary mode only: how many indexed forms the histogram covers.</param>
     /// <param name="Patterns">Summary mode only: the histogram.</param>
+    /// <param name="Hint">Summary mode only: how to narrow the answer.</param>
+    /// <param name="Filter">Filter/similar mode: what the list was narrowed by.</param>
     /// <param name="Reference">Similar mode only: the form the peers were derived from.</param>
+    /// <param name="Count">Filter/similar mode: how many forms matched.</param>
+    /// <param name="Items">Filter/similar mode: the matching forms.</param>
     public sealed record Result(
         string Mode,
         long? TotalForms = null,

@@ -706,6 +706,22 @@ public static class ToolCatalog
             Schema(),
             (h, _) => h.IndexStatus()),
 
+        new Descriptor("index_sync",
+            "Re-index ONE model after an edit made outside this server — in Visual Studio, by a git pull, by "
+            + "a colleague. Name the `model`, or pass a `path` to any file inside it and the model is read off "
+            + "the packages layout. Writes through `generate_object` / `modify_object` already refresh the "
+            + "index, so this is for changes this process did not make.\n"
+            + "A model is the unit, not a file: the index writer replaces a model's rows atomically, which is "
+            + "what keeps re-extraction idempotent — handing it one object would delete the rest of that model. "
+            + "A custom model takes seconds; naming a large standard model is a minutes-long call, and the "
+            + "result reports how long it took. Re-indexing EVERYTHING is `d365fo index refresh` on a shell: "
+            + "it walks every package, which is not something to wait on in a tool call.",
+            Schema(("model", "string", false), ("path", "string", false),
+                   ("packagesPath", "string", false), ("indexSource", "boolean", false)),
+            (h, p) => D365FO.Core.Index.IndexSync.Sync(
+                StrOrNull(p, "model"), StrOrNull(p, "path"), StrOrNull(p, "packagesPath"),
+                databasePath: null, indexSource: Bool(p, "indexSource"))),
+
         new Descriptor("index_history",
             "Recent ExtractionRuns telemetry (per-model timings). Returns newest first.",
             Schema(("limit", "integer", false), ("model", "string", false)),

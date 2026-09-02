@@ -1,4 +1,4 @@
-using D365FO.Core;
+﻿using D365FO.Core;
 using D365FO.Core.Extract;
 using D365FO.Core.Index;
 using Spectre.Console;
@@ -440,44 +440,11 @@ public sealed class IndexExtractCommand : Command<IndexExtractCommand.Settings>
     }
 
     /// <summary>
-    /// Cheap per-model content fingerprint used by <c>d365fo index refresh</c>.
-    /// Format: <c>"{fileCount}:{newestMtimeTicks}:{langs}"</c>. Sensitive enough
-    /// to catch touches (re-export, rebase, partial sync) without paying the
-    /// cost of hashing every byte. The trade-off is documented in ROADMAP §1.1.
-    /// <para>
-    /// Both <c>*.xml</c> and <c>*.label.txt</c> files are included so that
-    /// label-only changes (new translations, deletions) are not silently skipped.
-    /// The sorted <paramref name="labelLanguages"/> suffix ensures that adding
-    /// a language to <c>D365FO_LABEL_LANGUAGES</c> forces re-extraction even
-    /// when the underlying files have not changed.
-    /// </para>
+    /// Cheap per-model content fingerprint. Delegates to <see cref="IndexSync.ComputeFingerprint"/>
+    /// so `index refresh` and `index sync` cannot disagree about whether a model has changed.
     /// </summary>
     internal static string ComputeFingerprint(string dir, IReadOnlyList<string>? labelLanguages = null)
-    {
-        long newestTicks = 0;
-        int count = 0;
-        try
-        {
-            foreach (var f in Directory.EnumerateFiles(dir, "*", SearchOption.AllDirectories))
-            {
-                if (!f.EndsWith(".xml", StringComparison.OrdinalIgnoreCase)
-                    && !f.EndsWith(".label.txt", StringComparison.OrdinalIgnoreCase))
-                    continue;
-                count++;
-                try
-                {
-                    var t = File.GetLastWriteTimeUtc(f).Ticks;
-                    if (t > newestTicks) newestTicks = t;
-                }
-                catch { }
-            }
-        }
-        catch { }
-        var langs = labelLanguages is { Count: > 0 }
-            ? string.Join(",", labelLanguages.Select(l => l.ToLowerInvariant()).OrderBy(l => l))
-            : "";
-        return $"{count}:{newestTicks}:{langs}";
-    }
+        => IndexSync.ComputeFingerprint(dir, labelLanguages);
 
     /// <summary>
     /// Merges CLI-specified extra packages paths with those from the environment.
@@ -493,37 +460,12 @@ public sealed class IndexExtractCommand : Command<IndexExtractCommand.Settings>
         return all.Count > 0 ? all : null;
     }
 
-    private static IEnumerable<string> EnumerateModelDirs(string packagesRoot, string? onlyModel)    {
-        IEnumerable<string> SafeDirs(string d)
-        {
-            try { return Directory.EnumerateDirectories(d); }
-            catch (UnauthorizedAccessException) { return Array.Empty<string>(); }
-        }
-
-        // Same registry-driven marker list the extractor uses, so `index refresh` and
-        // MetadataExtractor never disagree about what counts as a model directory.
-        static bool HasAot(string dir)
-        {
-            foreach (var s in D365FO.Core.ObjectTypes.ObjectTypeRegistry.ModelMarkerFolders())
-                if (Directory.Exists(Path.Combine(dir, s))) return true;
-            return false;
-        }
-
-        foreach (var pkg in SafeDirs(packagesRoot))
-        {
-            // Mirror MetadataExtractor: skip FormAdaptor shim packages.
-            if (D365FO.Core.Extract.MetadataExtractor.IsFormAdaptorPackage(Path.GetFileName(pkg))) continue;
-            foreach (var model in SafeDirs(pkg))
-            {
-                if (D365FO.Core.Extract.MetadataExtractor.IsFormAdaptorPackage(Path.GetFileName(model))) continue;
-                if (!HasAot(model)) continue;
-                if (onlyModel is { Length: > 0 } only &&
-                    !string.Equals(Path.GetFileName(model), only, StringComparison.OrdinalIgnoreCase))
-                    continue;
-                yield return model;
-            }
-        }
-    }
+    /// <summary>
+    /// Model directories under a packages root. Delegates to <see cref="IndexSync.EnumerateModelDirs"/>,
+    /// which is also what the single-model sync walks — one definition of "this is a model".
+    /// </summary>
+    private static IEnumerable<string> EnumerateModelDirs(string packagesRoot, string? onlyModel)
+        => IndexSync.EnumerateModelDirs(packagesRoot, onlyModel);
 
     /// <summary>
     /// Cheap model-size proxy for extract scheduling: XML count in the

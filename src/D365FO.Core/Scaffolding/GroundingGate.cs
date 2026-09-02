@@ -31,7 +31,7 @@ public static class GroundingGate
     /// The verdict of one gate run, and the handle a command writes through.
     /// </summary>
     /// <remarks>
-    /// <see cref="GenerateInstaller.Write"/> takes one of these, so a generate command cannot
+    /// The CLI's <c>GenerateInstaller.Write</c> takes one of these, so a generate command cannot
     /// reach the writer without having gated first — the guarantee issue #161 asked for. It also
     /// makes the object the natural place to hang the property-honesty report (R6): the gate
     /// knows what was requested, and every document that reaches disk passes through here, so
@@ -63,7 +63,7 @@ public static class GroundingGate
         /// <remarks>
         /// Issue #180. <c>--verify</c> reads artefacts back by name through the metadata
         /// provider, and it can only do that for what was actually emitted — so the list is
-        /// built by <see cref="GenerateInstaller.Write"/> itself rather than declared per
+        /// built by the writer itself rather than declared per
         /// command. A per-command declaration is the hand-maintained table that goes stale
         /// the first time someone adds a second output file, which is precisely how the flag
         /// came to be inert for twenty-four subcommands.
@@ -116,6 +116,10 @@ public static class GroundingGate
     /// Option/value pairs the caller supplied, for the property-honesty reconciliation (R6).
     /// Empty means "do not reconcile" — the check is silent rather than reporting everything as
     /// missing.
+    /// </param>
+    /// <param name="repository">
+    /// Index to prove identifiers against. Null degrades every index-backed check to a warning:
+    /// a gate failure must never be caused by gate infrastructure.
     /// </param>
     public static GateResult Check(
         string? token,

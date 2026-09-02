@@ -251,6 +251,10 @@ public static class BridgeGate
     /// </summary>
     /// <param name="Deserialized">The provider's serializer accepted the document.</param>
     /// <param name="Valid">It deserialized <em>and</em> the round-trip lost nothing.</param>
+    /// <param name="RootElement">Root element the document declared, as read.</param>
+    /// <param name="ClrType">MetaModel type the provider resolved that root to, when it resolved one.</param>
+    /// <param name="ErrorCode">Machine-readable refusal, when the provider refused the document.</param>
+    /// <param name="ErrorMessage">The provider's own words for that refusal.</param>
     /// <param name="Dropped">Leaf elements (path = value) present in the input and gone after the round-trip.</param>
     public sealed record MetadataVerdict(
         bool Deserialized,
@@ -330,6 +334,7 @@ public static class BridgeGate
     /// the tooling, and blaming a perfectly good artefact for them is worse than not
     /// checking at all.
     /// </remarks>
+    /// <param name="name">Object to read back, by the name the provider knows it under.</param>
     public static (VerifyOutcome outcome, string? detail) TryVerifyObject(string axKind, string name)
     {
         // The typed read verbs exist only for the five original kinds. Everything the
@@ -363,6 +368,7 @@ public static class BridgeGate
     /// <see cref="TryVerifyObject"/> so the mapping — the part that decides whether a
     /// command fails — is testable without a live AOS.
     /// </summary>
+    /// <param name="axKind">Registry kind the read was issued for, for the detail message.</param>
     /// <param name="response">The bridge envelope, or null when the bridge did not answer.</param>
     public static (VerifyOutcome outcome, string? detail) VerdictFrom(string? axKind, JsonObject? response)
     {

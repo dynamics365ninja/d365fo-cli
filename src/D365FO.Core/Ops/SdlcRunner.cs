@@ -32,6 +32,9 @@ public static class SdlcRunner
 
     // ----------------------------------------------------------------- build
 
+    /// <param name="msbuildPath">MSBuild executable; defaults to <c>msbuild.exe</c> on PATH.</param>
+    /// <param name="projectPath">Project or solution to build; omitted builds whatever is in the working directory.</param>
+    /// <param name="configuration">MSBuild configuration, <c>Debug</c> by default.</param>
     /// <param name="xppcLogPath">
     /// Additional <c>Dynamics.AX.&lt;Model&gt;.xppc.log</c> to parse. The X++ compiler reports
     /// through its own format, which MSBuild's stdout only partly carries.

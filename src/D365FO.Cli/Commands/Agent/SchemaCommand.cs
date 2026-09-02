@@ -195,6 +195,7 @@ public sealed class SchemaCommand : Command<SchemaCommand.Settings>
         C("index status", "Report index table counts and config.", [], ["--output"], ["index_status"]),
         C("index extract", "Walk PackagesLocalDirectory and ingest AOT metadata.", [], ["--packages", "--db", "--model", "--since", "--output"], []),
         C("index refresh", "Incremental extract using model fingerprints.", [], ["--packages", "--db", "--model", "--since", "--force", "--output"], []),
+        C("index sync", "Re-index ONE model, named directly or by a file inside it — for an edit made outside this tool.", ["[TARGET]"], ["--model", "--packages", "--db", "--index-source", "--output"], ["index_sync"]),
         C("index history", "Show recent extraction telemetry.", [], ["--db", "--model", "--limit", "--output"], ["index_history"]),
         C("models list", "List indexed models.", [], ["--output"], ["models (action=list)"]),
         C("models deps", "Show dependencies for a model.", ["<NAME>"], ["--output"], ["models (action=deps)"]),

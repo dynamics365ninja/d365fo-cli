@@ -53,6 +53,8 @@ public static class ServerModeConfig
     ///   <see cref="WriteToolsAreLocal"/>.</description></item>
     ///   <item><description><c>undo_last_modification</c> — replays journal entries back
     ///   through the same disk/bridge write path that produced them.</description></item>
+    ///   <item><description><c>index_sync</c> — re-reads one model's XML from the local package
+    ///   tree.</description></item>
     ///   <item><description><c>sdlc</c> — builds, syncs, runs SysTest and runs xppbp by
     ///   launching the Windows D365FO developer tools against the local package tree.</description></item>
     ///   <item><description><c>journal_list</c> — reads <c>&lt;index-dir&gt;/journal/</c>,
@@ -71,6 +73,9 @@ public static class ServerModeConfig
         // the local package tree. A shared instance with no D365FO installation has nothing to
         // run, and would be launching processes on the host of whoever deployed it.
         "sdlc",
+        // `index_sync` reads model XML off the local package tree. A shared instance has none,
+        // and its index is fed by whoever deployed it rather than by a caller.
+        "index_sync",
     };
 
     /// <summary>

@@ -216,6 +216,7 @@ public static class CliApp
                 b.AddCommand<IndexStatusCommand>("status").WithDescription("Report index health.");
                 b.AddCommand<IndexExtractCommand>("extract").WithDescription("Walk PACKAGES_PATH and ingest AOT metadata.");
                 b.AddCommand<IndexRefreshCommand>("refresh").WithDescription("Incremental extract — skip models whose XMLs haven't changed since last extract.");
+                b.AddCommand<IndexSyncCommand>("sync").WithDescription("Re-index ONE model, named directly or by a file inside it — the answer to an edit made outside this tool.");
                 b.AddCommand<IndexHistoryCommand>("history").WithDescription("Show recent ExtractionRuns (per-model timings persisted across runs).");
                 b.AddCommand<IndexCrossCheckCommand>("cross-check").WithDescription("Report where this tool's catalogs are narrower than the installation.");
                 b.AddCommand<IndexOptimizeCommand>("optimize").WithDescription("VACUUM + ANALYZE the index (reclaim space, refresh query-planner stats).");

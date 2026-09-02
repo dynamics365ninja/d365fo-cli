@@ -38,6 +38,20 @@ was ported from.
   derived the enum spelling from the step name, which works for every operation whose command name
   matches its enum name and fails for the one that does not — `property` is `SetProperty`.
 
+### Added — the index can be refreshed from either surface
+- **`d365fo index sync <TARGET>` / `index_sync`** — re-index ONE model, named directly or by a
+  path to any file inside it. This was the gap the previous wave recorded rather than closed: a
+  write this tool makes refreshes the index itself, but an edit made in Visual Studio, by a git
+  pull or by a colleague left the index quietly lying about that model, and the only repair was a
+  full walk of every package — minutes, and not the shape of a call anyone waits on.
+  A model is the unit and not a file on purpose: `ApplyExtract` replaces a model's rows
+  atomically, which is what makes re-extraction idempotent, so handing it a single object would
+  not add that object — it would delete every other object of that model. Measured on this
+  repository's own host: `ApplicationCommon` (302 classes, 39 tables, 2 070 labels) re-indexes in
+  12 s cold and under a second warm, and a second sync leaves the row counts unchanged.
+  `EnumerateModelDirs` and `ComputeFingerprint` moved to Core with it, so `index refresh` and
+  `index sync` cannot disagree about what a model is or whether one has changed.
+
 ### Added — the work an agent does after a write
 - **`sdlc`** — build, sync, run SysTest and run xppbp over MCP. The CLI could answer "does what I
   just wrote compile?" and the MCP server could not, which leaves the one surface a remote agent

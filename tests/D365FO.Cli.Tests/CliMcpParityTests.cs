@@ -1,4 +1,4 @@
-using System.Text.RegularExpressions;
+﻿using System.Text.RegularExpressions;
 using D365FO.Cli.Commands.Agent;
 using D365FO.Core.Bridge;
 using D365FO.Mcp;
@@ -89,8 +89,8 @@ public class CliMcpParityTests
         ["doctor"] = "Diagnoses the local environment — paths, bridge, index, versions. `get_workspace_info` reports the resolved configuration, which is the part of it a remote caller can act on.",
         ["version"] = "Reports the assembly version of the shell binary. The MCP server reports its own in `initialize`.",
         ["index build"] = "Creates the index database. First-run setup, and the server needs a database to have been started at all.",
-        ["index extract"] = "Walks the whole PackagesLocalDirectory — minutes of filesystem work. A tool call that long is the wrong shape; the MCP-appropriate form is a per-file upsert, which does not exist yet (upstream's `update_symbol_index`). Tracked as the remaining gap.",
-        ["index refresh"] = "The incremental form of `index extract`, and the same reason.",
+        ["index extract"] = "Walks the whole PackagesLocalDirectory — minutes of filesystem work, which is the wrong shape for a call someone waits on. The narrow form an agent actually needs is `index sync`, which re-reads one model and IS exposed (`index_sync`).",
+        ["index refresh"] = "The incremental form of `index extract`, and the same reason. `index sync` is its per-model counterpart over MCP.",
         ["schema"] = "Publishes this manifest — the shell surface described for an agent that has a shell. An MCP client reads `tools/list` instead.",
         ["agent-prompt"] = "Emits the CLI-first system prompt. Same reason as `schema`: it describes the shell surface to a harness that will use it.",
     };
