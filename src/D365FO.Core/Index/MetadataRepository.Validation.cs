@@ -13,6 +13,14 @@ public sealed partial class MetadataRepository : IReferenceIndex, IPropertyStats
     private const int InheritanceWalkLimit = 10;
 
     /// <inheritdoc />
+    /// <remarks>
+    /// Extensions are symbols too. An extension row does not live in any of the object tables —
+    /// it records the object it EXTENDS — so <c>NumberSeqModule.Kitting</c>, an enum extension the
+    /// installation ships, used to come back empty here, and <c>prepare create</c> answered
+    /// "no collision" for a name that is taken, immediately before a write (upstream 0b363e5).
+    /// An extension reports as <c>&lt;kind&gt;-extension</c> (<c>enum-extension</c>,
+    /// <c>table-extension</c>), so callers that look for a base kind by name are unaffected.
+    /// </remarks>
     public IReadOnlyList<string> SymbolKinds(string name)
     {
         using var conn = OpenReadOnly();
@@ -25,7 +33,9 @@ public sealed partial class MetadataRepository : IReferenceIndex, IPropertyStats
             UNION SELECT 'query'        FROM Queries      WHERE Name = @name COLLATE NOCASE
             UNION SELECT 'view'         FROM Views        WHERE Name = @name COLLATE NOCASE
             UNION SELECT 'data-entity'  FROM DataEntities WHERE Name = @name COLLATE NOCASE
-            UNION SELECT 'map'          FROM Maps         WHERE Name = @name COLLATE NOCASE",
+            UNION SELECT 'map'          FROM Maps         WHERE Name = @name COLLATE NOCASE
+            UNION SELECT lower(Kind) || '-extension'
+                                        FROM ObjectExtensions WHERE ExtensionName = @name COLLATE NOCASE",
             new { name }).ToList();
     }
 

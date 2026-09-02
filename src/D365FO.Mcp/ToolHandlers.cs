@@ -2190,6 +2190,25 @@ public sealed partial class ToolHandlers
     /// and <c>Base_Extension</c>. The type alone is not enough to tell — a caller naming
     /// <c>CustTable.Fleet</c> without a type is still creating an extension.
     /// </remarks>
+    /// <summary>
+    /// The <see cref="ObjectNamingRules"/> kind for an extension of <paramref name="objectType"/>:
+    /// <c>enum</c> → <c>EnumExtension</c>, <c>data-entity</c> → <c>DataEntityViewExtension</c>,
+    /// and a type that already says "extension" passes through in PascalCase.
+    /// </summary>
+    private static string ExtensionNamingKind(string objectType)
+    {
+        var t = objectType.Trim().ToLowerInvariant();
+        return t switch
+        {
+            "data-entity" or "data-entity-extension" or "entity" => "DataEntityViewExtension",
+            "role" or "security-role" => "SecurityRoleExtension",
+            "duty" or "security-duty" => "SecurityDutyExtension",
+            "privilege" or "security-privilege" => "SecurityPrivilegeExtension",
+            _ => string.Concat(t.Replace("-extension", "").Split('-', StringSplitOptions.RemoveEmptyEntries)
+                                .Select(w => char.ToUpperInvariant(w[0]) + w[1..])) + "Extension",
+        };
+    }
+
     private static string? ExtensionBaseOf(string objectType, string name)
     {
         var looksLikeExtension = objectType.Contains("extension", StringComparison.OrdinalIgnoreCase)
@@ -2221,20 +2240,25 @@ public sealed partial class ToolHandlers
                 collisions.Add(new { name = candidate, existsAs = hit });
         }
 
-        var namingKind = objectType switch
-        {
-            "data-entity" => "Entity",
-            "menu-item" => "MenuItem",
-            _ => char.ToUpperInvariant(objectType[0]) + objectType[1..],
-        };
-        var violations = ObjectNamingRules.Validate(namingKind, finalName, prefix);
-
         // An extension is created against an object that already exists, and everything worth
         // knowing before writing one is about THAT object: does it exist, what model owns it,
         // and who is already extending it. Grounding on the extension's own name asks about a
         // name that by definition is not there yet, and answers "no collision, nothing similar"
         // — true, and useless.
         var extendedObject = ExtensionBaseOf(objectType, baseName);
+
+        // A dotted name under --type enum IS an enum extension, and the naming rules must judge
+        // it as one: judged as a plain enum, the dot that every shipped extension carries came
+        // back as INVALID_CHARS in the same answer that listed 25 siblings spelled that way.
+        var namingKind = extendedObject is not null
+            ? ExtensionNamingKind(objectType)
+            : objectType switch
+            {
+                "data-entity" => "Entity",
+                "menu-item" => "MenuItem",
+                _ => char.ToUpperInvariant(objectType[0]) + objectType[1..],
+            };
+        var violations = ObjectNamingRules.Validate(namingKind, finalName, prefix);
         object? extensionBase = null;
         if (extendedObject is not null)
         {
@@ -2324,7 +2348,9 @@ public sealed partial class ToolHandlers
             finalName,
             collisions = collisions.Count > 0 ? collisions : null,
             collisionVerdict = collisions.Count > 0
-                ? "Name already exists — pick a different name or extend the existing object instead."
+                ? extendedObject is not null
+                    ? "An extension of that name already exists — modify it (`d365fo modify`) or pick a different suffix."
+                    : "Name already exists — pick a different name or extend the existing object instead."
                 : string.Equals(finalName, baseName, StringComparison.Ordinal)
                     ? $"No collision — \"{finalName}\" does not exist in the index."
                     : $"No collision — neither \"{finalName}\" nor \"{baseName}\" exists in the index.",

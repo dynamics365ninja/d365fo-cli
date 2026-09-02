@@ -7,7 +7,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![.NET](https://img.shields.io/badge/.NET-10-purple.svg)](https://dotnet.microsoft.com/)
 [![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey.svg)]()
-[![Tests](https://img.shields.io/badge/tests-1813-brightgreen.svg)]()
+[![Tests](https://img.shields.io/badge/tests-1817-brightgreen.svg)]()
 [![Successor to d365fo-mcp-server](https://img.shields.io/badge/successor%20to-d365fo--mcp--server-orange.svg)](https://github.com/dynamics365ninja/d365fo-mcp-server)
 
 *Grounded AI development for Dynamics 365 Finance & Operations — works with GitHub Copilot, Claude Code, Codex, Gemini CLI, and any agent with a shell*
@@ -32,7 +32,7 @@ This CLI pre-indexes your entire D365FO installation (hundreds of thousands of s
 | Labels | Hardcoded strings | Right `@SYS`/`@MODULE` key found instantly |
 | Security chains | Hours of manual tracing | Role → Duty → Privilege → Entry Point in one call |
 | Generated code | Hallucinated fields and types | Every reference proven against the index, gated before write |
-| Agent context cost | 26–28 MCP tool schemas every turn | 1 shell tool + lazy-loaded Skills (~85 % fewer tokens) |
+| Agent context cost | 32 MCP tool schemas every turn (40 132 chars, ~11 100 tokens — measured) | 1 shell tool + lazy-loaded Skills (366 chars, ~100 tokens) |
 
 ---
 
@@ -236,7 +236,7 @@ Reference the `SKILL.md` files from `skills/anthropic/` in your session prompt o
 
 ### MCP (Claude Desktop, Continue, VS Code MCP)
 
-The bundled `d365fo-mcp` adapter speaks JSON-RPC 2.0 over the same index. Its tool surface is **consolidated** into 28 discriminator-based tools (e.g. `search`, `get_object_info`, `get_method`, `labels`, `security_info`, `extension_info`, `object_patterns`, `generate_object`, `modify_method`, `analyze`, `models`) — see [docs/MIGRATION_FROM_MCP.md](docs/MIGRATION_FROM_MCP.md):
+The bundled `d365fo-mcp` adapter speaks JSON-RPC 2.0 over the same index. Its tool surface is **consolidated** into 32 discriminator-based tools (e.g. `search`, `get_object_info`, `get_method`, `labels`, `security_info`, `extension_info`, `object_patterns`, `generate_object`, `modify_method`, `analyze`, `models`) — see [docs/MIGRATION_FROM_MCP.md](docs/MIGRATION_FROM_MCP.md):
 
 ```json
 {
@@ -266,15 +266,15 @@ A `d365fo search` shell call returning results from your codebase = you're conne
 
 ## Why CLI instead of MCP?
 
-MCP servers inject every tool definition into the model's context on every single turn. Tool consolidation trimmed that surface — the upstream MCP server went from ~61 per-type tools (≈3,500 tok/turn) to 26 discriminator-based tools, and this repo's adapter to 27 — but it is still ~1,800 tokens per turn versus one shell tool.
+MCP servers inject every tool definition into the model's context on every single turn. Tool consolidation trimmed that surface — the upstream MCP server went from ~61 per-type tools to 26 discriminator-based tools, and this repo's adapter advertises 32 — but the schemas remain. Measured on this repository (`scripts/measure-context-cost.py`, see [docs/TOKEN_ECONOMICS.md](docs/TOKEN_ECONOMICS.md)): those 32 schemas are **40 132 characters** (~11 100 tokens) in context every turn, against **366 characters** (~100 tokens) for the CLI's one-skill layout. Characters are measured; tokens are approximate (chars ÷ 3.6).
 
 | | MCP server | CLI + Skills |
 |---|---|---|
-| Tool definitions per turn | 26–28 tools (~1,800 tokens) | 1 shell tool (~100 tokens) |
+| Tool definitions per turn | 32 tools, 40 132 chars (~11 100 tokens) | 1 skill, 366 chars (~100 tokens) |
 | Discovery round-trips | 2–3 per task | often 1 (`d365fo prepare change`) |
 | Scriptable (shell, CI/CD) | No | Yes |
 | Works in any AI harness | No — MCP hosts only | Yes — Copilot, Claude, Codex, Gemini, … |
-| Token cost over 15-turn workflow | baseline | **~85 % reduction** |
+| Per-turn context cost | baseline | **~99 % less** (ratio does not depend on the tokenizer) |
 
 See [docs/TOKEN_ECONOMICS.md](docs/TOKEN_ECONOMICS.md) for the full analysis and the cases where MCP still wins. Migrating from `d365fo-mcp-server`? Start with **[docs/MIGRATION_FROM_MCP.md](docs/MIGRATION_FROM_MCP.md)**.
 
@@ -293,7 +293,7 @@ See [docs/TOKEN_ECONOMICS.md](docs/TOKEN_ECONOMICS.md) for the full analysis and
 | **Form patterns** | `form-pattern analyze` (advisor), `form-pattern spec` (catalog), `form-pattern validate` (FP001–FP010) — mirrors the MCP `object_patterns` tool (`domain=form`) |
 | **Find** | `find related`, `find coc`, `find relations`, `find usages`, `find extensions`, `find event-handlers`, `find references`, `find form-patterns`, `find batch-jobs` (the extensibility ones mirror the MCP `extension_info` tool) |
 | **Read** | `read class`, `read table`, `read form` (= MCP `get_method`) |
-| **Generate** | `generate table\|class\|coc\|form\|datasource-method\|control-method\|simple-list\|entity\|extension\|event-handler\|privilege\|duty\|role\|report\|sysoperation\|number-sequence\|workflow\|menu-item\|edt\|enum\|query\|view\|map\|business-event\|custom-service\|migration-script\|runbase\|security-policy\|systest` |
+| **Generate** | `generate table\|table-relation\|find-methods\|class\|coc\|form\|form-clone\|datasource-method\|control-method\|simple-list\|entity\|extension\|event-handler\|privilege\|duty\|role\|report\|report-extension\|sysoperation\|number-sequence\|workflow\|menu-item\|edt\|enum\|query\|view\|map\|business-event\|custom-service\|migration-script\|runbase\|security-policy\|systest` (33) |
 | **Labels** | `labels search\|resolve\|info\|create\|rename\|delete` — search/resolve plus in-place `*.label.txt` edits, multi-language via `--lang` (mirrors the MCP `labels` tool) |
 | **Journal / undo** | `undo [--steps N] [--dry-run]`, `journal list`, `delete` (kind/name, bridge or on-disk) — deterministic single-command rollback for every write path (mirrors the MCP `undo_last_modification` tool) |
 | **Modify** | `modify property\|method`, `modify add-field\|add-enum-value\|add-control`, `modify add-index\|add-relation\|add-field-group\|add-delete-action`, `modify rename-field`, `modify add-query-range\|remove-query-range`, `modify add-entry-point\|remove-entry-point`, seven `modify remove-*` forms, and `modify batch` (several changes in one read-edit-write) — 22 operations over all 41 bridge-writable kinds, extension-aware and journalled for `undo` |
