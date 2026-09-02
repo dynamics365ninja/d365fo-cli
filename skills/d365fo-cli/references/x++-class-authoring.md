@@ -34,6 +34,25 @@ conversation with long metadata dumps.
    d365fo bp check             # (when available) — xppbp.exe runner
    ```
 
+## The plain class
+
+When none of the framework shapes below fits — the class is a helper, a
+container, a small piece of domain logic — scaffold it directly rather than
+hand-writing the `<AxClass>` wrapper around the source:
+
+```sh
+d365fo generate class FmVehicleLogHelper --out c:/AOT/MyModel/AxClass/FmVehicleLogHelper.xml
+
+# Derive from a base class, and drop the default `final`
+d365fo generate class FmVehicleImportJob --extends RunBaseBatch --non-final   --install-to FleetManagement
+```
+
+The scaffold is `final` by default, because a class nobody has a reason to
+inherit from is the safer default in a model others extend; `--non-final` opts
+out where inheritance is actually intended. Add methods with
+`generate event-handler`, `generate coc` or by editing the `<Methods>` block —
+never by rewriting the file wholesale.
+
 ## Hard rules
 
 - **Never** emit X++ that references a field you have not verified with

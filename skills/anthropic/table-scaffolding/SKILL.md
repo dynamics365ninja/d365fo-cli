@@ -155,6 +155,44 @@ d365fo search query <NamePart> --output json
 
 `--join target:joinKind:parentDs` (repeatable). JoinKind: `InnerJoin`, `OuterJoin`, `ExistsJoin`, `NoExistsJoin` (no "t" — this is the real `AxQuerySimpleEmbeddedDataSource.JoinMode` spelling, confirmed against shipped platform `AxQuery` XML; `NotExistsJoin` is rejected). The join is emitted as `<UseRelations>Yes</UseRelations>`, which tells the platform to auto-derive the join key from the target table's existing AOT relation — this only works when such a relation actually exists between the two tables.
 
+### AxView — a query projected as a read-only table
+
+A view is a query with a field list: the AOS turns it into a database view, and
+X++ selects from it like a table. It is the right answer whenever the reporting
+or entity shape is a fixed join that nothing writes to.
+
+```sh
+# A view over an existing query — the query is required, a view projects one
+d365fo generate view FmVehicleView   --query FmVehicleQuery --field VIN:FmVehicle --field Make:FmVehicle   --out c:/AOT/MyModel/AxView/FmVehicleView.xml
+```
+
+`--field <name>:<dataSource>[:<dataField>]` is repeatable and names the query
+data source the column comes from; `--computed <name>:<method>:<type>` adds a
+computed column backed by a static method on the view. The root element and AOT
+folder are `AxView`. Generate the backing `AxQuery` first — a view whose query
+does not exist compiles to nothing usable.
+
+### AxMap — one field template mapped onto several tables
+
+A map declares fields once and maps them onto tables that already have those
+columns under different names, so a single X++ routine can run over all of them
+(`SalesPurchLine` is the platform's own example).
+
+```sh
+# Field declared once, mapped onto two tables
+d365fo generate map FmVehicleSharedMap   --field VIN:VinEdt --map-to FmVehicle --map-to FmVehicleLine   --out c:/AOT/MyModel/AxMap/FmVehicleSharedMap.xml
+
+# Column names that differ per table: <table>:<mapField>=<tableField>
+d365fo generate map FmVehicleMap   --field Make:Name --map-to FmVehicle:Make=Make   --out c:/AOT/MyModel/AxMap/FmVehicleMap.xml
+```
+
+`--field <name>:<edt>[:<label>]` — the EDT decides the concrete field type, so
+the map field and the mapped columns have to agree on it. `--map-to <table>`
+alone maps every field by identical name; the `<table>:<mapField>=<tableField>`
+form is for the ones that differ. The root element and AOT folder are `AxMap`.
+There is no map extension: to change a map's reach, extend the tables it maps
+onto.
+
 ### Number sequence integration
 
 If the table needs an auto-generated document number:
