@@ -101,10 +101,22 @@ public static class EvalScorer
         var expected = Directory.Exists(companionDir)
             ? Directory.GetFiles(companionDir, "*", SearchOption.AllDirectories)
             : Array.Empty<string>();
-        var produced = Directory.GetFiles(actualDir, "*", SearchOption.AllDirectories)
-            .Where(f => !string.Equals(Path.GetFullPath(f), scored, StringComparison.OrdinalIgnoreCase))
-            .Where(f => !IsWriterSidecar(f))
-            .ToDictionary(f => RelativeName(actualDir, f), f => f, StringComparer.OrdinalIgnoreCase);
+
+        // Only a directory the caller owns gets walked. Without one the scorer looks the
+        // golden's companions up by path instead: the artefact may be sitting in a shared temp
+        // directory, where enumerating everything is both meaningless — that is why extras are
+        // not reported either — and, on Linux, an UnauthorizedAccessException from somebody
+        // else's subtree of /tmp.
+        var produced = producedDir is null
+            ? new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+            : Directory.GetFiles(producedDir, "*", new EnumerationOptions
+                {
+                    RecurseSubdirectories = true,
+                    IgnoreInaccessible = true,
+                })
+                .Where(f => !string.Equals(Path.GetFullPath(f), scored, StringComparison.OrdinalIgnoreCase))
+                .Where(f => !IsWriterSidecar(f))
+                .ToDictionary(f => RelativeName(producedDir, f), f => f, StringComparer.OrdinalIgnoreCase);
 
         if (expected.Length == 0 && produced.Count == 0) return diff;
 
@@ -117,8 +129,13 @@ public static class EvalScorer
             var name = RelativeName(companionDir, goldenCompanion);
             if (!produced.Remove(name, out var actualCompanion))
             {
-                missing.Add($"_companions/{name}");
-                continue;
+                var beside = Path.Combine(actualDir, name.Replace('/', Path.DirectorySeparatorChar));
+                if (producedDir is not null || !File.Exists(beside))
+                {
+                    missing.Add($"_companions/{name}");
+                    continue;
+                }
+                actualCompanion = beside;
             }
 
             // Not every companion is XML. A label file's .label.txt and a resource's image are

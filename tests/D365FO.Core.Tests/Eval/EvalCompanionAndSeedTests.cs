@@ -150,6 +150,43 @@ public class EvalCompanionAndSeedTests : IDisposable
         Assert.True(score.GoldenMatch);
     }
 
+    /// <summary>
+    /// <c>eval score</c> is handed an artefact, not a directory it owns, and the companions the
+    /// golden names are looked up beside it.
+    /// </summary>
+    [Fact]
+    public void Without_a_produced_directory_a_named_companion_is_still_compared_beside_the_artefact()
+    {
+        Golden(Main);
+        GoldenCompanion("FooHelper.xml", "<AxClass><Name>FooHelper</Name><IsFinal>Yes</IsFinal></AxClass>");
+        var actual = Produce("actual.xml", Main);
+        Produce("FooHelper.xml", "<AxClass><Name>FooHelper</Name></AxClass>");
+
+        var score = EvalScorer.Score(Case("L0-test"), actual, _goldensRoot, _repo);
+
+        Assert.False(score.GoldenMatch);
+        Assert.Contains(score.GoldenDiff.Missing, m => m.StartsWith("_companions/FooHelper.xml:", StringComparison.Ordinal));
+    }
+
+    /// <summary>
+    /// Nothing but the golden's own companions is read from a directory the caller does not own.
+    /// Walking it recursively found the sub-directories of a shared temp directory — on Linux,
+    /// an <c>UnauthorizedAccessException</c> out of another process's subtree of <c>/tmp</c>.
+    /// </summary>
+    [Fact]
+    public void A_directory_the_caller_does_not_own_is_not_walked()
+    {
+        Golden(Main);
+        var actual = Produce("actual.xml", Main);
+        Directory.CreateDirectory(Path.Combine(_workDir, "someone-elses"));
+        File.WriteAllText(Path.Combine(_workDir, "someone-elses", "Whatever.xml"), "<AxClass><Name>Whatever</Name></AxClass>");
+
+        var score = EvalScorer.Score(Case("L0-test"), actual, _goldensRoot, _repo);
+
+        Assert.True(score.GoldenMatch);
+        Assert.Empty(score.GoldenDiff.Extra);
+    }
+
     // ── content companions: the non-XML half of an artefact ───────────────
 
     private void GoldenContentCompanion(string relativePath, string body)
