@@ -1,0 +1,21 @@
+{
+  "runId": "20260902T104539009Z__L2-menu-extension__ff853a44a5fc4063890868a4e41f9a90",
+  "caseId": "L2-menu-extension",
+  "tier": 2,
+  "timestampUtc": "2026-09-02T10:45:39.0098273+00:00",
+  "source": "build-oracle",
+  "score": {
+    "xppErrors": 0,
+    "referenceErrors": 0,
+    "goldenMatch": true,
+    "goldenDiff": {
+      "missing": [],
+      "extra": [],
+      "changed": [],
+      "isMatch": true
+    },
+    "buildClean": true,
+    "buildErrors": 0,
+    "runtimeFailures": 0
+  }
+}

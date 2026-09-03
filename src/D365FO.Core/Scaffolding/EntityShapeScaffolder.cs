@@ -6,6 +6,7 @@ namespace D365FO.Core.Scaffolding;
 /// <param name="Name">Reference name inside the composite (defaults to the entity name).</param>
 /// <param name="DataEntity">The <c>AxDataEntityView</c> referenced.</param>
 /// <param name="Relation">For an embedded reference: the relation on the child entity that binds it to its parent.</param>
+/// <param name="Embedded">Entities embedded under this one, each bound to it by its <see cref="Relation"/>.</param>
 public sealed record CompositeEntityReferenceSpec(
     string Name,
     string DataEntity,

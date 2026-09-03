@@ -279,6 +279,23 @@ public class McpGenerateObjectTypeTests : IDisposable
     }
 
     [Fact]
+    public void Menu_extension_over_mcp_takes_the_menu_spellings()
+    {
+        var envelope = Generate("""{"objectType":"extension","extensionKind":"menu","target":"AccountsReceivable","suffix":"ConFleet","submenus":["ConFleet:@FLM540"],"items":["ConFleet/FMVehicle","Customers/FMCustomer"],"after":"Customers"}""");
+        AssertOk(envelope);
+        var data = envelope.GetProperty("data");
+        Assert.Equal("AccountsReceivable.ConFleet", data.GetProperty("name").GetString());
+        var xml = data.GetProperty("xml").GetString()!;
+        AssertAotDocument(xml);
+        Assert.Contains("<Parent>Customers</Parent>", xml);
+        Assert.Contains("<PreviousSibling>Customers</PreviousSibling>", xml);
+
+        // Adding nothing is refused, not written as an inert shell.
+        var empty = Generate("""{"objectType":"extension","extensionKind":"menu","target":"AccountsReceivable","suffix":"ConFleet"}""");
+        Assert.False(empty.GetProperty("ok").GetBoolean());
+    }
+
+    [Fact]
     public void Label_file_over_mcp_hands_back_the_content_it_cannot_write()
     {
         var envelope = Generate("""{"objectType":"label-file","name":"ConFleet","model":"Contoso","entries":["Vehicles=Fleet vehicles","Make=Make"]}""");

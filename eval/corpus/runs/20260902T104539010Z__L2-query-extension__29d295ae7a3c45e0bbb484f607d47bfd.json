@@ -1,0 +1,21 @@
+{
+  "runId": "20260902T104539010Z__L2-query-extension__29d295ae7a3c45e0bbb484f607d47bfd",
+  "caseId": "L2-query-extension",
+  "tier": 2,
+  "timestampUtc": "2026-09-02T10:45:39.010627+00:00",
+  "source": "build-oracle",
+  "score": {
+    "xppErrors": 0,
+    "referenceErrors": 0,
+    "goldenMatch": true,
+    "goldenDiff": {
+      "missing": [],
+      "extra": [],
+      "changed": [],
+      "isMatch": true
+    },
+    "buildClean": true,
+    "buildErrors": 0,
+    "runtimeFailures": 0
+  }
+}

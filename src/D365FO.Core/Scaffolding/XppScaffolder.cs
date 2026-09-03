@@ -678,10 +678,19 @@ public static class XppScaffolder
             // the installation ships no instance at all (census: 0 files) — a map extension is
             // the shell a later edit hangs on, not a carrier of modifications.
             "map"             => "AxMapExtension",
+            "menu"            => "AxMenuExtension",
             _ => throw new ArgumentException(
-                $"Unsupported extension kind: {kind}. Extensible: table, form, edt, enum, view, query, dataEntityView, map.",
+                $"Unsupported extension kind: {kind}. Extensible: table, form, edt, enum, view, query, dataEntityView, map, menu.",
                 nameof(kind)),
         };
+
+        // A menu extension is its additions; the bare shell is a menu extension that adds
+        // nothing, which the scaffolder refuses. Callers with content use NavigationScaffolder
+        // directly; this path exists so the generic kind table stays complete.
+        if (elementName == "AxMenuExtension")
+            throw new ArgumentException(
+                "A menu extension adds elements to the base menu — pass --item, --tile, --menu-ref or --submenu " +
+                "(generate extension Menu <BaseMenu> --suffix <S> --item <Parent>/<MenuItem>).", nameof(kind));
 
         var root = new XElement(elementName, new XElement("Name", $"{targetName}.{suffix}"));
 

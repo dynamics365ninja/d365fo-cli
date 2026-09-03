@@ -84,7 +84,11 @@ public static class ConfigurationScaffolder
     /// XML document, a Power BI report. The manifest names the file and where it lives relative
     /// to the model store; the file itself is the caller's to place.
     /// </summary>
+    /// <param name="name">Resource name (AOT <c>&lt;Name&gt;</c> and file stem).</param>
+    /// <param name="fileName">Bare file name of the content the manifest describes.</param>
     /// <param name="model">The model whose folder holds the content — the first segment of <c>RelativeUriInModelStore</c>.</param>
+    /// <param name="resourceType">A <c>ResourceType</c> value; <c>Images</c>, the enum default, when null.</param>
+    /// <param name="label">Optional label.</param>
     public static XDocument Resource(string name, string fileName, string model, string? resourceType = null, string? label = null)
     {
         if (string.IsNullOrWhiteSpace(name))

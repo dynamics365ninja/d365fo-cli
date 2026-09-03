@@ -126,6 +126,8 @@ public class ObjectTypeRegistryAotTests
         };
 
         foreach (var package in SafeDirs(root))
+        {
+            if (!ShippedAot.IsMicrosoftPackage(package)) continue; // see ShippedAot
             foreach (var model in SafeDirs(package))
                 foreach (var name in interesting)
                 {
@@ -134,6 +136,7 @@ public class ObjectTypeRegistryAotTests
                     foreach (var file in Directory.EnumerateFiles(dir, "*.xml").Take(perFolder))
                         yield return file;
                 }
+        }
 
         static IEnumerable<string> SafeDirs(string d)
         {

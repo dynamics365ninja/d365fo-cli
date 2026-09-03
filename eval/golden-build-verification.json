@@ -1,12 +1,12 @@
 {
-  "capturedUtc": "2026-09-02T09:39:42.7980211+00:00",
+  "capturedUtc": "2026-09-02T10:45:38.8583451+00:00",
   "host": "D365ASLDEV2-1",
   "packagesRoot": "K:\\AosService\\PackagesLocalDirectory",
   "compiler": "K:\\AosService\\PackagesLocalDirectory\\Bin\\xppc.exe",
-  "compilerArgs": "-metadata=C:\\Users\\Admin7e00859cee\\AppData\\Local\\Temp\\2\\d365fo-l3-cf1eab0d7ce24bea9d9fbd4239ca2594 -modelmodule=D365FoCliEvalGoldens -output=C:\\Users\\Admin7e00859cee\\AppData\\Local\\Temp\\2\\d365fo-l3-cf1eab0d7ce24bea9d9fbd4239ca2594\\bin -referencefolder=K:\\AosService\\PackagesLocalDirectory -refPath=C:\\Users\\Admin7e00859cee\\AppData\\Local\\Temp\\2\\d365fo-l3-cf1eab0d7ce24bea9d9fbd4239ca2594\\bin -log=C:\\Users\\Admin7e00859cee\\AppData\\Local\\Temp\\2\\d365fo-l3-cf1eab0d7ce24bea9d9fbd4239ca2594\\Dynamics.AX.D365FoCliEvalGoldens.xppc.log",
+  "compilerArgs": "-metadata=C:\\Users\\Admin7e00859cee\\AppData\\Local\\Temp\\2\\d365fo-l3-8ad59902ddcb4432891bdc47fe3ef256 -modelmodule=D365FoCliEvalGoldens -output=C:\\Users\\Admin7e00859cee\\AppData\\Local\\Temp\\2\\d365fo-l3-8ad59902ddcb4432891bdc47fe3ef256\\bin -referencefolder=K:\\AosService\\PackagesLocalDirectory -refPath=C:\\Users\\Admin7e00859cee\\AppData\\Local\\Temp\\2\\d365fo-l3-8ad59902ddcb4432891bdc47fe3ef256\\bin -log=C:\\Users\\Admin7e00859cee\\AppData\\Local\\Temp\\2\\d365fo-l3-8ad59902ddcb4432891bdc47fe3ef256\\Dynamics.AX.D365FoCliEvalGoldens.xppc.log",
   "modelName": "D365FoCliEvalGoldens",
-  "total": 70,
-  "clean": 70,
+  "total": 71,
+  "clean": 71,
   "failed": 0,
   "skipped": 0,
   "cases": [
@@ -484,6 +484,14 @@
     },
     {
       "caseId": "L2-map-extension",
+      "verdict": "clean",
+      "errors": 0,
+      "warnings": 0,
+      "ruleIds": [],
+      "messages": []
+    },
+    {
+      "caseId": "L2-menu-extension",
       "verdict": "clean",
       "errors": 0,
       "warnings": 0,
