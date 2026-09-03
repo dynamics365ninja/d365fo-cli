@@ -187,7 +187,7 @@ public sealed class GenerateTileCommand : Command<GenerateTileCommand.Settings>
         public string Name { get; init; } = "";
 
         [CommandOption("--menu-item <NAME>")]
-        [System.ComponentModel.Description("Menu item the tile opens. Required — every shipped tile has one.")]
+        [System.ComponentModel.Description("Menu item the tile opens. Required for a Standard or Count tile; a KPI tile binds --kpi and a Link tile --url instead.")]
         public string? MenuItem { get; init; }
 
         [CommandOption("--menu-item-type <TYPE>")]
@@ -195,7 +195,7 @@ public sealed class GenerateTileCommand : Command<GenerateTileCommand.Settings>
         public string? MenuItemType { get; init; }
 
         [CommandOption("--type <TYPE>")]
-        [System.ComponentModel.Description("Standard (default, omitted) | Count (shows a record count from --query) | KPI (needs --kpi) | Link.")]
+        [System.ComponentModel.Description("Standard (default, omitted) | Count (shows a record count from --query) | KPI (needs --kpi) | Link (needs --url).")]
         public string? Type { get; init; }
 
         [CommandOption("--label <KEY>")]
@@ -224,6 +224,10 @@ public sealed class GenerateTileCommand : Command<GenerateTileCommand.Settings>
         [System.ComponentModel.Description("AxKPI a KPI tile shows.")]
         public string? Kpi { get; init; }
 
+        [CommandOption("--url <ADDRESS>")]
+        [System.ComponentModel.Description("Address a Link tile opens, e.g. https://learn.microsoft.com/dynamics365/. Link tiles only.")]
+        public string? Url { get; init; }
+
         [CommandOption("--configuration-key <NAME>")]
         public string? ConfigurationKey { get; init; }
     }
@@ -233,27 +237,30 @@ public sealed class GenerateTileCommand : Command<GenerateTileCommand.Settings>
         var kind = OutputMode.Resolve(settings.Output);
         if (string.IsNullOrWhiteSpace(settings.Name))
             return RenderHelpers.Render(kind, ToolResult<object>.Fail(D365FoErrorCodes.BadInput, "Tile name required."));
-        if (string.IsNullOrWhiteSpace(settings.MenuItem))
-            return RenderHelpers.Render(kind, ToolResult<object>.Fail(D365FoErrorCodes.BadInput,
-                "--menu-item <NAME> required.", hint: "A tile opens a menu item; create one first with `d365fo generate menu-item`."));
 
         XDocument doc;
         try
         {
-            doc = NavigationScaffolder.Tile(settings.Name, settings.MenuItem!, settings.Type, settings.Label, settings.Size,
+            // What a tile has to bind to depends on its type, so the scaffolder decides — it is
+            // the one place that knows Standard and Count open a menu item while KPI and Link
+            // do not.
+            doc = NavigationScaffolder.Tile(settings.Name, settings.MenuItem, settings.Type, settings.Label, settings.Size,
                 settings.Image, settings.Display, settings.Query, settings.Kpi, settings.ConfigurationKey,
-                settings.MenuItemType, settings.HelpText);
+                settings.MenuItemType, settings.HelpText, settings.Url);
         }
         catch (ArgumentException ex)
         {
-            return RenderHelpers.Render(kind, ToolResult<object>.Fail(D365FoErrorCodes.BadInput, ex.Message));
+            return RenderHelpers.Render(kind, ToolResult<object>.Fail(D365FoErrorCodes.BadInput, ex.Message,
+                hint: ex.ParamName == "menuItemName"
+                    ? "Create the menu item first with `d365fo generate menu-item`, or pass --type KPI/--type Link for a tile that opens something else."
+                    : null));
         }
 
         if (!GenerateViewCommand.TryResolveOutPath(kind, settings, Folders.Tile, settings.Name, out var outPath, out var pathFailure))
             return pathFailure;
 
         var warnings = new List<string>();
-        var unknown = NavigationGrounding.UnknownMenuItems(new[] { settings.MenuItem! });
+        var unknown = NavigationGrounding.UnknownMenuItems(new[] { settings.MenuItem ?? "" });
         if (NavigationGrounding.Warning(unknown, "Menu item") is { } w) warnings.Add(w);
 
         try
@@ -273,6 +280,7 @@ public sealed class GenerateTileCommand : Command<GenerateTileCommand.Settings>
                 type = settings.Type ?? "Standard",
                 query = settings.Query,
                 kpi = settings.Kpi,
+                url = settings.Url,
                 unknownMenuItems = unknown.Count > 0 ? unknown : null,
                 path = res.Path,
                 bytes = res.Bytes,

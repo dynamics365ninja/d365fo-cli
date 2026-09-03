@@ -503,6 +503,10 @@ d365fo generate menu ConFleet --label "@FLM540"   --submenu "Vehicles:@FLM95"   
 # A wide tile that opens a menu item; --type Count with --query makes it a cue
 d365fo generate tile ConFmVehiclesTile --menu-item FMVehicle   --label "@FLM95" --size Wide --install-to FleetManagement
 
+# The other two types open something else instead of a menu item
+d365fo generate tile ConFmUtilizationKpi --type KPI --kpi ConFmUtilization   --size Wide --install-to FleetManagement
+d365fo generate tile ConFmDocsLink --type Link --url "https://learn.microsoft.com/dynamics365/"   --display TextOnly --install-to FleetManagement
+
 # Register a form as a hostable part (preview pane, fact box)
 d365fo generate form-part ConFmVehiclePreviewPart --form FMVehicle   --caption "@FLM95" --install-to FleetManagement
 ```
@@ -510,7 +514,10 @@ d365fo generate form-part ConFmVehiclePreviewPart --form FMVehicle   --caption "
 `--item [<submenu>/]<menuItem>[:Display|Action|Output]`: Display is the contract
 default and is not written. A menu item the index does not know is reported in
 `unknownMenuItems` rather than refused — the index is a mirror, and the item may
-live in a model that has not been extracted.
+live in a model that has not been extracted. A tile's target follows its `--type`:
+762 of the 770 shipped tiles carry `<MenuItemName>` and all of them are Standard
+or Count; the eight that do not are the KPI and Link tiles, which bind `<KPI>` and
+`<URL>` instead.
 
 ### Configuration key, workflow category, label file, resource
 

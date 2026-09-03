@@ -223,9 +223,9 @@ namespace D365FO.Core.ObjectTypes
                 // There is no AxQueryExtension type at all — the bridge used to name one.
                 New("queryextension", "AxQuerySimpleExtension", "QuerySimpleExtensions", "extension", null, "QueryExtension"),
                 New("dataentityviewextension", "AxDataEntityViewExtension", "DataEntityViewExtensions", "extension", null, "DataEntityViewExtension"),
-                // Folder ships in every model; no standard model has a file in it yet, and
-                // `generate extension` takes no Map kind — the null is the truth here, unlike
-                // the three rows above, which named no command while the command built them.
+                // Folder ships in every model and no standard model has a file in it yet, so
+                // there is nothing here to index — but `generate extension --kind map` does
+                // build one, which is what the command name records.
                 New("mapextension", "AxMapExtension", "MapExtensions", "extension", null, "MapExtension"),
                 New("securitydutyextension", "AxSecurityDutyExtension", "SecurityDutyExtensions", "extension", null, "SecurityDutyExtension"),
                 New("securityroleextension", "AxSecurityRoleExtension", "SecurityRoleExtensions", "extension", null, "SecurityRoleExtension"),
@@ -246,7 +246,7 @@ namespace D365FO.Core.ObjectTypes
                 New("workflowapproval", "AxWorkflowApproval", "WorkflowApprovals", "workflow", null, "WorkflowApproval", ns: NsV2),
                 New("workflowtask", "AxWorkflowTask", "WorkflowTasks", "workflow", null, "WorkflowTask", ns: NsV2),
 
-                // ── Read-only types the index knows but nothing generates ───────────
+                // ── The small kinds: each has a generate subcommand of its own ──────
                 New("workflowcategory", "AxWorkflowCategory", "WorkflowCategories", "workflow-category", null, "WorkflowCategory", indexed: false, ns: NsV2),
                 New("configurationkey", "AxConfigurationKey", "ConfigurationKeys", "configuration-key", null, "ConfigurationKey"),
                 New("labelfile", "AxLabelFile", "LabelFiles", "label-file", null, "LabelFile"),

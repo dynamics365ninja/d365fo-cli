@@ -54,6 +54,42 @@ public static class EntityShapeScaffolder
     private static readonly XNamespace V2 = "Microsoft.Dynamics.AX.Metadata.V2";
 
     /// <summary>
+    /// The embedded references whose parent chain never arrives at a root, in the order they
+    /// were declared.
+    /// </summary>
+    /// <remarks>
+    /// The tree handed to <see cref="CompositeDataEntityView"/> is built by walking down from
+    /// the roots, so a reference in a parent cycle — <c>A</c> under <c>B</c> under <c>A</c> — is
+    /// simply never reached. Every parent name resolves, nothing throws, and the entity is
+    /// reported as bundled while <c>EmbeddedDataEntities</c> comes out empty. The cycle has to
+    /// be caught where the parent map still exists, which is the caller that parsed the specs,
+    /// so both the CLI and the MCP handler ask this rather than each having its own answer.
+    /// </remarks>
+    public static IReadOnlyList<string> UnrootedEmbedded(IEnumerable<(string RefName, string Parent)> embedded)
+    {
+        ArgumentNullException.ThrowIfNull(embedded);
+        var parentOf = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        var order = new List<string>();
+        foreach (var (refName, parent) in embedded)
+        {
+            if (parentOf.TryAdd(refName, parent)) order.Add(refName);
+        }
+
+        var unrooted = new List<string>();
+        foreach (var refName in order)
+        {
+            var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { refName };
+            var at = parentOf[refName];
+            while (parentOf.TryGetValue(at, out var next))
+            {
+                if (!seen.Add(at)) { unrooted.Add(refName); break; }
+                at = next;
+            }
+        }
+        return unrooted;
+    }
+
+    /// <summary>
     /// An <c>AxCompositeDataEntityView</c> over one or more root entities, each with the
     /// entities embedded under it.
     /// </summary>

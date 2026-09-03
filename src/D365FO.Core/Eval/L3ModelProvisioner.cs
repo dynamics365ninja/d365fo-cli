@@ -133,10 +133,12 @@ public static class L3ModelProvisioner
             files.AddRange(Companions(caseDir));
 
             // The scored golden's AOT folder is where content companions land: a label
-            // file's .label.txt, a resource's .png. Resolved before the loop so a skipped
-            // golden cannot leave the content pointing at nothing.
-            var (mainRoot, _, _) = ReadIdentity(files[0]);
-            var mainFolder = mainRoot is null ? null : ObjectTypeRegistry.Find(mainRoot)?.AotSubfolder;
+            // file's .label.txt, a resource's .png. Resolved from the same two checks the
+            // copy loop below applies to the manifest itself, so a golden that loop skips
+            // does not leave its content behind in the model with nothing pointing at it.
+            var (mainRoot, _, mainError) = ReadIdentity(files[0]);
+            var mainType = mainError is null && mainRoot is not null ? ObjectTypeRegistry.Find(mainRoot) : null;
+            var mainFolder = mainType is { ExistsInStandardAot: true } ? mainType.AotSubfolder : null;
             foreach (var (content, relativeUnderCompanions) in ContentCompanions(caseDir))
             {
                 if (mainFolder is null) break;
@@ -196,8 +198,9 @@ public static class L3ModelProvisioner
     /// buried the real defects underneath it.
     /// </para>
     /// <para>
-    /// Companions live in a <c>_companions</c> subfolder, invisible to the scorer
-    /// (which enumerates the case directory non-recursively) and compiled here. They
+    /// Companions live in a <c>_companions</c> subfolder, outside the one file the
+    /// case scores (the scorer enumerates the case directory non-recursively) though
+    /// it does diff them, and compiled here. They
     /// are captured from the same command run as the golden, so they stay honest:
     /// a companion that drifts from what the tool emits shows up as a build failure,
     /// exactly like the golden itself.

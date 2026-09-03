@@ -42,9 +42,19 @@ public static class PropertyHonesty
     /// Values that carry a request but never survive as text: they select a shape rather than
     /// supply a value, so their absence from the document says nothing.
     /// </summary>
+    /// <remarks>
+    /// The second row is the enum defaults the scaffolders deliberately do not write, because
+    /// shipped files do not write them either — <c>--type Standard</c> on a tile,
+    /// <c>--menu-item-type Display</c>, <c>--display Auto</c>. Asking for the default and
+    /// getting the default is the option working, so reporting it as a dropped value is a
+    /// warning that trains the reader to ignore the check. This stays a short list of words
+    /// rather than an option→member table for the reason the class remarks give: the blunt
+    /// version is wrong in one direction only.
+    /// </remarks>
     private static readonly HashSet<string> Untraceable = new(StringComparer.OrdinalIgnoreCase)
     {
         "true", "false", "yes", "no", "none", "default", "auto",
+        "standard", "display",
     };
 
     private static readonly char[] CompositeSeparators = [':', ',', ';', '|', '=', '/'];

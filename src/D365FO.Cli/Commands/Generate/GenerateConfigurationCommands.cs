@@ -285,8 +285,19 @@ public sealed class GenerateResourceCommand : Command<GenerateResourceCommand.Se
             if (!string.IsNullOrWhiteSpace(settings.Source))
             {
                 Directory.CreateDirectory(contentDir);
-                File.Copy(settings.Source!, contentPath, overwrite: settings.Overwrite);
-                copied = contentPath;
+                if (File.Exists(contentPath) && !settings.Overwrite)
+                {
+                    // The manifest is on disk by now, so throwing here would report a failed
+                    // command that half succeeded. Warn like the label-file path does and let
+                    // the caller decide — the file that is already there may well be the right
+                    // one.
+                    warnings.Add($"{contentPath} already exists and was left alone; --source was not copied over it. Pass --overwrite to replace it.");
+                }
+                else
+                {
+                    File.Copy(settings.Source!, contentPath, overwrite: settings.Overwrite);
+                    copied = contentPath;
+                }
             }
             else if (!File.Exists(contentPath))
             {
@@ -368,6 +379,14 @@ public sealed class GenerateLabelFileCommand : Command<GenerateLabelFileCommand.
             package = model = id;
             warnings.Add($"No --model given and --out is not inside a <package>/<model>/AxLabelFile/ folder, so RelativeUriInModelStore starts with '{id}\\{id}'. Pass --model <Model> for the real path.");
         }
+        else if (string.IsNullOrWhiteSpace(package))
+        {
+            // A model folder with no package folder above it — an --out pointing at a bare
+            // <model>/AxLabelFile/. The convention is package == model, which is what the
+            // single-model packages on an AOS look like anyway.
+            package = model;
+            warnings.Add($"--out has a model folder but no package folder above it, so RelativeUriInModelStore starts with '{model}\\{model}'. Pass --model <Model> if the package is named differently.");
+        }
 
         XDocument doc;
         try { doc = ConfigurationScaffolder.LabelFile(id, language, package!, model!); }
@@ -387,12 +406,30 @@ public sealed class GenerateLabelFileCommand : Command<GenerateLabelFileCommand.
             var contentPath = Path.Combine(Path.GetDirectoryName(Path.GetFullPath(outPath!))!,
                 "LabelResources", language, ConfigurationScaffolder.LabelContentFileName(id, language));
             Directory.CreateDirectory(Path.GetDirectoryName(contentPath)!);
-            if (File.Exists(contentPath) && !settings.Overwrite)
+            string? contentBackup = null;
+            var contentExists = File.Exists(contentPath);
+            if (contentExists && entries.Count == 0)
+            {
+                // Re-running the command to refresh the manifest must not empty the labels
+                // beside it. --overwrite is about the file this command owns; the .label.txt
+                // holds work `labels create` put there, and writing nothing over it is data
+                // loss dressed up as a successful generate.
+                warnings.Add($"{contentPath} already holds labels and no --entry was given, so it was left untouched. Add to it with `d365fo labels create`.");
+            }
+            else if (contentExists && !settings.Overwrite)
             {
                 warnings.Add($"{contentPath} already exists and was left alone; --entry values were not written. Use `d365fo labels create` to add to it, or --overwrite to replace it.");
             }
             else
             {
+                if (contentExists)
+                {
+                    // The manifest is written through ScaffoldFileWriter, which keeps a .bak and
+                    // journals the pre-image; the content file is written here and would have
+                    // neither. Same convention, so the recovery story is the same on both files.
+                    contentBackup = contentPath + ".bak";
+                    File.Copy(contentPath, contentBackup, overwrite: true);
+                }
                 var sb = new StringBuilder();
                 foreach (var (key, text) in entries) sb.Append(key).Append('=').Append(text).Append("\r\n");
                 File.WriteAllText(contentPath, sb.ToString(), new UTF8Encoding(encoderShouldEmitUTF8Identifier: true));
@@ -407,6 +444,7 @@ public sealed class GenerateLabelFileCommand : Command<GenerateLabelFileCommand.
                 model,
                 labels = entries.Count,
                 content = contentPath,
+                contentBackup,
                 path = res.Path,
                 bytes = res.Bytes,
                 backup = res.BackupPath,

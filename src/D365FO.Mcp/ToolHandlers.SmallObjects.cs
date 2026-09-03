@@ -157,18 +157,20 @@ public sealed partial class ToolHandlers
 
     public ToolResult<object> GenerateTile(
         string name, string? menuItem, string? tileType, string? label, string? size, string? image, string? display,
-        string? query, string? kpi, string? configurationKey, string? menuItemType, string? helpText)
+        string? query, string? kpi, string? configurationKey, string? menuItemType, string? helpText, string? url)
     {
         if (string.IsNullOrWhiteSpace(name)) return Required("name", "objectType=tile");
-        if (string.IsNullOrWhiteSpace(menuItem)) return Required("menuItem", "objectType=tile");
         try
         {
-            var doc = NavigationScaffolder.Tile(name, menuItem!, tileType, label, size, image, display, query, kpi,
-                configurationKey, menuItemType, helpText);
+            // menuItem is required for a Standard or Count tile and meaningless for the other
+            // two; the scaffolder holds that rule so both surfaces enforce the same one.
+            var doc = NavigationScaffolder.Tile(name, menuItem, tileType, label, size, image, display, query, kpi,
+                configurationKey, menuItemType, helpText, url);
             return ToolResult<object>.Success(new
             {
-                name, kind = "AxTile", menuItem, type = tileType ?? "Standard",
-                unknownMenuItems = SafeMenuItemExists(menuItem!) ? null : new[] { menuItem },
+                name, kind = "AxTile", menuItem, url, type = tileType ?? "Standard",
+                unknownMenuItems = string.IsNullOrWhiteSpace(menuItem) || SafeMenuItemExists(menuItem!)
+                    ? null : new[] { menuItem },
                 xml = Aot(doc),
             });
         }
@@ -242,6 +244,14 @@ public sealed partial class ToolHandlers
             if (!nodes.ContainsKey(c.Parent))
                 return ToolResult<object>.Fail(D365FoErrorCodes.BadInput,
                     $"embedded '{c.Entity}' names parent '{c.Parent}', which is neither a root nor an embedded reference.");
+
+        // Resolving is not arriving: a parent cycle is dropped by Build() and reported as
+        // bundled all the same.
+        var unrooted = EntityShapeScaffolder.UnrootedEmbedded(children.Select(c => (c.RefName, c.Parent)));
+        if (unrooted.Count > 0)
+            return ToolResult<object>.Fail(D365FoErrorCodes.BadInput,
+                $"embedded {string.Join(", ", unrooted.Select(u => $"'{u}'"))} never reaches a root: the parent chain loops.",
+                "Every embedded entity hangs, directly or through other embedded entities, off a root.");
 
         CompositeEntityReferenceSpec Build(string refName) => new(
             refName, nodes[refName].Entity, nodes[refName].Relation,
