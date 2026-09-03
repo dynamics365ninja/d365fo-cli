@@ -39,8 +39,9 @@ every golden compiled by the real `xppc`.
 - **`generate resource`** — `AxResource` manifest; `--source` copies the file into
   `ResourceContent/<Type>/`. A manifest whose content is missing is a **Metadata Error** at
   compile time ("Resource content file 'X.png' not found"), which the first L3 run proved.
-- **`generate tile`** — `AxTile` bound to a menu item; `Type` written only when not `Standard`,
-  a KPI tile needs `--kpi`. The menu item is checked against the index and reported in
+- **`generate tile`** — `AxTile` bound to whatever its `Type` opens: `--menu-item` for
+  `Standard` and `Count`, `--kpi` for `KPI`, `--url` for `Link`. `Type` is written only when it
+  is not `Standard`. The menu item is checked against the index and reported in
   `unknownMenuItems` rather than refused.
 - **`generate workflow-category`** — `AxWorkflowCategory` (V2 namespace) whose `--module` is
   validated against `ModuleAxapta` in the index; the contract types it as a string and the
@@ -77,12 +78,62 @@ Around them:
 
 `forms-and-navigation` taught that a sub-menu is nested through a `<SubMenu>` member and that
 `AxMenuElementMenuReference` was "a different, legacy concept". Counted on the installation:
-of 81 shipped menus, 60 nest sub-menus **inline** — `AxMenuElementSubMenu` carries its own
+of 80 shipped menus, 59 nest sub-menus **inline** — `AxMenuElementSubMenu` carries its own
 `<Elements>` — one references another menu through `AxMenuElementMenuReference/<MenuName>`,
 and **no file carries a `<SubMenu>` member**; the contract declares none. The topic now says
 what the files say. The tile size list lost its `Small` (the `TileSize` enum has none) and
 `object-extension-authoring` no longer claims there is no Map extension kind.
 
+
+### Fixed — the review of the ten new subcommands
+
+Reviewing `feat/generate-the-ten-missing-kinds` against the installation rather than against
+its own commit message. Every gate it claimed reproduces; these are what the review found
+underneath them.
+
+- **`generate label-file --overwrite` destroyed the labels it was not asked about.** With no
+  `--entry`, the content write ran anyway and put an empty string over an existing
+  `.label.txt` — a 35-byte file became a 3-byte byte-order mark, and since the content file
+  goes to disk outside `ScaffoldFileWriter` there was no `.bak` and no journal entry to
+  recover from. Re-running the command to refresh a manifest silently emptied the label file
+  beside it. Now: no `--entry` and a file already there means the file is left alone (with a
+  warning); `--entry` with `--overwrite` keeps the previous content as `.bak` and reports it
+  as `contentBackup`.
+- **A KPI or Link tile could not be written at all.** `--menu-item` was required of every
+  tile, justified as "every shipped tile has one". Counted here: of 770 tiles, 762 carry
+  `<MenuItemName>` and every one of those is `Standard` or `Count`. The eight that do not are
+  the other two types — a KPI tile binds `<KPI>` (`QMSCAPAAvgDaysToCloseAllCases`), a Link
+  tile binds `<URL>` (`CTPTechDocumentation`) — so the command offered `--type KPI` and
+  `--type Link` while refusing to produce either shape, and had no `--url` option to begin
+  with. The requirement now follows the type, `--url` exists, and both new shapes compile
+  clean under the real `xppc`.
+- **A tile's `size` was unreachable over MCP.** One flat `generate_object` schema with
+  `additionalProperties: false` declared `size` as an integer for `edt`, while the tile branch
+  read the same key as a string: a validating client could not send `"Wide"`, and one that
+  obeyed the declared type crashed the handler on `JsonElement.GetString()`. Tiles now take
+  `tileSize` (with `size` still accepted), and `Str` renders a number instead of throwing.
+- **A cyclic `--embedded` chain was reported as bundled and written as nothing.**
+  `generate composite-entity --embedded A:relA:B --embedded B:relB:A` passed every check — each
+  parent name resolves — and produced an empty `<EmbeddedDataEntities />` while the payload
+  and `requiredSymbols` listed both entities. Both surfaces now walk each parent chain to a
+  root and refuse the ones that loop.
+- **Content companions were never scored.** `eval run` diffed `_companions/*.xml`
+  non-recursively, so the `.label.txt` and `.png` added with the ten subcommands were
+  invisible: `L1-label-file-basic` and `L1-resource-basic` would both have stayed green with
+  the truncation bug above in place. The scorer now walks companions recursively and compares
+  non-XML ones as content (BOM and line endings normalised, since git owns both), and the
+  replay writes its artefacts into a directory of its own so the temp index and the write
+  journal are not mistaken for output.
+- **`generate resource --source` failed a command that had half succeeded.** An existing
+  content file without `--overwrite` threw out of `File.Copy` *after* the manifest was on
+  disk, reporting `WRITE_FAILED` for a write that happened. It warns now, as the label-file
+  path already did.
+- Property honesty no longer reports a contract default as a dropped value: `--type Standard`,
+  `--menu-item-type Display` and `--display Auto` are omitted from the XML by design.
+- The L3 provisioner no longer copies a golden's content companions into the throwaway model
+  when the golden itself is skipped, and two comments in `ObjectTypeRegistry` that the feature
+  commit made false — "the null is the truth here" over a row whose null it had just filled in,
+  "nothing generates" over nine rows that all name a command — say what the rows say.
 
 ### Fixed — the two 1.16.0 ports the parity audit found still missing
 

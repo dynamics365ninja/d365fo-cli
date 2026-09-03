@@ -100,6 +100,55 @@ public class SmallObjectScaffolderTests
         Assert.Throws<ArgumentException>(() => NavigationScaffolder.Tile("X", ""));
     }
 
+    /// <summary>
+    /// What a tile binds to follows from its type. 762 of the 770 the installation ships carry
+    /// <c>MenuItemName</c> and all of them are Standard or Count; the eight that do not are the
+    /// KPI and Link tiles, which carry <c>KPI</c> and <c>URL</c> instead
+    /// (<c>QMSCAPAAvgDaysToCloseAllCases</c>, <c>CTPTechDocumentation</c>). Requiring a menu
+    /// item on every tile made those two shapes unwritable while the command still offered them.
+    /// </summary>
+    [Fact]
+    public void Tile_binds_the_target_its_type_implies_and_not_a_menu_item_for_all_four()
+    {
+        var kpi = NavigationScaffolder.Tile("ConFmKpi", menuItemName: null, type: "KPI",
+            kpi: "QMSCAPAAvgDaysToCloseAllCases", size: "Wide");
+        Assert.Null(kpi.Root!.Element("MenuItemName"));
+        Assert.Equal("QMSCAPAAvgDaysToCloseAllCases", kpi.Root.Element("KPI")!.Value);
+
+        var link = NavigationScaffolder.Tile("ConFmLink", menuItemName: null, type: "Link",
+            url: "https://learn.microsoft.com/dynamics365/", tileDisplay: "TextOnly");
+        Assert.Null(link.Root!.Element("MenuItemName"));
+        Assert.Equal("https://learn.microsoft.com/dynamics365/", link.Root.Element("URL")!.Value);
+        Assert.Equal("Link", link.Root.Element("Type")!.Value);
+
+        // Standard and Count still have to open something, which is what 762 shipped files say.
+        Assert.Throws<ArgumentException>(() => NavigationScaffolder.Tile("X", null));
+        Assert.Throws<ArgumentException>(() => NavigationScaffolder.Tile("X", null, type: "Count", query: "FMVehicleQuery"));
+
+        // A Link tile with no address, and a URL on a type that has no member to hold it.
+        Assert.Throws<ArgumentException>(() => NavigationScaffolder.Tile("X", null, type: "Link"));
+        Assert.Throws<ArgumentException>(() => NavigationScaffolder.Tile("X", "FMVehicle", url: "https://example.com/"));
+    }
+
+    /// <summary>
+    /// A cycle among the embedded references resolves — every parent name exists — but the tree
+    /// is walked down from the roots, so nothing in the cycle is ever reached. The composite
+    /// came out with an empty <c>EmbeddedDataEntities</c> while the caller was told both
+    /// entities were bundled.
+    /// </summary>
+    [Fact]
+    public void Composite_entity_reports_embedded_references_whose_parent_chain_loops()
+    {
+        Assert.Empty(EntityShapeScaffolder.UnrootedEmbedded(
+            [("Lines", "Header"), ("Charges", "Lines")]));
+
+        Assert.Equal(["A", "B"], EntityShapeScaffolder.UnrootedEmbedded(
+            [("A", "B"), ("B", "A")]));
+
+        Assert.Equal(["Self"], EntityShapeScaffolder.UnrootedEmbedded(
+            [("Lines", "Header"), ("Self", "Self")]));
+    }
+
     [Fact]
     public void Menu_nests_entries_under_submenus_in_declaration_order_and_keeps_elements_unnamespaced()
     {

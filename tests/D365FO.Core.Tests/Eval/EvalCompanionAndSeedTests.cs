@@ -150,6 +150,142 @@ public class EvalCompanionAndSeedTests : IDisposable
         Assert.True(score.GoldenMatch);
     }
 
+    /// <summary>
+    /// <c>eval score</c> is handed an artefact, not a directory it owns, and the companions the
+    /// golden names are looked up beside it.
+    /// </summary>
+    [Fact]
+    public void Without_a_produced_directory_a_named_companion_is_still_compared_beside_the_artefact()
+    {
+        Golden(Main);
+        GoldenCompanion("FooHelper.xml", "<AxClass><Name>FooHelper</Name><IsFinal>Yes</IsFinal></AxClass>");
+        var actual = Produce("actual.xml", Main);
+        Produce("FooHelper.xml", "<AxClass><Name>FooHelper</Name></AxClass>");
+
+        var score = EvalScorer.Score(Case("L0-test"), actual, _goldensRoot, _repo);
+
+        Assert.False(score.GoldenMatch);
+        Assert.Contains(score.GoldenDiff.Missing, m => m.StartsWith("_companions/FooHelper.xml:", StringComparison.Ordinal));
+    }
+
+    /// <summary>
+    /// Nothing but the golden's own companions is read from a directory the caller does not own.
+    /// Walking it recursively found the sub-directories of a shared temp directory — on Linux,
+    /// an <c>UnauthorizedAccessException</c> out of another process's subtree of <c>/tmp</c>.
+    /// </summary>
+    [Fact]
+    public void A_directory_the_caller_does_not_own_is_not_walked()
+    {
+        Golden(Main);
+        var actual = Produce("actual.xml", Main);
+        Directory.CreateDirectory(Path.Combine(_workDir, "someone-elses"));
+        File.WriteAllText(Path.Combine(_workDir, "someone-elses", "Whatever.xml"), "<AxClass><Name>Whatever</Name></AxClass>");
+
+        var score = EvalScorer.Score(Case("L0-test"), actual, _goldensRoot, _repo);
+
+        Assert.True(score.GoldenMatch);
+        Assert.Empty(score.GoldenDiff.Extra);
+    }
+
+    // ── content companions: the non-XML half of an artefact ───────────────
+
+    private void GoldenContentCompanion(string relativePath, string body)
+    {
+        var path = Path.Combine(_goldensRoot, "L0-test", "_companions", relativePath);
+        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+        File.WriteAllText(path, body);
+    }
+
+    private string ProduceContent(string relativePath, string body)
+    {
+        var path = Path.Combine(_workDir, relativePath);
+        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+        File.WriteAllText(path, body);
+        return path;
+    }
+
+    private const string LabelContent = "LabelResources/en-US/ConFleet.en-US.label.txt";
+
+    [Fact]
+    public void A_content_companion_that_matches_keeps_the_case_passing()
+    {
+        Golden(Main);
+        GoldenContentCompanion(LabelContent, "Vehicles=Vehicles\r\n");
+        var actual = Produce("actual.xml", Main);
+        ProduceContent(LabelContent, "Vehicles=Vehicles\r\n");
+
+        var score = EvalScorer.Score(Case("L0-test"), actual, _goldensRoot, _repo, producedDir: _workDir);
+
+        Assert.True(score.GoldenMatch);
+    }
+
+    /// <summary>
+    /// The regression this exists for: <c>generate label-file --overwrite</c> with no
+    /// <c>--entry</c> emptied the <c>.label.txt</c> beside the manifest, and both the resource
+    /// and the label-file case stayed green because the scorer only ever diffed XML.
+    /// </summary>
+    [Fact]
+    public void A_content_companion_the_run_emptied_is_reported_as_changed()
+    {
+        Golden(Main);
+        GoldenContentCompanion(LabelContent, "Vehicles=Vehicles\r\nSetup=Setup\r\n");
+        var actual = Produce("actual.xml", Main);
+        ProduceContent(LabelContent, "");
+
+        var score = EvalScorer.Score(Case("L0-test"), actual, _goldensRoot, _repo, producedDir: _workDir);
+
+        Assert.False(score.GoldenMatch);
+        Assert.Contains(score.GoldenDiff.Changed, c => c.Path == $"_companions/{LabelContent}");
+    }
+
+    [Fact]
+    public void A_content_companion_the_run_did_not_write_at_all_is_missing()
+    {
+        Golden(Main);
+        GoldenContentCompanion(LabelContent, "Vehicles=Vehicles\r\n");
+        var actual = Produce("actual.xml", Main);
+
+        var score = EvalScorer.Score(Case("L0-test"), actual, _goldensRoot, _repo, producedDir: _workDir);
+
+        Assert.Contains($"_companions/{LabelContent}", score.GoldenDiff.Missing);
+    }
+
+    /// <summary>
+    /// Git decides the line endings and the BOM of a text file on its way to a checkout, so
+    /// neither can be evidence about what the tool wrote.
+    /// </summary>
+    [Fact]
+    public void A_content_companion_differing_only_in_BOM_and_line_endings_still_matches()
+    {
+        Golden(Main);
+        GoldenContentCompanion(LabelContent, "Vehicles=Vehicles\nSetup=Setup\n");
+        var actual = Produce("actual.xml", Main);
+        var path = Path.Combine(_workDir, LabelContent);
+        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+        File.WriteAllText(path, "Vehicles=Vehicles\r\nSetup=Setup\r\n",
+            new System.Text.UTF8Encoding(encoderShouldEmitUTF8Identifier: true));
+
+        var score = EvalScorer.Score(Case("L0-test"), actual, _goldensRoot, _repo, producedDir: _workDir);
+
+        Assert.True(score.GoldenMatch);
+    }
+
+    /// <summary>
+    /// The <c>.bak</c> an overwrite leaves behind is the writer's recovery copy, not an artefact
+    /// the command produced — every <c>apply_to_seed</c> case makes one.
+    /// </summary>
+    [Fact]
+    public void A_writer_sidecar_is_not_an_extra_companion()
+    {
+        Golden(Main);
+        var actual = Produce("actual.xml", Main);
+        Produce("actual.xml.bak", Main);
+
+        var score = EvalScorer.Score(Case("L0-test"), actual, _goldensRoot, _repo, producedDir: _workDir);
+
+        Assert.True(score.GoldenMatch);
+    }
+
     // ── the seeds themselves ──────────────────────────────────────────────
 
     /// <summary>

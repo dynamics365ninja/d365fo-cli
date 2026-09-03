@@ -87,6 +87,15 @@ public sealed class GenerateCompositeEntityCommand : Command<GenerateCompositeEn
                     $"--embedded '{e.Entity}' names parent '{e.Parent}', which is neither a root nor an embedded reference."));
         }
 
+        // A parent that resolves is not the same as a parent chain that arrives somewhere: two
+        // entities naming each other are dropped by the tree walk below and would be reported
+        // as bundled anyway.
+        var unrooted = EntityShapeScaffolder.UnrootedEmbedded(embedded.Select(e => (e.RefName, e.Parent)));
+        if (unrooted.Count > 0)
+            return RenderHelpers.Render(kind, ToolResult<object>.Fail(D365FoErrorCodes.BadInput,
+                $"--embedded {string.Join(", ", unrooted.Select(u => $"'{u}'"))} never reaches a --root: the parent chain loops.",
+                hint: "Every embedded entity hangs, directly or through other embedded entities, off a root."));
+
         CompositeEntityReferenceSpec Build(string refName)
         {
             var n = nodes[refName];

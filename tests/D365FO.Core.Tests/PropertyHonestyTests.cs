@@ -97,6 +97,26 @@ public class PropertyHonestyTests
         Assert.Empty(PropertyHonesty.Reconcile([("--label", "  ")], Table));
     }
 
+    /// <summary>
+    /// The scaffolders omit a member whose value is the contract's default, because shipped
+    /// files omit it too — a tile's <c>Type</c> when it is Standard, a menu entry's
+    /// <c>MenuItemType</c> when it is Display. Asking for the default and getting the default is
+    /// the option working, so reporting it as a dropped value trains the reader to ignore this
+    /// check.
+    /// </summary>
+    [Fact]
+    public void A_contract_default_the_writer_omits_is_not_a_gap()
+    {
+        const string tile = "<AxTile><Name>ConFmTile</Name><MenuItemName>FMVehicle</MenuItemName></AxTile>";
+
+        Assert.Empty(PropertyHonesty.Reconcile(
+            [("--type", "Standard"), ("--menu-item-type", "Display"), ("--display", "Auto")], tile));
+
+        // A value that is not a default still is one.
+        var gaps = PropertyHonesty.Reconcile([("--type", "Count")], tile);
+        Assert.Equal("Count", Assert.Single(gaps).Missing);
+    }
+
     [Fact]
     public void An_unparseable_document_falls_back_to_its_raw_text()
     {

@@ -159,13 +159,21 @@ public static class NavigationScaffolder
     }
 
     /// <summary>
-    /// An <c>AxTile</c>: a workspace or dashboard tile bound to a menu item. Of the 775 tiles
-    /// this installation ships, every one carries <c>MenuItemName</c>; <c>Type</c> is written
-    /// only when it is not the default <c>Standard</c>.
+    /// An <c>AxTile</c>: a workspace or dashboard tile, bound to whatever its type opens.
+    /// <c>Type</c> is written only when it is not the default <c>Standard</c>.
     /// </summary>
+    /// <remarks>
+    /// What a tile binds to follows from its type, counted on this installation's 770 tiles:
+    /// 762 carry <c>MenuItemName</c> and all of them are Standard or Count. The eight that do
+    /// not are the other two types — a Link tile carries <c>URL</c>
+    /// (<c>CTPTechDocumentation</c>) and a KPI tile carries <c>KPI</c>
+    /// (<c>QMSCAPAAvgDaysToCloseAllCases</c>) instead. Requiring a menu item on every tile,
+    /// as this used to, made those two types impossible to write correctly while still
+    /// offering them.
+    /// </remarks>
     public static XDocument Tile(
         string name,
-        string menuItemName,
+        string? menuItemName,
         string? type = null,
         string? label = null,
         string? size = null,
@@ -175,21 +183,31 @@ public static class NavigationScaffolder
         string? kpi = null,
         string? configurationKey = null,
         string? menuItemType = null,
-        string? helpText = null)
+        string? helpText = null,
+        string? url = null)
     {
         if (string.IsNullOrWhiteSpace(name))
             throw new ArgumentException("Tile name is required.", nameof(name));
-        if (string.IsNullOrWhiteSpace(menuItemName))
-            throw new ArgumentException("A tile opens a menu item; --menu-item is required.", nameof(menuItemName));
 
         var tileType = type is null ? "Standard" : Canonical(TileTypes, type, "tile type");
-        if (string.Equals(tileType, "KPI", StringComparison.Ordinal) && string.IsNullOrWhiteSpace(kpi))
-            throw new ArgumentException("A KPI tile names the KPI it shows; pass --kpi <AxKPI name>.", nameof(kpi));
+        switch (tileType)
+        {
+            case "KPI" when string.IsNullOrWhiteSpace(kpi):
+                throw new ArgumentException("A KPI tile names the KPI it shows; pass --kpi <AxKPI name>.", nameof(kpi));
+            case "Link" when string.IsNullOrWhiteSpace(url):
+                throw new ArgumentException("A Link tile opens a URL; pass --url <address>.", nameof(url));
+            case "Standard" or "Count" when string.IsNullOrWhiteSpace(menuItemName):
+                throw new ArgumentException(
+                    $"A {tileType} tile opens a menu item; --menu-item is required.", nameof(menuItemName));
+        }
+        if (!string.IsNullOrWhiteSpace(url) && !string.Equals(tileType, "Link", StringComparison.Ordinal))
+            throw new ArgumentException($"--url is a Link tile's target; a {tileType} tile has no URL member to put it in.", nameof(url));
 
         var root = new XElement("AxTile",
             new XAttribute(XNamespace.Xmlns + "i", Xsi.NamespaceName),
-            new XElement("Name", name),
-            new XElement("MenuItemName", menuItemName));
+            new XElement("Name", name));
+        if (!string.IsNullOrWhiteSpace(menuItemName)) root.Add(new XElement("MenuItemName", menuItemName));
+        if (!string.IsNullOrWhiteSpace(url)) root.Add(new XElement("URL", url));
         if (!string.IsNullOrEmpty(normalImage)) root.Add(new XElement("NormalImage", normalImage));
         if (!string.IsNullOrEmpty(label)) root.Add(new XElement("Label", label));
         if (size is not null) root.Add(new XElement("Size", Canonical(TileSizes, size, "tile size")));

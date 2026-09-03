@@ -467,8 +467,9 @@ public static class ToolCatalog
             "`language`, `model`, `entries` \"<Key>=<Text>\"; returns the manifest plus the content to write beside " +
             "it) · menu (`submenus` \"<name>[:<label>]\", `items` \"[<submenu>/]<menuItem>[:Action|Output]\", " +
             "`tiles`, `menuRefs`, `inContentArea`, `setCompany`) · resource (`fileName`, `model`, `resourceType`; " +
-            "the content file is yours to place) · tile (`menuItem`, `tileType` Standard|Count|KPI|Link, `size`, " +
-            "`image`, `display`, `query`, `kpi`) · workflow-category (`module` — a ModuleAxapta value, checked " +
+            "the content file is yours to place) · tile (`tileType` Standard|Count|KPI|Link and the target it " +
+            "implies — `menuItem` for Standard/Count, `kpi` for KPI, `url` for Link; plus `tileSize` " +
+            "Medium|Wide|ShortWide|Large, `image`, `display`, `query`) · workflow-category (`module` — a ModuleAxapta value, checked " +
             "against the index) · composite-entity (`roots` \"<entity>[:<ref>]\", `embedded` " +
             "\"<entity>:<relation>[:<parentRef>]\") · aggregate-entity (`measurement`, `measures` " +
             "\"<field>:<group>:<measure>:<edt>\", `dimensions` \"<field>:<group>:<dimension>:<attribute>:<edt>\").",
@@ -513,6 +514,7 @@ public static class ToolCatalog
                    ("tiles", "array", false), ("menuRefs", "array", false), ("inContentArea", "boolean", false),
                    ("setCompany", "boolean", false), ("fileName", "string", false), ("resourceType", "string", false),
                    ("menuItem", "string", false), ("menuItemType", "string", false), ("tileType", "string", false),
+                   ("tileSize", "string", false), ("url", "string", false),
                    ("helpText", "string", false), ("image", "string", false), ("display", "string", false),
                    ("kpi", "string", false), ("module", "string", false), ("roots", "array", false),
                    ("embedded", "array", false), ("tags", "string", false), ("modules", "string", false),
@@ -593,9 +595,13 @@ public static class ToolCatalog
                                         StrOrNull(p, "configurationKey")),
                 "resource"        => h.GenerateResource(Str(p, "name"), StrOrNull(p, "fileName"), StrOrNull(p, "model"),
                                         StrOrNull(p, "resourceType"), StrOrNull(p, "label")),
+                // tileSize, not size: `size` is declared integer for `edt`, and one flat schema
+                // with additionalProperties:false means a client that obeys it cannot send
+                // "Wide" under that name at all.
                 "tile"            => h.GenerateTile(Str(p, "name"), StrOrNull(p, "menuItem"), StrOrNull(p, "tileType"), StrOrNull(p, "label"),
-                                        StrOrNull(p, "size"), StrOrNull(p, "image"), StrOrNull(p, "display"), StrOrNull(p, "query"),
-                                        StrOrNull(p, "kpi"), StrOrNull(p, "configurationKey"), StrOrNull(p, "menuItemType"), StrOrNull(p, "helpText")),
+                                        StrAliasOrNull(p, "tileSize", "size"), StrOrNull(p, "image"), StrOrNull(p, "display"), StrOrNull(p, "query"),
+                                        StrOrNull(p, "kpi"), StrOrNull(p, "configurationKey"), StrOrNull(p, "menuItemType"), StrOrNull(p, "helpText"),
+                                        StrOrNull(p, "url")),
                 "workflow-category" => h.GenerateWorkflowCategory(Str(p, "name"), StrOrNull(p, "module"), StrOrNull(p, "label"), StrOrNull(p, "helpText")),
                 "composite-entity" => h.GenerateCompositeEntity(Str(p, "name"), StrArray(p, "roots"), StrArray(p, "embedded"),
                                         StrOrNull(p, "label"), StrOrNull(p, "tags"), StrOrNull(p, "modules"), StrOrNull(p, "entityCategory")),
@@ -1021,9 +1027,23 @@ public static class ToolCatalog
         };
     }
 
+    /// <summary>
+    /// A parameter as text. Numbers and booleans are rendered rather than rejected: one flat
+    /// schema is shared by every objectType, so a property another type declares as an integer
+    /// arrives here as a JSON number, and <c>GetString()</c> throws
+    /// <c>InvalidOperationException</c> on anything but a string — a handler crash where the
+    /// honest answer is the value the client sent.
+    /// </summary>
     private static string Str(JsonElement p, string name) =>
         p.ValueKind == JsonValueKind.Object && p.TryGetProperty(name, out var v)
-            ? v.GetString() ?? "" : "";
+            ? v.ValueKind switch
+            {
+                JsonValueKind.String => v.GetString() ?? "",
+                JsonValueKind.Null or JsonValueKind.Undefined => "",
+                JsonValueKind.Object or JsonValueKind.Array => "",
+                _ => v.ToString(),
+            }
+            : "";
 
     private static string StrOr(JsonElement p, string name, string dflt)
     {

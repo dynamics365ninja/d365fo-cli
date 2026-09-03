@@ -178,8 +178,12 @@ public sealed class EvalRunCommand : Command<EvalRunCommand.Settings>
         EvalCase @case, string root, string dllPath, bool write, string? note)
     {
         var workDir = Path.Combine(Path.GetTempPath(), $"d365fo-eval-{Guid.NewGuid():N}");
-        Directory.CreateDirectory(workDir);
-        var outPath = Path.Combine(workDir, "actual.xml");
+        // The run's artefacts get a directory of their own, separate from the replay's own
+        // furniture — the temp index and the write journal share workDir, and the scorer reads
+        // the produced directory as "everything the command wrote", extras included.
+        var artifactDir = Path.Combine(workDir, "artifacts");
+        Directory.CreateDirectory(artifactDir);
+        var outPath = Path.Combine(artifactDir, "actual.xml");
         var dbPath = Path.Combine(workDir, "index.sqlite");
 
         try
@@ -222,7 +226,7 @@ public sealed class EvalRunCommand : Command<EvalRunCommand.Settings>
             if (exitCode != 0 || !File.Exists(outPath))
                 return (null, new ReplayFailure("EVAL_GENERATE_FAILED", $"`d365fo {string.Join(' ', args)}` exited {exitCode} or produced no output file at {outPath}."));
 
-            var score = EvalScorer.Score(@case, outPath, EvalPaths.GoldensDir(root), repo, producedDir: workDir);
+            var score = EvalScorer.Score(@case, outPath, EvalPaths.GoldensDir(root), repo, producedDir: artifactDir);
 
             if (write)
             {

@@ -123,7 +123,7 @@ decides whether it works:
 | `AxMenuElementMenuReference` | pull in **another `AxMenu`** by name | `<MenuName>` |
 | `AxMenuElementSeparator` | visual separator | — |
 
-Counted on a stock installation (81 menus): 60 nest sub-menus inline this way,
+Counted on a stock installation (80 menus): 59 nest sub-menus inline this way,
 1 references another menu through `AxMenuElementMenuReference`/`<MenuName>`,
 and **no file carries a `<SubMenu>` member** — the type declares none. The
 element types are what `Microsoft.Dynamics.AX.Metadata.dll` declares;
@@ -158,9 +158,13 @@ d365fo validate metadata <path-to-menu-xml> --output json
 
 ### Tiles, form parts and image resources
 
-- A **tile** (`AxTile`) opens a menu item and sits on a workspace; every one of
-  the 775 the platform ships carries `<MenuItemName>`. `generate tile <Name>
-  --menu-item <MenuItem> [--type Count --query <AxQuery>]` — see
+- A **tile** (`AxTile`) sits on a workspace and opens whatever its `<Type>`
+  says. Of the 770 the platform ships, 762 are Standard or Count and carry
+  `<MenuItemName>`; the other two types bind something else — a KPI tile carries
+  `<KPI>` (`QMSCAPAAvgDaysToCloseAllCases`) and a Link tile `<URL>`
+  (`CTPTechDocumentation`), neither with a menu item.
+  `generate tile <Name> --menu-item <MenuItem> [--type Count --query <AxQuery>]`,
+  or `--type KPI --kpi <AxKPI>` / `--type Link --url <address>` — see
   `d365fo knowledge get analytics-and-er` for cues and KPIs.
 - A **form part** (`AxFormPart`) registers a form so another form can host it as
   an info part, fact box or preview pane. Three members, all mandatory in
