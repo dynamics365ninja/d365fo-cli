@@ -145,7 +145,7 @@ Ready to scaffold your first table, form, and CoC extension? Full walkthrough wi
 
 ### GitHub Copilot (VS Code / Visual Studio)
 
-The preferred method is the **one-command skill installer** — it deploys the bundled `d365fo-cli` Copilot skill (SKILL.md + 43 lazily-loaded topic references) into your X++ project's `.github/skills/d365fo-cli/` folder. Copilot auto-discovers skills in `.github/skills/` with no extra configuration.
+The preferred method is the **one-command skill installer** — it deploys the bundled `d365fo-cli` Copilot skill (SKILL.md + 43 lazily-loaded topic references) into your X++ project's `.github/skills/d365fo-cli/` folder. Copilot auto-discovers skills in `.github/skills/` with no extra configuration. Point `-XppRepo` at the folder that holds the `.sln` you open: Visual Studio (2026 18.5+) discovers skills next to the solution, not in parent folders. See [SETUP.md](docs/SETUP.md#github-copilot--visual-studio-2026-185--vs-code-agent-mode) for the multi-solution and VS 2022 options.
 
 ```powershell
 # From the d365fo-cli repo's scripts folder:

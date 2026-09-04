@@ -7,7 +7,14 @@
       - skills/d365fo-cli/SKILL.md            (main rule canon + tool mapping)
       - skills/d365fo-cli/references/*.md      (lazily-loaded X++ topic files, one per knowledge topic)
     into <XppRepo>/.github/skills/d365fo-cli/ so that GitHub Copilot in
-    Visual Studio 2022 / 2026 (and VS Code) automatically picks up the skill.
+    Visual Studio 2026 18.5+ (and VS Code) automatically picks up the skill.
+
+    Visual Studio discovers solution skills next to the .sln only - it never
+    searches parent folders - so XppRepo must be the folder that holds the
+    solution you open. To cover several solutions at once, copy
+    skills/d365fo-cli to %USERPROFILE%\.copilot\skills\d365fo-cli instead:
+    a personal skill applies to every solution. Visual Studio 2022 has no
+    skill support; use skills/copilot/*.instructions.md there (see docs/SETUP.md).
 
     If the skill folder's references/ is empty (first run or clean clone), this
     script regenerates it first, using whichever host is available: pwsh,
@@ -33,7 +40,9 @@
 
 .PARAMETER XppRepo
     Absolute path to the root of your X++ project repository (the folder that
-    contains - or will contain - the .github/ directory).
+    contains - or will contain - the .github/ directory). This must be the
+    folder that contains the .sln you open in Visual Studio; VS does not look
+    for skills in parent folders.
 
 .EXAMPLE
     .\Install-D365FoCopilotSkills.ps1 `
@@ -171,7 +180,8 @@ Write-Host "$summary to:"
 Write-Host "  $dstSkill"
 Write-Host ""
 Write-Host "Next steps:"
-Write-Host "  1. Restart Visual Studio / VS Code to pick up the new skill."
+Write-Host "  1. Restart Visual Studio 2026 (18.5+) / VS Code to pick up the new skill."
+Write-Host "     Verify: Copilot Chat -> Tools icon (bottom-right) -> skills panel lists d365fo-cli."
 Write-Host "  2. Commit .github/ in your X++ project:"
 Write-Host "       git -C `"$XppRepo`" add .github/"
 Write-Host "       git -C `"$XppRepo`" commit -m `"chore: add d365fo Copilot skill`""
