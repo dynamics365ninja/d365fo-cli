@@ -19,6 +19,17 @@ was ported from.
 
 ## [Unreleased]
 
+### Fixed — Copilot skill setup docs (#205)
+
+- SETUP.md, README and the installer header claimed Visual Studio 2022 / 2026 pick up
+  `.github/skills/` and that VS "searches upward from the `.sln`", so one copy in a parent
+  folder covers every solution beneath it. Neither holds: Agent Skills need Visual Studio 2026
+  18.5+ (VS 2022 ignores the folder), and VS discovers solution skills next to the `.sln` only.
+  The docs now say where the folder has to be, offer the personal-skill folder
+  (`%USERPROFILE%\.copilot\skills\`) when several solutions share a parent, point VS 2022
+  users at the legacy `.instructions.md` layout, and explain how to verify discovery in the
+  skills panel.
+
 ### Added — `generate extension Menu`, and menu items as symbols
 
 - **`AxMenuExtension`** — the most common ISV navigation task, adding to a menu Microsoft owns,
