@@ -1,15 +1,15 @@
 ---
 name: d365fo-cli
 description: "D365 Finance & Operations X++ AI development skill powered by the d365fo CLI. Use whenever the user is working in a D365 F&O X++ project: writing classes, tables, forms, CoC extensions, event handlers, entities, security, batch jobs, business events, labels, or any AOT artifact. Loads topic-specific guidance lazily from references/."
-compatibility: Requires GitHub Copilot agent mode (Visual Studio 2026 18.5+ or VS Code) and d365fo CLI in PATH.
+compatibility: Requires GitHub Copilot agent mode (Visual Studio 2022 17.14+ / 2026, or VS Code) and d365fo CLI in PATH.
 ---
 
 # D365 Finance & Operations X++ Development — `d365fo` CLI
 
 <!--
   Deployed to your X++ project via Install-D365FoCopilotSkills.ps1.
-  Primary target: GitHub Copilot in Visual Studio 2026 18.5+ (agent mode with built-in tools).
-  Visual Studio 2022 does not read .github/skills/; it gets skills/copilot/*.instructions.md instead.
+  Primary target: GitHub Copilot in Visual Studio 2022 (17.14+) / 2026 (agent mode with built-in tools).
+  The skill folder must sit next to the .sln you open, or in %USERPROFILE%\.copilot\skills\.
   Secondary target: VS Code with Copilot in agent mode (can run d365fo directly via terminal).
   References in the form `[learn:<page>]` link to Microsoft Learn pages
   (see "Authoritative X++ syntax source" at the bottom).
@@ -17,7 +17,7 @@ compatibility: Requires GitHub Copilot agent mode (Visual Studio 2026 18.5+ or V
 
 This skill gives **GitHub Copilot** the rules for assisting with D365 Finance & Operations X++ development. It is deployed to your X++ project's `.github/skills/d365fo-cli/` folder by `Install-D365FoCopilotSkills.ps1` and is loaded automatically by Copilot when you are working on D365 F&O tasks.
 
-> **Primary environment — VS 2026 agent mode (18.5+):** GitHub Copilot runs `d365fo` commands via the built-in terminal tool (`run_command_in_terminal`). Topic-specific rules in `references/` load on demand. No copy-paste, no MCP overhead.
+> **Primary environment — VS 2022 / VS 2026 agent mode:** GitHub Copilot runs `d365fo` commands via the built-in terminal tool (`run_command_in_terminal`). Topic-specific rules in `references/` load on demand. No copy-paste, no MCP overhead.
 >
 > **Secondary environment — VS Code agent mode:** Same approach, different terminal tool name (`run_in_terminal`). Identical experience.
 >
@@ -85,7 +85,7 @@ Examples:
 
 | Environment | How Copilot runs d365fo | Token cost |
 |---|---|---|
-| **VS 2026 agent mode** | Built-in terminal tool → `d365fo` CLI | ~100 tokens |
+| **VS 2022 / 2026 agent mode** | Built-in terminal tool → `d365fo` CLI | ~100 tokens |
 | **VS Code agent mode** | `run_in_terminal` → `d365fo` CLI | ~100 tokens |
 | **VS Chat mode** (no agent tools) | User runs manually, pastes JSON | collaborative |
 

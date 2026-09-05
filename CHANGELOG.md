@@ -21,14 +21,18 @@ was ported from.
 
 ### Fixed — Copilot skill setup docs (#205)
 
-- SETUP.md, README and the installer header claimed Visual Studio 2022 / 2026 pick up
-  `.github/skills/` and that VS "searches upward from the `.sln`", so one copy in a parent
-  folder covers every solution beneath it. Neither holds: Agent Skills need Visual Studio 2026
-  18.5+ (VS 2022 ignores the folder), and VS discovers solution skills next to the `.sln` only.
-  The docs now say where the folder has to be, offer the personal-skill folder
-  (`%USERPROFILE%\.copilot\skills\`) when several solutions share a parent, point VS 2022
-  users at the legacy `.instructions.md` layout, and explain how to verify discovery in the
-  skills panel.
+- SETUP.md, README and the installer header claimed VS "searches upward from the `.sln`", so one
+  copy of `.github/skills/` in a parent folder covers every solution beneath it. It does not:
+  Visual Studio discovers solution skills next to the `.sln` only. The docs now say where the
+  folder has to be, offer the personal-skill folder (`%USERPROFILE%\.copilot\skills\`) when
+  several solutions share a parent, and explain how to verify discovery — Copilot naming the
+  skill in its reply, plus the VS 2026 skills panel.
+- Corrected the version requirement this file first shipped: Agent Skills **do** work in
+  Visual Studio 2022 (17.14+ with a current GitHub Copilot extension), verified in the field —
+  Microsoft's Agent Skills page documents VS 2026 18.5+ only, and the skills panel is genuinely
+  VS 2026-only, but discovery and activation are not. VS 2022 users are no longer sent to the
+  legacy `.instructions.md` layout; that layout stays documented as the deterministic,
+  glob-scoped alternative for anyone who wants it.
 
 ### Added — `generate extension Menu`, and menu items as symbols
 
