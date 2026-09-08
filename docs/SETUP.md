@@ -56,7 +56,7 @@ flowchart TD
 | .NET SDK | **10** (pinned in `global.json`) | building / running the CLI |
 | `git` | any | `d365fo review diff` |
 | Visual Studio 2022 / 2026 + Dynamics 365 F&O workload | latest | scenario A — `MSBuild.exe`, `SyncEngine.exe`, `SysTestRunner.exe`, `xppbp.exe` on `PATH` |
-| GitHub Copilot extension | latest | VS agent mode (optional) — Agent Skills need **VS 2026 18.5+**; VS 2022 gets the legacy `.instructions.md` layout |
+| GitHub Copilot extension | latest | VS agent mode (optional) — Agent Skills are read by **VS 2022 17.14+** and VS 2026; the `.instructions.md` layout is the fallback when a Copilot build does not discover skills |
 | .NET Framework 4.8 Developer Pack | 4.8 | bridge (`D365FO_BRIDGE_ENABLED=1`) — pre-installed on D365FO VMs |
 
 > Off-platform setups (B) only need .NET 10 + git. Everything else is gated by `UNSUPPORTED_PLATFORM` and never invoked.
@@ -177,7 +177,7 @@ Or run the daemon and forget about it — `d365fo daemon start` keeps the SQLite
 
 ```mermaid
 flowchart LR
-    Cop["GitHub Copilot<br/>VS 2026 18.5+ · VS Code"] -->|.github/skills/d365fo-cli/| Bin
+    Cop["GitHub Copilot<br/>VS 2022 17.14+ · VS 2026 · VS Code"] -->|.github/skills/d365fo-cli/| Bin
     Cla["Claude Code<br/>CLI · VS Code ext."]     -->|skills/anthropic/| Bin
     Other["Codex · Gemini · Cursor"]              -->|AGENTS.md| Bin
     Mcp["Claude Desktop · Continue<br/>(MCP host)"] -->|JSON-RPC stdio| Mbin["d365fo-mcp"]
@@ -185,7 +185,7 @@ flowchart LR
     Mbin --> Idx
 ```
 
-### GitHub Copilot — Visual Studio 2026 (18.5+) / VS Code (agent mode)
+### GitHub Copilot — Visual Studio (2022 17.14+ / 2026) / VS Code (agent mode)
 
 1. Place `d365fo` on `PATH` (either Option 1 alias or Option 2 binary above).
 2. Deploy the `d365fo-cli` Copilot skill into the folder that contains the `.sln` you open in Visual Studio:
@@ -210,9 +210,19 @@ flowchart LR
    Restart Visual Studio after either step — skills are discovered on solution load.
 3. **Agent mode (recommended).** Open Copilot Chat → mode dropdown (top-right) → **Agent**. Copilot now calls `d365fo` directly via its terminal tool — no copy-paste.
 4. **Chat mode (fallback).** Without agent tools, Copilot asks you to run `d365fo` commands in Developer PowerShell and paste the JSON back. The skill teaches Copilot to ask first — if it skips that step the `.github/skills/d365fo-cli/SKILL.md` file is not next to the `.sln` (or in `%USERPROFILE%\.copilot\skills\`).
-5. **Verify the skill is discovered.** In VS 2026 18.6+ select the **Tools** icon in the bottom-right corner of Copilot Chat — the skills panel lists every skill VS found, with diagnostics for frontmatter errors. `d365fo-cli` must appear there; if it does not, VS is not seeing the folder (wrong location, or VS 2022 — see the requirements note below). When the skill activates, VS names it in the chat reply. In VS Code, type `/skills` in the chat input to list discovered skills, and check that `chat.useAgentSkills` is enabled in Settings.
+5. **Verify the skill is discovered.** In VS 2026 18.6+ select the **Tools** icon in the bottom-right corner of Copilot Chat — the skills panel lists every skill VS found, with diagnostics for frontmatter errors. `d365fo-cli` must appear there; if it does not, VS is not seeing the folder (almost always the wrong location — see the requirements note below). VS 2022 has no skills panel, so verify it there the other way: restart VS, open Copilot Chat in **Agent** mode and ask for something D365FO-shaped ("add a CoC extension for `SalesTable.insert`"). Copilot names the skill it used in the reply. If it doesn't fire on its own, say *"use the d365fo-cli skill"* — if it then answers that it doesn't know that skill, the folder is still in the wrong place. In VS Code, type `/skills` in the chat input to list discovered skills, and check that `chat.useAgentSkills` is enabled in Settings.
 
-> **Requirements.** Agent Skills need **Visual Studio 2026 version 18.5 or later** (or VS Code with `chat.useAgentSkills` on). Visual Studio 2022 has no skill support — it silently ignores `.github/skills/`. On a VS 2022 machine (including UDE setups still on VS 2022) use the legacy layout instead: copy `skills/copilot/*.instructions.md` into `<XppRepo>\.github\instructions\` and enable **Tools → Options → GitHub → Copilot → Copilot Chat → Enable custom instructions**. VS 2022 17.10+ applies those deterministically through their `applyTo` globs.
+> **Requirements.** Microsoft's [Agent Skills page](https://learn.microsoft.com/en-us/visualstudio/ide/copilot-agent-skills?view=visualstudio) lists **Visual Studio 2026 version 18.5 or later**, and that page is not published for the VS 2022 moniker at all — but the [agent mode page](https://learn.microsoft.com/en-us/visualstudio/ide/copilot-agent-mode?view=visualstudio) requires only **17.14** and lists agent skills as an agent-mode tool with no version gate. In practice `.github/skills/` is read on **VS 2022 17.14+ with a current GitHub Copilot extension** (verified on a VS 2022 UDE box), so a VS 2022 machine does not need to upgrade — only the folder has to sit next to the `.sln`. What genuinely is VS 2026-only is the **skills panel** (the Tools icon UI); on VS 2022 you verify by whether Copilot names the skill in its reply. If your Copilot build turns out not to discover skills, fall back to the deterministic `.github/instructions/` layout below — it needs no skill support at all.
+
+> **Skill, instructions, or both?** The **skill** is all you need — install it and stop there. The other two layouts exist for specific reasons:
+>
+> | Layout | What it is | When you want it |
+> |---|---|---|
+> | `.github/skills/d365fo-cli/` | SKILL.md + 43 topic references, loaded on demand | **the default** — cheapest by far (see [TOKEN_ECONOMICS.md](TOKEN_ECONOMICS.md)), the agent decides when it is relevant |
+> | `.github/instructions/*.instructions.md` | the same 43 topics as per-file rules with `applyTo` globs | when you want rules to fire deterministically by file pattern, or your Copilot build doesn't discover skills |
+> | `.github/copilot-instructions.md` | the pre-skill single always-on file | **retired.** The skill replaced it; delete it if an older install left one behind |
+>
+> The first two coexist — they do not clobber each other — but running both means paying for the instruction files in every request. Start with the skill alone.
 
 > **How the skill decides to activate — and what to do when it doesn't.**
 >
@@ -336,7 +346,8 @@ The [one-line install](#one-line-install) at the top of this page **is** the qui
 | `NO_INDEX` | `d365fo index build && d365fo index extract` |
 | `stale-index` warning from `doctor` | `d365fo index refresh --model <Model>` (or just start the daemon) |
 | Copilot Chat says "There was an error executing code search" then writes generic X++ | VS Copilot Chat cannot search AOT XML — the `d365fo-cli` skill is not being picked up. Open the skills panel (Tools icon, bottom-right of Copilot Chat) and confirm `d365fo-cli` is listed; `.github/skills/d365fo-cli/` must sit next to the `.sln` (or in `%USERPROFILE%\.copilot\skills\`). Restart VS. For full automation switch Copilot Chat to **Agent** mode |
-| Copilot never mentions the `d365fo-cli` skill and the skills panel is missing or empty | Agent Skills need VS 2026 18.5+ (VS 2022 ignores `.github/skills/`). Upgrade, or deploy the legacy `.github/instructions/*.instructions.md` layout from `skills/copilot/` |
+| Copilot never mentions the `d365fo-cli` skill | The folder is not next to the `.sln` — VS does not search parent folders. Re-run the installer with `-XppRepo` = the solution folder, or copy the skill to `%USERPROFILE%\.copilot\skills\d365fo-cli`, then restart VS and ask in **Agent** mode. Say *"use the d365fo-cli skill"* to force it. Still nothing on an older Copilot build: deploy `skills/copilot/*.instructions.md` to `.github/instructions/`, which applies by glob and needs no skill support |
+| The skills panel (Tools icon in Copilot Chat) is missing | The panel is VS 2026 18.6+ only. On VS 2022 the skill still works — verify it by whether Copilot names `d365fo-cli` in its reply |
 | Index file appears locked | Stop any running `d365fo daemon` or `d365fo-mcp` process; `-wal` / `-shm` sidecar files are normal |
 | Settings differ between Developer PowerShell and PowerShell 7 | Re-run `d365fo init --persist-profile` — it writes both profiles and the JSON config |
 | Self-contained binary won't start on Linux | `chmod +x d365fo` after copying out of the publish folder |
