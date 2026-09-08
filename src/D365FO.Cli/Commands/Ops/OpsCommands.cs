@@ -1,5 +1,6 @@
 using D365FO.Core;
 using D365FO.Core.Bridge;
+using D365FO.Core.Ops;
 using Spectre.Console;
 using Spectre.Console.Cli;
 
@@ -67,6 +68,34 @@ public sealed class DoctorCommand : Command<DoctorCommand.Settings>
         Add("platform.windows (build/sync/bp require it)",
             OperatingSystem.IsWindows() ? DoctorSeverity.Ok : DoctorSeverity.Warn,
             OperatingSystem.IsWindows() ? null : "Non-Windows host: write-ops (build, sync, bp, test) are unavailable.");
+
+        // Being on Windows is not the same as having a working X++ toolchain, and answering
+        // "is build tooling functional here?" with an OS check is how a broken MSBuild reached
+        // the user as an unexplained MSB4062 (issue #207). Probe the tools themselves.
+        if (OperatingSystem.IsWindows())
+        {
+            var msbuild = BuildTooling.ResolveMsBuild(null);
+            Add("build.msbuild (d365fo build)",
+                msbuild.Ok ? DoctorSeverity.Ok : DoctorSeverity.Warn,
+                msbuild.Ok
+                    ? $"{msbuild.Path} (from {msbuild.Source})"
+                    : msbuild.Path is null
+                        ? msbuild.Problem
+                        : $"{msbuild.Path} (from {msbuild.Source}) — {msbuild.Problem}");
+
+            var targets = BuildTooling.ResolveDynamicsTargets();
+            Add("build.dynamicsTargets (X++ MSBuild tasks)",
+                targets.Ok ? DoctorSeverity.Ok : DoctorSeverity.Warn,
+                targets.Ok ? targets.Path : targets.Problem);
+
+            foreach (var exe in BuildTooling.PackageBinTools)
+            {
+                var t = BuildTooling.ResolvePackageBinTool(exe, cfg.PackagesPath);
+                Add($"build.tooling ({exe})",
+                    t.Ok ? DoctorSeverity.Ok : DoctorSeverity.Warn,
+                    t.Ok ? t.Path : t.Problem);
+            }
+        }
 
         // Bridge — required for `generate --install-to <Model>` and `find refs --xref`.
         // Reports Warn (not Fail) when missing because read-only operations work

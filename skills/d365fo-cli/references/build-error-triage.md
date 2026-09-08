@@ -20,6 +20,33 @@ each. A message that matches nothing is returned **verbatim** rather than
 answered with the nearest-looking rule — an unexplained message is information,
 a wrong explanation is not.
 
+## First question: is it your code at all?
+
+An `MSB…` code means MSBuild failed before the X++ compiler ever ran, so nothing in the
+log is a statement about your code. The three that actually happen:
+
+| Message | What it is | Fix |
+|---|---|---|
+| `MSB4062` "task could not be loaded from the assembly" | MSBuild cannot load `Microsoft.Dynamics.Framework.Tools.BuildTasks` | you are running the wrong MSBuild — see below |
+| `MSB4019` "the imported project … was not found" | `BuildTasksDirectory` resolves nowhere: the Dynamics 365 dev tools are not installed for this MSBuild | install the dev tools, or pass `/p:BuildTasksDirectory=<dir with the .targets>` |
+| `MSB1003` / `MSB1009` "specify a project", "project file does not exist" | the build was pointed at no project | `d365fo build --project <sln or rnrproj>`, or run it where one lives |
+
+The wrong MSBuild is the common one. An `.rnrproj` imports
+`$(BuildTasksDirectory)\Microsoft.Dynamics.Framework.Tools.BuildTasks[.17.0].targets`
+(defaulting to `%ProgramFiles(x86)%\MSBuild\Microsoft\Dynamics\AX`), and that file declares
+its tasks by `AssemblyName` — so only an MSBuild that can resolve the dev-tools assembly can
+run them. On a developer VM the first `msbuild.exe` on `PATH` is
+`C:\Windows\Microsoft.NET\Framework\v4.0.30319\MSBuild.exe`, which cannot, and `dotnet build`
+never can.
+
+```sh
+d365fo doctor --output json    # build.msbuild / build.dynamicsTargets / build.tooling
+```
+
+`d365fo build` resolves the Visual Studio MSBuild ahead of `PATH` for exactly this reason and
+reports the executable it used in `data.msbuild`. Override it with `--msbuild <path>` or
+`D365FO_MSBUILD_PATH` when the box has several installs.
+
 ## Before you trust any of it: stale symbols
 
 If the log says a package "has not been successfully compiled since it was last
@@ -44,6 +71,7 @@ Rebuild first (`d365fo build --full` on the VM) and re-read.
 | "unknown type", "could not be found" | invented identifier | `d365fo validate references --file <f>` — it proves every symbol before the compiler sees it |
 | "label … does not exist" | missing label id | `d365fo search label "<text>"`, then `d365fo label create` |
 | `';' expected` and friends | syntax | check the reported line — usually a CDATA method body edit |
+| `MSB4062`, `MSB4019`, `MSB1003`/`MSB1009` | the build never reached the compiler | see "is it your code at all?" above |
 
 Each row is a rule in the scored matcher, and each carries the knowledge topic
 that explains the underlying model: `d365fo explain-error` returns the topic id

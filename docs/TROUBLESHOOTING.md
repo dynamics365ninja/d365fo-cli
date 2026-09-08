@@ -113,6 +113,32 @@ d365fo index extract --model MyModel
 d365fo index history --model MyModel   # confirm no extraction errors
 ```
 
+### `d365fo build` fails with `MSB4062` / `MSB4019` before compiling anything
+
+An `MSB…` code means MSBuild failed before the X++ compiler ran, so nothing in the log says
+anything about your code:
+
+```
+error MSB4062: The "…BuildTasks.BuildTask" task could not be loaded from the assembly …
+error MSB4019: The imported project "…BuildTasks.17.0.targets" was not found.
+```
+
+An `.rnrproj` imports `$(BuildTasksDirectory)\Microsoft.Dynamics.Framework.Tools.BuildTasks[.17.0].targets`
+— defaulting to `%ProgramFiles(x86)%\MSBuild\Microsoft\Dynamics\AX` — and that file declares its
+tasks by `AssemblyName`, so only an MSBuild that can resolve the Dynamics dev-tools assembly can
+run them. The `msbuild.exe` first on `PATH` is normally
+`C:\Windows\Microsoft.NET\Framework\v4.0.30319\MSBuild.exe`, which cannot; `dotnet build` never can.
+
+```sh
+d365fo doctor --output json    # build.msbuild / build.dynamicsTargets / build.tooling
+d365fo explain-error --file build.log --output json
+```
+
+`d365fo build` resolves the Visual Studio MSBuild ahead of `PATH` and reports the executable it
+used in `data.msbuild`. Override it with `--msbuild <path>` or `D365FO_MSBUILD_PATH` when the box
+carries several Visual Studio installs. If `build.dynamicsTargets` is missing, the Dynamics 365
+dev tools are not installed on the host at all — no MSBuild choice will fix that.
+
 ### `.NET 4.8 bridge not found` on non-Windows systems
 
 The `D365FO.Bridge` child process requires the .NET Framework 4.8 runtime, which is Windows-only. On macOS or Linux the bridge is unavailable and the CLI falls back to the SQLite index automatically:
