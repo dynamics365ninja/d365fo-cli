@@ -390,17 +390,21 @@ These are two completely unrelated concepts that happen to share the word "works
 | `D365FO_WORKSPACE_PATH`, `D365FO_PACKAGES_PATH`, `D365FO_CUSTOM_PACKAGES_PATH` (CLI env vars) | Where the `d365fo` CLI indexes metadata from / writes scaffolded output to |
 | The folder/`.sln` open in Visual Studio or VS Code ("workspace" in the IDE sense) | Where Copilot looks for `.github/skills/d365fo-cli/SKILL.md` |
 
-No `D365FO_*` environment variable or `settings.json` entry has any effect on Copilot's instruction discovery. Copilot (both in Visual Studio and VS Code) only walks **upward from the folder/solution you actually opened in the editor** looking for a `.github/` folder — it never reads CLI configuration.
+No `D365FO_*` environment variable or `settings.json` entry has any effect on Copilot's skill discovery — it never reads CLI configuration. Visual Studio looks for `.github/skills/` **in the solution folder itself**; it does not walk up to parent folders, so a copy one level above the `.sln` is invisible.
 
 Fix, in order:
 
-1. Confirm which folder is actually open in the editor (Visual Studio: the `.sln`'s folder; VS Code: File → Open Folder).
-2. Re-run `Install-D365FoCopilotSkills.ps1` targeting that exact folder (or a parent of it) as `-XppRepo`, not the `D365FO_WORKSPACE_PATH` / `D365FO_CUSTOM_PACKAGES_PATH` value.
-3. Visual Studio only: confirm the **GitHub Copilot** extension is enabled and skills auto-discovery is active (look for the `.github/skills/` folder being picked up in Copilot Chat's reference list).
-4. No shared parent solution/`.sln` above your projects? Copy the skill to a higher common ancestor folder:
-   - Run `Install-D365FoCopilotSkills.ps1 -XppRepo <common-parent>` to place `.github/skills/d365fo-cli/` where Copilot can walk up to it from any solution.
-   - Legacy fallback (pre-skill hosts): `skills/copilot/*.instructions.md` are still emitted and can be placed in `.github/instructions/` as before.
-5. Verify: after Copilot answers, expand **References / "Used N references"** in the reply — loaded instruction files are listed there. If your file isn't listed, it wasn't discovered.
+1. Confirm which folder is actually open in the editor (Visual Studio: the folder holding the `.sln`; VS Code: File → Open Folder).
+2. Re-run `Install-D365FoCopilotSkills.ps1` targeting that exact folder as `-XppRepo` — not the `D365FO_WORKSPACE_PATH` / `D365FO_CUSTOM_PACKAGES_PATH` value, and not a parent folder.
+3. Restart Visual Studio: skills are discovered on solution load. Then ask in Copilot Chat **Agent** mode — chat mode without agent tools does not load skills.
+4. Several solutions under one parent? There is no folder that covers them all. Either run the installer once per solution folder (and commit `.github/`, so teammates get it too), or install it as a personal skill, which applies to every solution but stays on your machine:
+
+   ```powershell
+   Copy-Item -Recurse -Force C:\source\d365fo-cli\skills\d365fo-cli "$env:USERPROFILE\.copilot\skills\d365fo-cli"
+   ```
+
+5. Verify. VS 2026 18.6+: the skills panel (Tools icon in Copilot Chat) lists every discovered skill. VS 2022 has no such panel — ask something D365FO-shaped and check that Copilot names `d365fo-cli` in its reply; force it with *"use the d365fo-cli skill"*. VS Code: type `/skills`, and check `chat.useAgentSkills` is enabled.
+6. Still nothing on an older Copilot build? Use the glob-scoped layout, which needs no skill support: copy `skills/copilot/*.instructions.md` into `<SolutionFolder>\.github\instructions\` and enable **Tools → Options → GitHub → Copilot → Copilot Chat → Enable custom instructions**. The two layouts coexist; `.github/copilot-instructions.md` is retired and can be deleted if an older install left one behind.
 
 ---
 

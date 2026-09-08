@@ -7,14 +7,21 @@
       - skills/d365fo-cli/SKILL.md            (main rule canon + tool mapping)
       - skills/d365fo-cli/references/*.md      (lazily-loaded X++ topic files, one per knowledge topic)
     into <XppRepo>/.github/skills/d365fo-cli/ so that GitHub Copilot in
-    Visual Studio 2026 18.5+ (and VS Code) automatically picks up the skill.
+    Visual Studio (2022 17.14+ or 2026) and VS Code automatically picks up
+    the skill.
 
     Visual Studio discovers solution skills next to the .sln only - it never
     searches parent folders - so XppRepo must be the folder that holds the
     solution you open. To cover several solutions at once, copy
     skills/d365fo-cli to %USERPROFILE%\.copilot\skills\d365fo-cli instead:
-    a personal skill applies to every solution. Visual Studio 2022 has no
-    skill support; use skills/copilot/*.instructions.md there (see docs/SETUP.md).
+    a personal skill applies to every solution, at the cost of not travelling
+    to teammates through source control.
+
+    Verifying it worked: VS 2026 18.6+ lists discovered skills in the Copilot
+    Chat skills panel (Tools icon). VS 2022 has no such panel - ask something
+    D365FO-shaped in Agent mode and check that Copilot names the d365fo-cli
+    skill in its reply. If a Copilot build does not discover skills at all,
+    fall back to skills/copilot/*.instructions.md (see docs/SETUP.md).
 
     If the skill folder's references/ is empty (first run or clean clone), this
     script regenerates it first, using whichever host is available: pwsh,

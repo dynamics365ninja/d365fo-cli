@@ -42,14 +42,21 @@ was ported from.
 
 ### Fixed — Copilot skill setup docs (#205)
 
-- SETUP.md, README and the installer header claimed Visual Studio 2022 / 2026 pick up
-  `.github/skills/` and that VS "searches upward from the `.sln`", so one copy in a parent
-  folder covers every solution beneath it. Neither holds: Agent Skills need Visual Studio 2026
-  18.5+ (VS 2022 ignores the folder), and VS discovers solution skills next to the `.sln` only.
-  The docs now say where the folder has to be, offer the personal-skill folder
-  (`%USERPROFILE%\.copilot\skills\`) when several solutions share a parent, point VS 2022
-  users at the legacy `.instructions.md` layout, and explain how to verify discovery in the
-  skills panel.
+- SETUP.md, README and the installer header claimed VS "searches upward from the `.sln`", so one
+  copy in a parent folder covers every solution beneath it. It does not: VS discovers solution
+  skills next to the `.sln` only. The docs now say where the folder has to be and offer the
+  personal-skill folder (`%USERPROFILE%\.copilot\skills\`) when several solutions share a parent.
+  TROUBLESHOOTING.md still carried the "walks upward" claim in two places and was missed by the
+  first pass; it is corrected and now ends with a verification step per host.
+- The same pass then claimed Agent Skills need VS 2026 18.5+ and that VS 2022 ignores
+  `.github/skills/`. That was wrong — it came from Microsoft's Agent Skills page, which is not
+  published for the VS 2022 moniker, while the agent-mode page gates only on 17.14.
+  `.github/skills/` is read on VS 2022 17.14+ with a current Copilot extension; what is
+  VS 2026-only is the skills *panel*, so the docs now give the VS 2022 way to verify (Copilot
+  names the skill in its reply).
+- Added the answer to "skill, instructions, or both?": the skill alone is the default, the
+  `.instructions.md` layout is the deterministic-by-glob fallback, and
+  `.github/copilot-instructions.md` is retired.
 
 ### Added — `generate extension Menu`, and menu items as symbols
 
