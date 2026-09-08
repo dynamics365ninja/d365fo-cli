@@ -32,7 +32,11 @@ public static class SdlcRunner
 
     // ----------------------------------------------------------------- build
 
-    /// <param name="msbuildPath">MSBuild executable; defaults to <c>msbuild.exe</c> on PATH.</param>
+    /// <param name="msbuildPath">
+    /// MSBuild executable. Omitted, it is resolved by <see cref="BuildTooling.ResolveMsBuild"/>:
+    /// the Visual Studio MSBuild before the one on PATH, because on a developer VM PATH resolves
+    /// <c>msbuild.exe</c> to the .NET Framework build, which cannot host the Dynamics build tasks.
+    /// </param>
     /// <param name="projectPath">Project or solution to build; omitted builds whatever is in the working directory.</param>
     /// <param name="configuration">MSBuild configuration, <c>Debug</c> by default.</param>
     /// <param name="xppcLogPath">
@@ -42,15 +46,26 @@ public static class SdlcRunner
     public static ToolResult<object> Build(
         string? msbuildPath, string? projectPath, string configuration = "Debug", string? xppcLogPath = null)
     {
-        var msbuild = string.IsNullOrWhiteSpace(msbuildPath) ? "msbuild.exe" : msbuildPath!;
+        var tool = BuildTooling.ResolveMsBuild(msbuildPath);
+        if (tool.Path is null)
+        {
+            return ToolResult<object>.Fail("MSBUILD_NOT_FOUND",
+                tool.Problem ?? "msbuild.exe could not be resolved.",
+                "Run `d365fo doctor` to see every build tool path, then set D365FO_MSBUILD_PATH or pass --msbuild.");
+        }
+
+        var msbuild = tool.Path;
         var args = new List<string>();
         if (!string.IsNullOrEmpty(projectPath)) args.Add(projectPath!);
         args.Add($"/p:Configuration={configuration}");
         args.Add("/nologo");
 
         var (exit, stdout, stderr, elapsed) = Run(msbuild, args);
-        var errors = ParseMsBuildDiagnostics(stdout, "error");
-        var warnings = ParseMsBuildDiagnostics(stdout, "warning");
+        // stderr is scanned too: a toolchain failure (MSB1009, a missing targets import) is
+        // often all MSBuild writes, and reading only stdout reported it as zero errors.
+        var output = string.IsNullOrEmpty(stderr) ? stdout : stdout + "\n" + stderr;
+        var errors = ParseMsBuildDiagnostics(output, "error");
+        var warnings = ParseMsBuildDiagnostics(output, "warning");
 
         // Structured xppc diagnostics: the X++ compiler reports through its own
         // "Compile Error: … dynamics://Model/Object/member: [(l,c)]: msg" format,
@@ -70,6 +85,10 @@ public static class SdlcRunner
             buildSucceeded = exit == 0,
             exitCode = exit,
             elapsedMs = (long)elapsed.TotalMilliseconds,
+            // Which MSBuild ran, and whether it is one that can build X++ at all. A build that
+            // fails because PATH handed us the .NET Framework MSBuild reports MSB4062, which
+            // reads like a compiler error; naming the executable here makes it one question.
+            msbuild = new { path = tool.Path, source = tool.Source, problem = tool.Problem },
             errorCount = errors.Count,
             warningCount = warnings.Count,
             errors,
@@ -98,7 +117,11 @@ public static class SdlcRunner
         // A failed build keeps the full structured payload — the diagnostics are wanted exactly
         // when it fails — and says so in a warning rather than in an error envelope that would
         // throw the diagnostics away.
-        return ToolResult<object>.Success(payload, exit == 0 ? null : ["build-failed"]);
+        var buildWarnings = new List<string>();
+        if (exit != 0) buildWarnings.Add("build-failed");
+        if (tool.Problem is not null) buildWarnings.Add($"msbuild-unfit: {tool.Problem}");
+
+        return ToolResult<object>.Success(payload, buildWarnings.Count == 0 ? null : buildWarnings);
     }
 
     // ------------------------------------------------------------------ sync
@@ -262,22 +285,66 @@ public static class SdlcRunner
         @"(?<file>[^:()]+)\((?<line>\d+),(?<col>\d+)\):\s+(?<kind>error|warning)\s+(?<code>\S+):\s+(?<msg>.+)",
         RegexOptions.Compiled);
 
-    private static List<object> ParseMsBuildDiagnostics(string output, string kind)
+    // MSBuild's other diagnostic shape, with no file position: "MSBUILD : error MSB1009: …",
+    // "MSBUILD : error MSB4062: …". These are exactly the toolchain failures — a missing
+    // project, an unloadable build task — and matching only the positional form above dropped
+    // them, so a build that never reached the compiler reported zero errors.
+    private static readonly Regex GlobalDiagRx = new(
+        @"^\s*(?<src>[^\r\n:]*?)\s*:\s*(?<kind>error|warning)\s+(?<code>MSB\d+):\s+(?<msg>.+)$",
+        RegexOptions.Compiled | RegexOptions.Multiline | RegexOptions.IgnoreCase);
+
+    internal static List<object> ParseMsBuildDiagnostics(string output, string kind)
     {
         var list = new List<object>();
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+
         foreach (Match m in DiagRx.Matches(output))
         {
             if (!string.Equals(m.Groups["kind"].Value, kind, StringComparison.OrdinalIgnoreCase)) continue;
+            var code = m.Groups["code"].Value;
+            var message = m.Groups["msg"].Value.Trim();
+            seen.Add(code + "|" + message);
             list.Add(new
             {
                 file = m.Groups["file"].Value.Trim(),
                 line = int.Parse(m.Groups["line"].Value),
                 column = int.Parse(m.Groups["col"].Value),
-                code = m.Groups["code"].Value,
-                message = m.Groups["msg"].Value.Trim(),
+                code,
+                message,
+                hint = HintFor(m.Value.Trim()),
             });
         }
+
+        foreach (Match m in GlobalDiagRx.Matches(output))
+        {
+            if (!string.Equals(m.Groups["kind"].Value, kind, StringComparison.OrdinalIgnoreCase)) continue;
+            var code = m.Groups["code"].Value;
+            var message = m.Groups["msg"].Value.Trim();
+            // The same MSB error is often echoed both with and without a file position.
+            if (!seen.Add(code + "|" + message)) continue;
+            list.Add(new
+            {
+                file = m.Groups["src"].Value.Trim(),
+                line = (int?)null,
+                column = (int?)null,
+                code,
+                message,
+                hint = HintFor(m.Value.Trim()),
+            });
+        }
+
         return list;
+    }
+
+    /// <summary>
+    /// The scored fix-hint rules, applied to MSBuild's own messages. An MSB4062 is an
+    /// environment failure that reads like a compiler error; without this the caller saw the
+    /// raw text and had to guess what it meant.
+    /// </summary>
+    private static object? HintFor(string line)
+    {
+        var hint = XppcFixHints.Best(line);
+        return hint is null ? null : new { rule = hint.RuleId, hint = hint.Hint, knowledge = hint.Knowledge };
     }
 
     private static string Tail(string text, int lines) =>

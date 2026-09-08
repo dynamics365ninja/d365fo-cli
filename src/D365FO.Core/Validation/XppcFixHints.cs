@@ -54,6 +54,38 @@ public static class XppcFixHints
     /// </summary>
     internal static readonly Rule[] Rules =
     [
+        // --- environment / tooling: the build never reached the X++ compiler -----
+        // Not X++ defects at all. Without these rules a "MSBuild task assembly
+        // missing" failure matched nothing, so the only thing an agent could do
+        // with it was guess at the cause — the report behind issue #207.
+        new("ENV-MSBUILD-TASK-MISSING",
+            AllOf: [],
+            AnyOf: [@"\bMSB4062\b", @"task could not be loaded from the assembly", @"<UsingTask> declaration"],
+            NoneOf: [], Weight: 12,
+            Hint: "MSBuild could not load the D365FO build tasks — an environment failure, not an X++ error. The first `msbuild.exe` on PATH is usually the .NET Framework one (C:\\Windows\\Microsoft.NET\\Framework\\v4.0.30319), which cannot host Microsoft.Dynamics.Framework.Tools.BuildTasks: those load only under the Visual Studio MSBuild that carries the Dynamics 365 dev tools extension. `d365fo doctor` prints which MSBuild is resolved; override it with `d365fo build --msbuild <VS>\\MSBuild\\Current\\Bin\\MSBuild.exe` or D365FO_MSBUILD_PATH.",
+            Knowledge: "build-error-triage"),
+
+        new("ENV-MSBUILD-TARGETS-MISSING",
+            AllOf: [],
+            AnyOf: [@"\bMSB4019\b", @"imported project .* was not found", @"\bMSB4066\b", @"is not a supported project type", @"\bMSB4025\b"],
+            NoneOf: [], Weight: 12,
+            Hint: "MSBuild cannot read the X++ project — the imported Dynamics targets are missing, so this MSBuild has no Dynamics 365 dev tools extension behind it. Build with the Visual Studio MSBuild on the developer VM (`d365fo doctor` reports the one it resolves); `dotnet build` and the .NET Framework MSBuild cannot build a .rnrproj.",
+            Knowledge: "build-error-triage"),
+
+        new("ENV-PROJECT-NOT-FOUND",
+            AllOf: [],
+            AnyOf: [@"\bMSB1003\b", @"\bMSB1009\b", @"specify a project or solution file", @"project file does not exist"],
+            NoneOf: [], Weight: 12,
+            Hint: "MSBuild was pointed at no project: it builds whatever is in the working directory unless told otherwise. Pass `d365fo build --project <Solution.sln|Model.rnrproj>`, or run it from the folder that holds one.",
+            Knowledge: "build-error-triage"),
+
+        new("ENV-TOOL-NOT-FOUND",
+            AllOf: [@"\b(msbuild|xppc|xppbp|syncengine|systestconsole)(\.exe)?\b"],
+            AnyOf: [@"is not recognized as", @"command not found", @"could not find the file", @"cannot find the file", @"was not found"],
+            NoneOf: [@"\bMSB4062\b", @"task could not be loaded"], Weight: 11,
+            Hint: "A D365FO developer tool is not where the CLI looked. MSBuild comes from the Visual Studio install; SyncEngine.exe, SysTestConsole.exe and xppbp.exe live under <PackagesLocalDirectory>\\bin. `d365fo doctor` prints every tool path it resolves and which one is missing.",
+            Knowledge: "build-error-triage"),
+
         // --- named diagnostics: the message identifies the defect itself ----------
         new("XPPC-COC-MISSING-NEXT",
             AllOf: [], AnyOf: [@"\bSYS10028\b", @"must call next", @"missing next", @"call to next"],

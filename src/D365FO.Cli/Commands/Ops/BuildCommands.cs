@@ -18,6 +18,7 @@ public sealed class BuildCommand : Command<BuildCommand.Settings>
     public sealed class Settings : D365OutputSettings
     {
         [CommandOption("--msbuild <PATH>")]
+        [System.ComponentModel.Description("MSBuild executable. Defaults to the Visual Studio MSBuild (via vswhere) ahead of the one on PATH, because the .NET Framework MSBuild cannot load the X++ build tasks. `d365fo doctor` reports the resolved path.")]
         public string? MsBuildPath { get; init; }
 
         [CommandOption("--project <PATH>")]

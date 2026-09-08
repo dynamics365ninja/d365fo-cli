@@ -19,6 +19,27 @@ was ported from.
 
 ## [Unreleased]
 
+### Fixed — build tooling is probed instead of assumed (#207)
+
+- **`d365fo build` picked its MSBuild off `PATH`.** On a developer VM that is
+  `C:\Windows\Microsoft.NET\Framework\v4.0.30319\MSBuild.exe`, which cannot host
+  `Microsoft.Dynamics.Framework.Tools.BuildTasks` — the build then fails with `MSB4062`, which
+  reads like a compiler error and is not one. `BuildTooling.ResolveMsBuild` now prefers the
+  Visual Studio MSBuild (`vswhere`, then the known install roots) over `PATH`, honours
+  `D365FO_MSBUILD_PATH`, and reports the executable it used in `data.msbuild` — with the reason
+  when the resolved one cannot build X++.
+- **`explain-error` had nothing to say about environment failures.** `MSB4062`,
+  `MSB4019`/`MSB4066` and `MSB1003`/`MSB1009` now match four `ENV-…` rules that name the cause
+  and point at `build-error-triage`; the topic itself gained an "is it your code at all?"
+  section. MSBuild's own diagnostics carry those hints in the build payload too.
+- **`doctor` answered "is build tooling functional here?" with an OS check.** It now reports
+  `build.msbuild` (which executable, found how), `build.dynamicsTargets` (the
+  `BuildTasksDirectory` default an `.rnrproj` imports) and `build.tooling` for `xppc.exe`,
+  `xppbp.exe` and `SyncEngine.exe` under `<packages>\bin`.
+- **A build that never started reported zero errors.** MSBuild's position-less form
+  (`MSBUILD : error MSB1009: …`) matched neither diagnostic parser, and `stderr` was not scanned
+  at all. Both are parsed now, de-duplicated against the positional form.
+
 ### Fixed — Copilot skill setup docs (#205)
 
 - SETUP.md, README and the installer header claimed Visual Studio 2022 / 2026 pick up

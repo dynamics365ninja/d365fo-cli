@@ -52,6 +52,13 @@ public class XppcFixHintsTests
     [InlineData("The number sequence for MyId is not set up for company USMF.", "XPPC-NUMBER-SEQUENCE")]
     [InlineData("The field 'CreditMaxx' does not exist on table CustTable.", "XPPC-FIELD-MISSING")]
     [InlineData("CSUV1: the value cannot be assigned to a variable of this type.", "XPPC-TYPE-MISMATCH")]
+    // Environment failures (issue #207): the build never reached the X++ compiler, and
+    // before these rules the whole family matched nothing at all.
+    [InlineData("MyModel.rnrproj(4,5): error MSB4062: The \"BuildTask\" task could not be loaded from the assembly Microsoft.Dynamics.Framework.Tools.BuildTasks.17.0.", "ENV-MSBUILD-TASK-MISSING")]
+    [InlineData("error MSB4019: The imported project \"\\Microsoft.Dynamics.Framework.Tools.BuildTasks.17.0.targets\" was not found.", "ENV-MSBUILD-TARGETS-MISSING")]
+    [InlineData("'msbuild.exe' is not recognized as an internal or external command.", "ENV-TOOL-NOT-FOUND")]
+    [InlineData("MSBUILD : error MSB1009: Project file does not exist.", "ENV-PROJECT-NOT-FOUND")]
+    [InlineData("MSBUILD : error MSB1003: Specify a project or solution file. The current working directory does not contain a project or solution file.", "ENV-PROJECT-NOT-FOUND")]
     public void Maps_known_messages_to_their_rule(string message, string expectedRule)
     {
         var best = XppcFixHints.Best(message);
@@ -134,5 +141,33 @@ public class XppcFixHintsTests
     {
         var matches = XppcFixHints.Match("The field 'Foo' does not exist on table CustTable.");
         Assert.Equal("XPPC-FIELD-MISSING", matches[0].RuleId);
+    }
+
+    [Fact]
+    public void Environment_rules_do_not_claim_ordinary_xpp_errors()
+    {
+        // The tooling rules sit at the top of the weight order, so a rule that matched
+        // loosely would shadow every compiler diagnostic below it.
+        foreach (var message in new[]
+                 {
+                     "The field 'CreditMaxx' does not exist on table CustTable.",
+                     "The label @SYS12345 does not exist.",
+                     "Unknown type 'CustTableXyz'.",
+                     "';' expected.",
+                 })
+        {
+            Assert.DoesNotContain(XppcFixHints.Match(message), h => h.RuleId.StartsWith("ENV-", StringComparison.Ordinal));
+        }
+    }
+
+    [Fact]
+    public void Task_load_failure_outranks_the_generic_tool_not_found_rule()
+    {
+        // MSB4062 names the assembly it could not find, so both rules can see it; the
+        // one that explains *why* the assembly is unreachable has to win.
+        var matches = XppcFixHints.Match(
+            "MSBUILD : error MSB4062: The \"BuildTask\" task could not be loaded from the assembly. The system cannot find the file specified.");
+        Assert.Equal("ENV-MSBUILD-TASK-MISSING", matches[0].RuleId);
+        Assert.DoesNotContain(matches, h => h.RuleId == "ENV-TOOL-NOT-FOUND");
     }
 }

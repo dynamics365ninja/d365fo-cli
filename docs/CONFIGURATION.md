@@ -24,6 +24,7 @@ Run `d365fo init` — in a terminal it's a wizard that asks for what you need an
 | `D365FO_BRIDGE_ENABLED` | `1`/`true` enables the metadata bridge (required for `generate --install-to` and `find refs --xref`) | `false` |
 | `D365FO_BRIDGE_PATH` | Path to `D365FO.Bridge.exe` (auto-detected next to `d365fo.exe` when unset) | *(auto)* |
 | `D365FO_BIN_PATH` | Folder containing `Microsoft.Dynamics.AX.Metadata.*.dll` (usually `<PackagesLocalDirectory>\bin`) | — |
+| `D365FO_MSBUILD_PATH` | MSBuild executable for `d365fo build`. Unset, the Visual Studio MSBuild is resolved through `vswhere` (then the known install roots) and only then `PATH` — the `msbuild.exe` first on `PATH` is usually the .NET Framework one, which cannot load the X++ build tasks and fails with `MSB4062`. `d365fo doctor` reports which one is resolved. | *(auto)* |
 | `D365FO_XREF_CONNECTIONSTRING` | Cross-reference DB connection string | — |
 | `D365FO_FORCE_JSON` | `1` forces machine-readable JSON output even on a TTY | — |
 | `D365FO_HOME` | Root for the provenance/grounding token store | `%USERPROFILE%\.d365fo` |
