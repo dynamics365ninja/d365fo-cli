@@ -129,4 +129,58 @@ public class ContractShapeRulesTests
         Assert.Contains("NotAProperty", v.Excerpt);
         Assert.Contains("AxTableFieldString", v.Fix);
     }
+
+        [Fact]
+        public void AxClass_method_name_mismatch_is_reported()
+        {
+                var xml = """
+                        <AxClass>
+                            <Name>Example</Name>
+                            <SourceCode><Methods><Method>
+                                <Name>expectedName</Name>
+                                <Source><![CDATA[public void actualName() { }]]></Source>
+                            </Method></Methods></SourceCode>
+                        </AxClass>
+                        """;
+
+                var violation = Assert.Single(Check(xml), violation => violation.Rule == AotMethodSourceRules.RuleMethodSourceMismatch);
+                Assert.Contains("actualName", violation.Fix);
+                Assert.Contains("expectedName", violation.Fix);
+        }
+
+        [Fact]
+        public void AxClass_method_node_with_multiple_declarations_is_reported()
+        {
+                var xml = """
+                        <AxClass>
+                            <Name>Example</Name>
+                            <SourceCode><Methods><Method>
+                                <Name>firstMethod</Name>
+                                <Source><![CDATA[
+                                        public void firstMethod() { }
+                                        public void secondMethod() { }
+                                ]]></Source>
+                            </Method></Methods></SourceCode>
+                        </AxClass>
+                        """;
+
+                var violation = Assert.Single(Check(xml), violation => violation.Rule == AotMethodSourceRules.RuleMethodSourceMismatch);
+                Assert.Contains("exactly one", violation.Fix);
+        }
+
+        [Fact]
+        public void AxClass_method_name_matching_single_declaration_is_allowed()
+        {
+                var xml = """
+                        <AxClass>
+                            <Name>Example</Name>
+                            <SourceCode><Methods><Method>
+                                <Name>expectedName</Name>
+                                <Source><![CDATA[public void expectedName() { }]]></Source>
+                            </Method></Methods></SourceCode>
+                        </AxClass>
+                        """;
+
+                Assert.DoesNotContain(Check(xml), violation => violation.Rule == AotMethodSourceRules.RuleMethodSourceMismatch);
+        }
 }
