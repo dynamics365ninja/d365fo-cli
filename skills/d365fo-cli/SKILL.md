@@ -1,7 +1,7 @@
 ---
 name: d365fo-cli
-description: "D365 Finance & Operations X++ AI development skill powered by the d365fo CLI. Use whenever the user is working in a D365 F&O X++ project: writing classes, tables, forms, CoC extensions, event handlers, entities, security, batch jobs, business events, labels, or any AOT artifact. Loads topic-specific guidance lazily from references/."
-compatibility: Requires GitHub Copilot agent mode (Visual Studio 2022 17.14+, Visual Studio 2026, or VS Code) and d365fo CLI in PATH.
+description: "D365 Finance & Operations X++ AI development skill powered by the d365fo CLI. Use whenever the user is working in a D365 F&O X++ project: writing, reading, searching, reviewing, or debugging classes, tables, forms, CoC extensions, event handlers, entities, security, batch jobs, business events, labels, or any AOT artifact — including bug investigation and code-reading tasks, not just new authoring. Prefer `d365fo search`/`get`/`find` over generic grep/glob/file_search when locating or inspecting AOT objects. Loads topic-specific guidance lazily from references/."
+compatibility: Requires GitHub Copilot agent mode with shell/terminal tool access and d365fo CLI in PATH — Visual Studio 2022 17.14+, Visual Studio 2026, VS Code, or the GitHub Copilot CLI (terminal-only sessions).
 ---
 
 # D365 Finance & Operations X++ Development — `d365fo` CLI
@@ -12,15 +12,20 @@ compatibility: Requires GitHub Copilot agent mode (Visual Studio 2022 17.14+, Vi
   The .instructions.md layout in skills/copilot/ is the fallback for Copilot builds that do not
   discover skills; the two layouts coexist.
   Secondary target: VS Code with Copilot in agent mode (can run d365fo directly via terminal).
+  Also supported: GitHub Copilot CLI (terminal-only sessions, no IDE host) — same commands via
+  the shell/powershell tool. Trigger this skill for ANY D365 F&O X++ task, including
+  investigation/debugging/code-reading, not just new-code authoring.
   References in the form `[learn:<page>]` link to Microsoft Learn pages
   (see "Authoritative X++ syntax source" at the bottom).
 -->
 
-This skill gives **GitHub Copilot** the rules for assisting with D365 Finance & Operations X++ development. It is deployed to your X++ project's `.github/skills/d365fo-cli/` folder by `Install-D365FoCopilotSkills.ps1` and is loaded automatically by Copilot when you are working on D365 F&O tasks.
+This skill gives **GitHub Copilot** the rules for assisting with D365 Finance & Operations X++ development. It is deployed to your X++ project's `.github/skills/d365fo-cli/` folder by `Install-D365FoCopilotSkills.ps1` and is loaded automatically by Copilot when you are working on D365 F&O tasks — including reading, searching, reviewing, and debugging existing AOT objects, not only writing new ones.
 
 > **Primary environment — Visual Studio agent mode (2022 17.14+ or 2026):** GitHub Copilot runs `d365fo` commands via the built-in terminal tool (`run_command_in_terminal`). Topic-specific rules in `references/` load on demand. No copy-paste, no MCP overhead. (The skills panel that lists discovered skills is VS 2026 18.6+ only; on VS 2022 the skill still loads — Copilot names it in its reply.)
 >
 > **Secondary environment — VS Code agent mode:** Same approach, different terminal tool name (`run_in_terminal`). Identical experience.
+>
+> **Also supported — GitHub Copilot CLI (terminal-only, no IDE host):** Same approach — the CLI's shell/`powershell` tool runs `d365fo` commands directly; no VS/VS Code host is required. The only prerequisite is `d365fo` being resolvable in PATH (confirm with `d365fo doctor`). Explicitly invoke this skill at the start of **any** D365 F&O X++ task in a Copilot CLI session — including bug investigation, code review, and read-only searches — not only when generating new code. Prefer `d365fo search`/`get`/`find`/`read` over generic `grep`/`glob`/`Get-ChildItem -Recurse` when locating or inspecting AOT XML: the CLI's model-aware index resolves enum/label/relation semantics that plain filesystem search cannot, and is far faster than recursive scans of `PackagesLocalDirectory`.
 >
 > **Fallback — VS Chat mode (no agent tools):** Copilot must ask the user to run `d365fo` commands manually and paste back JSON output. See the fallback workflow section below.
 
@@ -88,6 +93,7 @@ Examples:
 |---|---|---|
 | **VS 2026 agent mode** | Built-in terminal tool → `d365fo` CLI | ~100 tokens |
 | **VS Code agent mode** | `run_in_terminal` → `d365fo` CLI | ~100 tokens |
+| **GitHub Copilot CLI** (terminal-only) | `powershell`/shell tool → `d365fo` CLI | ~100 tokens |
 | **VS Chat mode** (no agent tools) | User runs manually, pastes JSON | collaborative |
 
 In agent mode Copilot calls `d365fo` commands autonomously — it reads topic rules from `references/` in this skill, decides which commands to run, executes them in the terminal, and interprets the JSON output. No copy-paste required.
