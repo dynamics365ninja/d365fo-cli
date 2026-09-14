@@ -77,6 +77,7 @@ public interface IPropertyStatsProvider
 ///   XML011  XMLSchema-instance namespace used or required but not declared on the root
 ///   XML012  Document not in the XML namespace its contract declares
 ///   XML013  File sitting in an AOT folder another family owns (path-aware)
+///   XML014  AxClass method name/source declaration mismatch
 /// </summary>
 /// <remarks>
 /// XML001–XML005 are AxTable-only by nature — they are property-presence rules mined from
@@ -172,6 +173,7 @@ public static class XppValidator
     {
         ObjectShapeRules.Check(code, violations, sourcePath);
         ContractShapeRules.Check(code, violations);
+        AotMethodSourceRules.Check(code, violations);
     }
 
     public static string NormalizeCodeType(string? codeType) => codeType?.ToLowerInvariant() switch
