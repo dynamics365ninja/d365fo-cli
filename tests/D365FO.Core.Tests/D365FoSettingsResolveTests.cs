@@ -207,6 +207,8 @@ public class D365FoSettingsResolveTests
         var prevExtra = Environment.GetEnvironmentVariable("D365FO_EXTRA_PACKAGES_PATH");
         try
         {
+            D365FoSettings.ConfigPathOverrideForTests = null;
+            D365FoSettings.ClearCacheForTests();
             Environment.SetEnvironmentVariable("D365FO_CUSTOM_PACKAGES_PATH", custom);
             Environment.SetEnvironmentVariable("D365FO_EXTRA_PACKAGES_PATH", extra);
             body();
@@ -215,6 +217,8 @@ public class D365FoSettingsResolveTests
         {
             Environment.SetEnvironmentVariable("D365FO_CUSTOM_PACKAGES_PATH", prevCustom);
             Environment.SetEnvironmentVariable("D365FO_EXTRA_PACKAGES_PATH", prevExtra);
+            D365FoSettings.ConfigPathOverrideForTests = null;
+            D365FoSettings.ClearCacheForTests();
         }
     }
 
