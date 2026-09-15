@@ -201,4 +201,20 @@ public class ContractShapeRulesTests
 
                 Assert.DoesNotContain(Check(xml), violation => violation.Rule == AotMethodSourceRules.RuleMethodSourceMismatch);
         }
+
+    [Fact]
+    public void AxClass_delegate_declaration_is_validated_as_a_single_method()
+    {
+        var xml = "<AxClass>\n"
+            + "  <Name>FmVehicleService</Name>\n"
+            + "  <SourceCode><Methods><Method>\n"
+            + "    <Name>OnInitialized</Name>\n"
+            + "    <Source><![CDATA[delegate void OnInitialized(XppPrePostArgs _args)\n"
+            + "{\n"
+            + "}]]></Source>\n"
+            + "  </Method></Methods></SourceCode>\n"
+            + "</AxClass>";
+
+        Assert.DoesNotContain(Check(xml), violation => violation.Rule == AotMethodSourceRules.RuleMethodSourceMismatch);
+    }
 }

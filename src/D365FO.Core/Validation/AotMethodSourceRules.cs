@@ -14,7 +14,7 @@ public static class AotMethodSourceRules
     public const string RuleMethodSourceMismatch = "XML014";
 
     private static readonly Regex MethodDeclaration = new(
-        @"^\s*(?:(?:public|protected|private|internal|final|static|abstract)\s+)*[A-Za-z_]\w*(?:::\w+)?(?:\s*\[\s*\])?\s+([A-Za-z_]\w*)\s*\(",
+        @"^\s*(?:(?:public|protected|private|internal|final|static|abstract)\s+)*(?:delegate\s+)?[A-Za-z_]\w*(?:::\w+)?(?:\s*\[\s*\])?\s+([A-Za-z_]\w*)\s*\(",
         RegexOptions.Multiline | RegexOptions.CultureInvariant);
 
     /// <summary>Appends AxClass method-source consistency violations found in <paramref name="xml"/>.</summary>
