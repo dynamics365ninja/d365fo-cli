@@ -183,4 +183,22 @@ public class ContractShapeRulesTests
 
                 Assert.DoesNotContain(Check(xml), violation => violation.Rule == AotMethodSourceRules.RuleMethodSourceMismatch);
         }
+
+        [Fact]
+        public void AxClass_method_body_next_call_is_not_treated_as_second_method_declaration()
+        {
+                var xml = "<AxClass>\n"
+                    + "  <Name>FmVehicleService_Extension</Name>\n"
+                    + "  <SourceCode><Methods><Method>\n"
+                    + "    <Name>run</Name>\n"
+                    + "    <Source><![CDATA[public void run()\n"
+                    + "{\n"
+                    + "    next run();\n"
+                    + "    // extension logic here\n"
+                    + "}]]></Source>\n"
+                    + "  </Method></Methods></SourceCode>\n"
+                    + "</AxClass>";
+
+                Assert.DoesNotContain(Check(xml), violation => violation.Rule == AotMethodSourceRules.RuleMethodSourceMismatch);
+        }
 }
