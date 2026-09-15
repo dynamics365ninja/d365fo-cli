@@ -44,8 +44,40 @@ public static class AotMethodSourceRules
                 continue;
             }
 
-            var declarations = MethodDeclaration.Matches(XppLexer.Mask(source))
+            var maskedSource = XppLexer.Mask(source);
+            var declarations = MethodDeclaration.Matches(maskedSource)
+                .Cast<Match>()
+                .Where(match =>
+                {
+                    var lineStart = maskedSource.LastIndexOf('\n', match.Index) + 1;
+                    if (lineStart < 0)
+                    {
+                        lineStart = 0;
+                    }
+
+                    var lineEnd = maskedSource.IndexOf('\n', match.Index);
+                    if (lineEnd < 0)
+                    {
+                        lineEnd = maskedSource.Length;
+                    }
+
+                    if (lineStart > lineEnd)
+                    {
+                        return true;
+                    }
+
+                    var line = maskedSource.Substring(lineStart, lineEnd - lineStart).TrimStart();
+                    return !line.StartsWith("next ", StringComparison.OrdinalIgnoreCase)
+                        && !line.StartsWith("super ", StringComparison.OrdinalIgnoreCase)
+                        && !line.StartsWith("return ", StringComparison.OrdinalIgnoreCase)
+                        && !line.StartsWith("if ", StringComparison.OrdinalIgnoreCase)
+                        && !line.StartsWith("while ", StringComparison.OrdinalIgnoreCase)
+                        && !line.StartsWith("for ", StringComparison.OrdinalIgnoreCase)
+                        && !line.StartsWith("switch ", StringComparison.OrdinalIgnoreCase)
+                        && !line.StartsWith("case ", StringComparison.OrdinalIgnoreCase);
+                })
                 .Select(match => match.Groups[1].Value)
+                .Where(methodName => !string.IsNullOrEmpty(methodName))
                 .ToList();
             var line = (method as IXmlLineInfo)?.LineNumber;
 
