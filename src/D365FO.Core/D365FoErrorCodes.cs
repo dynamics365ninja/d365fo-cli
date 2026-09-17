@@ -42,6 +42,10 @@ public static class D365FoErrorCodes
     public const string PackagesPathMissing = "PACKAGES_PATH_MISSING";
     public const string PackagesPathNotFound = "PACKAGES_PATH_NOT_FOUND";
 
+    // Configuration profiles (issue #210)
+    public const string ProfileNotFound = "PROFILE_NOT_FOUND";
+    public const string InvalidProfileName = "INVALID_PROFILE_NAME";
+
     // Build / SDLC
     public const string BuildFailed = "BUILD_FAILED";
     public const string SyncFailed = "SYNC_FAILED";

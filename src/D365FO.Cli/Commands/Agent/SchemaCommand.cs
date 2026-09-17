@@ -243,7 +243,11 @@ public sealed class SchemaCommand : Command<SchemaCommand.Settings>
         C("daemon status", "Report daemon status.", [], [], []),
         C("verify", "Do the model on disk and its .rnrproj agree? An unlisted object is never compiled.", ["[MODEL]"], ["--path", "--expect", "--output"], ["verify_project"]),
         C("doctor", "Diagnose environment.", [], ["--output"], []),
-        C("init", "Quickstart index/profile setup.", [], ["--packages", "--extra-packages", "--db", "--run-extract", "--dry-run", "--persist-profile"], []),
+        C("init", "Quickstart index/profile setup. With the global --profile <name>, writes that named profile instead of settings.json.", [], ["--packages", "--extra-packages", "--db", "--run-extract", "--dry-run", "--persist-profile", "--label-languages", "--no-wizard", "--output"], []),
+        C("config list", "List named configuration profiles and which one is active (flag/env/settings). Select one per call with the global `d365fo --profile <name> <command>`.", [], ["--output"], []),
+        C("config show", "Every resolved setting with its source (env, profile:<name>, settings, default).", ["[NAME]"], ["--output"], []),
+        C("config use", "Persist the default profile in settings.json.", ["[NAME]"], ["--clear", "--create", "--output"], []),
+        C("config current", "The active profile, where it came from, and its index DB.", [], ["--output"], []),
         C("version", "Print version information.", [], ["--output"], []),
 
         // ── The rest of the registered surface ─────────────────────────────

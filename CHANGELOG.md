@@ -19,6 +19,39 @@ was ported from.
 
 ## [Unreleased]
 
+### Added — named configuration profiles, one per D365FO environment/UDE (#210)
+
+- **Profiles are files, `%LOCALAPPDATA%\d365fo-cli\profiles\<name>.json`,** in the same flat
+  format as `settings.json`. `d365fo --profile <name> init …` creates one (persisting is implied,
+  and the shell-profile block is skipped because env vars would override every profile).
+- **Selection, highest first:** the global `--profile <name>` option (stripped before Spectre
+  parses the command line, so it works in any position and is exported as `D365FO_PROFILE` to
+  child processes), the `D365FO_PROFILE` env var, then `D365FO_PROFILE` in `settings.json`,
+  written by `d365fo config use <name>`. With nothing selected, resolution is unchanged.
+- **Resolution with a profile active:** env var → profile → `settings.json` → default. The
+  deprecated `D365FO_EXTRA_PACKAGES_PATH` alias keeps working in both files, and env vars still
+  outrank both. Each profile gets its own default index,
+  `profiles\<name>\d365fo-index.sqlite`, and does not inherit a `D365FO_INDEX_DB` from
+  `settings.json`, so two environments never share one index. For the same reason,
+  `init --profile` does not copy the packages, workspace or custom-packages paths from
+  `settings.json` into the new profile.
+- **Guardrail:** a profile that is selected but missing, or has an invalid name
+  (`^[A-Za-z0-9][A-Za-z0-9._-]*$`), fails with `PROFILE_NOT_FOUND` / `INVALID_PROFILE_NAME`.
+  It never silently falls back to the global settings. `init`, `config`, `doctor`, `version`
+  and `--help` still run.
+- **New `config` branch:** `config list`, `config show [name]` (each setting with its source;
+  secret-looking keys are masked), `config use <name>` (`--create` makes an empty profile,
+  `--clear` unsets the default, and the output shows the `$env:D365FO_PROFILE='<name>'`
+  per-shell alternative) and `config current`. All four accept `--output json`.
+- **`doctor`** now lists the active profile, its source and its file as its first check. It
+  also warns when process env vars (e.g. an old `$PROFILE` block) override keys the profile sets.
+- **`d365fo-mcp`** reads the same profile setting, from `D365FO_PROFILE` in the client's env
+  block or from `--profile <name>`. If the selected profile is missing, it exits at start-up.
+- **`D365FO_CONFIG_DIR`** moves the whole config root. Windows ignores a changed
+  `LOCALAPPDATA` env var, so before this there was no way to point the CLI at a throw-away config.
+- Possible follow-up, not included: per-repository `.d365fo/settings.json` found from the
+  working directory.
+
 ### Changed — the `d365fo-cli` skill covers GitHub Copilot CLI and read-only tasks
 
 - The skill's `description` now names reading, searching, reviewing and debugging existing AOT

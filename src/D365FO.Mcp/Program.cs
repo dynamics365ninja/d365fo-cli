@@ -13,6 +13,7 @@ using D365FO.Mcp;
 //   d365fo-mcp --legacy                 # use built-in StdioDispatcher (no SDK)
 //   d365fo-mcp --http                   # HTTP transport (POST /mcp, GET /health)
 //   d365fo-mcp --http --port 8080       # override HTTP listen port
+//   d365fo-mcp --profile customerA      # resolve settings from a named profile
 //
 // The stdio server speaks the MCP stdio transport — compatible with Claude
 // Desktop, Cursor, VS Code Copilot, and any other MCP client that supports it.
@@ -29,6 +30,15 @@ for (int i = 0; i < args.Length; i++)
     if ((args[i] == "--db" || args[i] == "-d") && i + 1 < args.Length)
     {
         dbPath = args[++i];
+    }
+    else if (args[i] == "--profile" && i + 1 < args.Length)
+    {
+        // Same selection the CLI's global --profile makes (issue #210); an MCP
+        // client config can equally pin D365FO_PROFILE in its env block.
+        var name = args[++i];
+        D365FoProfiles.FlagProfile = name;
+        if (D365FoProfiles.IsValidName(name))
+            Environment.SetEnvironmentVariable(D365FoProfiles.ProfileKey, name);
     }
     else if (args[i] == "--legacy")
     {
@@ -60,6 +70,7 @@ for (int i = 0; i < args.Length; i++)
               --legacy            Use the built-in StdioDispatcher (pre-SDK transport).
               --http              Serve over HTTP (POST /mcp, GET /health) instead of stdio.
               --port <N>          HTTP listen port (default: MCP_HTTP_PORT env var, else 3000).
+              --profile <NAME>    Resolve settings from a named profile (default: D365FO_PROFILE).
               --help, -h          Print this message.
 
             Environment (HTTP transport):
@@ -72,6 +83,15 @@ for (int i = 0; i < args.Length; i++)
             """);
         return 0;
     }
+}
+
+// A selected-but-missing profile must not silently fall back to the global
+// settings.json: the server would answer from the wrong environment's index.
+if (D365FoProfiles.CheckActive() is { } profileError)
+{
+    Console.Error.WriteLine(D365Json.Serialize(
+        ToolResult<object>.Fail(profileError.Code, profileError.Message, profileError.Hint)));
+    return 2;
 }
 
 using var cts = new CancellationTokenSource();

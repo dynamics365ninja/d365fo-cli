@@ -431,6 +431,17 @@ public static class CliApp
             cfg.AddCommand<VerifyCommand>("verify").WithDescription("Do the model on disk and its .rnrproj agree? An object the project does not list is never compiled, and nothing else reports it.");
             cfg.AddCommand<DoctorCommand>("doctor").WithDescription("Diagnose environment.");
             cfg.AddCommand<InitCommand>("init").WithDescription("Interactive quickstart: detects PackagesLocalDirectory and prepares the index.");
+
+            // Named configuration profiles (#210). Selection itself is the global
+            // `--profile <name>` option, peeled off in Program.cs (ProfileArgs).
+            cfg.AddBranch("config", b =>
+            {
+                b.SetDescription("Named configuration profiles: one per D365FO environment/UDE. Select with the global --profile <name>, D365FO_PROFILE, or 'config use'.");
+                b.AddCommand<ConfigListCommand>("list").WithDescription("List profiles and which one is active (and why: flag, env var, or settings.json).");
+                b.AddCommand<ConfigShowCommand>("show").WithDescription("Show every resolved setting with its source for the active (or named) profile.");
+                b.AddCommand<ConfigUseCommand>("use").WithDescription("Persist the default profile in settings.json (--clear to unset).");
+                b.AddCommand<ConfigCurrentCommand>("current").WithDescription("Print the active profile, where it came from, and its index DB.");
+            });
             cfg.AddCommand<StatsCommand>("stats").WithDescription("Aggregate counters over the index (top tables / classes / CoC targets).");
             cfg.AddCommand<LintCommand>("lint").WithDescription("In-process Best-Practice gate over the index.");
             cfg.AddCommand<VersionCommand>("version").WithDescription("Print version information.");

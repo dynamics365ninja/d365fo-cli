@@ -35,7 +35,7 @@ public sealed class InitCommand : Command<InitCommand.Settings>
         public bool DryRun { get; init; }
 
         [CommandOption("--persist-profile")]
-        [System.ComponentModel.Description("Append D365FO_PACKAGES_PATH / D365FO_INDEX_DB to the user's shell profile (PowerShell $PROFILE on Windows, ~/.profile otherwise).")]
+        [System.ComponentModel.Description("Write D365FO_PACKAGES_PATH / D365FO_INDEX_DB to settings.json and the user's shell profile (PowerShell $PROFILE on Windows, ~/.profile otherwise). With the global --profile <name> (implied there), writes the named profile file instead and leaves the shell profile alone.")]
         public bool PersistProfile { get; init; }
 
         [CommandOption("--label-languages <LANGS>")]
@@ -58,7 +58,20 @@ public sealed class InitCommand : Command<InitCommand.Settings>
     public override int Execute(CommandContext ctx, Settings settings)
     {
         var kind = OutputMode.Resolve(settings.Output);
+
+        // Profile mode (#210): with a profile selected (global --profile, or
+        // D365FO_PROFILE) init writes that profile's file instead of the global
+        // settings.json, and may create it. `init --profile <name>` implies
+        // persisting — creating the profile is the whole point of the flag.
+        var profile = D365FoProfiles.GetActive();
+        if (profile is { IsValidName: false })
+            return RenderHelpers.Render(kind, ToolResult<object>.Fail(D365FoErrorCodes.InvalidProfileName,
+                $"Invalid profile name '{profile.Name}' (from {profile.SourceLabel}).",
+                "Profile names must match ^[A-Za-z0-9][A-Za-z0-9._-]*$ (max 64 chars)."));
+        var profileName = profile?.Name;
+
         var cfg = D365FoSettings.FromEnvironment(settings.DatabasePath);
+        if (profileName is not null) cfg = WithoutGlobalFallback(cfg);
 
         var extraFromFlags = D365FO.Cli.Commands.Index.IndexExtractCommand.MergeExtraPaths(
             settings.ExtraPackagesPaths,
@@ -83,7 +96,7 @@ public sealed class InitCommand : Command<InitCommand.Settings>
 
         if (runWizard)
         {
-            var answers = RunWizard(settings, cfg, extraFromFlags);
+            var answers = RunWizard(settings, cfg, extraFromFlags, profileName);
             packages = answers.Packages;
             extraPackages = answers.ExtraPackages;
             persistProfile = answers.PersistProfile;
@@ -94,7 +107,7 @@ public sealed class InitCommand : Command<InitCommand.Settings>
         {
             packages = settings.PackagesPath ?? cfg.PackagesPath ?? AutoDetectPackages();
             extraPackages = extraFromFlags.ToList();
-            persistProfile = settings.PersistProfile;
+            persistProfile = settings.PersistProfile || profile?.Source == ProfileSource.Flag;
             runExtractNow = settings.RunExtract;
             labelLanguages = settings.LabelLanguages;
         }
@@ -160,15 +173,22 @@ public sealed class InitCommand : Command<InitCommand.Settings>
             // --- JSON config file (shell-agnostic, solves Developer PowerShell issue) ---
             try
             {
-                var configPath = D365FO.Core.D365FoSettings.GetDefaultConfigPath();
+                var configPath = profileName is null
+                    ? D365FO.Core.D365FoSettings.GetDefaultConfigPath()
+                    : D365FoProfiles.GetProfilePath(profileName);
                 if (settings.DryRun)
                 {
                     Log("config.persist", true, $"Would write {configPath} (dry-run).");
                 }
-                else
+                else if (profileName is null)
                 {
                     D365FO.Core.D365FoSettings.SaveJsonConfig(vars);
                     Log("config.persist", true, $"Written to {configPath}");
+                }
+                else
+                {
+                    D365FoProfiles.Save(profileName, vars);
+                    Log("config.persist", true, $"Written to profile '{profileName}' ({configPath})");
                 }
             }
             catch (Exception ex)
@@ -180,7 +200,12 @@ public sealed class InitCommand : Command<InitCommand.Settings>
             // Write to all profile paths that exist or can be created so that both
             // Windows PowerShell 5.1 (used by VS Developer PowerShell) and
             // PowerShell 7+ pick up the env vars automatically.
-            foreach (var profilePath in ResolveAllProfilePaths())
+            // Not in profile mode: env vars outrank every profile, so a $PROFILE
+            // block would pin this environment's paths for all profiles.
+            if (profileName is not null)
+                Log("profile.persist", true, "Skipped: shell-profile env vars would override every named profile.");
+            var shellProfiles = profileName is null ? ResolveAllProfilePaths() : [];
+            foreach (var profilePath in shellProfiles)
             {
                 try
                 {
@@ -207,17 +232,25 @@ public sealed class InitCommand : Command<InitCommand.Settings>
         var payload = ok
             ? ToolResult<object>.Success(new
             {
+                profile = profileName,
                 packages,
                 workspace,
                 database = cfg.DatabasePath,
                 dryRun = settings.DryRun,
                 extracted = runExtractNow && !settings.DryRun && extractExit == 0,
-                nextSteps = new[]
-                {
-                    "Set D365FO_PACKAGES_PATH to persist the discovered path.",
-                    "Run 'd365fo index extract' to ingest metadata.",
-                    "Run 'd365fo doctor' to verify environment.",
-                },
+                nextSteps = profileName is null
+                    ? new[]
+                    {
+                        "Set D365FO_PACKAGES_PATH to persist the discovered path.",
+                        "Run 'd365fo index extract' to ingest metadata.",
+                        "Run 'd365fo doctor' to verify environment.",
+                    }
+                    : new[]
+                    {
+                        $"Select the profile: 'd365fo config use {profileName}' (persisted), $env:D365FO_PROFILE='{profileName}' (this shell), or 'd365fo --profile {profileName} <command>' (one call).",
+                        $"Run 'd365fo --profile {profileName} index extract' to ingest metadata into the profile's own index.",
+                        $"Run 'd365fo --profile {profileName} doctor' to verify environment.",
+                    },
                 steps,
             })
             : ToolResult<object>.Fail(D365FoErrorCodes.DoctorFailed, "Init completed with errors.",
@@ -236,6 +269,32 @@ public sealed class InitCommand : Command<InitCommand.Settings>
         });
     }
 
+    /// <summary>
+    /// In profile mode, drop the environment-specific values that only came from
+    /// the global settings.json. Otherwise `init --profile fabrikam` without
+    /// --packages would copy the other customer's packages path and custom-model
+    /// root out of settings.json into the new profile — the very mix-up
+    /// profiles exist to prevent. Env vars and the profile's own values stay.
+    /// </summary>
+    private static D365FoSettings WithoutGlobalFallback(D365FoSettings cfg)
+    {
+        static string? Own(string key)
+        {
+            var (value, source) = D365FoSettings.ResolveWithSource(key);
+            return source == D365FoSettings.SourceSettings ? null : value;
+        }
+
+        var custom = Own("D365FO_CUSTOM_PACKAGES_PATH") ?? Own("D365FO_EXTRA_PACKAGES_PATH");
+        return cfg with
+        {
+            PackagesPath = Own("D365FO_PACKAGES_PATH"),
+            WorkspacePath = Own("D365FO_WORKSPACE_PATH"),
+            CustomPackagesPaths = string.IsNullOrWhiteSpace(custom)
+                ? Array.Empty<string>()
+                : custom.Split([',', ';'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries),
+        };
+    }
+
     private readonly record struct WizardAnswers(
         string? Packages,
         List<string> ExtraPackages,
@@ -250,9 +309,11 @@ public sealed class InitCommand : Command<InitCommand.Settings>
     /// index now. Mirrors <c>npm run setup</c> upstream, scoped to what this
     /// CLI actually needs (no scenario picker, no secrets — it has neither).
     /// </summary>
-    private static WizardAnswers RunWizard(Settings settings, D365FoSettings cfg, IReadOnlyList<string> extraFromFlags)
+    private static WizardAnswers RunWizard(Settings settings, D365FoSettings cfg, IReadOnlyList<string> extraFromFlags, string? profileName)
     {
-        AnsiConsole.Write(new Rule("[bold]d365fo init — setup wizard[/]").LeftJustified());
+        AnsiConsole.Write(new Rule(profileName is null
+            ? "[bold]d365fo init — setup wizard[/]"
+            : $"[bold]d365fo init — setup wizard (profile '{RenderHelpers.Escape(profileName)}')[/]").LeftJustified());
         AnsiConsole.MarkupLine("[grey]Enter accepts the default shown. Nothing is written until the end. Pass --no-wizard to skip this.[/]");
         AnsiConsole.WriteLine();
 
@@ -282,7 +343,9 @@ public sealed class InitCommand : Command<InitCommand.Settings>
         var labelLanguages = AnsiConsole.Ask("Label languages (comma-separated):", defaultLanguages);
 
         var persistProfile = settings.PersistProfile
-            || AnsiConsole.Confirm("Persist these settings to your shell profile so new shells pick them up?");
+            || (profileName is null
+                ? AnsiConsole.Confirm("Persist these settings to your shell profile so new shells pick them up?")
+                : AnsiConsole.Confirm($"Save these settings to profile '{RenderHelpers.Escape(profileName)}'?"));
 
         var runExtract = settings.RunExtract
             || AnsiConsole.Confirm("Build the metadata index now? (minutes for one model, longer for ApplicationSuite)", false);

@@ -1,11 +1,23 @@
 using D365FO.Cli;
 using Spectre.Console.Cli;
 
+// Global `--profile <name>` (issue #210). Spectre.Console.Cli has no real
+// global options, so it is peeled off here before parsing. The name is also
+// exported as D365FO_PROFILE so child processes (daemon, bridge, eval
+// sub-runs) resolve against the same profile.
+var (cliArgs, profileError) = ProfileArgs.Apply(args);
+if (profileError is not null)
+{
+    Console.Error.WriteLine(D365FO.Core.D365Json.Serialize(D365FO.Core.ToolResult<object>.Fail(
+        profileError.Code, profileError.Message, profileError.Hint)));
+    return 2;
+}
+
 var app = CliApp.Build();
 
 try
 {
-    return await app.RunAsync(args);
+    return await app.RunAsync(cliArgs);
 }
 catch (CommandParseException ex)
 {
