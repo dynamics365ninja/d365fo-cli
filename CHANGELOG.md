@@ -19,6 +19,13 @@ was ported from.
 
 ## [Unreleased]
 
+### Changed — the `d365fo-cli` skill covers GitHub Copilot CLI and read-only tasks
+
+- The skill's `description` now names reading, searching, reviewing and debugging existing AOT
+  objects, not only authoring, and tells the agent to prefer `d365fo search`/`get`/`find` over
+  generic file search. `compatibility` and the environment table list GitHub Copilot CLI
+  (terminal-only sessions), with where it looks for the skill. Contributed by @RollPatrol.
+
 ### Added — `XML014`: an AxClass method's source must declare that method (#213)
 
 - **`validate xpp` now catches what xppc reports as "The method name in the source code, 'x',
