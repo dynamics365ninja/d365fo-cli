@@ -19,6 +19,17 @@ was ported from.
 
 ## [Unreleased]
 
+### Fixed — links in the installed skills resolve (#216)
+
+- `xpp-best-practice-rules` linked `d365fo bp check` to `../../docs/EXAMPLES.md`, a path that
+  was wrong even inside this repository and does not exist once the skill is installed into a
+  customer repository. It now links to the page on GitHub.
+- Links from one topic to another (`global-class-statics` → `system-objects`, …) only resolved
+  in `skills/d365fo-cli/references/`. The emitters now rename them per target —
+  `<id>.instructions.md` for Copilot, `../<id>/SKILL.md` for Claude — and
+  `scripts/emit-skills.py` fails when any relative link in the emitted files points at a file
+  that is not emitted, so CI catches the next one.
+
 ### Changed — the `d365fo-cli` skill covers GitHub Copilot CLI and read-only tasks
 
 - The skill's `description` now names reading, searching, reviewing and debugging existing AOT
