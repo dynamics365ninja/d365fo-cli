@@ -18,6 +18,7 @@
 #   $env:D365FO_CLI_YES = '1'                     # non-interactive: accept all defaults
 #   $env:D365FO_CLI_NO_WIZARD = '1'                # install only, skip 'd365fo init'
 #   $env:D365FO_CLI_RUN_EXTRACT = '1'              # also run 'index build' + 'index extract' (can take minutes)
+#   $env:D365FO_CLI_NO_BRIDGE = '1'                # skip building D365FO.Bridge.exe (live metadata, --install-to)
 #
 # D365FO VMs are Windows Server, where winget is usually unavailable - the
 # .NET SDK and Git both fall back to portable/official installers that need
@@ -125,6 +126,57 @@ function Get-InstallDir {
     return (Join-Path $env:USERPROFILE 'd365fo-cli')
 }
 
+# D365FO.Bridge is a separate .NET Framework 4.8 process - the D365FO metadata
+# assemblies only ship for net48 - so publishing the CLI does not produce it, and
+# without it 'generate --install-to', 'find --xref' and every live-metadata
+# operation are unavailable (issue #212). It goes to
+# %LOCALAPPDATA%\d365fo-cli\D365FO.Bridge\, which the CLI already probes as
+# ..\D365FO.Bridge\ next to d365fo.exe, so no D365FO_BRIDGE_PATH is needed; its
+# own folder keeps its net48 assemblies away from the CLI's. Runs from the
+# checkout root. A failure here is reported, not fatal: index-backed commands
+# work without the bridge.
+function Install-Bridge {
+    if ($env:D365FO_CLI_NO_BRIDGE -and $env:D365FO_CLI_NO_BRIDGE -ne '0' -and $env:D365FO_CLI_NO_BRIDGE -ne 'false') {
+        Write-Note 'Skipping D365FO.Bridge (D365FO_CLI_NO_BRIDGE set).'
+        return
+    }
+
+    Write-Step 'Building D365FO.Bridge (dotnet publish -c Release, .NET Framework 4.8)'
+    $bridgeDir = Join-Path $env:LOCALAPPDATA 'd365fo-cli\D365FO.Bridge'
+    $staging = Join-Path $env:TEMP 'd365fo-cli-bridge'
+    if (Test-Path $staging) { Remove-Item -Recurse -Force $staging }
+    dotnet publish src\D365FO.Bridge\D365FO.Bridge.csproj -c Release -o $staging
+    if ($LASTEXITCODE -ne 0) {
+        Write-Note 'D365FO.Bridge did not build - see the error above. Index-backed commands still work;'
+        Write-Note 'live-metadata commands need the bridge. Build it later with:'
+        Write-Note "  dotnet publish src\D365FO.Bridge -c Release -o `"$bridgeDir`""
+        return
+    }
+
+    try {
+        New-Item -ItemType Directory -Force -Path $bridgeDir | Out-Null
+        Copy-Item -Path (Join-Path $staging '*') -Destination $bridgeDir -Recurse -Force
+    } catch {
+        # A running bridge (spawned by d365fo, the daemon or an MCP session) locks its files.
+        Write-Note "Could not update $bridgeDir - $($_.Exception.Message)"
+        Write-Note 'Close any d365fo / d365fo-mcp sessions that use the bridge and re-run the installer.'
+        return
+    } finally {
+        Remove-Item -Recurse -Force $staging -ErrorAction SilentlyContinue
+    }
+    Write-Ok "Bridge installed to $bridgeDir"
+
+    $enabled = [Environment]::GetEnvironmentVariable('D365FO_BRIDGE_ENABLED')
+    $settingsJson = Join-Path $env:LOCALAPPDATA 'd365fo-cli\settings.json'
+    if (-not $enabled -and (Test-Path $settingsJson)) {
+        try { $enabled = (Get-Content $settingsJson -Raw | ConvertFrom-Json).D365FO_BRIDGE_ENABLED } catch { }
+    }
+    if ($enabled -ne '1' -and $enabled -ne 'true') {
+        Write-Note 'The bridge is off until you enable it: d365fo doctor shows bridge.enabled, and'
+        Write-Note '  set D365FO_BRIDGE_ENABLED="1" in settings.json (or the environment) to turn it on.'
+    }
+}
+
 # Publishes a self-contained single-file binary and puts it on the user PATH,
 # so 'd365fo' resolves from any shell the way a global npm/dotnet-tool install
 # would - without needing a package registry.
@@ -143,6 +195,8 @@ function Build-And-Install([string]$dir) {
         }
         $env:Path = "$env:Path;$binDir"
         Write-Ok "Installed to $binDir"
+
+        Install-Bridge
     } finally {
         Pop-Location
     }
