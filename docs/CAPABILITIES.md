@@ -354,6 +354,7 @@ order, which is what keeps a table's field groups from being dropped.
 | `XML011` | `xmlns:i` missing where the reader needs it | every family |
 | `XML012` | Document not in the XML namespace its contract declares | every family |
 | `XML013` | File sitting in an AOT folder another family owns | every family (path-aware) |
+| `XML014` | `<Method>` whose source does not declare exactly one method named like its `<Name>` | `AxClass` only |
 
 XML001–XML005 are AxTable-only by nature: they are property-presence rules mined from standard
 tables, and there is no equivalent evidence for other families. Everything from XML007 down is
@@ -363,6 +364,12 @@ form, EDT, enum, entity, report, query, view, map and every security type includ
 are the offline approximation of what the bridge's `Handlers.WriteArtifact` rejects before the
 provider ever sees the document (`TYPE_NOT_FOUND`, `ABSTRACT_TYPE`, and the two
 `XML_DESERIALIZE_FAILED` shapes), which is what lets non-Windows CI catch those failures.
+
+XML014 (#213) is the offline form of the metadata provider's "The method name in the source code,
+'x', does not match the name in the XML file, 'y'" error, which xppc reports both for a renamed
+method and for a second method pasted into the same `<Method>` node. Only method headers are read,
+names compare case-insensitively (as xppc does), and a method written as a macro invocation
+(`#ParmMethod(JobId)`) is skipped. It flags none of the 67,403 shipped `AxClass` files.
 
 There is deliberately **no member-order lint**. Order matters and generated files are written in
 contract order, but shipped Microsoft files deviate from it in places and the provider reads them
