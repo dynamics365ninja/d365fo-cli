@@ -12,7 +12,11 @@ namespace D365FO.Cli.Commands.Ops;
 // while they lived here, "does it compile?" was a question only a caller with a shell could ask,
 // which is the wrong half of the audience to leave it with.
 
-/// <summary><c>d365fo build</c> — MSBuild with structured X++ compiler diagnostics.</summary>
+/// <summary>
+/// <c>d365fo build</c> — compile X++ projects with LabelC/xppc (an <c>.rnrproj</c> cannot be built
+/// by MSBuild outside Visual Studio, issue #211), anything else with MSBuild; structured
+/// diagnostics either way.
+/// </summary>
 public sealed class BuildCommand : Command<BuildCommand.Settings>
 {
     public sealed class Settings : D365OutputSettings
@@ -22,7 +26,24 @@ public sealed class BuildCommand : Command<BuildCommand.Settings>
         public string? MsBuildPath { get; init; }
 
         [CommandOption("--project <PATH>")]
+        [System.ComponentModel.Description("An .rnrproj, a solution, or a folder holding one. X++ projects are compiled with LabelC.exe + xppc.exe (see --engine). Defaults to the working directory.")]
         public string? ProjectPath { get; init; }
+
+        [CommandOption("--model <NAME>")]
+        [System.ComponentModel.Description("Build these models (comma-separated) with LabelC.exe + xppc.exe instead of a project.")]
+        public string? Model { get; init; }
+
+        [CommandOption("--engine <ENGINE>")]
+        [System.ComponentModel.Description("auto (default): X++ projects and --model go to xppc, anything else to MSBuild. xppc | msbuild force one. The .rnrproj MSBuild tasks run only inside Visual Studio, so msbuild fails with MSB4062 on an X++ project.")]
+        public string Engine { get; init; } = "auto";
+
+        [CommandOption("--incremental")]
+        [System.ComponentModel.Description("xppc: compile only what changed since the last full build. Rebuild without it when xppc reports stale symbols.")]
+        public bool Incremental { get; init; }
+
+        [CommandOption("--packages <PATH>")]
+        [System.ComponentModel.Description("PackagesLocalDirectory (FrameworkDirectory on UDE) holding bin\\xppc.exe. Defaults to D365FO_PACKAGES_PATH; models are also looked for under D365FO_CUSTOM_PACKAGES_PATH.")]
+        public string? PackagesPath { get; init; }
 
         [CommandOption("--config <NAME>")]
         public string Configuration { get; init; } = "Debug";
@@ -39,7 +60,8 @@ public sealed class BuildCommand : Command<BuildCommand.Settings>
         if (guard is not null) return RenderHelpers.Render(kind, guard);
 
         var result = SdlcRunner.Build(
-            settings.MsBuildPath, settings.ProjectPath, settings.Configuration, settings.XppcLogPath);
+            settings.MsBuildPath, settings.ProjectPath, settings.Configuration, settings.XppcLogPath,
+            settings.Model, settings.Engine, settings.Incremental, settings.PackagesPath);
 
         // The build's own verdict rides in a warning so the diagnostics survive; the exit code
         // is what CI reads.

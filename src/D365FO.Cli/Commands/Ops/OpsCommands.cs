@@ -88,6 +88,23 @@ public sealed class DoctorCommand : Command<DoctorCommand.Settings>
                 targets.Ok ? DoctorSeverity.Ok : DoctorSeverity.Warn,
                 targets.Ok ? targets.Path : targets.Problem);
 
+            // Issue #211 asks doctor to tell three things apart: an unsuitable MSBuild host
+            // (build.msbuild above), a missing build-task dependency chain (this line), and
+            // whether an X++ project can be built at all (build.xppProject below).
+            var vs = BuildTooling.InstallFor(msbuild.Path);
+            Add("build.dynamicsTools (Dynamics 365 dev tools extension)",
+                vs?.DynamicsTools is not null ? DoctorSeverity.Ok : DoctorSeverity.Warn,
+                vs?.DynamicsTools is not null
+                    ? $"{vs.DynamicsTools} (in {vs.InstallPath})"
+                    : $"No Visual Studio install carries {BuildTooling.DynamicsBuildTasksAssembly}, so the X++ MSBuild tasks cannot load anywhere (MSB4062). Install the Dynamics 365 dev tools extension to work on projects in Visual Studio.");
+
+            var xppc = BuildTooling.ResolvePackageBinTool("xppc.exe", cfg.PackagesPath);
+            Add("build.xppProject (d365fo build on an .rnrproj)",
+                xppc.Ok ? DoctorSeverity.Ok : DoctorSeverity.Warn,
+                xppc.Ok
+                    ? $"compiled with LabelC.exe + {xppc.Path}. MSBuild cannot build an .rnrproj outside Visual Studio (its tasks need the IDE's metadata services), so `d365fo build` does not use it for X++ projects."
+                    : $"xppc.exe is not available ({xppc.Problem}), and MSBuild cannot build an .rnrproj outside Visual Studio: X++ projects cannot be built from the CLI here.");
+
             foreach (var exe in BuildTooling.PackageBinTools)
             {
                 var t = BuildTooling.ResolvePackageBinTool(exe, cfg.PackagesPath);

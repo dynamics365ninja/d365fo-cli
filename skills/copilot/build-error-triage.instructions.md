@@ -31,31 +31,31 @@ log is a statement about your code. The three that actually happen:
 
 | Message | What it is | Fix |
 |---|---|---|
-| `MSB4062` "task could not be loaded from the assembly" | MSBuild cannot load `Microsoft.Dynamics.Framework.Tools.BuildTasks` | you are running the wrong MSBuild — see below |
+| `MSB4062` "task could not be loaded from the assembly" | MSBuild cannot load `Microsoft.Dynamics.Framework.Tools.BuildTasks` — no command-line MSBuild can, for an `.rnrproj` | build it with `d365fo build` (xppc), not `--engine msbuild` — see below |
 | `MSB4019` "the imported project … was not found" | `BuildTasksDirectory` resolves nowhere: the Dynamics 365 dev tools are not installed for this MSBuild | install the dev tools, or pass `/p:BuildTasksDirectory=<dir with the .targets>` |
 | `MSB1003` / `MSB1009` "specify a project", "project file does not exist" | the build was pointed at no project | `d365fo build --project <sln or rnrproj>`, or run it where one lives |
 
-The wrong MSBuild is the common one. An `.rnrproj` imports
-`$(BuildTasksDirectory)\Microsoft.Dynamics.Framework.Tools.BuildTasks[.17.0].targets`
-(defaulting to `%ProgramFiles(x86)%\MSBuild\Microsoft\Dynamics\AX`), and that file declares
-its tasks by `AssemblyName` — so only an MSBuild that can resolve the dev-tools assembly can
-run them. On a developer VM the first `msbuild.exe` on `PATH` is
-`C:\Windows\Microsoft.NET\Framework\v4.0.30319\MSBuild.exe`, which cannot, and `dotnet build`
-never can.
+`MSB4062` on an X++ project is not a wrong-MSBuild problem that another MSBuild fixes. An
+`.rnrproj` imports
+`$(BuildTasksDirectory)\Microsoft.Dynamics.Framework.Tools.BuildTasks[.17.0].targets`, whose
+tasks load only inside Visual Studio: their dependencies resolve only in `devenv`, and they read
+the model store through services only the IDE registers. `msbuild.exe` and `dotnet build` both
+fail, the Visual Studio one included.
+
+`d365fo build` therefore compiles X++ projects the way Visual Studio's *Build models* does:
+`LabelC.exe`, then `xppc.exe`, from `<PackagesLocalDirectory>\bin` (`data.engine` is `xppc`).
+Pass `--project <Model.rnrproj | Solution.sln>` or `--model <Model>`. An `MSB…` code from it
+means `--engine msbuild` was forced, or the project is not an X++ one.
 
 ```sh
-d365fo doctor --output json    # build.msbuild / build.dynamicsTargets / build.tooling
+d365fo doctor --output json    # build.xppProject / build.dynamicsTools / build.msbuild / build.tooling
 ```
-
-`d365fo build` resolves the Visual Studio MSBuild ahead of `PATH` for exactly this reason and
-reports the executable it used in `data.msbuild`. Override it with `--msbuild <path>` or
-`D365FO_MSBUILD_PATH` when the box has several installs.
 
 ## Before you trust any of it: stale symbols
 
 If the log says a package "has not been successfully compiled since it was last
 changed", or asks for a full build, **every other error in that log is suspect**.
-Rebuild first (`d365fo build --full` on the VM) and re-read.
+Rebuild first (`d365fo build` without `--incremental`, on the VM) and re-read.
 
 ## The families, and what each actually means
 
