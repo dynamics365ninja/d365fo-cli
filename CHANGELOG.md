@@ -33,6 +33,17 @@ was ported from.
 - `doctor`'s `bridge.executable` failure now names both places it looked and how to get the
   executable there.
 
+### Fixed — links in the installed skills resolve (#216)
+
+- `xpp-best-practice-rules` linked `d365fo bp check` to `../../docs/EXAMPLES.md`, a path that
+  was wrong even inside this repository and does not exist once the skill is installed into a
+  customer repository. It now links to the page on GitHub.
+- Links from one topic to another (`global-class-statics` → `system-objects`, …) only resolved
+  in `skills/d365fo-cli/references/`. The emitters now rename them per target —
+  `<id>.instructions.md` for Copilot, `../<id>/SKILL.md` for Claude — and
+  `scripts/emit-skills.py` fails when any relative link in the emitted files points at a file
+  that is not emitted, so CI catches the next one.
+
 ### Changed — the `d365fo-cli` skill covers GitHub Copilot CLI and read-only tasks
 
 - The skill's `description` now names reading, searching, reviewing and debugging existing AOT
@@ -188,7 +199,6 @@ and **no file carries a `<SubMenu>` member**; the contract declares none. The to
 what the files say. The tile size list lost its `Small` (the `TileSize` enum has none) and
 `object-extension-authoring` no longer claims there is no Map extension kind.
 
-
 ### Fixed — the review of the ten new subcommands
 
 Reviewing `feat/generate-the-ten-missing-kinds` against the installation rather than against
@@ -266,7 +276,6 @@ on the live index rather than ticked off the list, found two that no wave had po
 Also brought back in line with the code: the README's token-economics section still carried the
 ~1 800-tokens-per-turn estimate wave 06 had measured to be off by six times, and its adapter
 tool count (28) and `generate` command list (29 of 33) had drifted.
-
 
 ### Added — wave 06: the ten missing documents, and two of them generated
 

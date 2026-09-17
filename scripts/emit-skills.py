@@ -101,6 +101,54 @@ def yaml_scalar(value: object) -> str:
     return '"' + text.replace("\\", "\\\\").replace('"', '\\"') + '"'
 
 
+# A link from one topic to another, written in the source as `](<id>.md)` or
+# `](<id>.md#anchor)`. Only the d365fo-cli references folder keeps that file name;
+# the other two targets rename every topic, so the link has to be renamed with it.
+TOPIC_LINK_RX = re.compile(r"\]\(([A-Za-z0-9+_.-]+)\.md(#[^)]*)?\)")
+
+# Where a topic link points in each target, relative to the file that holds it.
+TOPIC_LINK_FORMAT = {
+    "copilot": "{id}.instructions.md",
+    "anthropic": "../{id}/SKILL.md",
+    "d365fo-cli": "{id}.md",
+}
+
+
+def rewrite_topic_links(body: str, target: str, topic_ids: set[str]) -> str:
+    """
+    Point `](<id>.md)` links at the file that topic becomes in `target`.
+
+    Every emitted file is copied into a customer repository on its own (issue #216),
+    so a link is only good if it resolves among the emitted files. A link to
+    anything that is not a topic is left alone — `check_links` reports it.
+    """
+    fmt = TOPIC_LINK_FORMAT[target]
+
+    def repl(m: re.Match) -> str:
+        if m.group(1) not in topic_ids:
+            return m.group(0)
+        return "](" + fmt.format(id=m.group(1)) + (m.group(2) or "") + ")"
+
+    return TOPIC_LINK_RX.sub(repl, body)
+
+
+# Any Markdown link or image target that is not a URL, a mailto or a bare anchor.
+RELATIVE_LINK_RX = re.compile(r"\]\((?!https?://|mailto:|#)([^)\s]+)\)")
+
+
+def check_links(root: Path) -> list[str]:
+    """Every relative link in the emitted files must resolve to an emitted file."""
+    problems = []
+    for folder in ("copilot", "anthropic", "d365fo-cli"):
+        for md in sorted((root / folder).rglob("*.md")):
+            text = md.read_text(encoding="utf-8")
+            for m in RELATIVE_LINK_RX.finditer(text):
+                target = m.group(1).split("#", 1)[0]
+                if not (md.parent / target).resolve().is_file():
+                    problems.append(f"{md.relative_to(root).as_posix()}: broken link '{m.group(1)}'")
+    return problems
+
+
 def emit_copilot(meta: dict, body: str, out_dir: Path) -> Path:
     sid = meta["id"]
     apply_to = meta.get("applyTo") or []
@@ -197,17 +245,21 @@ def main() -> int:
     topics: list[dict] = []
     canon: dict[str, str] = {}
 
+    parsed = []
     for f in files:
-        print(f"» {f.name}")
-        text = f.read_text(encoding="utf-8")
-        fm_text, body = split_frontmatter(text)
+        fm_text, body = split_frontmatter(f.read_text(encoding="utf-8"))
         meta = parse_yaml(fm_text)
         for required in ("id", "description", "covers"):
             if required not in meta:
                 raise SystemExit(f"{f.name}: missing '{required}'")
-        emit_copilot(meta, body, copilot_out)
-        emit_anthropic(meta, body, anthropic_out)
-        emit_copilot_skill(meta, body, copilot_skill_out)
+        parsed.append((f, meta, body))
+    topic_ids = {meta["id"] for _, meta, _ in parsed}
+
+    for f, meta, body in parsed:
+        print(f"» {f.name}")
+        emit_copilot(meta, rewrite_topic_links(body, "copilot", topic_ids), copilot_out)
+        emit_anthropic(meta, rewrite_topic_links(body, "anthropic", topic_ids), anthropic_out)
+        emit_copilot_skill(meta, rewrite_topic_links(body, "d365fo-cli", topic_ids), copilot_skill_out)
         topics.append(meta)
 
         for canon_id, block in CANON_RX.findall(body.replace("\r\n", "\n")):
@@ -216,6 +268,12 @@ def main() -> int:
             canon[canon_id] = block.strip()
 
     emit_skill_md(topics, canon, OUT_ROOT / "d365fo-cli" / "SKILL.md")
+
+    broken = check_links(OUT_ROOT)
+    if broken:
+        print("\n".join(broken), file=sys.stderr)
+        raise SystemExit(f"{len(broken)} broken link(s) in the emitted skills — link to a topic "
+                         "as `](<id>.md)` or to anything else by absolute URL.")
 
     print(f"\nDone. {len(files)} skill(s) emitted to all three targets (copilot, anthropic, d365fo-cli); "
           f"{len(canon)} canon block(s) written into skills/d365fo-cli/SKILL.md.")

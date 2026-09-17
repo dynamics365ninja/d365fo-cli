@@ -108,6 +108,26 @@ function ConvertTo-YamlScalar {
     return '"' + ($text -replace '\\', '\\' -replace '"', '\"') + '"'
 }
 
+# Kept in lock-step with rewrite_topic_links() in scripts/emit-skills.py.
+# A source link to another topic is written `](<id>.md)`; only the d365fo-cli
+# references folder keeps that file name, so the other targets need it renamed
+# (issue #216 - every emitted file is copied into a customer repository alone).
+$script:TopicLinkFormat = @{
+    'copilot'    = '{0}.instructions.md'
+    'anthropic'  = '../{0}/SKILL.md'
+    'd365fo-cli' = '{0}.md'
+}
+
+function Convert-TopicLinks {
+    param([string]$Body, [string]$Target, [string[]]$TopicIds)
+    $format = $script:TopicLinkFormat[$Target]
+    return [regex]::Replace($Body, '\]\(([A-Za-z0-9+_.-]+)\.md(#[^)]*)?\)', {
+        param($m)
+        if ($TopicIds -notcontains $m.Groups[1].Value) { return $m.Value }
+        return '](' + ($format -f $m.Groups[1].Value) + $m.Groups[2].Value + ')'
+    }.GetNewClosure())
+}
+
 function Emit-Copilot {
     param($Meta, [string]$Body, [string]$OutDir)
     $id = $Meta.id
@@ -174,20 +194,24 @@ if (Test-Path $copilotSkillOut) { Remove-Item -Recurse -Force $copilotSkillOut }
 $files = Get-ChildItem -Path $Source -Filter '*.md' -File
 if ($files.Count -eq 0) { Write-Warning "No source skills found."; exit 0 }
 
-foreach ($f in $files) {
-    # ASCII only: these .ps1 files have no BOM, so Windows PowerShell 5.1 reads
-    # them as ANSI and would mangle non-ASCII output. (A BOM is not an option --
-    # it would break the #!/usr/bin/env pwsh shebang on Linux/macOS.)
-    Write-Host "-> $($f.Name)"
+$parsed = foreach ($f in $files) {
     $raw = [System.IO.File]::ReadAllText($f.FullName, [System.Text.Encoding]::UTF8)
     $split = Split-Frontmatter -Content $raw
     $meta = Parse-Yaml -Text $split.Frontmatter
     if (-not $meta.id)          { throw "Missing 'id' in $($f.Name)." }
     if (-not $meta.description) { throw "Missing 'description' in $($f.Name)." }
+    [pscustomobject]@{ File = $f; Meta = $meta; Body = $split.Body }
+}
+$topicIds = @($parsed | ForEach-Object { $_.Meta.id })
 
-    Emit-Copilot      -Meta $meta -Body $split.Body -OutDir $copilotOut
-    Emit-Anthropic    -Meta $meta -Body $split.Body -OutDir $anthropicOut
-    Emit-CopilotSkill -Meta $meta -Body $split.Body -OutDir $copilotSkillOut
+foreach ($p in $parsed) {
+    # ASCII only: these .ps1 files have no BOM, so Windows PowerShell 5.1 reads
+    # them as ANSI and would mangle non-ASCII output. (A BOM is not an option --
+    # it would break the #!/usr/bin/env pwsh shebang on Linux/macOS.)
+    Write-Host "-> $($p.File.Name)"
+    Emit-Copilot      -Meta $p.Meta -Body (Convert-TopicLinks $p.Body 'copilot' $topicIds) -OutDir $copilotOut
+    Emit-Anthropic    -Meta $p.Meta -Body (Convert-TopicLinks $p.Body 'anthropic' $topicIds) -OutDir $anthropicOut
+    Emit-CopilotSkill -Meta $p.Meta -Body (Convert-TopicLinks $p.Body 'd365fo-cli' $topicIds) -OutDir $copilotSkillOut
 }
 
 Write-Host "`nDone. $($files.Count) skill(s) emitted to all three targets (copilot, anthropic, d365fo-cli)."

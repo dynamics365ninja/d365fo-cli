@@ -2,7 +2,7 @@
 
 # Best-practice rules — generated X++ must be BP-clean
 
-> **Source of truth:** [`d365fo bp check`](../../docs/EXAMPLES.md) — the Windows-VM runner that executes `xppbp.exe`. The list below covers the non-negotiable BP rules every scaffold and hand-edit must satisfy out of the box.
+> **Source of truth:** [`d365fo bp check`](https://github.com/dynamics365ninja/d365fo-cli/blob/main/docs/EXAMPLES.md#windows-only-ops-d365fo-vm) — the Windows-VM runner that executes `xppbp.exe`. The list below covers the non-negotiable BP rules every scaffold and hand-edit must satisfy out of the box.
 
 ## Per-rule rules
 
