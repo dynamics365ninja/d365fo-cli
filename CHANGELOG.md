@@ -26,6 +26,27 @@ was ported from.
   generic file search. `compatibility` and the environment table list GitHub Copilot CLI
   (terminal-only sessions), with where it looks for the skill. Contributed by @RollPatrol.
 
+### Added — `XML014`: an AxClass method's source must declare that method (#213)
+
+- **`validate xpp` now catches what xppc reports as "The method name in the source code, 'x',
+  does not match the name in the XML file, 'y'".** The provider raises it for a renamed method
+  and for a second method pasted into the same `<Method>` node; both used to surface only at
+  compile time. XML014 reports either shape as an error, with the fix.
+- Only method headers are read (attributes and comments skipped, bodies skipped by brace
+  matching), so statements such as `throw error(…)` or `else if (…)` and local functions are
+  never taken for declarations. Names compare case-insensitively, as xppc does, and a method
+  written as a macro invocation (`#ParmMethod(JobId)`) is skipped. Checked against all 67,403
+  shipped `AxClass` files: none is flagged. Contributed by @ptuerk5057.
+
+### Fixed — `D365FO_EXTRA_PACKAGES_PATH` in the environment lost to `settings.json`
+
+- **The deprecated alias only fell back after the whole env → JSON chain of the new name.** A
+  `D365FO_EXTRA_PACKAGES_PATH` set in the process environment was ignored whenever
+  `settings.json` held `D365FO_CUSTOM_PACKAGES_PATH`, so an explicit override silently lost to
+  the file. Both names are now read from the environment first, then from `settings.json`; the
+  new name still wins within each source. The custom-packages tests now run against a temp
+  `settings.json`, so a real one on the test host can no longer change their outcome.
+
 ### Fixed — build tooling is probed instead of assumed (#207)
 
 - **`d365fo build` picked its MSBuild off `PATH`.** On a developer VM that is

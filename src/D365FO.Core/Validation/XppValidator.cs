@@ -77,6 +77,7 @@ public interface IPropertyStatsProvider
 ///   XML011  XMLSchema-instance namespace used or required but not declared on the root
 ///   XML012  Document not in the XML namespace its contract declares
 ///   XML013  File sitting in an AOT folder another family owns (path-aware)
+///   XML014  AxClass &lt;Method&gt; source does not declare exactly one method of that name
 /// </summary>
 /// <remarks>
 /// XML001–XML005 are AxTable-only by nature — they are property-presence rules mined from
@@ -163,8 +164,8 @@ public static class XppValidator
     }
 
     /// <summary>
-    /// The family-agnostic half of the XML rules: the root's own shape (XML009–XML013) and
-    /// everything inside it (XML007–XML008). Both are driven by the contract catalog and the
+    /// The family-agnostic half of the XML rules: the root's own shape (XML009–XML013),
+    /// everything inside it (XML007–XML008), and the AxClass method name/source check (XML014). Both are driven by the contract catalog and the
     /// object-type registry, so they apply to every AOT family rather than the AxTable-only set
     /// XML001–XML005 covers (issue #163).
     /// </summary>
@@ -172,6 +173,7 @@ public static class XppValidator
     {
         ObjectShapeRules.Check(code, violations, sourcePath);
         ContractShapeRules.Check(code, violations);
+        AotMethodSourceRules.Check(code, violations);
     }
 
     public static string NormalizeCodeType(string? codeType) => codeType?.ToLowerInvariant() switch
