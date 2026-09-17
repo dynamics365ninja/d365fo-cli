@@ -626,7 +626,7 @@ d365fo daemon stop
 Wraps the Microsoft tools Visual Studio uses.
 
 ```powershell
-d365fo build --project path/to/MyModel.rnrproj
+d365fo build --project path/to/MyModel.rnrproj   # LabelC + xppc; or --model MyModel [--incremental]
 d365fo sync --full
 d365fo test run --suite MyModel.Tests
 d365fo bp check --model MyModel

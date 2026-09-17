@@ -62,14 +62,14 @@ public static class XppcFixHints
             AllOf: [],
             AnyOf: [@"\bMSB4062\b", @"task could not be loaded from the assembly", @"<UsingTask> declaration"],
             NoneOf: [], Weight: 12,
-            Hint: "MSBuild could not load the D365FO build tasks — an environment failure, not an X++ error. The first `msbuild.exe` on PATH is usually the .NET Framework one (C:\\Windows\\Microsoft.NET\\Framework\\v4.0.30319), which cannot host Microsoft.Dynamics.Framework.Tools.BuildTasks: those load only under the Visual Studio MSBuild that carries the Dynamics 365 dev tools extension. `d365fo doctor` prints which MSBuild is resolved; override it with `d365fo build --msbuild <VS>\\MSBuild\\Current\\Bin\\MSBuild.exe` or D365FO_MSBUILD_PATH.",
+            Hint: "MSBuild could not load the D365FO build tasks — an environment failure, not an X++ error. Microsoft.Dynamics.Framework.Tools.BuildTasks runs only inside Visual Studio, so no command-line MSBuild (the Visual Studio one included) can build an .rnrproj. Build it with `d365fo build --project <Model.rnrproj>` or `--model <Model>`, which compiles with LabelC.exe + xppc.exe; drop `--engine msbuild` if it was forced. `d365fo doctor` reports build.xppProject.",
             Knowledge: "build-error-triage"),
 
         new("ENV-MSBUILD-TARGETS-MISSING",
             AllOf: [],
             AnyOf: [@"\bMSB4019\b", @"imported project .* was not found", @"\bMSB4066\b", @"is not a supported project type", @"\bMSB4025\b"],
             NoneOf: [], Weight: 12,
-            Hint: "MSBuild cannot read the X++ project — the imported Dynamics targets are missing, so this MSBuild has no Dynamics 365 dev tools extension behind it. Build with the Visual Studio MSBuild on the developer VM (`d365fo doctor` reports the one it resolves); `dotnet build` and the .NET Framework MSBuild cannot build a .rnrproj.",
+            Hint: "MSBuild cannot read the X++ project — the imported Dynamics targets are missing, so this host has no Dynamics 365 dev tools for MSBuild. No MSBuild builds an .rnrproj outside Visual Studio anyway: use `d365fo build --project <Model.rnrproj>` (LabelC.exe + xppc.exe) on the developer VM.",
             Knowledge: "build-error-triage"),
 
         new("ENV-PROJECT-NOT-FOUND",

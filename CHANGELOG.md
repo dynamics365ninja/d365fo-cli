@@ -19,6 +19,37 @@ was ported from.
 
 ## [Unreleased]
 
+### Fixed — `d365fo build` builds X++ projects without MSB4062 (#211)
+
+- **No command-line MSBuild can build an `.rnrproj`**, Visual Studio's included. Measured on a
+  D365FO VM against the VS 2022 and VS 2026 MSBuilds (x86 and amd64): the targets load
+  `Microsoft.Dynamics.Framework.Tools.BuildTasks.17.0` by strong name, and its dependencies
+  (`Microsoft.VisualStudio.Shell.15.0`, `Microsoft.VisualStudio.Interop`, …) resolve only inside
+  `devenv` — hence `MSB4062`. Supplying that probing context gets the task loaded, and it then
+  throws in `BuildTask.ValidateAndGetModel`, because it reads the model store through
+  `AxServiceProvider` services that only the Visual Studio package registers.
+- **`d365fo build` now compiles X++ projects the way *Build models* does**: `LabelC.exe`, then
+  `xppc.exe`, from `<packages>in`, with the argument lists Visual Studio logs for its own builds
+  and the same output folders (`bin`, `Resources`, `BuildModelResult.*`). It takes an
+  `.rnrproj`, a solution (its X++ projects, in order), a folder, or `--model A,B`; the model is
+  found by its descriptor under `D365FO_CUSTOM_PACKAGES_PATH`, then `D365FO_PACKAGES_PATH`, so a
+  UDE layout passes both roots as reference folders. `--incremental` maps to xppc's own flag,
+  `--packages` overrides the platform root, and `--engine msbuild` keeps the old route for
+  anything that wants it. Non-X++ projects still go to MSBuild. The payload names the route in
+  `data.engine` and lists each model's compiler run; MCP `sdlc action=build` takes the same
+  `model` / `engine` / `incremental` / `packagesPath`. Verified end to end on the VM: a broken
+  class surfaces as a structured `NotDeclared` error, a clean model with a label file produces
+  its assembly and label resources.
+- **The Visual Studio MSBuild is chosen from the install that has the dev tools**, not from
+  whatever vswhere lists first — which was SQL Server Management Studio 22's on the reporting
+  host. `build.msbuild` says when the resolved one is SSMS's or lacks the dev tools.
+- **`doctor` tells the three failure modes apart**: `build.msbuild` (unsuitable host),
+  `build.dynamicsTools` (the dev tools extension and its build-task assembly), and
+  `build.xppProject` (whether an `.rnrproj` can be built from the CLI here). `LabelC.exe` joins
+  `build.tooling`. The `MSB4062`/`MSB4019` fix hints and the `build-error-triage` topic no longer
+  send the reader looking for a different MSBuild, and the topic's `d365fo build --full` (an
+  option that never existed) is now "without `--incremental`".
+
 ### Changed — the `d365fo-cli` skill covers GitHub Copilot CLI and read-only tasks
 
 - The skill's `description` now names reading, searching, reviewing and debugging existing AOT

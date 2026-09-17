@@ -825,10 +825,14 @@ public static class ToolCatalog
         new Descriptor("sdlc",
             "Run the Windows-only D365FO developer tools and read their output as structured "
             + "results. `action`:\n"
-            + "• build — MSBuild over `project` (`configuration`, default Debug; `msbuild` to "
-            + "override the executable). Returns per-diagnostic X++ compiler findings — object, "
+            + "• build — compiles `project` (an .rnrproj, a solution, or a folder) or `model` "
+            + "(comma-separated). X++ projects and models go to LabelC.exe + xppc.exe — the .rnrproj "
+            + "MSBuild tasks only run inside Visual Studio — with `incremental` for a changed-only "
+            + "compile and `packagesPath` for the platform root; anything else goes to MSBuild "
+            + "(`configuration`, default Debug; `msbuild` to override the executable). `engine` "
+            + "(auto|xppc|msbuild) forces a route. Returns per-diagnostic X++ compiler findings — object, "
             + "member, line, column, message and a fix hint — not a log tail, and says when xppc "
-            + "reports stale symbols from a previous incremental build (which needs a Full Build, "
+            + "reports stale symbols from a previous incremental build (which needs a full build, "
             + "not a retry). Pass `xppcLog` to also parse Dynamics.AX.<Model>.xppc.log. A failed "
             + "build still returns its diagnostics; the failure is reported as a `build-failed` "
             + "warning rather than an error envelope that would throw them away.\n"
@@ -847,6 +851,7 @@ public static class ToolCatalog
             + "which is the question that follows every write.",
             Schema(("action", "string", true), ("project", "string", false), ("configuration", "string", false),
                    ("msbuild", "string", false), ("xppcLog", "string", false),
+                   ("engine", "string", false), ("incremental", "boolean", false),
                    ("full", "boolean", false), ("tool", "string", false),
                    ("testClasses", "array", false), ("granularity", "string", false),
                    ("resultsPath", "string", false), ("parallel", "boolean", false),
@@ -862,7 +867,9 @@ public static class ToolCatalog
                 {
                     "build" => D365FO.Core.Ops.SdlcRunner.Build(
                         StrOrNull(p, "msbuild"), StrOrNull(p, "project"),
-                        StrOr(p, "configuration", "Debug"), StrOrNull(p, "xppcLog")),
+                        StrOr(p, "configuration", "Debug"), StrOrNull(p, "xppcLog"),
+                        StrOrNull(p, "model"), StrOr(p, "engine", "auto"), Bool(p, "incremental"),
+                        StrOrNull(p, "packagesPath")),
                     "sync" or "db-sync" => D365FO.Core.Ops.SdlcRunner.Sync(StrOrNull(p, "tool"), Bool(p, "full")),
                     "test" or "systest" => D365FO.Core.Ops.SdlcRunner.RunTests(
                         StrOrNull(p, "tool"), StrArray(p, "testClasses"), StrOrNull(p, "granularity"),
