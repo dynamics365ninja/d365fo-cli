@@ -13,8 +13,7 @@ compatibility: Requires GitHub Copilot agent mode with shell/terminal tool acces
   discover skills; the two layouts coexist.
   Secondary target: VS Code with Copilot in agent mode (can run d365fo directly via terminal).
   Also supported: GitHub Copilot CLI (terminal-only sessions, no IDE host) — same commands via
-  the shell/powershell tool. Trigger this skill for ANY D365 F&O X++ task, including
-  investigation/debugging/code-reading, not just new-code authoring.
+  the shell/powershell tool.
   References in the form `[learn:<page>]` link to Microsoft Learn pages
   (see "Authoritative X++ syntax source" at the bottom).
 -->
@@ -25,7 +24,7 @@ This skill gives **GitHub Copilot** the rules for assisting with D365 Finance & 
 >
 > **Secondary environment — VS Code agent mode:** Same approach, different terminal tool name (`run_in_terminal`). Identical experience.
 >
-> **Also supported — GitHub Copilot CLI (terminal-only, no IDE host):** Same approach — the CLI's shell/`powershell` tool runs `d365fo` commands directly; no VS/VS Code host is required. The only prerequisite is `d365fo` being resolvable in PATH (confirm with `d365fo doctor`). Explicitly invoke this skill at the start of **any** D365 F&O X++ task in a Copilot CLI session — including bug investigation, code review, and read-only searches — not only when generating new code. Prefer `d365fo search`/`get`/`find`/`read` over generic `grep`/`glob`/`Get-ChildItem -Recurse` when locating or inspecting AOT XML: the CLI's model-aware index resolves enum/label/relation semantics that plain filesystem search cannot, and is far faster than recursive scans of `PackagesLocalDirectory`.
+> **Also supported — GitHub Copilot CLI (terminal-only, no IDE host):** Same approach — the CLI's shell/`powershell` tool runs `d365fo` commands directly; no VS/VS Code host is required. The only prerequisite is `d365fo` being resolvable in PATH (confirm with `d365fo doctor`). The CLI finds project skills in `.github/skills/`, so start it in the folder the installer deployed to (next to the `.sln`), or copy the skill to the personal folder `~/.copilot/skills/`. These rules apply to **every** D365 F&O X++ task in a Copilot CLI session — bug investigation, code review and read-only searches as much as new code. Prefer `d365fo search`/`get`/`find`/`read` over generic `grep`/`glob`/`Get-ChildItem -Recurse` when locating or inspecting AOT XML: the CLI's model-aware index resolves enum/label/relation semantics that plain filesystem search cannot, and is far faster than recursive scans of `PackagesLocalDirectory`.
 >
 > **Fallback — VS Chat mode (no agent tools):** Copilot must ask the user to run `d365fo` commands manually and paste back JSON output. See the fallback workflow section below.
 
