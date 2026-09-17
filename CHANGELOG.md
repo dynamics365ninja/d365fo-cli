@@ -19,6 +19,20 @@ was ported from.
 
 ## [Unreleased]
 
+### Fixed — `install.ps1` installs the metadata bridge (#212)
+
+- **The Windows installer published only the CLI.** `D365FO.Bridge` is a separate .NET Framework
+  4.8 project, so `generate --install-to`, `find --xref` and every live-metadata operation stayed
+  unavailable after a normal install, and `doctor` reported `bridge.executable` missing.
+  `install.ps1` now publishes the bridge into `%LOCALAPPDATA%\d365fo-cli\D365FO.Bridge\` — the
+  `..\D365FO.Bridge\` folder the CLI already probes next to `d365fo.exe`, so no
+  `D365FO_BRIDGE_PATH` is needed. A bridge that does not build, or whose files are locked by a
+  running session, is reported with the manual command and does not fail the install.
+  `D365FO_CLI_NO_BRIDGE=1` skips it. Enabling the bridge stays an explicit
+  `D365FO_BRIDGE_ENABLED="1"`, and the installer says so when it is not set.
+- `doctor`'s `bridge.executable` failure now names both places it looked and how to get the
+  executable there.
+
 ### Changed — the `d365fo-cli` skill covers GitHub Copilot CLI and read-only tasks
 
 - The skill's `description` now names reading, searching, reviewing and debugging existing AOT
