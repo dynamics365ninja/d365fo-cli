@@ -31,6 +31,15 @@ was ported from.
   written as a macro invocation (`#ParmMethod(JobId)`) is skipped. Checked against all 67,403
   shipped `AxClass` files: none is flagged. Contributed by @ptuerk5057.
 
+### Fixed — `D365FO_EXTRA_PACKAGES_PATH` in the environment lost to `settings.json`
+
+- **The deprecated alias only fell back after the whole env → JSON chain of the new name.** A
+  `D365FO_EXTRA_PACKAGES_PATH` set in the process environment was ignored whenever
+  `settings.json` held `D365FO_CUSTOM_PACKAGES_PATH`, so an explicit override silently lost to
+  the file. Both names are now read from the environment first, then from `settings.json`; the
+  new name still wins within each source. The custom-packages tests now run against a temp
+  `settings.json`, so a real one on the test host can no longer change their outcome.
+
 ### Fixed — build tooling is probed instead of assumed (#207)
 
 - **`d365fo build` picked its MSBuild off `PATH`.** On a developer VM that is
