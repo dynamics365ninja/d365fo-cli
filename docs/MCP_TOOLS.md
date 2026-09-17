@@ -3,7 +3,7 @@
 
 Every tool the bundled `d365fo-mcp` adapter advertises, and the `d365fo` commands that reach the same handler. Both columns are read from the running code — the command manifest (`d365fo schema --full`) and the adapter's own `tools/list` — so a tool that stops matching a command fails the generator rather than quietly outliving the mapping.
 
-**32 tools · 187 command routes · 11 commands with no MCP route.**
+**32 tools · 187 command routes · 15 commands with no MCP route.**
 
 The adapter is consolidated on purpose: one tool dispatches on a `type` / `objectType` / `mode` / `action` discriminator instead of shipping one tool per object kind. That keeps the schema payload a host injects every turn from growing with the object model — see [TOKEN_ECONOMICS.md](TOKEN_ECONOMICS.md) for what that payload actually measures.
 
@@ -429,6 +429,10 @@ Not an oversight, and not a gap in the adapter: these are operator and introspec
 | Command | What it does |
 |---|---|
 | `d365fo agent-prompt` | Emit the CLI-first LLM system prompt. |
+| `d365fo config current` | The active profile, where it came from, and its index DB. |
+| `d365fo config list` | List named configuration profiles and which one is active (flag/env/settings). Select one per call with the global `d365fo --profile <name> <command>`. |
+| `d365fo config show` | Every resolved setting with its source (env, profile:<name>, settings, default). |
+| `d365fo config use` | Persist the default profile in settings.json. |
 | `d365fo daemon start` | Start warm JSON-RPC daemon. |
 | `d365fo daemon status` | Report daemon status. |
 | `d365fo daemon stop` | Stop daemon. |
@@ -436,7 +440,7 @@ Not an oversight, and not a gap in the adapter: these are operator and introspec
 | `d365fo index build` | Create or ensure the metadata index schema. |
 | `d365fo index extract` | Walk PackagesLocalDirectory and ingest AOT metadata. |
 | `d365fo index refresh` | Incremental extract using model fingerprints. |
-| `d365fo init` | Quickstart index/profile setup. |
+| `d365fo init` | Quickstart index/profile setup. With the global --profile <name>, writes that named profile instead of settings.json. |
 | `d365fo schema` | Emit this JSON command manifest. |
 | `d365fo version` | Print version information. |
 

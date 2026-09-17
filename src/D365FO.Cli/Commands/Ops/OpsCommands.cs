@@ -29,6 +29,39 @@ public sealed class DoctorCommand : Command<DoctorCommand.Settings>
             checks.Add(new DoctorCheck(name, ok, detail, severity.ToString().ToLowerInvariant()));
         }
 
+        // Which named profile (issue #210) the rest of these checks resolved
+        // against — the first thing to look at when a command hits the wrong
+        // environment. A selected-but-missing profile fails here instead of at
+        // the entry point, so doctor stays usable for diagnosing exactly that.
+        var profile = D365FoProfiles.GetActive();
+        var profileError = D365FoProfiles.CheckActive();
+        if (profile is null)
+        {
+            Add("config.profile", DoctorSeverity.Ok,
+                $"none (global settings: {D365FoSettings.GetDefaultConfigPath()})");
+        }
+        else
+        {
+            Add("config.profile",
+                profileError is null ? DoctorSeverity.Ok : DoctorSeverity.Fail,
+                profileError is null
+                    ? $"{profile.Name} (from {profile.SourceLabel}) — {profile.FilePath}"
+                    : $"{profileError.Message} {profileError.Hint}");
+
+            // Env vars outrank the profile by design, so a leftover
+            // `init --persist-profile` block in $PROFILE silently pins those keys.
+            if (profileError is null)
+            {
+                var shadowed = ConfigCommandSupport.KnownKeys
+                    .Where(k => D365FoProfiles.Load(profile.Name).ContainsKey(k)
+                                && !string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable(k)))
+                    .ToArray();
+                if (shadowed.Length > 0)
+                    Add("config.profile (env overrides)", DoctorSeverity.Warn,
+                        $"Process env vars override profile '{profile.Name}' for: {string.Join(", ", shadowed)}. Remove them (e.g. the d365fo-cli block in your shell profile) to let the profile apply.");
+            }
+        }
+
         Add("config.databasePath resolvable",
             string.IsNullOrEmpty(cfg.DatabasePath) ? DoctorSeverity.Fail : DoctorSeverity.Ok,
             cfg.DatabasePath);

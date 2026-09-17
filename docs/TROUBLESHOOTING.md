@@ -95,6 +95,14 @@ error: { "code": "PACKAGES_PATH_NOT_FOUND", "hint": "Set D365FO_PACKAGES_PATH or
 
 Fix: set `D365FO_PACKAGES_PATH` or pass `--packages`. Verify the path exists: `Test-Path $env:D365FO_PACKAGES_PATH`.
 
+### `PROFILE_NOT_FOUND` / `INVALID_PROFILE_NAME`
+
+A [named profile](CONFIGURATION.md#named-profiles) is selected (by `--profile`, `$env:D365FO_PROFILE`, or `d365fo config use`), but its file does not exist or the name is invalid. Every command except `init`, `config`, `doctor` and `version` refuses to run, so it cannot fall back to another environment's settings. The message says which of the three selected it. Fix: `d365fo init --profile <name>` to create it, `d365fo config list` to see what exists, or `d365fo config use --clear` / `Remove-Item Env:D365FO_PROFILE` to go back to the plain `settings.json`.
+
+### A profile is selected but paths still point at another environment
+
+Process env vars outrank profiles. An older `d365fo init --persist-profile` wrote `$env:D365FO_PACKAGES_PATH = …` into your PowerShell `$PROFILE`. `d365fo config show` lists `env` as the source of those keys, and `d365fo doctor` warns with `config.profile (env overrides)`. Fix: delete the `# >>> d365fo-cli init` block from `$PROFILE` and open a new shell.
+
 ### Unicode characters in the path
 
 Paths containing non-ASCII characters (accented letters, CJK, etc.) can cause the .NET file-system walker to throw `DirectoryNotFoundException` on certain Windows builds. Fix: move the packages directory to an ASCII-only path, or set a junction point:

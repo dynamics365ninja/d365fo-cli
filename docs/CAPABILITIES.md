@@ -26,7 +26,8 @@ By default the index stores object/method *metadata* only — method bodies (the
 | `index import` | Restore from an archive |
 | `index cross-check` | Report where this tool's catalogs are narrower than the installation |
 | `index optimize` | Checkpoint the WAL, then `VACUUM` + `ANALYZE` to compact and re-plan |
-| `doctor` | End-to-end health check: paths, schema version, object counts |
+| `doctor` | End-to-end health check: active profile, paths, schema version, object counts |
+| `config list` / `show` / `use` / `current` | Named configuration profiles, one per environment/UDE; select per call with the global `--profile <name>` (see [CONFIGURATION.md](CONFIGURATION.md#named-profiles)) |
 
 `index sync <TARGET>` re-reads a single model — pass the model name, or a path to any file
 inside it and the model is read off the packages layout. It is the repair for an edit this tool
