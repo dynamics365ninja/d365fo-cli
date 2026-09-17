@@ -113,7 +113,7 @@ public sealed record D365FoSettings(
             DatabasePath: db,
             CustomModels: models,
             LabelLanguages: langs,
-            CustomPackagesPaths: Split(customPackages));
+            CustomPackagesPaths: Split(customPackages ?? string.Empty));
     }
 
     /// <summary>

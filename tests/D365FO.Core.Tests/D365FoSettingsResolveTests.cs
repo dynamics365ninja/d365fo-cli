@@ -201,13 +201,39 @@ public class D365FoSettingsResolveTests
         });
     }
 
-    private static void WithCustomPackagesEnv(string? custom, string? extra, Action body)
+    [Fact]
+    public void FromEnvironment_deprecated_env_var_wins_over_new_key_in_settings_json()
+    {
+        // A process env var is an explicit override, so it outranks settings.json even
+        // when it uses the deprecated name and the JSON file uses the new one.
+        WithCustomPackagesEnv(custom: null, extra: @"C:\Legacy", () =>
+        {
+            var cfg = D365FoSettings.FromEnvironment();
+            Assert.Equal(new[] { @"C:\Legacy" }, cfg.CustomPackagesPaths);
+        }, json: """{"D365FO_CUSTOM_PACKAGES_PATH": "C:/FromJson"}""");
+    }
+
+    [Fact]
+    public void FromEnvironment_new_key_in_settings_json_wins_over_deprecated_key_in_settings_json()
+    {
+        WithCustomPackagesEnv(custom: null, extra: null, () =>
+        {
+            var cfg = D365FoSettings.FromEnvironment();
+            Assert.Equal(new[] { "C:/FromJson" }, cfg.CustomPackagesPaths);
+        }, json: """{"D365FO_EXTRA_PACKAGES_PATH": "C:/Legacy", "D365FO_CUSTOM_PACKAGES_PATH": "C:/FromJson"}""");
+    }
+
+    // Points settings.json at a temp file (empty unless json is given) so a real
+    // settings.json on the test host cannot leak into these assertions.
+    private static void WithCustomPackagesEnv(string? custom, string? extra, Action body, string json = "{}")
     {
         var prevCustom = Environment.GetEnvironmentVariable("D365FO_CUSTOM_PACKAGES_PATH");
         var prevExtra = Environment.GetEnvironmentVariable("D365FO_EXTRA_PACKAGES_PATH");
+        var tmp = Path.GetTempFileName();
         try
         {
-            D365FoSettings.ConfigPathOverrideForTests = null;
+            File.WriteAllText(tmp, json);
+            D365FoSettings.ConfigPathOverrideForTests = tmp;
             D365FoSettings.ClearCacheForTests();
             Environment.SetEnvironmentVariable("D365FO_CUSTOM_PACKAGES_PATH", custom);
             Environment.SetEnvironmentVariable("D365FO_EXTRA_PACKAGES_PATH", extra);
@@ -219,6 +245,7 @@ public class D365FoSettingsResolveTests
             Environment.SetEnvironmentVariable("D365FO_EXTRA_PACKAGES_PATH", prevExtra);
             D365FoSettings.ConfigPathOverrideForTests = null;
             D365FoSettings.ClearCacheForTests();
+            File.Delete(tmp);
         }
     }
 
