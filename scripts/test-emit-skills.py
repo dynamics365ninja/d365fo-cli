@@ -92,4 +92,35 @@ assert parsed["name"] == "some-topic"
 assert parsed["description"] == description
 assert parsed["applies_when"] == applies_when
 
-print("OK — emit-skills frontmatter quoting round-trips.")
+# Issue #216: a topic link is renamed per target, and only topic links are.
+ids = {"system-objects", "x++-class-authoring"}
+src = "see [a](system-objects.md#kernel), [b](x++-class-authoring.md), [c](other.md)"
+assert emit.rewrite_topic_links(src, "copilot", ids) == (
+    "see [a](system-objects.instructions.md#kernel), "
+    "[b](x++-class-authoring.instructions.md), [c](other.md)"
+)
+assert emit.rewrite_topic_links(src, "anthropic", ids) == (
+    "see [a](../system-objects/SKILL.md#kernel), [b](../x++-class-authoring/SKILL.md), [c](other.md)"
+)
+assert emit.rewrite_topic_links(src, "d365fo-cli", ids) == src
+
+# ...and anything left pointing outside the emitted files is reported.
+import tempfile
+
+with tempfile.TemporaryDirectory() as tmp:
+    root = Path(tmp)
+    (root / "copilot").mkdir()
+    (root / "anthropic" / "a").mkdir(parents=True)
+    (root / "d365fo-cli" / "references").mkdir(parents=True)
+    (root / "copilot" / "a.instructions.md").write_text(
+        "[ok](a.instructions.md) [url](https://example.com/x.md) [anchor](#h) [bad](../../docs/EXAMPLES.md)",
+        encoding="utf-8",
+    )
+    (root / "anthropic" / "a" / "SKILL.md").write_text("[ok](../a/SKILL.md)", encoding="utf-8")
+    problems = emit.check_links(root)
+    assert problems == ["copilot/a.instructions.md: broken link '../../docs/EXAMPLES.md'"], problems
+
+# The committed skills themselves must be clean.
+assert emit.check_links(emit.OUT_ROOT) == [], emit.check_links(emit.OUT_ROOT)
+
+print("OK — emit-skills frontmatter quoting round-trips; topic links resolve in every target.")
