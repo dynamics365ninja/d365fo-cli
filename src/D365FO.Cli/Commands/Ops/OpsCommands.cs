@@ -133,7 +133,9 @@ public sealed class DoctorCommand : Command<DoctorCommand.Settings>
                 bridgeExe is null
                     ? (OperatingSystem.IsWindows() ? DoctorSeverity.Fail : DoctorSeverity.Warn)
                     : DoctorSeverity.Ok,
-                bridgeExe ?? "D365FO.Bridge.exe not found next to d365fo.exe; set D365FO_BRIDGE_PATH.");
+                bridgeExe ?? "D365FO.Bridge.exe not found next to d365fo.exe or in ..\\D365FO.Bridge\\. " +
+                    "Re-run install.ps1 (it builds the bridge), or run `dotnet publish src\\D365FO.Bridge -c Release` " +
+                    "and set D365FO_BRIDGE_PATH to the D365FO.Bridge.exe it produces.");
 
             // Mirror the bridge's own resolution (MetadataBootstrap.ResolveBinPath):
             // D365FO_BIN_PATH when set, otherwise <D365FO_PACKAGES_PATH>\bin.

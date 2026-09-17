@@ -8,7 +8,7 @@ applies_when: User intent involves Global::, a helper that "should exist" but wi
 # Global class statics
 
 `Global` is an ordinary `AxClass` — `d365fo get class Global` finds it, unlike
-the kernel types in [system-objects](system-objects.md). Measured on a real
+the kernel types in [system-objects](../system-objects/SKILL.md). Measured on a real
 installation it declares **375 static methods**.
 
 ## The distinction that decides how you call it
@@ -51,7 +51,7 @@ Global does not declare**. Checked against the compiler-captured catalog
 
 So `Global::strFmt(...)` does **not** compile, however natural it reads.
 Predefined functions are covered in
-[xpp-runtime-functions](xpp-runtime-functions.md); this topic is only about
+[xpp-runtime-functions](../xpp-runtime-functions/SKILL.md); this topic is only about
 what `Global` itself declares.
 
 ## Deciding, in practice
@@ -73,7 +73,7 @@ Do not. `Global` belongs to `ApplicationPlatform`, so a new method there is a
 customisation of a Microsoft model that every later platform update has to
 merge. Put the helper on a class of your own; if it truly must be reachable
 without a receiver, that is what `Global` extensions via Chain of Command are
-for — see [coc-extension-authoring](coc-extension-authoring.md).
+for — see [coc-extension-authoring](../coc-extension-authoring/SKILL.md).
 
 Note that a CoC extension of `Global` still does not make a new method
 callable bare: the predefined-function set is the compiler's, not the AOT's.

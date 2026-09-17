@@ -299,7 +299,7 @@ d365fo-index.sqlite-shm      ← shared memory for WAL
 |---|---|
 | Is the bridge enabled? | `echo $env:D365FO_BRIDGE_ENABLED` — must be `1` or `true` |
 | Is `D365FO_BIN_PATH` set? | Must point to the D365FO binaries folder (contains `Microsoft.Dynamics.Ax.Xpp.Support.dll`) |
-| Is the bridge executable present? | `Test-Path "$env:D365FO_BRIDGE_PATH"` or auto-discovered at `<CLI root>/bin/D365FO.Bridge.exe` |
+| Is the bridge executable present? | `d365fo doctor` → `bridge.executable`. Without `D365FO_BRIDGE_PATH` it is looked for next to `d365fo.exe` and in `..\D365FO.Bridge\` — where `install.ps1` puts it (`%LOCALAPPDATA%\d365fo-cli\D365FO.Bridge\`). Missing after an older install: re-run `install.ps1`, or `dotnet publish src\D365FO.Bridge -c Release -o "$env:LOCALAPPDATA\d365fo-cli\D365FO.Bridge"` |
 | Is the target platform Windows? | Bridge is Windows-only; non-Windows always falls back |
 
 Bridge startup errors are written to stderr. Capture them:

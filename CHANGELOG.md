@@ -50,6 +50,31 @@ was ported from.
   send the reader looking for a different MSBuild, and the topic's `d365fo build --full` (an
   option that never existed) is now "without `--incremental`".
 
+### Fixed — `install.ps1` installs the metadata bridge (#212)
+
+- **The Windows installer published only the CLI.** `D365FO.Bridge` is a separate .NET Framework
+  4.8 project, so `generate --install-to`, `find --xref` and every live-metadata operation stayed
+  unavailable after a normal install, and `doctor` reported `bridge.executable` missing.
+  `install.ps1` now publishes the bridge into `%LOCALAPPDATA%\d365fo-cli\D365FO.Bridge\` — the
+  `..\D365FO.Bridge\` folder the CLI already probes next to `d365fo.exe`, so no
+  `D365FO_BRIDGE_PATH` is needed. A bridge that does not build, or whose files are locked by a
+  running session, is reported with the manual command and does not fail the install.
+  `D365FO_CLI_NO_BRIDGE=1` skips it. Enabling the bridge stays an explicit
+  `D365FO_BRIDGE_ENABLED="1"`, and the installer says so when it is not set.
+- `doctor`'s `bridge.executable` failure now names both places it looked and how to get the
+  executable there.
+
+### Fixed — links in the installed skills resolve (#216)
+
+- `xpp-best-practice-rules` linked `d365fo bp check` to `../../docs/EXAMPLES.md`, a path that
+  was wrong even inside this repository and does not exist once the skill is installed into a
+  customer repository. It now links to the page on GitHub.
+- Links from one topic to another (`global-class-statics` → `system-objects`, …) only resolved
+  in `skills/d365fo-cli/references/`. The emitters now rename them per target —
+  `<id>.instructions.md` for Copilot, `../<id>/SKILL.md` for Claude — and
+  `scripts/emit-skills.py` fails when any relative link in the emitted files points at a file
+  that is not emitted, so CI catches the next one.
+
 ### Changed — the `d365fo-cli` skill covers GitHub Copilot CLI and read-only tasks
 
 - The skill's `description` now names reading, searching, reviewing and debugging existing AOT
@@ -205,7 +230,6 @@ and **no file carries a `<SubMenu>` member**; the contract declares none. The to
 what the files say. The tile size list lost its `Small` (the `TileSize` enum has none) and
 `object-extension-authoring` no longer claims there is no Map extension kind.
 
-
 ### Fixed — the review of the ten new subcommands
 
 Reviewing `feat/generate-the-ten-missing-kinds` against the installation rather than against
@@ -283,7 +307,6 @@ on the live index rather than ticked off the list, found two that no wave had po
 Also brought back in line with the code: the README's token-economics section still carried the
 ~1 800-tokens-per-turn estimate wave 06 had measured to be off by six times, and its adapter
 tool count (28) and `generate` command list (29 of 33) had drifted.
-
 
 ### Added — wave 06: the ten missing documents, and two of them generated
 
