@@ -17,7 +17,7 @@ public class XppModelBuildTests : IDisposable
 
     private string Write(string relative, string content)
     {
-        var path = Path.Combine(root.FullName, relative);
+        var path = Path.Combine(root.FullName, relative.Replace('\\', Path.DirectorySeparatorChar));
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
         File.WriteAllText(path, content);
         return path;
@@ -86,38 +86,44 @@ public class XppModelBuildTests : IDisposable
     [Fact]
     public void Xppc_arguments_follow_what_visual_studio_logs()
     {
-        var target = new XppModelBuild.Target("M", "Pkg", @"K:\AosService\PackagesLocalDirectory", null);
+        // K:\AosService\PackagesLocalDirectory on a VM; built with the host's separators so the
+        // test runs on every CI leg.
+        var pld = Path.Combine(root.FullName, "PackagesLocalDirectory");
+        var pkg = Path.Combine(pld, "Pkg");
+        var target = new XppModelBuild.Target("M", "Pkg", pld, null);
 
-        var args = XppModelBuild.XppcArgs(target, @"K:\AosService\PackagesLocalDirectory", incremental: false);
+        var args = XppModelBuild.XppcArgs(target, pld, incremental: false);
 
         Assert.Equal(
         [
-            @"-metadata=K:\AosService\PackagesLocalDirectory",
-            @"-compilermetadata=K:\AosService\PackagesLocalDirectory",
+            $"-metadata={pld}",
+            $"-compilermetadata={pld}",
             "-modelmodule=Pkg",
-            @"-output=K:\AosService\PackagesLocalDirectory\Pkg\bin",
-            @"-referencefolder=K:\AosService\PackagesLocalDirectory",
-            @"-refPath=K:\AosService\PackagesLocalDirectory\Pkg\bin",
-            @"-log=K:\AosService\PackagesLocalDirectory\Pkg\BuildModelResult.log",
-            @"-xmlLog=K:\AosService\PackagesLocalDirectory\Pkg\BuildModelResult.xml",
+            $"-output={Path.Combine(pkg, "bin")}",
+            $"-referencefolder={pld}",
+            $"-refPath={Path.Combine(pkg, "bin")}",
+            $"-log={Path.Combine(pkg, "BuildModelResult.log")}",
+            $"-xmlLog={Path.Combine(pkg, "BuildModelResult.xml")}",
         ], args);
         Assert.Equal(
-            [@"-metadata=K:\AosService\PackagesLocalDirectory", @"-output=K:\AosService\PackagesLocalDirectory\Pkg\Resources", "-modelmodule=Pkg"],
+            [$"-metadata={pld}", $"-output={Path.Combine(pkg, "Resources")}", "-modelmodule=Pkg"],
             XppModelBuild.LabelcArgs(target).Take(3));
     }
 
     [Fact]
     public void On_a_ude_layout_both_roots_are_reference_folders()
     {
-        var target = new XppModelBuild.Target("M", "Pkg", @"E:\UDE\Custom", null);
+        var custom = Path.Combine(root.FullName, "UDE", "Custom");
+        var framework = Path.Combine(root.FullName, "Dynamics365", "PackagesLocalDirectory");
+        var target = new XppModelBuild.Target("M", "Pkg", custom, null);
 
-        var args = XppModelBuild.XppcArgs(target, @"E:\Dynamics365\10.0.2527\PackagesLocalDirectory", incremental: true);
+        var args = XppModelBuild.XppcArgs(target, framework, incremental: true);
 
-        Assert.Contains(@"-metadata=E:\UDE\Custom", args);
-        Assert.Contains(@"-compilermetadata=E:\Dynamics365\10.0.2527\PackagesLocalDirectory", args);
-        Assert.Contains(@"-referencefolder=E:\Dynamics365\10.0.2527\PackagesLocalDirectory", args);
-        Assert.Contains(@"-referencefolder=E:\UDE\Custom", args);
-        Assert.Contains(@"-output=E:\UDE\Custom\Pkg\bin", args);
+        Assert.Contains($"-metadata={custom}", args);
+        Assert.Contains($"-compilermetadata={framework}", args);
+        Assert.Contains($"-referencefolder={framework}", args);
+        Assert.Contains($"-referencefolder={custom}", args);
+        Assert.Contains($"-output={Path.Combine(custom, "Pkg", "bin")}", args);
         Assert.Equal("-incremental", args[^1]);
     }
 
