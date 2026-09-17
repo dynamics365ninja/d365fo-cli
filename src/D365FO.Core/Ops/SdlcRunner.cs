@@ -43,9 +43,42 @@ public static class SdlcRunner
     /// Additional <c>Dynamics.AX.&lt;Model&gt;.xppc.log</c> to parse. The X++ compiler reports
     /// through its own format, which MSBuild's stdout only partly carries.
     /// </param>
+    /// <param name="model">Model(s) to build with xppc, comma-separated, instead of a project.</param>
+    /// <param name="engine">
+    /// <c>auto</c> (default): X++ projects — an <c>.rnrproj</c>, a solution that lists one, or
+    /// <paramref name="model"/> — go to <see cref="XppModelBuild"/>, anything else to MSBuild.
+    /// <c>xppc</c> / <c>msbuild</c> force one route.
+    /// </param>
+    /// <param name="incremental">xppc only: compile what changed since the last full build.</param>
+    /// <param name="packagesPath">Platform packages root; defaults to <c>D365FO_PACKAGES_PATH</c>.</param>
     public static ToolResult<object> Build(
-        string? msbuildPath, string? projectPath, string configuration = "Debug", string? xppcLogPath = null)
+        string? msbuildPath, string? projectPath, string configuration = "Debug", string? xppcLogPath = null,
+        string? model = null, string engine = "auto", bool incremental = false, string? packagesPath = null)
     {
+        engine = string.IsNullOrWhiteSpace(engine) ? "auto" : engine.Trim().ToLowerInvariant();
+        if (engine is not ("auto" or "xppc" or "msbuild"))
+        {
+            return ToolResult<object>.Fail("BAD_INPUT", $"Unknown build engine '{engine}'.",
+                "Use auto (default), xppc or msbuild.");
+        }
+
+        if (engine != "msbuild")
+        {
+            var (targets, failure, reason) = PlanXppBuild(projectPath, model, packagesPath);
+            if (failure is not null) return failure;
+            if (targets.Count > 0)
+            {
+                var root = packagesPath ?? D365FoSettings.FromEnvironment().PackagesPath!;
+                return XppModelBuild.Build(targets, root, incremental, reason);
+            }
+            if (engine == "xppc")
+            {
+                return ToolResult<object>.Fail("NO_XPP_PROJECT",
+                    $"No X++ project found in '{projectPath ?? Environment.CurrentDirectory}'.",
+                    "Pass --project <Model.rnrproj | Solution.sln> or --model <Model>.");
+            }
+        }
+
         var tool = BuildTooling.ResolveMsBuild(msbuildPath);
         if (tool.Path is null)
         {
@@ -122,6 +155,72 @@ public static class SdlcRunner
         if (tool.Problem is not null) buildWarnings.Add($"msbuild-unfit: {tool.Problem}");
 
         return ToolResult<object>.Success(payload, buildWarnings.Count == 0 ? null : buildWarnings);
+    }
+
+    /// <summary>
+    /// The models an xppc build compiles, or why it cannot. No targets and no failure means the
+    /// input is not an X++ project, and MSBuild should have it.
+    /// </summary>
+    internal static (IReadOnlyList<XppModelBuild.Target> Targets, ToolResult<object>? Failure, string Reason) PlanXppBuild(
+        string? projectPath, string? model, string? packagesPath)
+    {
+        var requests = new List<(string Model, string? Project)>();
+        string reason;
+
+        if (!string.IsNullOrWhiteSpace(model))
+        {
+            requests.AddRange(model!.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                .Select(m => (m, (string?)null)));
+            reason = "--model: compiled with LabelC.exe and xppc.exe.";
+        }
+        else
+        {
+            var path = string.IsNullOrWhiteSpace(projectPath) ? Environment.CurrentDirectory : projectPath!;
+            foreach (var project in XppModelBuild.ProjectFiles(path))
+            {
+                var name = XppModelBuild.ReadModel(project);
+                if (name is null)
+                {
+                    return ([], ToolResult<object>.Fail("PROJECT_HAS_NO_MODEL",
+                        $"{project} names no <Model>, so there is nothing to compile.",
+                        "Open the project in Visual Studio and set its Model property, or pass --model <Model>."), "");
+                }
+                requests.Add((name, project));
+            }
+            reason = "X++ projects are compiled with LabelC.exe and xppc.exe: the .rnrproj MSBuild tasks run only " +
+                     "inside Visual Studio, which supplies the metadata services they need (issue #211). " +
+                     "Pass --engine msbuild to use MSBuild anyway.";
+        }
+
+        if (requests.Count == 0) return ([], null, "");
+
+        var settings = D365FoSettings.FromEnvironment();
+        var packages = packagesPath ?? settings.PackagesPath;
+        if (string.IsNullOrWhiteSpace(packages))
+        {
+            return ([], ToolResult<object>.Fail("PACKAGES_PATH_NOT_SET",
+                "D365FO_PACKAGES_PATH is not set, so xppc.exe and the models cannot be found.",
+                "Run `d365fo init`, or pass --packages <PackagesLocalDirectory>."), "");
+        }
+
+        // Custom roots first: on UDE the model lives there, and the platform root only supplies references.
+        var roots = settings.CustomPackagesPaths.Append(packages!).ToList();
+        var targets = new List<XppModelBuild.Target>();
+        foreach (var (name, project) in requests)
+        {
+            var target = XppModelBuild.Locate(name, roots, project);
+            if (target is null)
+            {
+                return ([], ToolResult<object>.Fail("MODEL_NOT_FOUND",
+                    $"No descriptor for model '{name}' (<package>\\Descriptor\\{name}.xml) under {string.Join(", ", roots)}.",
+                    "Check the model name, or add its metadata root to D365FO_CUSTOM_PACKAGES_PATH."), "");
+            }
+            if (!targets.Any(t => t.Module.Equals(target.Module, StringComparison.OrdinalIgnoreCase) &&
+                                  t.MetadataRoot.Equals(target.MetadataRoot, StringComparison.OrdinalIgnoreCase)))
+                targets.Add(target);
+        }
+
+        return (targets, null, reason);
     }
 
     // ------------------------------------------------------------------ sync

@@ -425,7 +425,7 @@ public static class CliApp
 
             cfg.AddCommand<ExplainErrorCommand>("explain-error").WithDescription("Score xppc/build errors (argument, --file, or stdin) against the fix-hint rules and point at the knowledge topic behind each.");
 
-            cfg.AddCommand<BuildCommand>("build").WithDescription("Invoke MSBuild (Windows VM).");
+            cfg.AddCommand<BuildCommand>("build").WithDescription("Compile X++ projects/models with xppc, other projects with MSBuild (Windows VM).");
             cfg.AddCommand<SyncCommand>("sync").WithDescription("Run DB sync (Windows VM).");
             cfg.AddCommand<D365FO.Cli.Commands.Connect.ConnectCommand>("connect").WithDescription("Point an editor's MCP config at a deployed `d365fo-mcp --http` server (probes /health, merges rather than clobbers).");
             cfg.AddCommand<VerifyCommand>("verify").WithDescription("Do the model on disk and its .rnrproj agree? An object the project does not list is never compiled, and nothing else reports it.");

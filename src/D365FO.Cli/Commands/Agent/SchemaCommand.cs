@@ -234,7 +234,7 @@ public sealed class SchemaCommand : Command<SchemaCommand.Settings>
         C("analyze api-usage", "How an API is really reached: constructed, called statically, or declared.", ["<API>"], ["--model", "--limit", "--output"], ["analyze (mode=api-usage)"]),
         C("report-integrations", "Aggregated integration surface report.", [], ["--model", "--output"], ["analyze (mode=report)"]),
         C("review diff", "Inspect AOT changes vs. a git revision.", [], ["--base", "--head", "--repo", "--output"], ["get_workspace_info (changes=true)"]),
-        C("build", "Invoke MSBuild on a D365FO project.", [], ["--msbuild", "--project", "--config", "--output"], ["sdlc (action=build)"]),
+        C("build", "Compile a D365FO project or model: X++ projects with LabelC/xppc, anything else with MSBuild.", [], ["--project", "--model", "--engine", "--incremental", "--packages", "--msbuild", "--config", "--xppc-log", "--output"], ["sdlc (action=build)"]),
         C("sync", "Run DB sync.", [], ["--tool", "--full", "--output"], ["sdlc (action=sync)"]),
         C("test run", "Invoke the platform SysTest console runner (SysTestConsole.exe).", [], ["--runner", "--test", "--suite", "--granularity", "--results", "--parallel", "--output"], ["sdlc (action=test)"]),
         C("bp check", "Invoke xppbp best-practice checks.", [], ["--tool", "--model", "--packages", "--metadata", "--output"], ["sdlc (action=bp-check)"]),

@@ -880,6 +880,8 @@ d365fo test run --suite MyModel.Tests
 d365fo bp check --model MyModel
 ```
 
+`build` compiles an `.rnrproj` (or `--model <Name>`, or a solution listing X++ projects) with `LabelC.exe` + `xppc.exe`, as Visual Studio's *Build models* does — the project's MSBuild tasks only run inside Visual Studio. Other projects still go to MSBuild.
+
 Each parses the tool output and returns a structured JSON envelope (errors, warnings, elapsed time, tail of stdout). On non-Windows they return `UNSUPPORTED_PLATFORM`.
 
 ---

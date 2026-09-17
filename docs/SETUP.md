@@ -16,7 +16,7 @@ irm https://raw.githubusercontent.com/dynamics365ninja/d365fo-cli/main/install.p
 curl -fsSL https://raw.githubusercontent.com/dynamics365ninja/d365fo-cli/main/install.sh | bash
 ```
 
-Checks for the .NET SDK (installs it if missing, no elevation needed), clones or updates the repo, publishes a self-contained `d365fo` binary onto `PATH`, and hands off to the `d365fo init` wizard, then `d365fo doctor`. Safe to re-run. Env vars instead of flags, since the script is piped through `iex`/`bash`:
+Checks for the .NET SDK (installs it if missing, no elevation needed), clones or updates the repo, publishes a self-contained `d365fo` binary onto `PATH`, on Windows builds the metadata bridge (`D365FO.Bridge.exe`, into `%LOCALAPPDATA%\d365fo-cli\D365FO.Bridge\`, where `d365fo` finds it without `D365FO_BRIDGE_PATH`), and hands off to the `d365fo init` wizard, then `d365fo doctor`. Safe to re-run. Env vars instead of flags, since the script is piped through `iex`/`bash`:
 
 | Variable | Effect |
 |---|---|
@@ -24,6 +24,7 @@ Checks for the .NET SDK (installs it if missing, no elevation needed), clones or
 | `D365FO_CLI_YES=1` | Non-interactive: pass `--no-wizard` to `d365fo init` instead of prompting |
 | `D365FO_CLI_NO_WIZARD=1` | Install only, skip `d365fo init` entirely |
 | `D365FO_CLI_RUN_EXTRACT=1` | Also run `index build` + `index extract` during install (can take minutes for `ApplicationSuite`) |
+| `D365FO_CLI_NO_BRIDGE=1` | Windows: skip building `D365FO.Bridge.exe`. The bridge is still off until `D365FO_BRIDGE_ENABLED="1"` is set either way |
 
 What's left after either installer: **Step 4** below to populate the index (unless `D365FO_CLI_RUN_EXTRACT` was set), then **Step 5** to connect your AI agent. The steps below are what the installer automates — read them if you want to run each one yourself, understand what happened, or install on a machine you don't want to pipe a remote script into.
 

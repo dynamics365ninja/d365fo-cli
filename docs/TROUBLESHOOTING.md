@@ -138,14 +138,39 @@ run them. The `msbuild.exe` first on `PATH` is normally
 `C:\Windows\Microsoft.NET\Framework\v4.0.30319\MSBuild.exe`, which cannot; `dotnet build` never can.
 
 ```sh
-d365fo doctor --output json    # build.msbuild / build.dynamicsTargets / build.tooling
+d365fo doctor --output json    # build.msbuild / build.dynamicsTools / build.xppProject / build.tooling
 d365fo explain-error --file build.log --output json
 ```
 
-`d365fo build` resolves the Visual Studio MSBuild ahead of `PATH` and reports the executable it
-used in `data.msbuild`. Override it with `--msbuild <path>` or `D365FO_MSBUILD_PATH` when the box
-carries several Visual Studio installs. If `build.dynamicsTargets` is missing, the Dynamics 365
-dev tools are not installed on the host at all — no MSBuild choice will fix that.
+**No MSBuild fixes this for an X++ project** (issue #211). Even the Visual Studio MSBuild
+fails with `MSB4062`: the task assembly's dependencies (`Microsoft.VisualStudio.Shell.15.0`,
+`Microsoft.VisualStudio.Interop`, …) resolve only inside `devenv`. Supplying them gets the task
+loaded, and it then fails with a `NullReferenceException` in `BuildTask.ValidateAndGetModel`,
+because it reads the model store through services only the Visual Studio package registers.
+Copying assemblies into `%ProgramFiles(x86)%\MSBuild\Microsoft\Dynamics\AX` does not help either.
+
+So `d365fo build` does not use MSBuild for X++. An `.rnrproj`, a solution that lists one, or
+`--model <Name>` is compiled the way Visual Studio's *Build models* does it — `LabelC.exe`, then
+`xppc.exe` from `<PackagesLocalDirectory>\bin`, writing to the package's `bin`/`Resources` folders
+and `BuildModelResult.log` — and `data.engine` says `xppc`:
+
+```sh
+d365fo build --project MyModel.rnrproj --output json   # or --model MyModel
+d365fo build --model MyModel --incremental             # changed elements only
+```
+
+An `MSB4062` now only appears with `--engine msbuild`. `d365fo doctor` separates the three
+things that can be wrong:
+
+| Check | Tells you |
+|---|---|
+| `build.msbuild` | which MSBuild would run for non-X++ projects, and why it is unfit (the .NET Framework one, SQL Server Management Studio's, or a Visual Studio without the dev tools) |
+| `build.dynamicsTools` | whether any Visual Studio install carries the Dynamics 365 dev tools extension (`Microsoft.Dynamics.Framework.Tools.BuildTasks.17.0.dll`) |
+| `build.xppProject` | whether an `.rnrproj` can be built from the CLI here — it can whenever `xppc.exe` is found |
+
+The Visual Studio MSBuild is chosen by `vswhere`, preferring an install with the dev tools and
+never SQL Server Management Studio's. Override it with `--msbuild <path>` or
+`D365FO_MSBUILD_PATH`.
 
 ### `.NET 4.8 bridge not found` on non-Windows systems
 
@@ -282,7 +307,7 @@ d365fo-index.sqlite-shm      ← shared memory for WAL
 |---|---|
 | Is the bridge enabled? | `echo $env:D365FO_BRIDGE_ENABLED` — must be `1` or `true` |
 | Is `D365FO_BIN_PATH` set? | Must point to the D365FO binaries folder (contains `Microsoft.Dynamics.Ax.Xpp.Support.dll`) |
-| Is the bridge executable present? | `Test-Path "$env:D365FO_BRIDGE_PATH"` or auto-discovered at `<CLI root>/bin/D365FO.Bridge.exe` |
+| Is the bridge executable present? | `d365fo doctor` → `bridge.executable`. Without `D365FO_BRIDGE_PATH` it is looked for next to `d365fo.exe` and in `..\D365FO.Bridge\` — where `install.ps1` puts it (`%LOCALAPPDATA%\d365fo-cli\D365FO.Bridge\`). Missing after an older install: re-run `install.ps1`, or `dotnet publish src\D365FO.Bridge -c Release -o "$env:LOCALAPPDATA\d365fo-cli\D365FO.Bridge"` |
 | Is the target platform Windows? | Bridge is Windows-only; non-Windows always falls back |
 
 Bridge startup errors are written to stderr. Capture them:
