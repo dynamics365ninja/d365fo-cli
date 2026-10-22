@@ -48,8 +48,15 @@
 
   <ItemGroup>
     <PackageReference Include="Dapper" Version="2.1.35" />
+    <!-- DYNAMICSXREFDB, queried directly by the xref mode of `find refs` and find_references so the
+         compiler's where-used does not need the bridge. Read-only, parameterised. -->
+    <PackageReference Include="Microsoft.Data.SqlClient" Version="7.1.1" />
     <PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.11" />
-    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="8.0.2" />
+    <!-- 10.x: Microsoft.Data.SqlClient needs >= 9.0.18, and 8.0.2 here was a package downgrade. -->
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.11" />
+    <!-- Transitive via Microsoft.Data.SqlClient, which asks for 9.0.18 — vulnerable to
+         CVE-2026-84008 / CVE-2026-70162 (NU1903). Pinned to the patched release. -->
+    <PackageReference Include="System.Security.Cryptography.Pkcs" Version="10.0.13" />
   </ItemGroup>
 
 </Project>

@@ -62,7 +62,7 @@ D365FO extensibility analyzer. Pick a `mode`: coc (Chain-of-Command extensions f
 
 ### `find_references`
 
-Reverse references: regex scan of indexed X++ source for where a symbol is used. `kind` (class/table/form) and `model` narrow the scan; `limit` caps hits (default 200). Returns the method + up to 3 sample lines per hit.
+Where a symbol is used. Default: text scan of indexed X++ source — `kind` (class/table/form) and `model` narrow it. `xref: true`: the compiler's cross-reference (DYNAMICSXREFDB) — complete and compiler-resolved, `kind` is a reference kin…
 
 | CLI command | Discriminator |
 |---|---|

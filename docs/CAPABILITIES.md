@@ -129,8 +129,8 @@ find usages <needle> [--kind k,k,…]  — All references by kind
 find extensions <target>              — All object extensions
 find handlers <object>                — Event subscribers
 find relations <table>                — FK relations
-find refs <needle>                    — References inside method bodies (FTS5 when `--index-source` was used, else on-demand source scan)
-find refs --xref                      — Path/line/kind via DYNAMICSXREFDB
+find refs <needle>                    — Who uses it: one row per object + matching methods (FTS5 when `--index-source` was used, else on-demand source scan); --lines N for sample lines
+find refs --xref                      — The compiler's where-used from DYNAMICSXREFDB, queried directly: one row per object + members + reference kinds; --lines 1 for path/line/kind
 find form-patterns [--pattern P]      — Form pattern histogram / filter
 find batch-jobs [--model M]           — RunBaseBatch subclasses
 ```

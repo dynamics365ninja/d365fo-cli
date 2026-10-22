@@ -264,11 +264,15 @@ public static class ToolCatalog
             }),
 
         new Descriptor("find_references",
-            "Reverse references: regex scan of indexed X++ source for where a symbol is used. " +
-            "`kind` (class/table/form) and `model` narrow the scan; `limit` caps hits (default 200). " +
-            "Returns the method + up to 3 sample lines per hit.",
-            Schema(("name", "string", true), ("kind", "string", false), ("model", "string", false), ("limit", "integer", false)),
-            (h, p) => h.FindReferences(Str(p, "name"), StrOrNull(p, "kind"), StrOrNull(p, "model"), Int(p, "limit", 200))),
+            "Where a symbol is used. Default: text scan of indexed X++ source — `kind` (class/table/form) and " +
+            "`model` narrow it. `xref: true`: the compiler's cross-reference (DYNAMICSXREFDB) — complete and " +
+            "compiler-resolved, `kind` is a reference kind (Call/Read/Set/Type/…), no `model`. Returns one row " +
+            "per referencing object (`limit` caps objects, default 200); `lines: N` returns one row per method " +
+            "with up to N sample lines (xref: one row per reference with line/column).",
+            Schema(("name", "string", true), ("kind", "string", false), ("model", "string", false), ("limit", "integer", false),
+                   ("lines", "integer", false), ("xref", "boolean", false)),
+            (h, p) => h.FindReferences(Str(p, "name"), StrOrNull(p, "kind"), StrOrNull(p, "model"), Int(p, "limit", 200),
+                                       Int(p, "lines", 0), Bool(p, "xref"))),
 
         new Descriptor("find_tables_by_field",
             "Which tables declare a field named `name` (or whose field uses an EDT named `name`) — exact match. " +

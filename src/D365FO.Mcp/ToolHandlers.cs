@@ -2709,41 +2709,94 @@ public sealed partial class ToolHandlers
 
     // ---- find_references (reverse references in indexed X++ source) ----
 
+    /// <summary>Raw method hits read per object asked for, in the names-only answer.</summary>
+    private const int HitsPerObject = 5;
+
     /// <summary>
-    /// Reverse-reference search over indexed X++ source for a symbol. Backs the
-    /// unified <c>find_references</c> MCP tool and shares its implementation
-    /// (<see cref="MethodSourceSearch"/>) with the CLI <c>find refs</c> command,
-    /// so both surfaces use the MethodSourceFts index when it's populated and
-    /// fall back to the same disk scan otherwise. (The bridge-backed
-    /// DYNAMICSXREFDB path stays CLI-only via <c>find refs --xref</c>.)
+    /// Reverse-reference search for a symbol. Backs the unified <c>find_references</c> MCP tool
+    /// and the CLI <c>find refs</c> command, so both surfaces answer alike: the text scan over
+    /// indexed X++ source (<see cref="MethodSourceSearch"/> — the MethodSourceFts index when
+    /// populated, else a disk scan), or with <paramref name="xref"/> the compiler's
+    /// cross-reference (<see cref="D365FO.Core.Xref.XrefReferences"/>).
     /// </summary>
-    public ToolResult<object> FindReferences(string name, string? kind, string? model, int limit = 200)
+    /// <param name="lines">
+    /// 0 (default): one row per referencing object with the methods that match — the answer to
+    /// "who uses X", without sample lines or paths. Above 0: one row per matching method with up
+    /// to that many sample lines and the source path (with <paramref name="xref"/>: one row per
+    /// reference, with line and column).
+    /// </param>
+    public ToolResult<object> FindReferences(
+        string name, string? kind, string? model, int limit = 200, int lines = 0, bool xref = false)
     {
         if (string.IsNullOrWhiteSpace(name))
             return ToolResult<object>.Fail("BAD_INPUT", "name is required.");
-        if (!ModelFilter.TryResolve(_repo, model, out model, out var badModel)) return badModel!;
+        if (xref)
+            return D365FO.Core.Xref.XrefReferences.Find(name, kind, model, limit, lines);
 
-        var result = MethodSourceSearch.Find(_repo, name, kind, model, limit);
-        var items = result.Hits.Select(h => new
+        // An unknown kind used to pass through and "simply match nothing" — a clean empty
+        // answer to a typo.
+        if (!string.IsNullOrWhiteSpace(kind)
+            && kind.Trim().ToLowerInvariant() is not ("class" or "table" or "form"))
+            return ToolResult<object>.Fail(D365FoErrorCodes.BadInput,
+                $"Unknown kind '{kind}' for the text scan.",
+                "Use class | table | form. A reference kind (Call, Read, Set, …) needs the xref query.");
+        if (!ModelFilter.TryResolve(_repo, model, out model, out var badModel)) return badModel!;
+        if (limit <= 0) limit = 200;
+
+        if (lines > 0)
         {
-            kind = h.Kind,
-            name = h.Name,
-            model = h.Model,
-            method = h.Method,
-            matches = h.Matches.Select(l => new { line = l.Line, text = l.Text }),
-            path = h.Path,
-        }).ToList();
+            var result = MethodSourceSearch.Find(_repo, name, kind, model, limit, sampleLinesPerHit: lines);
+            var items = result.Hits.Select(h => new
+            {
+                kind = h.Kind,
+                name = h.Name,
+                model = h.Model,
+                method = h.Method,
+                matches = h.Matches.Select(l => new { line = l.Line, text = l.Text }),
+                path = h.Path,
+            }).ToList();
+
+            return ToolResult<object>.Success(new
+            {
+                needle = result.Needle,
+                via = result.Via,
+                mode = "methods",
+                filesScanned = result.FilesScanned,
+                searched = result.Searched,
+                count = items.Count,
+                truncated = result.Truncated,
+                items,
+            }, result.Caveat is null ? null : [result.Caveat]);
+        }
+
+        // Names only: no sample lines, so the FTS path opens no source file at all. More hits
+        // are read than objects returned, so the object list is not cut short by objects with
+        // many matching methods.
+        var hitLimit = (int)Math.Min((long)limit * HitsPerObject, 10000);
+        var scan = MethodSourceSearch.Find(_repo, name, kind, model, hitLimit, sampleLinesPerHit: 0);
+        var objects = scan.Hits
+            .GroupBy(h => (h.Kind, h.Name, h.Model))
+            .Select(g => new
+            {
+                kind = g.Key.Kind,
+                name = g.Key.Name,
+                model = g.Key.Model,
+                methods = g.Select(h => h.Method).Distinct(StringComparer.OrdinalIgnoreCase).ToList(),
+            })
+            .ToList();
 
         return ToolResult<object>.Success(new
         {
-            needle = result.Needle,
-            via = result.Via,
-            filesScanned = result.FilesScanned,
-            searched = result.Searched,
-            count = items.Count,
-            truncated = result.Truncated,
-            items,
-        }, result.Caveat is null ? null : [result.Caveat]);
+            needle = scan.Needle,
+            via = scan.Via,
+            mode = "names",
+            filesScanned = scan.FilesScanned,
+            searched = scan.Searched,
+            count = Math.Min(objects.Count, limit),
+            matchedMethods = scan.Hits.Count,
+            truncated = scan.Truncated || objects.Count > limit,
+            items = objects.Take(limit).ToList(),
+        }, scan.Caveat is null ? null : [scan.Caveat]);
     }
 
     /// <summary>

@@ -53,6 +53,7 @@ A few carry more weight than their size suggests:
 | `MetadataContractsAotTests` | A contract claim the shipped files contradict — it samples up to 12 documents per AOT folder across the installation, and it is what withdrew the member-order rule. |
 | `SweepFalsePositiveTests` | A validator rule that fires on shipped X++, each pinned with the count it once accounted for. |
 | `SchemaIndexCoverageTests` | An index column that queries filter on and no index covers. |
+| `XrefLiveSqlTests` | A where-used query that only ever ran as text. Inert unless `D365FO_TEST_SQLSERVER` names a SQL Server the login can create a database on; it seeds a throwaway DYNAMICSXREFDB with the traps the query once fell into (a kind filter after `TOP`, prefix matches) and drops it. Locally: `docker run -e ACCEPT_EULA=Y -e MSSQL_SA_PASSWORD=… -p 127.0.0.1:14333:1433 mcr.microsoft.com/mssql/server:2022-latest` (Apple Silicon: add `--platform linux/amd64`). |
 
 ---
 

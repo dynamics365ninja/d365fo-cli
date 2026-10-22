@@ -23,18 +23,23 @@ public sealed class SilentEmptyLookupTests : IDisposable
     private readonly string _root = Path.Combine(Path.GetTempPath(), $"d365fo-silent-{Guid.NewGuid():N}");
     private readonly string? _oldIndexDb = Environment.GetEnvironmentVariable("D365FO_INDEX_DB");
     private readonly string? _oldBridge = Environment.GetEnvironmentVariable("D365FO_BRIDGE_ENABLED");
+    private readonly string? _oldXref = Environment.GetEnvironmentVariable("D365FO_XREF_CONNECTIONSTRING");
 
     public SilentEmptyLookupTests()
     {
         Directory.CreateDirectory(_root);
         Environment.SetEnvironmentVariable("D365FO_INDEX_DB", Path.Combine(_root, "index.sqlite"));
         Environment.SetEnvironmentVariable("D365FO_BRIDGE_ENABLED", "0");
+        // Nothing listens on port 9: the direct xref query fails at once, on every machine.
+        Environment.SetEnvironmentVariable("D365FO_XREF_CONNECTIONSTRING",
+            "Server=tcp:127.0.0.1,9;Database=DYNAMICSXREFDB;Integrated Security=true;Connect Timeout=1");
     }
 
     public void Dispose()
     {
         Environment.SetEnvironmentVariable("D365FO_INDEX_DB", _oldIndexDb);
         Environment.SetEnvironmentVariable("D365FO_BRIDGE_ENABLED", _oldBridge);
+        Environment.SetEnvironmentVariable("D365FO_XREF_CONNECTIONSTRING", _oldXref);
         try { Directory.Delete(_root, recursive: true); } catch { }
     }
 
@@ -61,7 +66,7 @@ public sealed class SilentEmptyLookupTests : IDisposable
     // ---- find refs --xref ----
 
     [Fact]
-    public void Xref_with_the_bridge_off_fails_instead_of_falling_back_to_the_text_scan()
+    public void Xref_with_the_database_unreachable_fails_instead_of_falling_back_to_the_text_scan()
     {
         var (exit, envelope) = Run(() => new FindRefsCommand().Execute(null!,
             new FindRefsCommand.Settings { Name = "SalesLine", Xref = true, Output = "json" }));
@@ -69,7 +74,10 @@ public sealed class SilentEmptyLookupTests : IDisposable
         Assert.NotEqual(0, exit);
         Assert.False(envelope.GetProperty("ok").GetBoolean());
         Assert.Equal(D365FoErrorCodes.XrefUnavailable, ErrorCode(envelope));
-        Assert.Contains("D365FO_BRIDGE_ENABLED", envelope.GetProperty("error").GetProperty("message").GetString());
+        // The direct query ran and said why it failed; the bridge (off here) was not tried.
+        Assert.Contains("SqlException", envelope.GetProperty("error").GetProperty("message").GetString());
+        Assert.DoesNotContain("Bridge fallback", envelope.GetProperty("error").GetProperty("message").GetString());
+        Assert.Contains("D365FO_XREF_CONNECTIONSTRING", envelope.GetProperty("error").GetProperty("hint").GetString());
     }
 
     [Fact]
@@ -80,7 +88,7 @@ public sealed class SilentEmptyLookupTests : IDisposable
 
         Assert.NotEqual(0, exit);
         Assert.Equal(D365FoErrorCodes.BadInput, ErrorCode(envelope));
-        Assert.Contains("--model", envelope.GetProperty("error").GetProperty("message").GetString());
+        Assert.Contains("model filter", envelope.GetProperty("error").GetProperty("message").GetString());
     }
 
     [Fact]
@@ -97,7 +105,7 @@ public sealed class SilentEmptyLookupTests : IDisposable
     }
 
     [Fact]
-    public void Xref_accepts_a_reference_kind_and_only_then_needs_the_bridge()
+    public void Xref_accepts_a_reference_kind_and_only_then_needs_the_database()
     {
         var (_, envelope) = Run(() => new FindRefsCommand().Execute(null!,
             new FindRefsCommand.Settings { Name = "SalesLine", Xref = true, Kind = "call", Output = "json" }));

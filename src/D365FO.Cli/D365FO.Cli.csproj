@@ -25,7 +25,13 @@
     <AssemblyName>d365fo</AssemblyName>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
-    <InvariantGlobalization>true</InvariantGlobalization>
+    <!-- Off: Microsoft.Data.SqlClient refuses to connect in invariant mode ("Globalization
+         Invariant Mode is not supported"), which made the direct DYNAMICSXREFDB query behind
+         `find refs` with xref unreachable in every shipped build. Program.cs pins the process
+         culture to InvariantCulture, so formatting does not start following the OS locale.
+         Linux without libicu: set DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=1 (xref is then
+         unavailable; everything else works). -->
+    <InvariantGlobalization>false</InvariantGlobalization>
     <!-- The SQLite provider ships a native e_sqlite3.dll. PublishSingleFile leaves native
          assets loose next to the .exe unless they are bundled, so a d365fo.exe that travels
          without its folder dies with "The type initializer for

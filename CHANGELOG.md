@@ -19,6 +19,51 @@ was ported from.
 
 ## [Unreleased]
 
+### Changed — `find refs` answers "who uses X" by name, and `--xref` no longer needs the bridge
+
+Follow-up to the outside CLI vs XRef DB vs grep benchmark, which measured `find refs` at 3–30×
+the tokens of the cheapest route and put the cheapest, most complete route — the XRef DB —
+behind the most setup.
+
+- **Names-only by default.** `find refs` (and MCP `find_references`) returns one row per
+  referencing object with its matching methods — no sample lines, no paths — and on the FTS
+  path opens no source file at all. `--lines N` (`lines: N`) restores one row per method with up
+  to N sample lines and the path. `--limit` caps objects; more method hits are read underneath,
+  so the object list is not cut short by objects with many matches. `find related refs` uses the
+  same answer. **Breaking:** callers that read `items[].method` / `matches` / `path` must pass
+  `--lines`.
+- **`--xref` queries `DYNAMICSXREFDB` directly** through `Microsoft.Data.SqlClient`
+  (`D365FO_XREF_CONNECTIONSTRING`, default local SQL with integrated auth; `Encrypt` defaults to
+  `Optional` when unset, as the bridge's client always did). The bridge is the fallback when
+  `D365FO_BRIDGE_ENABLED=1`; both run one shared query (`D365FO.Core/Xref/XrefQuery.cs`,
+  compiled into the net48 bridge as shared source). The names-only answer is one row per
+  object with its module, reference kinds and members; `--lines 1` returns the per-reference
+  rows with line and column. MCP `find_references` gains `xref: true`. The names-only query
+  aggregates in SQL (one row per source path and kind, with a count), so a method that reads a
+  field 300 times does not use up the row budget before the next object is reached.
+- **Proven against SQL Server.** `XrefLiveSqlTests` (opt-in, `D365FO_TEST_SQLSERVER`) runs the
+  real query, connection-string default included, on a seeded throwaway database; run against
+  SQL Server 2022 in Docker, together with the trimmed single-file binary.
+- **Fixed — `--xref --kind Call` undercounted.** The reference-kind filter ran on the rows
+  `TOP` had already cut, i.e. "the Calls among the first N references of any kind". It is now
+  in the `WHERE` clause.
+- **Fixed — a bare name pooled its prefixes.** The XRef match for `SalesLine` included
+  `%/SalesLine%`, so `SalesLineType`, `SalesLine_IN` and every other object whose name merely
+  starts with the symbol counted as callers. It now matches the name as a whole path node.
+- **Fixed — an unknown text-scan `--kind` matched nothing.** `--kind clas` passed through and
+  returned an empty answer; it is now `BAD_INPUT`.
+- **Globalization is no longer invariant.** `Microsoft.Data.SqlClient` refuses to connect in
+  invariant mode, so the CLI now loads ICU/NLS and pins its culture to `InvariantCulture` at
+  startup — formatting and parsing are unchanged on any OS locale (verified byte-identical on a
+  `cs_CZ` locale). Default string sorting is now linguistic rather than ordinal, as it already
+  was under the test suite. Linux without libicu: set `DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=1`
+  (xref is then unavailable). `smoke-published-cli.ps1` asserts the trimmed build reaches
+  SqlClient's connect.
+- **Dependencies:** `Microsoft.Data.SqlClient` 7.1.1 (no Azure.Identity);
+  `Microsoft.Extensions.Logging.Abstractions` 8.0.2 → 10.0.11 (SqlClient needs ≥ 9.0.18);
+  `System.Security.Cryptography.Pkcs` pinned to 10.0.13 — SqlClient's transitive 9.0.18 is
+  vulnerable to CVE-2026-84008 / CVE-2026-70162.
+
 ### Fixed — lookups that answered nothing, or a different question, without saying so
 
 Found by an outside benchmark of CLI vs the XRef DB vs grep for D365 lookups, where 3 of 24 runs

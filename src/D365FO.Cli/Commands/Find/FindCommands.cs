@@ -194,10 +194,15 @@ public sealed class FindRefsCommand : Command<FindRefsCommand.Settings>
         public string? Model { get; init; }
 
         [CommandOption("-l|--limit <N>")]
+        [System.ComponentModel.Description("Most objects returned (default 200); with --lines, most methods (xref: references).")]
         public int Limit { get; init; } = 200;
 
+        [CommandOption("--lines <N>")]
+        [System.ComponentModel.Description("Default 0: one row per referencing object, with its matching methods (xref: members and reference kinds). N > 0: one row per method with up to N sample lines and the source path (xref: one row per reference with line/column) — several times the tokens.")]
+        public int Lines { get; init; }
+
         [CommandOption("--xref")]
-        [System.ComponentModel.Description("Answer from DYNAMICSXREFDB via the metadata bridge — compiler-resolved, unlike the text scan. Requires D365FO_BRIDGE_ENABLED=1 and a populated DYNAMICSXREFDB on the VM; fails XREF_UNAVAILABLE rather than falling back to the text scan.")]
+        [System.ComponentModel.Description("Answer from DYNAMICSXREFDB — compiler-resolved and complete, unlike the text scan. Queried directly (D365FO_XREF_CONNECTIONSTRING, default local SQL with integrated auth); the metadata bridge is the fallback when D365FO_BRIDGE_ENABLED=1. Fails XREF_UNAVAILABLE rather than falling back to the text scan.")]
         public bool Xref { get; init; }
     }
 
@@ -207,12 +212,15 @@ public sealed class FindRefsCommand : Command<FindRefsCommand.Settings>
         if (string.IsNullOrWhiteSpace(settings.Name))
             return RenderHelpers.Render(kind, ToolResult<object>.Fail("BAD_INPUT", "Name required."));
 
-        // Bridge-backed compiler xref path — fast, precise, and returns
-        // line/column plus reference kind (Call/Read/Set/Type/...). Asked for
-        // by name, so it answers or fails: the text scan is a different, less
-        // complete answer and must not stand in for it unannounced.
+        if (settings.Lines < 0)
+            return RenderHelpers.Render(kind, ToolResult<object>.Fail(D365FoErrorCodes.BadInput, "--lines must be 0 or more."));
+
+        // The compiler's xref — fast, precise, and complete. Asked for by name, so
+        // it answers or fails: the text scan is a different, less complete answer
+        // and must not stand in for it unannounced.
         if (settings.Xref)
-            return RenderHelpers.Render(kind, FindViaXref(settings));
+            return RenderHelpers.Render(kind, D365FO.Core.Xref.XrefReferences.Find(
+                settings.Name, settings.Kind, settings.Model, settings.Limit, settings.Lines));
 
         // Regex scan over indexed X++ source — shared with the unified
         // `find_references` MCP tool (D365FO.Mcp.ToolHandlers.FindReferences).
@@ -222,7 +230,7 @@ public sealed class FindRefsCommand : Command<FindRefsCommand.Settings>
         {
             var repo = RepoFactory.Create();
             var result = new D365FO.Mcp.ToolHandlers(repo)
-                .FindReferences(settings.Name, settings.Kind, settings.Model, settings.Limit);
+                .FindReferences(settings.Name, settings.Kind, settings.Model, settings.Limit, settings.Lines);
             return RenderHelpers.Render(kind, result);
         }
         catch (Exception ex)
@@ -232,43 +240,6 @@ public sealed class FindRefsCommand : Command<FindRefsCommand.Settings>
                 $"find refs failed: {ex.Message}",
                 "Try narrowing --kind/--model, or run `d365fo doctor --output json` to confirm the index is healthy."));
         }
-    }
-
-    private static readonly string[] XrefReferenceKinds =
-        ["Declaration", "Set", "Read", "Call", "Reference", "Type", "Extends", "Implements"];
-
-    private static ToolResult<object> FindViaXref(Settings settings)
-    {
-        // DYNAMICSXREFDB is keyed by module (package), and the bridge query takes no model —
-        // silently dropping --model would widen the answer to every module.
-        if (!string.IsNullOrWhiteSpace(settings.Model))
-            return ToolResult<object>.Fail(D365FoErrorCodes.BadInput,
-                "--model cannot be combined with --xref: DYNAMICSXREFDB is keyed by module, not model.",
-                "Drop --model — every xref row carries its `module` — or drop --xref for the text scan, which honours --model.");
-
-        // --kind means an artifact kind to the text scan and a reference kind to the xref
-        // query; `--kind class` here would filter on a reference kind that does not exist
-        // and return an empty list.
-        string? refKind = null;
-        if (!string.IsNullOrWhiteSpace(settings.Kind))
-        {
-            refKind = XrefReferenceKinds.FirstOrDefault(k =>
-                string.Equals(k, settings.Kind.Trim(), StringComparison.OrdinalIgnoreCase));
-            if (refKind is null)
-                return ToolResult<object>.Fail(D365FoErrorCodes.BadInput,
-                    $"--kind '{settings.Kind}' is not a reference kind. With --xref, --kind filters on how the symbol is used.",
-                    "Use one of: " + string.Join(" | ", XrefReferenceKinds) + ". Every xref row's `source` path names the referencing artifact.");
-        }
-
-        var (xref, error) = BridgeGate.FindReferencesViaXref(settings.Name, refKind, settings.Limit);
-        if (xref is null)
-            return ToolResult<object>.Fail(D365FoErrorCodes.XrefUnavailable,
-                "--xref was requested but DYNAMICSXREFDB could not be queried: " + error,
-                "Fix the bridge (`d365fo doctor --output json`), or drop --xref for the text scan over indexed X++ "
-                + "source — it is not compiler-resolved and can miss references made through variables and aliases.");
-
-        xref["_source"] = "xrefdb";
-        return ToolResult<object>.Success((object)xref);
     }
 }
 
@@ -387,30 +358,9 @@ public sealed class FindRelatedCommand : Command<FindRelatedCommand.Settings>
         return RenderHelpers.Render(output, ToolResult<object>.Success(new { count = items.Count, items }));
     }
 
-    private static int RenderRefs(OutputMode.Kind output, D365FO.Core.Index.MetadataRepository repo, string name, string? kind, int limit)
-    {
-        // Shared with the MCP find_references tool. Uses the MethodSourceFts index
-        // when it's populated (index extract --index-source), else scans on disk.
-        var result = D365FO.Core.Index.MethodSourceSearch.Find(repo, name, kind, model: null, limit: limit);
-        var items = result.Hits.Select(h => new
-        {
-            kind = h.Kind,
-            name = h.Name,
-            model = h.Model,
-            method = h.Method,
-            path = h.Path,
-            matches = h.Matches.Select(l => new { line = l.Line, text = l.Text }),
-        });
-        return RenderHelpers.Render(output, ToolResult<object>.Success(new
-        {
-            needle = result.Needle,
-            via = result.Via,
-            filesScanned = result.FilesScanned,
-            count = result.Hits.Count,
-            truncated = result.Truncated,
-            items,
-        }));
-    }
+    private static int RenderRefs(OutputMode.Kind output, D365FO.Core.Index.MetadataRepository repo, string name, string? kind, int limit) =>
+        // Shared with `find refs` and the MCP find_references tool, so all three answer alike.
+        RenderHelpers.Render(output, new D365FO.Mcp.ToolHandlers(repo).FindReferences(name, kind, model: null, limit));
 
     private static int RenderItems<T>(OutputMode.Kind output, IReadOnlyList<T> items)
         => RenderHelpers.Render(output, ToolResult<object>.Success(new { count = items.Count, items }));
