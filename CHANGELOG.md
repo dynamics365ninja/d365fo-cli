@@ -19,6 +19,29 @@ was ported from.
 
 ## [Unreleased]
 
+### Fixed — MCP tools that write were flagged, cached and exposed as reads
+
+The write list was kept by hand and had fallen behind the catalog. `delete_object` was advertised
+`readOnlyHint: true` / `destructiveHint: false`, so clients that confirm before a destructive call
+ran it without asking. Its result went into the duplicate-call cache, and `MCP_SERVER_MODE=read-only`
+still listed it and ran it on a shared server. `index_sync` and `sdlc` were missing from the write
+list too.
+
+- **Every MCP tool declares its effect.** `ToolCatalog.Descriptor` takes a `ToolEffect` (`Read`,
+  `Write`, `Destructive`) next to the name, so a new tool cannot be added without deciding.
+  `WriteTools` is derived from it instead of kept by hand. `delete_object`, `undo_last_modification`
+  and `sdlc` (a database sync can drop columns) are destructive. `index_sync` is a write that is not
+  destructive: it rebuilds the index, which the server derives.
+- **`delete_object` is local.** `MCP_SERVER_MODE=read-only` no longer lists it, and a call fails
+  `MODE_NOT_ALLOWED`.
+- **A write flushes the duplicate-call cache.** `get_object_info` → `modify_object` →
+  `get_object_info` inside 60 s returned the pre-write object with "you already have this answer".
+  Any write-tool call now clears the cache, on stdio, `--http` and the daemon, whether or not it
+  reported success, because a refused batch or a half-failed build can still have changed disk.
+- **The invariant test reads the catalog.** It checks that every declared writer is in `WriteTools`
+  and `LocalTools` and is hidden in read-only mode, and that no tool declared `Read` takes a writer's
+  argument (`installTo`, `overwrite`, `dryRun`, `out`).
+
 ### Fixed — `D365FO_BRIDGE_ENABLED=0` now switches the bridge off for writes too
 
 The write, delete, verify and model-folder helpers in `BridgeGate` only asked whether the bridge

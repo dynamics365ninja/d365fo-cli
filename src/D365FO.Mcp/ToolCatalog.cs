@@ -20,29 +20,47 @@ namespace D365FO.Mcp;
 /// </summary>
 public static class ToolCatalog
 {
+    /// <summary>
+    /// What a tool does to the world outside the server. Every <see cref="Descriptor"/>
+    /// states it, positionally, so a new tool cannot be added without deciding —
+    /// the hand-kept write list this replaced missed <c>delete_object</c>,
+    /// <c>index_sync</c> and <c>sdlc</c>, and <c>delete_object</c> shipped advertised as
+    /// read-only, was dedup-cached, and stayed reachable on a read-only server.
+    /// </summary>
+    public enum ToolEffect
+    {
+        /// <summary>Reads only. Safe to dedup-cache and to expose on a shared read-only server.</summary>
+        Read,
+
+        /// <summary>
+        /// Changes state, but only state the server derives and can rebuild (the index).
+        /// Repeating the call is harmless, so it is advertised idempotent and not destructive.
+        /// </summary>
+        Write,
+
+        /// <summary>
+        /// Changes, replaces or removes source the caller owns: AOT XML, label files, live
+        /// metadata, the database schema. Advertised destructive so clients confirm first.
+        /// A tool whose actions are mixed (<c>labels</c> search vs delete) is classified by its
+        /// most dangerous action: clients gate on the tool, not on the call.
+        /// </summary>
+        Destructive,
+    }
+
     public readonly record struct Descriptor(
         string Name,
+        ToolEffect Effect,
         string Description,
         JsonObject InputSchema,
         Func<ToolHandlers, JsonElement, object> Invoke);
 
     /// <summary>
-    /// Tools that modify the file system. Everything else is read-only. Drives
-    /// both the MCP tool annotations (readOnlyHint/destructiveHint) and the
-    /// duplicate-call dedup cache exclusions.
+    /// Tools whose <see cref="Descriptor.Effect"/> is not <see cref="ToolEffect.Read"/>,
+    /// derived from the catalog rather than kept by hand. Drives the duplicate-call dedup
+    /// exclusion and the cache flush after a write (<see cref="CallDedup"/>), and
+    /// <see cref="ServerModeConfig.WriteToolsAreLocal"/>.
     /// </summary>
-    public static readonly HashSet<string> WriteTools = new(StringComparer.Ordinal)
-    {
-        // Unified write tools. `generate_object` writes AOT XML to disk for the
-        // table/class/coc/form objectTypes (the edt/enum/query/… objectTypes are
-        // XML-only, but the whole tool is flagged write so clients confirm before
-        // any write objectType runs). `labels` mixes read actions (search/info)
-        // with write actions (create/rename/delete) — flagged here too.
-        // `undo_last_modification` mutates the file system (or the live metadata
-        // provider) just like the write it reverts — flagged write even though its
-        // `dryRun` mode is read-only, since clients gate on the tool, not the call.
-        "generate_object", "labels", "modify_method", "modify_object", "undo_last_modification",
-    };
+    public static IReadOnlySet<string> WriteTools => s_writeTools.Value;
 
     /// <summary>
     /// MCP tool annotations (2025-03-26 spec): a human title plus behaviour
@@ -51,13 +69,12 @@ public static class ToolCatalog
     /// </summary>
     public static JsonObject AnnotationsFor(in Descriptor d)
     {
-        var isWrite = WriteTools.Contains(d.Name);
         return new JsonObject
         {
             ["title"] = TitleFor(d.Name),
-            ["readOnlyHint"] = !isWrite,
-            ["destructiveHint"] = isWrite,
-            ["idempotentHint"] = !isWrite,
+            ["readOnlyHint"] = d.Effect == ToolEffect.Read,
+            ["destructiveHint"] = d.Effect == ToolEffect.Destructive,
+            ["idempotentHint"] = d.Effect != ToolEffect.Destructive,
             ["openWorldHint"] = false,
         };
     }
@@ -78,7 +95,7 @@ public static class ToolCatalog
 
         // ---- Search & discovery ----
 
-        new Descriptor("search",
+        new Descriptor("search", ToolEffect.Read,
             "Unified metadata search across the index. `type` selects the kind: " +
             "class | table | edt | enum | query | view | entity | report | service | workflow | " +
             "business-event | security-policy | configuration-key | tile | workspace | batch-jobs | any. " +
@@ -116,14 +133,14 @@ public static class ToolCatalog
                 };
             }),
 
-        new Descriptor("batch_get_info",
+        new Descriptor("batch_get_info", ToolEffect.Read,
             "Fetch up to 10 objects in one call. Each spec is \"<kind>:<name>\" (kinds: class, table, edt, enum, form, menu-item, query, view, entity, report, service, service-group, role, duty, privilege). One failed lookup never fails the batch.",
             Schema(("objects", "array", true)),
             (h, p) => h.BatchGetInfo(StrArray(p, "objects"))),
 
         // ---- Object info ----
 
-        new Descriptor("get_object_info",
+        new Descriptor("get_object_info", ToolEffect.Read,
             "Read one object's full metadata by `objectType`: table | class | edt | enum | form | query | view | " +
             "entity | report | service | service-group | menu-item | business-event | security-policy. For tables, set exactly one of " +
             "`relations` | `methods` | `indexes` | `deleteActions` to return just that slice instead of the full table.",
@@ -159,7 +176,7 @@ public static class ToolCatalog
                 };
             }),
 
-        new Descriptor("get_method",
+        new Descriptor("get_method", ToolEffect.Read,
             "Read X++ source from the index. `objectType` (class | table | form, default class), `name`, optional `method`. " +
             "`include` = signature | source | both (default both — signature is the cheap header for CoC planning). " +
             "Omit `method` to list every method's signature.",
@@ -170,7 +187,7 @@ public static class ToolCatalog
 
         // ---- Labels ----
 
-        new Descriptor("labels",
+        new Descriptor("labels", ToolEffect.Destructive,
             "Unified label operations via `action`: " +
             "search (substring across label files) · fts (ranked FTS5; supports phrases, NEAR, Value: filters) · " +
             "info (all translations of a token like @SYS12345, or one entry by file+language+key) · " +
@@ -220,7 +237,7 @@ public static class ToolCatalog
 
         // ---- Security ----
 
-        new Descriptor("security_info",
+        new Descriptor("security_info", ToolEffect.Read,
             "Security lookup. `mode=artifact` returns a named role/duty/privilege (set `type` = role | duty | privilege, and `name`). " +
             "`mode=coverage` returns which roles → duties → privileges grant access to `object` (set `objectKind`, default Menuitem).",
             Schema(("mode", "string", true), ("type", "string", false), ("name", "string", false),
@@ -238,7 +255,7 @@ public static class ToolCatalog
 
         // ---- Extensions & handlers ----
 
-        new Descriptor("extension_info",
+        new Descriptor("extension_info", ToolEffect.Read,
             "D365FO extensibility analyzer. Pick a `mode`: " +
             "coc (Chain-of-Command extensions for `target` class, optionally scoped to `method`) · " +
             "events (DataEventHandler / SubscribesTo handlers bound to `target`; set `objectType` to its kind) · " +
@@ -263,14 +280,14 @@ public static class ToolCatalog
                         "Use one of: coc, events, table-merge, points, strategy."),
             }),
 
-        new Descriptor("find_references",
+        new Descriptor("find_references", ToolEffect.Read,
             "Reverse references: regex scan of indexed X++ source for where a symbol is used. " +
             "`kind` (class/table/form) and `model` narrow the scan; `limit` caps hits (default 200). " +
             "Returns the method + up to 3 sample lines per hit.",
             Schema(("name", "string", true), ("kind", "string", false), ("model", "string", false), ("limit", "integer", false)),
             (h, p) => h.FindReferences(Str(p, "name"), StrOrNull(p, "kind"), StrOrNull(p, "model"), Int(p, "limit", 200))),
 
-        new Descriptor("find_tables_by_field",
+        new Descriptor("find_tables_by_field", ToolEffect.Read,
             "Which tables declare a field named `name` (or whose field uses an EDT named `name`) — exact match. " +
             "Use this for 'which tables contain field X' questions. Do NOT use find_references or relation lookups for " +
             "this — those answer source-code usage / FK-relation targets, not a table's own field list, and will " +
@@ -278,7 +295,7 @@ public static class ToolCatalog
             Schema(("name", "string", true), ("model", "string", false), ("limit", "integer", false)),
             (h, p) => h.FindTablesByField(Str(p, "name"), StrOrNull(p, "model"), Int(p, "limit", 200))),
 
-        new Descriptor("validate",
+        new Descriptor("validate", ToolEffect.Read,
             "Check an artifact before it is written. `mode`:\n" +
             "• xpp — the offline X++/XML best-practice validator (SEL/COC/BP/FN/TTS/CS/ATTR/EXT/KW/RPT + " +
             "XML001-XML014), 40+ compiler-grounded rules. `codeType` " +
@@ -302,12 +319,12 @@ public static class ToolCatalog
                       ? h.ValidateMetadata(StrOrNull(p, "kind"), Str(p, "code"))
                       : h.Validate(Str(p, "mode"), Str(p, "code"), StrOrNull(p, "context"), StrOrNull(p, "codeType"))),
 
-        new Descriptor("validate_object_naming",
+        new Descriptor("validate_object_naming", ToolEffect.Read,
             "Static naming-rule check (PascalCase, length, character set, extension suffix, optional publisher prefix). No index access required.",
             Schema(("kind", "string", true), ("name", "string", true), ("prefix", "string", false)),
             (h, p) => h.ValidateObjectNaming(Str(p, "kind"), Str(p, "name"), StrOrNull(p, "prefix"))),
 
-        new Descriptor("get_workspace_info",
+        new Descriptor("get_workspace_info", ToolEffect.Read,
             "Return the effective configuration in use (paths, custom-model patterns, label languages). Each "
             + "D365FO_* key resolves via CLI flag → environment variable → settings.json → default. "
             + "`changes=true` answers a different question with the same tool: what has changed in the working "
@@ -324,7 +341,7 @@ public static class ToolCatalog
 
         // ---- Knowledge ----
 
-        new Descriptor("get_knowledge",
+        new Descriptor("get_knowledge", ToolEffect.Read,
             "Verified X++/D365FO knowledge topics (the same corpus the d365fo skill files ship, checked against a " +
             "live D365FO dev VM). `action=list` returns the catalog with each topic's section count and token cost; " +
             "`action=get` returns one topic by `topic` id (`section` narrows to one '##' section, `outline=true` " +
@@ -358,7 +375,7 @@ public static class ToolCatalog
                                     StrOrNull(p, "query"), Int(p, "limit", 10), Bool(p, "outline")),
             }),
 
-        new Descriptor("explain_build_error",
+        new Descriptor("explain_build_error", ToolEffect.Read,
             "Score xppc / MSBuild output against the fix-hint rules and return ranked, machine-identified causes " +
             "(rule id + fix + the `get_knowledge` topic behind it). Offline — needs no VM or index, so it works on " +
             "a log pasted by the user. Pass the whole log; structured `dynamics://` lines are parsed per-diagnostic, " +
@@ -368,7 +385,7 @@ public static class ToolCatalog
 
         // ---- Object patterns ----
 
-        new Descriptor("object_patterns",
+        new Descriptor("object_patterns", ToolEffect.Read,
             "Pattern catalog + structural validator, selected by `domain` (default form). " +
             "`domain=form`: spec (catalog spec for a pattern/sub-pattern — versions, when-to-use, reference forms, " +
             "lifecycle; omit `name` to list all) · validate (structural validator FP001-FP010 over complete AxForm " +
@@ -422,7 +439,7 @@ public static class ToolCatalog
 
         // ---- Generation ----
 
-        new Descriptor("generate_object",
+        new Descriptor("generate_object", ToolEffect.Destructive,
             "Scaffold an AOT object from `objectType`. Every objectType that WRITES runs the same grounding "
             + "gate the CLI runs: the generated X++ is proved against the index and checked by the offline BP "
             + "validator, findings come back in `grounding`, and under D365FO_GROUNDING_ENFORCE=true a write "
@@ -621,7 +638,7 @@ public static class ToolCatalog
                         + "form-part, label-file, menu, resource, tile, workflow-category, composite-entity, aggregate-entity."),
             }),
 
-        new Descriptor("modify_method",
+        new Descriptor("modify_method", ToolEffect.Destructive,
             "Replace the body of an EXISTING method on a live class/table/edt/form via D365FO.Bridge " +
             "(Windows VM, requires D365FO_BRIDGE_ENABLED=1). Reads the object through IMetadataProvider, " +
             "structurally replaces one <Method>'s source (never raw XML/CDATA string surgery), runs the same " +
@@ -634,7 +651,7 @@ public static class ToolCatalog
             (h, p) => h.ModifyMethod(Str(p, "kind"), Str(p, "name"), Str(p, "method"), Str(p, "body"),
                         StrOrNull(p, "model"), StrOrNull(p, "groundingToken"))),
 
-        new Descriptor("modify_object",
+        new Descriptor("modify_object", ToolEffect.Destructive,
             "Structured edits to an EXISTING object beyond its method bodies, via D365FO.Bridge (Windows VM, " +
             "requires D365FO_BRIDGE_ENABLED=1). `action` names the edit — the same twenty the CLI's `d365fo " +
             "modify` sub-commands carry:\n" +
@@ -681,14 +698,14 @@ public static class ToolCatalog
                    ("requireExtension", "boolean", false)),
             ModifyObjectCall),
 
-        new Descriptor("suggest_edt",
+        new Descriptor("suggest_edt", ToolEffect.Read,
             "Suggest indexed EDTs for a field name using similarity heuristics. Returns confidence-ranked candidates.",
             Schema(("fieldName", "string", true), ("limit", "integer", false)),
             (h, p) => h.SuggestEdt(Str(p, "fieldName"), Int(p, "limit", 5))),
 
         // ---- Analysis ----
 
-        new Descriptor("analyze",
+        new Descriptor("analyze", ToolEffect.Read,
             "Cross-index analysis via `mode`: integration (OData/DMF readiness of data entities — duplicate PublicEntityName, " +
             "missing staging table, zero-field entities) · impact (downstream consumers of `object`: CoC wrappers, event " +
             "handlers, extensions, form datasources, data entities, queries) · report (aggregated integration surface: OData " +
@@ -725,7 +742,7 @@ public static class ToolCatalog
                 _        => h.AnalyzeIntegration(StrOrNull(p, "model")),
             }),
 
-        new Descriptor("prepare",
+        new Descriptor("prepare", ToolEffect.Read,
             "Single-round context aggregator that issues a 30-min grounding token. " +
             "`mode=change` (extend/modify an existing `object`): signature + CoC eligibility, existing wrappers, " +
             "strategy, naming check (`proposedName`/`prefix`), similar objects — set `method` for a specific method. " +
@@ -748,19 +765,19 @@ public static class ToolCatalog
                                 StrOrNull(p, "method"), StrOrNull(p, "type"), StrOrNull(p, "proposedName"), StrOrNull(p, "prefix")),
             }),
 
-        new Descriptor("lint",
+        new Descriptor("lint", ToolEffect.Read,
             "In-process Best-Practice gate. Categories: table-no-index, ext-named-not-attributed, string-without-edt.",
             Schema(("categories", "array", false), ("onlyCustomModels", "boolean", false)),
             (h, p) => h.Lint(StrArray(p, "categories"), Bool(p, "onlyCustomModels", true))),
 
-        new Descriptor("stats",
+        new Descriptor("stats", ToolEffect.Read,
             "Aggregate counters over the index: totals + top-N tables (by fields), top-N classes (by methods), top-N CoC targets, and per-model counts.",
             Schema(("topN", "integer", false)),
             (h, p) => h.Stats(Int(p, "topN", 10))),
 
         // ---- Models & index ----
 
-        new Descriptor("models",
+        new Descriptor("models", ToolEffect.Read,
             "Model inspection via `action`: list (every indexed model — name/publisher/layer/custom) · " +
             "deps (dependsOn / dependedBy for `name`) · coupling (fan-in / fan-out / instability + dependency cycles; `topN`, `onlyCycles`).",
             Schema(("action", "string", true), ("name", "string", false), ("topN", "integer", false), ("onlyCycles", "boolean", false)),
@@ -771,12 +788,12 @@ public static class ToolCatalog
                 _          => h.ListModels(),
             }),
 
-        new Descriptor("index_status",
+        new Descriptor("index_status", ToolEffect.Read,
             "Current row counts of every entity table.",
             Schema(),
             (h, _) => h.IndexStatus()),
 
-        new Descriptor("verify_project",
+        new Descriptor("verify_project", ToolEffect.Read,
             "Do the model on disk and its Visual Studio project agree? Every object XML present, every "
             + "`.rnrproj` entry pointing at a file that exists. An object the project does not list is NOT "
             + "compiled — the AOT never sees it and nothing anywhere reports that; a project entry whose file is "
@@ -787,7 +804,7 @@ public static class ToolCatalog
             Schema(("model", "string", false), ("path", "string", false), ("expect", "array", false)),
             (h, p) => h.VerifyProject(StrOrNull(p, "model"), StrOrNull(p, "path"), StrArray(p, "expect"))),
 
-        new Descriptor("index_sync",
+        new Descriptor("index_sync", ToolEffect.Write,
             "Re-index ONE model after an edit made outside this server — in Visual Studio, by a git pull, by "
             + "a colleague. Name the `model`, or pass a `path` to any file inside it and the model is read off "
             + "the packages layout. Writes through `generate_object` / `modify_object` already refresh the "
@@ -806,14 +823,14 @@ public static class ToolCatalog
                 StrOrNull(p, "model"), StrOrNull(p, "path"), StrOrNull(p, "packagesPath"),
                 databasePath: null, indexSource: Bool(p, "indexSource"), prune: Bool(p, "prune"))),
 
-        new Descriptor("index_history",
+        new Descriptor("index_history", ToolEffect.Read,
             "Recent ExtractionRuns telemetry (per-model timings). Returns newest first.",
             Schema(("limit", "integer", false), ("model", "string", false)),
             (h, p) => h.IndexHistory(Int(p, "limit", 50), Str(p, "model"))),
 
         // ---- Modification journal / undo (issue #113) ----
 
-        new Descriptor("undo_last_modification",
+        new Descriptor("undo_last_modification", ToolEffect.Destructive,
             "Revert the last `steps` writes (default 1) made by `generate_object` / `labels` (create/rename/delete) / " +
             "`delete` — CLI parity for upstream `undo_last_modification`. Replays each entry in reverse through the " +
             "SAME write path that produced it (on-disk file, or the live metadata provider when the bridge was used), " +
@@ -825,7 +842,7 @@ public static class ToolCatalog
 
         // ---- SDLC (Windows D365FO VM only) ----
 
-        new Descriptor("sdlc",
+        new Descriptor("sdlc", ToolEffect.Destructive,
             "Run the Windows-only D365FO developer tools and read their output as structured "
             + "results. `action`:\n"
             + "• build — compiles `project` (an .rnrproj, a solution, or a folder) or `model` "
@@ -886,7 +903,7 @@ public static class ToolCatalog
                 };
             }),
 
-        new Descriptor("delete_object",
+        new Descriptor("delete_object", ToolEffect.Destructive,
             "Remove an AOT object and journal the removal so `undo_last_modification` can put it back. "
             + "Name `kind` and `name`, then exactly one of: `installTo` (the model — deletes through the live "
             + "metadata provider, requires D365FO_BRIDGE_ENABLED=1) or `path` (deletes that XML file, `model` "
@@ -899,12 +916,16 @@ public static class ToolCatalog
                 Str(p, "kind"), Str(p, "name"), StrOrNull(p, "installTo"),
                 StrOrNull(p, "path"), StrOrNull(p, "model"))),
 
-        new Descriptor("journal_list",
+        new Descriptor("journal_list", ToolEffect.Read,
             "Inspect the modification-journal stack (most-recent-first) without reverting anything — " +
             "see what `undo_last_modification` would act on.",
             Schema(("limit", "integer", false)),
             (h, p) => h.JournalList(Int(p, "limit", 50))),
     };
+
+    // Declared after the catalog: static initialisers run in text order.
+    private static readonly Lazy<IReadOnlySet<string>> s_writeTools = new(() =>
+        All.Where(d => d.Effect != ToolEffect.Read).Select(d => d.Name).ToHashSet(StringComparer.Ordinal));
 
     /// <summary>
     /// Enforces the <c>additionalProperties: false</c> every tool's schema already
