@@ -43,6 +43,10 @@ fail, the Visual Studio one included.
 Pass `--project <Model.rnrproj | Solution.sln>` or `--model <Model>`. An `MSB…` code from it
 means `--engine msbuild` was forced, or the project is not an X++ one.
 
+`--xref` also writes the cross-reference database named by `D365FO_XREF_CONNECTIONSTRING`
+(xppc `-xref`). It is what `find refs --xref` reads, and nothing else fills it for a custom model,
+so pass it once after the model changes when compiler-resolved where-used is wanted. It is slower.
+
 ```sh
 d365fo doctor --output json    # build.xppProject / build.dynamicsTools / build.msbuild / build.tooling
 ```

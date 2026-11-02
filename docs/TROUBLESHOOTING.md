@@ -318,6 +318,16 @@ d365fo get table CustTable --output json 2>bridge-stderr.txt
 
 Common message: `Assembly not found: Microsoft.Dynamics.Ax.Xpp.Support`. Fix: ensure `D365FO_BIN_PATH` points to the correct version of the D365FO binaries.
 
+**`XREF_UNAVAILABLE … 0 rows for module X`.** The cross-reference database has never seen the module that
+declares the symbol. The compiler writes it only when a build asks (`xppc -xref`), and neither a UDE nor a
+`pac` deployment does, so a custom model is missing until you run `d365fo build --model <Model> --xref`
+(MCP: `sdlc action=build xref=true`). The build takes longer with it, so it is opt-in.
+
+**A reference query timed out.** A bare name is matched as a substring of every path in the database, which
+on a database holding the whole standard application takes tens of seconds. The direct query allows it the
+database's own 30 s command timeout; the bridge fallback allows 60 s, above the bridge's connect and command
+timeouts, so a slow query ends with the database's error rather than an anonymous timeout. A qualified `Owner.member` is an exact match and much faster.
+
 ---
 
 ## `find refs --xref` fails with `XREF_UNAVAILABLE`

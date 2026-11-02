@@ -96,7 +96,7 @@ Examples:
 | Who uses X — calls, reads, writes, extends (where-used) | `d365fo find refs <X> --xref --output json` — the compiler's xref, one row per object; `Owner.member` for one method/field. No XRef DB: drop `--xref` for the text scan, which can miss references |
 | Find label | `d365fo labels search "<text>" --output json` |
 | Resolve label token | `d365fo labels resolve @SYS12345 --lang en-us,cs` |
-| Trace security (Role → Duty → Privilege) | `d365fo security coverage <Role> --type Role --output json` |
+| Trace security (Role → Duty → Privilege) | `d365fo security <Name> --output json` (a role, duty or privilege, or the coverage of an object) |
 | Find table relations | `d365fo find relations <Table> --output json` |
 | Fetch several objects at once | `d365fo get batch table:CustTable class:CustTableType … --output json` (max 10) |
 | Form pattern spec (required structure) | `d365fo form-pattern spec <Pattern> --output json` |

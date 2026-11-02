@@ -38,6 +38,77 @@ escapes, and the default MCP server sent no instructions at all.
   the rules), restated from the `d365fo-cli` skill's tool mapping. Clients without the skill,
   such as Claude Desktop, had 32 tool schemas and no word on which to use. `--legacy` and
   `--http` keep sending the full rule canon.
+
+### Changed — the argument shapes agents try first now work
+
+Measured over a month of agent sessions on a real installation: 16 of 46 `d365fo` invocations
+were `--help` lookups, most after one of these three shapes failed with a usage error.
+
+- **`d365fo search <QUERY>` runs `search any <QUERY>`.** It failed with "Unknown command
+  '<QUERY>'". The rewrite happens only when the word after `search` is not an option and not a
+  sub-command, so every strict form parses exactly as before and `search class X` is still
+  `search class`. (Spectre cannot do this with a branch default command: it only runs one when
+  nothing follows the branch.)
+- **`d365fo security <NAME>` runs the new `security any <NAME>`** (MCP `security_info(mode=any)`).
+  It returns the role, duty or privilege of that name, in that order, and otherwise the coverage
+  of the object it names under every entry-point type, menu item and table that secures it, so a
+  caller no longer has to know the literal entry-point type `security coverage --type` wants.
+  `resolvedAs` says which, `alsoMatched` lists the other kinds. A name nothing knows fails
+  `SECURITY_NOT_FOUND` rather than answering an empty coverage that reads as "nobody has access".
+- **`validate references` and `validate xpp` accept `--file <PATH>`** as well as the positional
+  `FILE`. The agent prompt and four skill topics already documented `--file`, which neither
+  command accepted. Two different paths are refused with `BAD_INPUT`.
+- An unknown sub-command (`d365fo get ContosoDealTable`) now says that the branch takes a
+  sub-command before the name and points at `d365fo get --help`, instead of the generic hint.
+
+### Added — writes re-index the model they touched
+
+No write refreshed the index. An agent created a table, then `generate entity --table` answered
+`TABLE_NOT_FOUND`. The workaround, `index refresh --model` after every write, was easy to forget and
+without `--index-source` cleared the model's method-body index, so `find references` lost its hits.
+
+- **Every journaled write re-syncs its model before the result is returned.** `generate` (with
+  `--install-to`, or `--out` into a model under a configured root), `modify`, `delete`, `undo` and
+  the label writers, on the CLI and through MCP. The result carries
+  `data.indexRefreshed: { model, elapsedMs }`, and the stale "Index not auto-refreshed" warning is
+  dropped once the refresh succeeded. A failed refresh is a warning, never a failed write.
+- **The method-source index survives.** Whether the model had method bodies in `MethodSourceFts` is
+  read before the sync and passed on.
+- **Only writes under a configured packages root.** A scaffold written with `--out` to a scratch folder
+  is not part of the index, so it is not refreshed (and a test model sharing a standard model's
+  name cannot trigger a re-extract of the real one).
+- **Opt out** with the global `--no-refresh` or `D365FO_AUTO_REFRESH=0`.
+- **The daemon watcher covers the custom roots.** It watched `D365FO_PACKAGES_PATH` only, so an
+  edit to a custom model on a UDE was never seen, and it re-read a model through a bare extract that
+  found no custom root and dropped the method-source index. It now watches every configured root,
+  includes `*.label.txt`, and re-syncs through the same per-model path a write uses.
+
+### Added — `build --xref` fills the cross-reference database, and `find refs --xref` says when it is empty
+
+`find refs --xref` on a custom symbol failed `XREF_UNAVAILABLE … did not respond within 10s`. Two causes:
+nothing writes DYNAMICSXREFDB for a custom model on a developer machine (the CLI's own xppc call passed
+no cross-reference switches, and UDE and `pac` deployments do not either), and the bridge gave a query
+over the whole standard application 10 s while the database itself allows 15 s to connect and 30 s to run.
+
+- **`d365fo build --xref`** (MCP `sdlc action=build xref=true`) passes xppc's documented switches
+  (`-xref`, `-xrefSqlServer=`, `-xrefDbName=`, from `xppc.exe -?`) with the server and database read
+  from `D365FO_XREF_CONNECTIONSTRING`, so the build writes where the reader looks. In a multi-model
+  build every model but the last gets `-norecreatecrossrefindexes`, as xppc's help asks; when the build
+  stops before its last model, an `-xrefonly` run of the last model that compiled recreates the
+  indexes anyway (payload `xrefIndexes`). A SQL login
+  in the connection string, or `--engine msbuild`, is refused rather than dropped.
+- **An empty xref answer over a module with no rows is refused**, with the build that fills it:
+  "DYNAMICSXREFDB has 0 rows for module CCTPM … `d365fo build --model CCTPM --xref`". An answer with
+  rows from other modules is kept with a warning, and a failed query over such a module names that
+  cause next to the transport error. Both the direct query and the bridge fallback, and both CLI
+  `find refs --xref` and MCP `find_references xref:true`, are judged alike. The coverage probe is one
+  parameterised existence query per module over the same direct connection, with a new bridge method
+  `xrefCoverage` as its fallback. When the index records no package folder for the symbol's model,
+  coverage is unknown: an empty answer stays an answer, with a warning naming the build, rather than
+  a guess from the model name.
+- **Cross-reference bridge calls (the fallback) get a 60 s budget** instead of the 10 s metadata one,
+  so a slow query ends with the database's own error.
+
 ### Changed — `find refs` answers "who uses X" by name, and `--xref` no longer needs the bridge
 
 Follow-up to the outside CLI vs XRef DB vs grep benchmark, which measured `find refs` at 3–30×

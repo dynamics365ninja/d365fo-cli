@@ -124,7 +124,7 @@ public static class McpServerHost
         object raw;
         try
         {
-            raw = descriptor.Invoke(handlers, args);
+            raw = ToolCatalog.InvokeWithIndexRefresh(descriptor, handlers, args);
         }
         catch (Exception ex)
         {

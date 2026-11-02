@@ -22,6 +22,18 @@ if (profileError is not null)
     return 2;
 }
 
+// Global `--no-refresh`: a write re-indexes the model it touched before its result is
+// rendered (see IndexAutoRefresh). Peeled off the same way, so every write command honours it.
+var (refreshArgs, noRefresh) = AutoRefreshArgs.Strip(cliArgs);
+// Exported like --profile, so `d365fo --no-refresh mcp serve` / `daemon start` (whose tool calls
+// open their own scopes) and child processes honour it too.
+if (noRefresh)
+    Environment.SetEnvironmentVariable(D365FO.Core.Index.IndexAutoRefresh.EnvVar, "0");
+
+// Bare `search <QUERY>` / `security <NAME>` run the scope-agnostic sub-command
+// instead of failing with "Unknown command" (see ArgumentShapes).
+refreshArgs = ArgumentShapes.Normalize(refreshArgs);
+
 // Redirected output, NO_COLOR or TERM=dumb: help and tables render without ANSI escapes.
 // Set globally too, since table renderers write through the AnsiConsole static.
 var console = ConsoleSetup.ForThisProcess();
@@ -29,9 +41,10 @@ if (console is not null) Spectre.Console.AnsiConsole.Console = console;
 
 var app = CliApp.Build(console);
 
+using var autoRefresh = D365FO.Core.Index.IndexAutoRefresh.BeginScope(enabled: !noRefresh);
 try
 {
-    return await app.RunAsync(cliArgs);
+    return await app.RunAsync(refreshArgs);
 }
 catch (CommandParseException ex)
 {
@@ -43,7 +56,7 @@ catch (CommandParseException ex)
         D365FO.Core.ToolResult<object>.Fail(
             "BAD_INPUT",
             ex.Message,
-            "Run the command with --help to see the options it actually accepts.")));
+            ArgumentShapes.HintFor(refreshArgs, ex.Message))));
     return 2;
 }
 catch (Exception ex)

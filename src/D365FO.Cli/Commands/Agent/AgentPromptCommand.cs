@@ -157,7 +157,7 @@ not invent a name.
 | Relations | `d365fo find relations <Table> --output json` |
 | Existing object extensions | `d365fo find extensions <Target> --output json` |
 | Resolve label | `d365fo labels resolve @SYS12345 --lang en-us,cs` |
-| Security trace | `d365fo security coverage <Object> --type <Kind>` |
+| Security trace | `d365fo security <Name>` (role, duty, privilege or object coverage), or `d365fo security coverage <Object> --type <Kind>` |
 
 ## 🧱 Scaffolding commands
 
@@ -223,8 +223,9 @@ d365fo generate table <Name> --pattern <preset> --field <F1>:<Edt> … --install
 ```sh
 d365fo prepare change <Table> --goal "add fields" --output json
 d365fo get edt <Edt> --output json
-# edit / regenerate, then:
-d365fo index refresh --model <Model>
+# edit / regenerate: the write re-indexes <Model> itself (data.indexRefreshed).
+# After an edit made outside d365fo (Visual Studio, git pull):
+d365fo index sync <Model>
 ```
 
 ### Hand-written X++ gate (always before writing)

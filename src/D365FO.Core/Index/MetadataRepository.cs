@@ -1044,6 +1044,65 @@ public sealed partial class MetadataRepository
         return new SecurityPrivilegeDetails(header.Name, header.Label, header.Model, eps);
     }
 
+    /// <summary>
+    /// Resolve a security name of unknown kind: a role, duty or privilege (in that
+    /// order), else the coverage of the object it names.
+    /// </summary>
+    /// <remarks>
+    /// Callers ask <c>security ContosoDealTable</c> without knowing whether the name is an
+    /// artifact or a secured object, and before this the strict sub-commands made them
+    /// guess (coverage even wanted the literal entry-point type). Coverage is gathered
+    /// from every place the index knows the object is secured: the entry-point types it
+    /// is granted under, the menu items that open it, and the table itself (XDS).
+    /// Returns <c>null</c> when none of those know the name, so the caller can say so
+    /// instead of reporting an empty coverage that reads as "nobody has access".
+    /// </remarks>
+    public SecurityLookup? ResolveSecurityName(string name)
+    {
+        var role = GetSecurityRole(name);
+        var duty = GetSecurityDuty(name);
+        var privilege = GetSecurityPrivilege(name);
+
+        var targets = new List<(string ObjectName, string ObjectType)>();
+        using (var conn = OpenReadOnly())
+        {
+            targets.AddRange(conn.Query<(string, string)>(@"
+                SELECT DISTINCT ObjectName, ObjectType FROM SecurityPrivilegeEntryPoints
+                WHERE ObjectName = @n AND ObjectType IS NOT NULL", new { n = name }));
+            // A form, class or report is granted through the menu items that open it,
+            // and a menu item through itself.
+            targets.AddRange(conn.Query<(string, string)>(@"
+                SELECT DISTINCT Name, 'MenuItem' || Kind FROM MenuItems
+                WHERE Object = @n OR Name = @n
+                ORDER BY Name", new { n = name }));
+            if (conn.ExecuteScalar<long>("SELECT COUNT(*) FROM Tables WHERE Name = @n", new { n = name }) > 0)
+                targets.Add((name, "Table"));
+        }
+        targets = targets
+            .DistinctBy(t => (t.ObjectName.ToUpperInvariant(), t.ObjectType.ToUpperInvariant()))
+            .ToList();
+
+        var matched = new List<string>();
+        if (role is not null) matched.Add("role");
+        if (duty is not null) matched.Add("duty");
+        if (privilege is not null) matched.Add("privilege");
+        if (targets.Count > 0) matched.Add("coverage");
+        if (matched.Count == 0) return null;
+
+        var resolvedAs = matched[0];
+        var coverage = resolvedAs == "coverage"
+            ? targets.Select(t => GetSecurityCoverage(t.ObjectName, t.ObjectType)).ToList()
+            : new List<SecurityCoverage>();
+        return new SecurityLookup(
+            name,
+            resolvedAs,
+            resolvedAs == "role" ? role : null,
+            resolvedAs == "duty" ? duty : null,
+            resolvedAs == "privilege" ? privilege : null,
+            coverage,
+            matched.Skip(1).ToList());
+    }
+
     public IReadOnlyList<TableMethodInfo> GetTableMethods(string table)
     {
         using var conn = OpenReadOnly();

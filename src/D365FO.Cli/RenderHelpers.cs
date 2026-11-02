@@ -42,6 +42,11 @@ public static class RenderHelpers
 
     public static int Render<T>(OutputMode.Kind kind, ToolResult<T> result, Action<T>? tableRenderer, bool resolveLabels)
     {
+        // A write this command made is re-indexed before its result is shown, so the next command
+        // reads what was just written. Nothing is pending unless the command journaled a write.
+        if (IndexAutoRefresh.CurrentScope?.Flush() is { } refreshed)
+            return RenderRefreshed(kind, result, tableRenderer, resolveLabels, refreshed);
+
         if (resolveLabels && result.Ok && result.Data is not null)
         {
             try
@@ -93,6 +98,28 @@ public static class RenderHelpers
         }
 
         return result.Ok ? 0 : 1;
+    }
+
+    /// <summary>
+    /// Render a result after the auto-refresh ran: <c>data.indexRefreshed</c> in JSON, one extra
+    /// line under a table.
+    /// </summary>
+    private static int RenderRefreshed<T>(
+        OutputMode.Kind kind, ToolResult<T> result, Action<T>? tableRenderer, bool resolveLabels,
+        IReadOnlyList<IndexAutoRefresh.ModelRefresh> refreshed)
+    {
+        if (kind == OutputMode.Kind.Table && tableRenderer is not null)
+        {
+            var code = Render(kind, result, tableRenderer, resolveLabels);
+            foreach (var r in refreshed)
+                AnsiConsole.MarkupLine(r.Ok
+                    ? $"[grey]index refreshed: {Escape(r.Model)} ({r.ElapsedMs} ms)[/]"
+                    : $"[yellow]warn[/] index not refreshed for {Escape(r.Model)}: {Escape(r.Error)}. Run `d365fo index sync {Escape(r.Model)}`.");
+            return code;
+        }
+
+        var envelope = new ToolResult<object>(result.Ok, result.Data, result.Error, result.Warnings);
+        return Render(kind, IndexAutoRefresh.Attach(envelope, refreshed), null, resolveLabels);
     }
 
     private static IReadOnlyCollection<string> ResolveLanguages()

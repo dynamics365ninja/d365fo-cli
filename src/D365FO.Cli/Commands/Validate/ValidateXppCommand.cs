@@ -22,6 +22,10 @@ public sealed class ValidateXppCommand : Command<ValidateXppCommand.Settings>
         [System.ComponentModel.Description("Path to the X++ / XML file to validate. Omit to read from stdin.")]
         public string? File { get; init; }
 
+        [CommandOption("--file <PATH>")]
+        [System.ComponentModel.Description("Same as the FILE argument, for callers that pass the path as an option.")]
+        public string? FileOption { get; init; }
+
         [CommandOption("--code-type <TYPE>")]
         [System.ComponentModel.Description("xpp (default) for X++ source, xml-table for AxTable XML, xml-report for AxReport XML, xml-any for other XML. Auto-detected from file extension/content when omitted.")]
         public string? CodeType { get; init; }
@@ -35,12 +39,15 @@ public sealed class ValidateXppCommand : Command<ValidateXppCommand.Settings>
     {
         var kind = OutputMode.Resolve(settings.Output);
 
-        var (code, error) = ValidateInput.ReadCode(settings.File);
+        var (file, conflict) = ValidateInput.ResolveFile(settings.File, settings.FileOption, "validate xpp");
+        if (conflict is not null) return RenderHelpers.Render(kind, conflict);
+
+        var (code, error) = ValidateInput.ReadCode(file);
         if (error is not null)
             return RenderHelpers.Render(kind, ToolResult<object>.Fail("INPUT_NOT_FOUND", error,
                 "Pass a file path or pipe code via stdin: `cat MyClass.xpp | d365fo validate xpp`."));
 
-        var codeType = XppValidator.NormalizeCodeType(settings.CodeType ?? DetectCodeType(settings.File, code!));
+        var codeType = XppValidator.NormalizeCodeType(settings.CodeType ?? DetectCodeType(file, code!));
 
         // Property rules read mined statistics when an index exists; validation
         // itself never requires one (static defaults apply otherwise).
@@ -54,7 +61,7 @@ public sealed class ValidateXppCommand : Command<ValidateXppCommand.Settings>
 
         // The path is passed through so XML013 can judge the folder the file sits in — it has
         // nothing to say when the document arrived on stdin.
-        var violations = XppValidator.Validate(code!, codeType, stats, settings.File);
+        var violations = XppValidator.Validate(code!, codeType, stats, file);
         var errors = violations.Count(v => v.Severity == "error");
         var warnings = violations.Count(v => v.Severity == "warning");
 
@@ -114,6 +121,23 @@ public sealed class ValidateXppCommand : Command<ValidateXppCommand.Settings>
 /// <summary>Shared file/stdin input reader for the validate commands.</summary>
 internal static class ValidateInput
 {
+    /// <summary>
+    /// The file to read, from the <c>[FILE]</c> argument or the <c>--file</c> option.
+    /// Agents reach for <c>--file</c> (the agent prompt itself documented it before either
+    /// command accepted it), so both spellings work. Two different paths is a refusal,
+    /// not a silent pick of one.
+    /// </summary>
+    public static (string? File, ToolResult<object>? Conflict) ResolveFile(string? argument, string? option, string command)
+    {
+        if (string.IsNullOrEmpty(option)) return (argument, null);
+        if (string.IsNullOrEmpty(argument) || string.Equals(argument, option, StringComparison.Ordinal))
+            return (option, null);
+
+        return (null, ToolResult<object>.Fail(D365FoErrorCodes.BadInput,
+            $"Two different files given: FILE '{argument}' and --file '{option}'.",
+            $"Pass one path, either `d365fo {command} <FILE>` or `d365fo {command} --file <FILE>`."));
+    }
+
     public static (string? Code, string? Error) ReadCode(string? file)
     {
         if (!string.IsNullOrEmpty(file))

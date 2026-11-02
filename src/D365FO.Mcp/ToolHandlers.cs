@@ -341,6 +341,25 @@ public sealed partial class ToolHandlers
             : ToolResult<object>.Success(p);
     }
 
+    /// <summary>
+    /// A security name of unknown kind: role, duty or privilege, else the coverage of the
+    /// object it names (<c>security_info(mode=any)</c>, CLI <c>security any</c> and bare
+    /// <c>security &lt;NAME&gt;</c>).
+    /// </summary>
+    public ToolResult<object> ResolveSecurityName(string name)
+    {
+        if (string.IsNullOrWhiteSpace(name))
+            return ToolResult<object>.Fail(D365FoErrorCodes.BadInput, "A name is required.",
+                "Pass the role, duty, privilege or object name to look up.");
+
+        var found = _repo.ResolveSecurityName(name);
+        return found is null
+            ? ToolResult<object>.Fail(D365FoErrorCodes.SecurityNotFound,
+                $"'{name}' is not an indexed role, duty or privilege, and no privilege, menu item or table names it.",
+                $"Names are matched exactly. Find the exact name with `d365fo search any {name}` (MCP: search(type=any)).")
+            : ToolResult<object>.Success(found);
+    }
+
     // ---- Models ----
 
     public ToolResult<object> ListModels()
@@ -2749,7 +2768,8 @@ public sealed partial class ToolHandlers
                 "allModels cannot be combined with xref: the xref query is not scoped by model.",
                 "Drop allModels (the xref answer already covers every module), or drop xref for the text scan.");
         if (xref)
-            return D365FO.Core.Xref.XrefReferences.Find(name, kind, model, limit, lines);
+            return D365FO.Core.Xref.XrefReferences.Find(name, kind, model, limit, lines,
+                ownerOf: symbol => D365FO.Core.Bridge.XrefCoverage.OwnerOf(symbol, _repo));
 
         // An unknown kind used to pass through and "simply match nothing" — a clean empty
         // answer to a typo.

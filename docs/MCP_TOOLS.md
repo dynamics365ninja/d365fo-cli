@@ -365,6 +365,7 @@ Security lookup. `mode=artifact` returns a named role/duty/privilege (set `type`
 | `d365fo get privilege` | `mode=artifact,type=privilege` |
 | `d365fo get role` | `mode=artifact,type=role` |
 | `d365fo get security` | `mode=coverage` |
+| `d365fo security any` | `mode=any` |
 | `d365fo security coverage` | `mode=coverage` |
 | `d365fo security duty` | `mode=artifact,type=duty` |
 | `d365fo security privilege` | `mode=artifact,type=privilege` |

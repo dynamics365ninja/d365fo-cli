@@ -1,8 +1,8 @@
 using System.IO.Pipes;
 using System.Net;
 using System.Net.Sockets;
-using D365FO.Cli.Commands.Index;
 using D365FO.Core;
+using D365FO.Core.Index;
 using D365FO.Mcp;
 using Spectre.Console.Cli;
 
@@ -81,7 +81,7 @@ public sealed class DaemonStartCommand : AsyncCommand<DaemonStartCommand.Setting
         public string? DatabasePath { get; init; }
 
         [CommandOption("--packages <PATH>")]
-        [System.ComponentModel.Description("PackagesLocalDirectory to watch for XML changes. Defaults to D365FO_PACKAGES_PATH.")]
+        [System.ComponentModel.Description("PackagesLocalDirectory to watch for metadata changes. Defaults to D365FO_PACKAGES_PATH. The D365FO_CUSTOM_PACKAGES_PATH roots are watched as well.")]
         public string? PackagesPath { get; init; }
 
         [CommandOption("--foreground")]
@@ -130,9 +130,10 @@ public sealed class DaemonStartCommand : AsyncCommand<DaemonStartCommand.Setting
         using var cts = new CancellationTokenSource();
         Console.CancelKeyPress += (_, e) => { e.Cancel = true; cts.Cancel(); };
 
-        // Resolve packages path for the file watcher.
-        var packagesPath = settings.PackagesPath
-            ?? D365FoSettings.FromEnvironment(settings.DatabasePath).PackagesPath;
+        // Every root the index reads from: --packages (or D365FO_PACKAGES_PATH) and the custom
+        // roots, the same set `index refresh` extracts.
+        var watchRoots = IndexAutoRefresh.ConfiguredRoots(settings.DatabasePath, settings.PackagesPath);
+        var packagesPath = watchRoots.FirstOrDefault();
 
         var summary = ToolResult<object>.Success(new
         {
@@ -140,8 +141,9 @@ public sealed class DaemonStartCommand : AsyncCommand<DaemonStartCommand.Setting
             pid = Environment.ProcessId,
             pidFile = DaemonEndpoint.PidFilePath,
             platform = OperatingSystem.IsWindows() ? "windows-named-pipe" : "unix-socket",
-            watching = !settings.NoWatch && !string.IsNullOrWhiteSpace(packagesPath),
-            watchPath = string.IsNullOrWhiteSpace(packagesPath) ? null : packagesPath,
+            watching = !settings.NoWatch && watchRoots.Count > 0,
+            watchPath = packagesPath,
+            watchPaths = watchRoots.Count > 0 ? watchRoots : null,
             watchDebounceMs = settings.WatchDebounceMs,
         });
 
@@ -149,9 +151,9 @@ public sealed class DaemonStartCommand : AsyncCommand<DaemonStartCommand.Setting
         RenderHelpers.Render(kind, summary);
 
         // Start file watcher if requested.
-        using var watcher = settings.NoWatch || string.IsNullOrWhiteSpace(packagesPath)
+        using var watcher = settings.NoWatch
             ? null
-            : StartWatcher(packagesPath, settings.DatabasePath, settings.WatchDebounceMs, cts.Token);
+            : StartWatchers(watchRoots, settings.DatabasePath, settings.WatchDebounceMs, cts.Token);
 
         try
         {
@@ -166,26 +168,35 @@ public sealed class DaemonStartCommand : AsyncCommand<DaemonStartCommand.Setting
     }
 
     /// <summary>
-    /// Creates a <see cref="FileSystemWatcher"/> over <paramref name="packagesPath"/>
-    /// that debounces XML changes and triggers an incremental <c>index refresh</c>
-    /// for the affected model. Returns the watcher so the caller can dispose it.
+    /// One <see cref="FileSystemWatcher"/> per packages root — <c>D365FO_PACKAGES_PATH</c> and every
+    /// <c>D365FO_CUSTOM_PACKAGES_PATH</c> root — that debounces metadata changes and re-syncs the
+    /// affected model. Dispose the returned handle to stop all of them.
     /// </summary>
-    private static FileSystemWatcher? StartWatcher(
-        string packagesPath, string? dbPath, int debounceMs, CancellationToken ct)
+    /// <remarks>
+    /// It used to watch the packages path only, so on a UDE, where custom models live in their own
+    /// root, an edit to a custom model was never seen. And it re-read the model through a bare
+    /// extract: no extra roots (a custom model was not found), and no <c>--index-source</c> (a model
+    /// that had method bodies in the full-text index lost them on the first save). The refresh now
+    /// goes through <see cref="IndexAutoRefresh.RefreshModel"/>, the same per-model sync a write
+    /// uses, which searches every configured root and keeps the model's method-source state.
+    /// </remarks>
+    internal static IDisposable? StartWatchers(
+        IReadOnlyList<string> roots, string? dbPath, int debounceMs, CancellationToken ct)
     {
-        if (!Directory.Exists(packagesPath)) return null;
+        var existing = roots.Where(Directory.Exists).ToList();
+        if (existing.Count == 0) return null;
 
         // model name → debounce timer
         var pending = new Dictionary<string, Timer>(StringComparer.OrdinalIgnoreCase);
         var @lock = new object();
 
-        void ScheduleRefresh(string modelName)
+        void ScheduleRefresh(string modelName, string root)
         {
             lock (@lock)
             {
-                if (pending.TryGetValue(modelName, out var existing))
+                if (pending.TryGetValue(modelName, out var existingTimer))
                 {
-                    existing.Change(debounceMs, Timeout.Infinite);
+                    existingTimer.Change(debounceMs, Timeout.Infinite);
                     return;
                 }
                 pending[modelName] = new Timer(state =>
@@ -197,52 +208,73 @@ public sealed class DaemonStartCommand : AsyncCommand<DaemonStartCommand.Setting
                     }
                     self?.Dispose();
                     if (ct.IsCancellationRequested) return;
-                    // Fire-and-forget incremental extract for this model only.
-                    try
-                    {
-                        IndexExtractCommand.ExtractCore(
-                            OutputMode.Kind.Json,
-                            packagesPath,
-                            dbPath,
-                            modelName,
-                            sinceIso: null);
-                        Console.Error.WriteLine(
-                            D365Json.Serialize(new { @event = "index_refreshed", model = modelName }));
-                    }
-                    catch (Exception ex)
-                    {
-                        Console.Error.WriteLine(
-                            D365Json.Serialize(new { @event = "index_refresh_failed", model = modelName, error = ex.Message }));
-                    }
+                    var r = IndexAutoRefresh.RefreshModel(modelName, root, dbPath);
+                    Console.Error.WriteLine(D365Json.Serialize(r.Ok
+                        ? new { @event = "index_refreshed", model = modelName, elapsedMs = r.ElapsedMs, methodSourceIndexed = r.MethodSourceIndexed } as object
+                        : new { @event = "index_refresh_failed", model = modelName, error = r.Error }));
                 }, null, debounceMs, Timeout.Infinite);
             }
         }
 
-        void OnChanged(object _, FileSystemEventArgs e)
+        var watchers = new List<FileSystemWatcher>();
+        foreach (var root in existing)
         {
-            // D365FO layout: packagesPath/<package>/<model>/Ax*/*.xml
-            // parts[0] = package name, parts[1] = model name.
-            // In the common case where package == model, parts[0] works too,
-            // but we must use parts[1] for ISV models where they differ.
-            var rel = Path.GetRelativePath(packagesPath, e.FullPath);
-            var parts = rel.Split(Path.DirectorySeparatorChar, StringSplitOptions.RemoveEmptyEntries);
-            if (parts.Length < 2) return;
-            ScheduleRefresh(parts[1]);
-        }
+            var fullRoot = Path.TrimEndingDirectorySeparator(Path.GetFullPath(root));
+            void OnChanged(object _, FileSystemEventArgs e)
+            {
+                // <root>/<package>/<model>/Ax*/*.xml — the model is the second segment, which is not
+                // the package for ISV models where the two differ.
+                if (IndexAutoRefresh.LocateUnderRoots(e.FullPath, new[] { fullRoot }) is { } hit)
+                    ScheduleRefresh(hit.Model, hit.Root);
+            }
 
-        var fsw = new FileSystemWatcher(packagesPath)
-        {
-            IncludeSubdirectories = true,
-            Filter = "*.xml",
-            NotifyFilter = NotifyFilters.LastWrite | NotifyFilters.FileName,
-            EnableRaisingEvents = true,
-        };
-        fsw.Changed += OnChanged;
-        fsw.Created += OnChanged;
-        fsw.Deleted += OnChanged;
-        fsw.Renamed += (s, e) => OnChanged(s, e);
-        return fsw;
+            // One root that cannot be watched (a network share without change notifications, a
+            // root removed since it was resolved) must not take the daemon or the other roots down.
+            FileSystemWatcher? fsw = null;
+            try
+            {
+                fsw = new FileSystemWatcher(fullRoot)
+                {
+                    IncludeSubdirectories = true,
+                    NotifyFilter = NotifyFilters.LastWrite | NotifyFilters.FileName,
+                };
+                // Label files are metadata too: a label added in Visual Studio changes the model.
+                fsw.Filters.Add("*.xml");
+                fsw.Filters.Add("*.label.txt");
+                fsw.Changed += OnChanged;
+                fsw.Created += OnChanged;
+                fsw.Deleted += OnChanged;
+                fsw.Renamed += (s, e) => OnChanged(s, e);
+                // A burst larger than the buffer (git checkout, a full build) drops events silently
+                // unless this is reported; `index sync` / `index refresh` is then the repair.
+                fsw.Error += (_, e) => Console.Error.WriteLine(D365Json.Serialize(
+                    new { @event = "watch_error", root = fullRoot, error = e.GetException().Message }));
+                fsw.EnableRaisingEvents = true;
+                watchers.Add(fsw);
+            }
+            catch (Exception ex)
+            {
+                fsw?.Dispose();
+                Console.Error.WriteLine(D365Json.Serialize(
+                    new { @event = "watch_failed", root = fullRoot, error = ex.Message }));
+            }
+        }
+        return watchers.Count == 0 ? null : new WatcherSet(watchers);
     }
+
+    private sealed class WatcherSet(IReadOnlyList<FileSystemWatcher> watchers) : IDisposable
+    {
+        public IReadOnlyList<FileSystemWatcher> Watchers { get; } = watchers;
+
+        public void Dispose()
+        {
+            foreach (var w in Watchers) w.Dispose();
+        }
+    }
+
+    /// <summary>The paths a watcher handle covers, for tests.</summary>
+    internal static IReadOnlyList<string> WatchedPaths(IDisposable? handle)
+        => handle is WatcherSet set ? set.Watchers.Select(w => w.Path).ToList() : Array.Empty<string>();
 
     private static async Task AcceptLoop(StdioDispatcher dispatcher, CancellationToken ct)
     {
