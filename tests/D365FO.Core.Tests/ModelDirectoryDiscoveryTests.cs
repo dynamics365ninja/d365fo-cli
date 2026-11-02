@@ -53,11 +53,31 @@ public sealed class ModelDirectoryDiscoveryTests : IDisposable
     }
 
     [Fact]
-    public void Marker_folder_name_matches_case_insensitively_as_the_old_probe_did_on_Windows()
+    public void Marker_folder_name_follows_the_file_system_case_rule_as_the_old_probe_did()
     {
         Dir("Pkg", "Model", "axclass");
 
-        Assert.True(ObjectTypeRegistry.IsModelDirectory(Path.Combine(_root, "Pkg", "Model")));
+        // The old Directory.Exists probe was case-insensitive on Windows/macOS and exact on Linux,
+        // where the extractor then reads AxClass by its exact name and would find nothing.
+        Assert.Equal(!OperatingSystem.IsLinux(),
+            ObjectTypeRegistry.IsModelDirectory(Path.Combine(_root, "Pkg", "Model")));
+    }
+
+    [Fact]
+    public void A_folder_that_cannot_be_listed_but_can_be_traversed_is_still_probed()
+    {
+        if (OperatingSystem.IsWindows()) return; // needs Unix modes; the probe fallback is OS-agnostic
+        var model = Path.Combine(_root, "Pkg", "Model");
+        Dir("Pkg", "Model", "AxClass");
+        File.SetUnixFileMode(model, UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+        try
+        {
+            Assert.True(ObjectTypeRegistry.IsModelDirectory(model));
+        }
+        finally
+        {
+            File.SetUnixFileMode(model, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+        }
     }
 
     [Fact]
