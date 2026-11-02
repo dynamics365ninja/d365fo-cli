@@ -19,6 +19,32 @@ was ported from.
 
 ## [Unreleased]
 
+### Added — `build --xref` fills the cross-reference database, and `find refs --xref` says when it is empty
+
+`find refs --xref` on a custom symbol failed `XREF_UNAVAILABLE … did not respond within 10s`. Two causes:
+nothing writes DYNAMICSXREFDB for a custom model on a developer machine (the CLI's own xppc call passed
+no cross-reference switches, and UDE and `pac` deployments do not either), and the bridge gave a query
+over the whole standard application 10 s while the database itself allows 15 s to connect and 30 s to run.
+
+- **`d365fo build --xref`** (MCP `sdlc action=build xref=true`) passes xppc's documented switches
+  (`-xref`, `-xrefSqlServer=`, `-xrefDbName=`, from `xppc.exe -?`) with the server and database read
+  from `D365FO_XREF_CONNECTIONSTRING`, so the build writes where the reader looks. In a multi-model
+  build every model but the last gets `-norecreatecrossrefindexes`, as xppc's help asks; when the build
+  stops before its last model, an `-xrefonly` run of the last model that compiled recreates the
+  indexes anyway (payload `xrefIndexes`). A SQL login
+  in the connection string, or `--engine msbuild`, is refused rather than dropped.
+- **An empty xref answer over a module with no rows is refused**, with the build that fills it:
+  "DYNAMICSXREFDB has 0 rows for module CCTPM … `d365fo build --model CCTPM --xref`". An answer with
+  rows from other modules is kept with a warning, and a failed query over such a module names that
+  cause next to the transport error. Both the direct query and the bridge fallback, and both CLI
+  `find refs --xref` and MCP `find_references xref:true`, are judged alike. The coverage probe is one
+  parameterised existence query per module over the same direct connection, with a new bridge method
+  `xrefCoverage` as its fallback. When the index records no package folder for the symbol's model,
+  coverage is unknown: an empty answer stays an answer, with a warning naming the build, rather than
+  a guess from the model name.
+- **Cross-reference bridge calls (the fallback) get a 60 s budget** instead of the 10 s metadata one,
+  so a slow query ends with the database's own error.
+
 ### Changed — `find refs` answers "who uses X" by name, and `--xref` no longer needs the bridge
 
 Follow-up to the outside CLI vs XRef DB vs grep benchmark, which measured `find refs` at 3–30×

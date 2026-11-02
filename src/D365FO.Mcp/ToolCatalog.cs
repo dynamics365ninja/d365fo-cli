@@ -863,7 +863,9 @@ public static class ToolCatalog
             + "• build — compiles `project` (an .rnrproj, a solution, or a folder) or `model` "
             + "(comma-separated). X++ projects and models go to LabelC.exe + xppc.exe — the .rnrproj "
             + "MSBuild tasks only run inside Visual Studio — with `incremental` for a changed-only "
-            + "compile and `packagesPath` for the platform root; anything else goes to MSBuild "
+            + "compile, `packagesPath` for the platform root and `xref` to also update the "
+            + "cross-reference database (D365FO_XREF_CONNECTIONSTRING) that `find refs --xref` reads; "
+            + "anything else goes to MSBuild "
             + "(`configuration`, default Debug; `msbuild` to override the executable). `engine` "
             + "(auto|xppc|msbuild) forces a route. Returns per-diagnostic X++ compiler findings — object, "
             + "member, line, column, message and a fix hint — not a log tail, and says when xppc "
@@ -887,6 +889,7 @@ public static class ToolCatalog
             Schema(("action", "string", true), ("project", "string", false), ("configuration", "string", false),
                    ("msbuild", "string", false), ("xppcLog", "string", false),
                    ("engine", "string", false), ("incremental", "boolean", false),
+                   ("xref", "boolean", false),
                    ("full", "boolean", false), ("tool", "string", false),
                    ("testClasses", "array", false), ("granularity", "string", false),
                    ("resultsPath", "string", false), ("parallel", "boolean", false),
@@ -904,7 +907,7 @@ public static class ToolCatalog
                         StrOrNull(p, "msbuild"), StrOrNull(p, "project"),
                         StrOr(p, "configuration", "Debug"), StrOrNull(p, "xppcLog"),
                         StrOrNull(p, "model"), StrOr(p, "engine", "auto"), Bool(p, "incremental"),
-                        StrOrNull(p, "packagesPath")),
+                        StrOrNull(p, "packagesPath"), Bool(p, "xref")),
                     "sync" or "db-sync" => D365FO.Core.Ops.SdlcRunner.Sync(StrOrNull(p, "tool"), Bool(p, "full")),
                     "test" or "systest" => D365FO.Core.Ops.SdlcRunner.RunTests(
                         StrOrNull(p, "tool"), StrArray(p, "testClasses"), StrOrNull(p, "granularity"),

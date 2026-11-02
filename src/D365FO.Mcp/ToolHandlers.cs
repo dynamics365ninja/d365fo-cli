@@ -2740,7 +2740,8 @@ public sealed partial class ToolHandlers
                 "allModels cannot be combined with xref: the xref query is not scoped by model.",
                 "Drop allModels (the xref answer already covers every module), or drop xref for the text scan.");
         if (xref)
-            return D365FO.Core.Xref.XrefReferences.Find(name, kind, model, limit, lines);
+            return D365FO.Core.Xref.XrefReferences.Find(name, kind, model, limit, lines,
+                ownerOf: symbol => D365FO.Core.Bridge.XrefCoverage.OwnerOf(symbol, _repo));
 
         // An unknown kind used to pass through and "simply match nothing" — a clean empty
         // answer to a typo.

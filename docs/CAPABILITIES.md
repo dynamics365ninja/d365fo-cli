@@ -141,7 +141,7 @@ find extensions <target>              — All object extensions
 find handlers <object>                — Event subscribers
 find relations <table>                — FK relations
 find refs <needle>                    — Who uses it: one row per object + matching methods (FTS5 when `--index-source` was used, else on-demand source scan); --lines N for sample lines. A form hit names its member: `init`, `CustTable.init`, `CustTable.AccountNum.modified`, `OkButton.clicked`. Each model is answered from the index when it has source indexed, else from disk. Without `--model` the scope is the source-indexed models plus the custom models (`D365FO_CUSTOM_MODELS`); `--all-models` scans every other model from disk too. The answer carries `scope` and a `coverage` block (models from the index, from disk, not searched). `Owner.member` (or `Owner::member`) without `--xref` searches the member and keeps methods that also mention Owner, flagged `match.kind: member-text`. A needle the index does not know gets a `hint`
-find refs --xref                      — The compiler's where-used from DYNAMICSXREFDB, queried directly: one row per object + members + reference kinds; --lines 1 for path/line/kind
+find refs --xref                      — The compiler's where-used from DYNAMICSXREFDB, queried directly: one row per object + members + reference kinds; --lines 1 for path/line/kind. Refuses an empty answer when the symbol's module has no rows there, and names the build that fills it (`build --model <Model> --xref`)
 find form-patterns [--pattern P]      — Form pattern histogram / filter
 find batch-jobs [--model M]           — RunBaseBatch subclasses
 ```
@@ -639,6 +639,7 @@ Wraps the Microsoft tools Visual Studio uses.
 
 ```powershell
 d365fo build --project path/to/MyModel.rnrproj   # LabelC + xppc; or --model MyModel [--incremental]
+d365fo build --model MyModel --xref              # also write DYNAMICSXREFDB (xppc -xref), what find refs --xref reads
 d365fo sync --full
 d365fo test run --suite MyModel.Tests
 d365fo bp check --model MyModel
