@@ -45,6 +45,20 @@ public static class XppSourceReader
         => src.Methods.FirstOrDefault(m => string.Equals(m.Name, methodName, StringComparison.OrdinalIgnoreCase));
 
     /// <summary>
+    /// <see cref="FindMethod"/>, plus the owner-qualified form member names that <c>find refs</c>
+    /// reports (<c>CustTable.init</c>, <c>CustTable.AccountNum.modified</c>, <c>OkButton.clicked</c> —
+    /// see <see cref="FormMethodSource"/>), so a hit can be read back by the name it was reported under.
+    /// </summary>
+    public static SourceBlock? FindMember(SourceResult src, string methodName)
+    {
+        var hit = FindMethod(src, methodName);
+        if (hit is not null || !methodName.Contains('.')) return hit;
+        var member = FormMethodSource.Read(src.Path)?
+            .FirstOrDefault(m => string.Equals(m.Name, methodName, StringComparison.OrdinalIgnoreCase));
+        return member is null ? null : new SourceBlock("Method", member.Name, member.Body);
+    }
+
+    /// <summary>
     /// Return a contiguous slice of <paramref name="body"/> by 1-based line
     /// numbers. Clamps to body bounds. <paramref name="fromLine"/> &lt; 1 is
     /// treated as 1, <paramref name="toLine"/> past the end is clamped to the
