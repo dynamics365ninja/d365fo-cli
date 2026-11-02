@@ -74,6 +74,26 @@ public sealed class MethodSourceSplicerTests
     }
 
     [Fact]
+    public void Macro_in_a_parameter_default_or_attribute_argument_does_not_block_the_splice()
+    {
+        const string source = "\n    [SysObsolete(#ObsoleteText, false)]\n    public void new(int _maxRows = #DefaultMaxRows)\n    {\n        old();\n    }\n";
+
+        var result = MethodSourceSplicer.Splice(source, "a();", "new");
+
+        Assert.Null(result.Error);
+        Assert.Equal("\n    [SysObsolete(#ObsoleteText, false)]\n    public void new(int _maxRows = #DefaultMaxRows)\n    {\n        a();\n    }\n", result.Source);
+    }
+
+    [Fact]
+    public void Header_line_that_starts_with_a_macro_is_refused()
+    {
+        var result = MethodSourceSplicer.Splice("\n    #localmacro.Sig void run() #endmacro\n    #Sig\n    {\n    }\n", "a();", "run");
+
+        Assert.Null(result.Source);
+        Assert.Equal(MethodSourceSplicer.BodyNotFound, result.Code);
+    }
+
+    [Fact]
     public void Text_after_the_closing_brace_makes_the_body_ambiguous_and_is_refused()
     {
         var result = MethodSourceSplicer.Splice("    void a() { }\n    void b() { }\n", "x();", "a");

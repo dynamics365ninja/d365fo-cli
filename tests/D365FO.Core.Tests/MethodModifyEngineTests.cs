@@ -281,6 +281,21 @@ public sealed class MethodModifyEngineTests : IDisposable
         Assert.Null(MethodSourceSplicer.RefuseDeclarationAsBody(body, "calc"));
     }
 
+    [Fact]
+    public void Body_is_spliced_into_a_method_whose_signature_uses_a_macro()
+    {
+        var classXml = "<AxClass><Name>CustBalance</Name><SourceCode><Methods>" +
+                       "<Method><Name>calc</Name><Source><![CDATA[\n    public real calc(int _max = #MaxRows)\n    {\n        return 1;\n    }\n]]></Source></Method>" +
+                       "</Methods></SourceCode></AxClass>";
+
+        var (result, written, writeCalled) = RunModify(classXml,
+            new MethodModifyEngine.ModifyRequest("class", "CustBalance", "calc", "return 2;", Model: "ApplicationSuite"));
+
+        Assert.True(result.Ok, result.Error?.Message);
+        Assert.True(writeCalled);
+        Assert.Contains("public real calc(int _max = #MaxRows)\n    {\n        return 2;\n    }", written!.Replace("\r\n", "\n"));
+    }
+
     [Theory]
     [InlineData("    abstract real calc()\n    {\n    }\n", "abstract")]
     [InlineData("    delegate void calc(real _x)\n    {\n    }\n", "delegate")]

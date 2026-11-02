@@ -52,6 +52,8 @@ internal static class MethodSourceSplicer
 
     private static readonly Regex Identifier = new(@"^[A-Za-z_][A-Za-z0-9_]*$", RegexOptions.CultureInvariant);
 
+    private static readonly Regex MacroLine = new(@"^[ \t]*#", RegexOptions.CultureInvariant | RegexOptions.Multiline);
+
     private static readonly Regex HeaderWord = new(@"\b(abstract|delegate)\b", RegexOptions.CultureInvariant | RegexOptions.IgnoreCase);
 
     /// <summary>
@@ -71,8 +73,10 @@ internal static class MethodSourceSplicer
                 "There is nothing to put statements into. Change the declaration with `generate`, or edit the method in Visual Studio.");
         }
 
+        // Only a line that starts with '#' (a macro invocation or directive) makes the declaration
+        // macro-dependent; a macro used as a parameter default or attribute argument does not.
         var header = blanked[..open];
-        if (header.Contains('#'))
+        if (MacroLine.IsMatch(header))
         {
             return Result.Fail(BodyNotFound,
                 $"Method '{methodName}' is declared through a macro, so its body is only known after preprocessing.",
