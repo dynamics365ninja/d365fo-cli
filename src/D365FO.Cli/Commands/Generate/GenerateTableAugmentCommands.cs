@@ -89,7 +89,24 @@ internal static class TableAugment
         try
         {
             var res = GenerateInstaller.Write(gate, doc, path, overwrite: true);
-            return (new { path = res.Path, added, backup = res.BackupPath }, null);
+
+            // The write path parks the previous file as <Table>.xml.bak beside it, which inside a
+            // model folder ends up in source control. The journal already holds the pre-image,
+            // so `d365fo undo` is the way back and the sibling is not kept.
+            var backupRemoved = false;
+            if (res.BackupPath is { } bak && File.Exists(bak))
+            {
+                try { File.Delete(bak); backupRemoved = true; }
+                catch { /* a leftover .bak is harmless; the write itself succeeded */ }
+            }
+
+            return (new
+            {
+                path = res.Path,
+                added,
+                backup = backupRemoved ? null : res.BackupPath,
+                undo = "The previous file is journaled: `d365fo undo` restores it.",
+            }, null);
         }
         catch (Exception ex)
         {
@@ -118,7 +135,7 @@ public sealed class GenerateTableRelationCommand : Command<GenerateTableRelation
         public string[]? Fields { get; init; }
 
         [CommandOption("--apply-to <PATH>")]
-        [System.ComponentModel.Description("Merge the relations into this existing AxTable XML (atomic write, .bak sibling; a relation the table already declares is skipped). Omit to print the fragments only.")]
+        [System.ComponentModel.Description("Merge the relations into this existing AxTable XML (atomic write; the previous file is journaled for `d365fo undo`, no .bak is left beside it; a relation the table already declares is skipped). Omit to print the fragments only.")]
         public string? ApplyTo { get; init; }
     }
 
@@ -214,15 +231,23 @@ public sealed class GenerateFindMethodsCommand : Command<GenerateFindMethodsComm
         public string[]? Keys { get; init; }
 
         [CommandOption("--no-exists")]
-        [System.ComponentModel.Description("Skip exists().")]
+        [System.ComponentModel.Description("Skip the existence check (exist()).")]
         public bool NoExists { get; init; }
+
+        [CommandOption("--exist-name <NAME>")]
+        [System.ComponentModel.Description("Name of the existence check: exist (default, the standard application's CustTable::exist) or exists.")]
+        public string? ExistName { get; init; }
+
+        [CommandOption("--var <NAME>")]
+        [System.ComponentModel.Description("Local buffer variable name. Default: the table name in camelCase, a leading prefix lowered as a whole (XYZPilotTable → xyzPilotTable).")]
+        public string? Var { get; init; }
 
         [CommandOption("--no-find-recid")]
         [System.ComponentModel.Description("Skip findRecId().")]
         public bool NoFindRecId { get; init; }
 
         [CommandOption("--apply-to <PATH>")]
-        [System.ComponentModel.Description("Merge the methods into this existing AxTable XML's <SourceCode> (atomic write, .bak sibling; a method the table already declares is skipped, never overwritten). Omit to print the X++ only.")]
+        [System.ComponentModel.Description("Merge the methods into this existing AxTable XML's <SourceCode> (atomic write; the previous file is journaled for `d365fo undo`, no .bak is left beside it; a method the table already declares is skipped, never overwritten). Omit to print the X++ only.")]
         public string? ApplyTo { get; init; }
     }
 
@@ -232,6 +257,8 @@ public sealed class GenerateFindMethodsCommand : Command<GenerateFindMethodsComm
         if (string.IsNullOrWhiteSpace(settings.Table))
             return RenderHelpers.Render(kind, ToolResult<object>.Fail(D365FoErrorCodes.BadInput, "Table name required."));
         if (TableAugment.RejectScaffoldOutputOptions(kind, settings) is int rejected) return rejected;
+        if (TableAugmentScaffolder.ValidateFindMethodNames(settings.ExistName, settings.Var) is { } badName)
+            return RenderHelpers.Render(kind, ToolResult<object>.Fail(D365FoErrorCodes.BadInput, badName));
 
         var (table, failure) = TableAugment.ResolveTable(kind, settings.Table, out _);
         if (failure.HasValue) return failure.Value;
@@ -244,11 +271,12 @@ public sealed class GenerateFindMethodsCommand : Command<GenerateFindMethodsComm
         {
             warnings.Add(
                 "No unique key could be determined (no alternate-key or unique index in the index data), so only " +
-                "findRecId() is generated — RecId always exists. Pass --key <Field> to get key-based find()/exists().");
+                "findRecId() is generated — RecId always exists. Pass --key <Field> to get key-based find()/exist().");
         }
 
         var methods = TableAugmentScaffolder.BuildFindMethods(
-            tableName, keys, includeExists: !settings.NoExists, includeFindRecId: !settings.NoFindRecId);
+            tableName, keys, includeExists: !settings.NoExists, includeFindRecId: !settings.NoFindRecId,
+            existName: settings.ExistName, bufferName: settings.Var);
 
         if (methods.Count == 0)
             return RenderHelpers.Render(kind, ToolResult<object>.Fail(D365FoErrorCodes.BadInput,

@@ -580,6 +580,7 @@ public static class ToolCatalog
                    ("documentType", "string", false), ("baseController", "string", false),
                    ("controller", "string", false), ("keys", "array", false),
                    ("noExists", "boolean", false), ("noFindRecId", "boolean", false),
+                   ("existName", "string", false), ("var", "string", false),
                    ("from", "string", false), ("rebind", "array", false), ("form", "string", false),
                    ("dataSource", "string", false), ("control", "string", false), ("returnType", "string", false),
                    ("body", "string", false),
@@ -657,7 +658,8 @@ public static class ToolCatalog
                                         StrOrNull(p, "design"), StrOrNull(p, "documentType"), StrOrNull(p, "baseController"),
                                         StrOrNull(p, "controller"), StrOrNull(p, "suffix")),
                 "find-methods"    => h.GenerateFindMethods(StrOr(p, "table", Str(p, "name")), StrArray(p, "keys"),
-                                        !Bool(p, "noExists"), !Bool(p, "noFindRecId")),
+                                        !Bool(p, "noExists"), !Bool(p, "noFindRecId"),
+                                        StrOrNull(p, "existName"), StrOrNull(p, "var")),
                 "table-relation"  => h.GenerateTableRelation(StrOr(p, "table", Str(p, "name")), StrArray(p, "fields")),
                 "form-clone"      => h.GenerateFormClone(Str(p, "name"), StrOrNull(p, "from"), StrArray(p, "rebind")),
                 "datasource-method" => h.GenerateFormMethod(StrOr(p, "form", Str(p, "name")), StrOrNull(p, "dataSource"),
@@ -709,11 +711,14 @@ public static class ToolCatalog
 
         new Descriptor("modify_object", ToolEffect.Destructive,
             "Structured edits to an EXISTING object beyond its method bodies, via D365FO.Bridge (Windows VM, " +
-            "requires D365FO_BRIDGE_ENABLED=1). `action` names the edit — the same twenty the CLI's `d365fo " +
+            "requires D365FO_BRIDGE_ENABLED=1). `action` names the edit — the same twenty-one the CLI's `d365fo " +
             "modify` sub-commands carry:\n" +
             "• property — set `member` (Label, ConfigurationKey, TableGroup, …) to `value` on any kind\n" +
             "• add-field / remove-field / rename-field — a field on table `name`; on add, `type` is the EDT and " +
-            "decides the concrete AxTableField subtype (`label`, `mandatory` optional); on rename, `newName`\n" +
+            "decides the concrete AxTableField subtype (`label`, `mandatory`, `noEdit`, `noEditOnCreate` optional); on rename, `newName`\n" +
+            "• field-property — set `property` (AllowEdit, AllowEditOnCreate, Mandatory, Visible, HelpText, " +
+            "IgnoreEDTRelation, StringSize, …) of table field `member` to `value`; checked against the field's " +
+            "AOT contract, NoYes properties take Yes/No\n" +
             "• add-index / remove-index — an index `member` over `fields` (order is the key order); unique " +
             "unless `allowDuplicates`, `alternateKey` marks it an alternate key\n" +
             "• add-relation / remove-relation — a foreign key `member` to `relatedTable`.`relatedField`\n" +
@@ -742,7 +747,8 @@ public static class ToolCatalog
             "undo_last_modification. No on-disk fallback: fails BRIDGE_REQUIRED when the bridge is unavailable.",
             Schema(("action", "string", false), ("kind", "string", true), ("name", "string", true),
                    ("member", "string", false), ("value", "string", false), ("type", "string", false),
-                   ("label", "string", false), ("mandatory", "boolean", false), ("parent", "string", false),
+                   ("label", "string", false), ("mandatory", "boolean", false), ("noEdit", "boolean", false),
+                   ("noEditOnCreate", "boolean", false), ("property", "string", false), ("parent", "string", false),
                    ("dataSource", "string", false), ("dataField", "string", false), ("model", "string", false),
                    ("fields", "array", false), ("relatedTable", "string", false), ("relatedField", "string", false),
                    ("deleteAction", "string", false), ("allowDuplicates", "boolean", false),
@@ -1087,6 +1093,9 @@ public static class ToolCatalog
             Type = StrOrNull(p, "type"),
             Label = StrOrNull(p, "label"),
             Mandatory = Bool(p, "mandatory"),
+            NoEdit = Bool(p, "noEdit"),
+            NoEditOnCreate = Bool(p, "noEditOnCreate"),
+            Property = StrOrNull(p, "property"),
             Parent = StrOrNull(p, "parent"),
             DataSource = StrOrNull(p, "dataSource"),
             DataField = StrOrNull(p, "dataField"),

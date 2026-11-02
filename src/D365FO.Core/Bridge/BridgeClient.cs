@@ -60,6 +60,14 @@ public sealed record BridgeOptions
     public TimeSpan RequestTimeout { get; init; } = TimeSpan.FromSeconds(10);
 
     /// <summary>
+    /// Budget for the first request after the bridge process is spawned. That request also pays
+    /// for loading the metadata assemblies and the provider, which on a cold machine alone can
+    /// exceed <see cref="RequestTimeout"/>, so a first <c>createObject</c> timed out and the
+    /// write fell back. The larger of the two applies.
+    /// </summary>
+    public TimeSpan ColdStartTimeout { get; init; } = TimeSpan.FromSeconds(60);
+
+    /// <summary>
     /// When true, <see cref="BridgeClient"/> resolves the executable path but
     /// does not spawn — caller supplies the stdio streams. Used by tests.
     /// </summary>
@@ -115,6 +123,7 @@ public sealed class BridgeClient : IDisposable
     private TextReader? reader;
     private int nextId;
     private bool disposed;
+    private bool coldStart;
 
     /// <summary>
     /// Create a client that spawns <c>D365FO.Bridge.exe</c> on first call.
@@ -190,6 +199,11 @@ public sealed class BridgeClient : IDisposable
         string? responseLine;
         lock (gate)
         {
+            var timeout = coldStart && options.ColdStartTimeout > options.RequestTimeout
+                ? options.ColdStartTimeout
+                : options.RequestTimeout;
+            coldStart = false;
+
             writer.WriteLine(line);
             writer.Flush();
 
@@ -197,7 +211,7 @@ public sealed class BridgeClient : IDisposable
             // enforce the configured timeout via Task.WhenAny.
             var readTask = Task.Run(() => reader.ReadLine(), CancellationToken.None);
             using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancel);
-            cts.CancelAfter(options.RequestTimeout);
+            cts.CancelAfter(timeout);
             var timeoutTask = Task.Delay(Timeout.InfiniteTimeSpan, cts.Token);
             var completed = Task.WhenAny(readTask, timeoutTask).GetAwaiter().GetResult();
             if (completed != readTask)
@@ -210,7 +224,7 @@ public sealed class BridgeClient : IDisposable
                 cancel.ThrowIfCancellationRequested();
                 DiscardProcess();
                 throw new BridgeException(
-                    $"Bridge did not respond within {options.RequestTimeout.TotalSeconds:F0}s (method: {method}). " +
+                    $"Bridge did not respond within {timeout.TotalSeconds:F0}s (method: {method}). " +
                     "The bridge process was restarted; retry the call.");
             }
 
@@ -373,6 +387,7 @@ public sealed class BridgeClient : IDisposable
 
             writer = process.StandardInput;
             reader = process.StandardOutput;
+            coldStart = true;
         }
     }
 
