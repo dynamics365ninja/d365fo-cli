@@ -280,7 +280,7 @@ Pass `--project <path>.rnrproj` to any `generate` command to list every object i
 | `generate simple-list` | Alias for `generate form --pattern SimpleList` |
 | `modify method` | Replace an existing method's body on a live class/table/edt/form via D365FO.Bridge (`IMetadataProvider`, structured `XDocument` replace — no CDATA string surgery, no on-disk fallback). `--body` is statements only: they replace what sits between the method's outer braces, and the doc comment, attributes and signature are kept. A full declaration passed as `--body` is refused, and so is a method with no body (abstract, delegate, interface). `--source` replaces the whole method instead and must declare exactly that one method. Reference/BP validation always blocks on error-severity findings. |
 | `modify property` | Set a property (`Label`, `ConfigurationKey`, `TableGroup`, …) on a live object. |
-| `modify add-field` | Add a field to a live table; the concrete `AxTableField*` subtype is resolved from the EDT's indexed base type. |
+| `modify add-field` | Add a field to a live table; the concrete `AxTableField*` subtype is resolved from the EDT's indexed base type, and a base enum becomes `AxTableFieldEnum` with `EnumType`. A type the index cannot resolve is guessed from its name and reported as `EDT_BASETYPE_UNRESOLVED`. |
 | `modify add-enum-value` | Add a value to a live base enum — positional, never a hard-coded ordinal. |
 | `modify add-control` | Add a control to a live form's Design, optionally inside `--parent` and bound to `--datasource`/`--datafield`. |
 

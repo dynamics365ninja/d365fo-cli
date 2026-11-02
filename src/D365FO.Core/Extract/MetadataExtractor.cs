@@ -720,9 +720,7 @@ public sealed class MetadataExtractor
         if (root is null) return null;
         var name = Local(root, "Name") ?? Path.GetFileNameWithoutExtension(file);
         var extends = Local(root, "Extends");
-        var baseType = root.Name.LocalName.StartsWith("AxEdt", StringComparison.Ordinal)
-            ? root.Name.LocalName.Substring("AxEdt".Length)
-            : null;
+        var baseType = EdtBaseTypeOf(root);
         var label = Local(root, "Label");
         int? stringSize = int.TryParse(Local(root, "StringSize"), out var s) ? s : null;
         return new ExtractedEdt(name, extends, baseType, label, stringSize)
@@ -732,6 +730,32 @@ public sealed class MetadataExtractor
             AnalysisUsage  = Local(root, "AnalysisUsage"),
             EnumType       = Local(root, "EnumType"),
         };
+    }
+
+    private static readonly XName XsiType = XName.Get("type", "http://www.w3.org/2001/XMLSchema-instance");
+
+    /// <summary>
+    /// The primitive base type of an EDT file (<c>Real</c>, <c>Int64</c>, <c>Enum</c>, …).
+    /// </summary>
+    /// <remarks>
+    /// Issue #233. Every EDT file, shipped or custom, has the abstract root element
+    /// <c>&lt;AxEdt&gt;</c> and names the concrete type in its discriminator,
+    /// <c>i:type="AxEdtReal"</c>. Reading the element name alone stored an empty base type for
+    /// every EDT in the index, and every scaffolder that types a field from it fell back to a
+    /// name guess that defaults to String. The element name is still honoured when there is no
+    /// discriminator, for a file written with the concrete element as its root.
+    /// </remarks>
+    internal static string? EdtBaseTypeOf(XElement root)
+    {
+        var typeName = (string?)root.Attribute(XsiType);
+        if (string.IsNullOrWhiteSpace(typeName)) typeName = root.Name.LocalName;
+        // A discriminator may carry a namespace prefix of its own (`q1:AxEdtReal`).
+        var colon = typeName.IndexOf(':');
+        if (colon >= 0) typeName = typeName[(colon + 1)..];
+        const string prefix = "AxEdt";
+        return typeName.StartsWith(prefix, StringComparison.Ordinal) && typeName.Length > prefix.Length
+            ? typeName[prefix.Length..]
+            : null;
     }
 
     private static ExtractedEnum? ParseEnum(XDocument doc, string file)

@@ -83,6 +83,15 @@ d365fo generate table FmVehicle \
 `--primary-key <Field>` is repeatable. Falls back to "all mandatory fields",
 then "first field" so `BPCheckAlternateKeyAbsent` never trips.
 
+Each field's concrete type (`AxTableFieldReal`, `AxTableFieldInt64`, …) comes from
+the indexed base type of its EDT, so `--field Amt:AmountCur` is a Real field. A
+`<type>` that is a base enum rather than an EDT (`--field Status:SalesStatus`)
+becomes `AxTableFieldEnum` with `<EnumType>` and no `<ExtendedDataType>`. A type
+the index knows neither way is guessed from its name (String by default) and the
+result carries an `EDT_BASETYPE_UNRESOLVED` warning — check the field, or run
+`d365fo index refresh` if the index predates schema v21. `generate map` and
+`modify add-field` type fields the same way.
+
 The CLI returns a JSON summary `{path, bytes, backup, pattern, tableType,
 usedPatternDefaults, fieldCount}` — never request the full XML back.
 

@@ -320,25 +320,17 @@ internal static class GenerateInstaller
     }
 
     /// <summary>
-    /// Build an EDT → primitive-base-type resolver backed by the SQLite index.
-    /// Passed to <see cref="XppScaffolder.Table"/> so each field gets its
-    /// concrete <c>i:type="AxTableField{Suffix}"</c> discriminator (issue #91).
-    /// Returns null when the index is unavailable — the scaffolder then falls
-    /// back to a name heuristic.
+    /// Build the field-type resolver backed by the SQLite index: EDT → primitive base type,
+    /// base enum → <see cref="FieldTypeResolver.BaseEnum"/>. Passed to the table, map and
+    /// extension scaffolders so each field gets its concrete <c>i:type</c> discriminator
+    /// (issues #91, #233). When the index is unavailable the resolver resolves nothing, every
+    /// field falls back to the name heuristic, and <see cref="FieldTypeResolver.Warning"/>
+    /// says so.
     /// </summary>
-    internal static Func<string, string?>? BuildEdtBaseTypeResolver()
+    internal static FieldTypeResolver BuildEdtBaseTypeResolver()
     {
-        try
-        {
-            var repo = RepoFactory.Create();
-            return edt =>
-            {
-                if (string.IsNullOrWhiteSpace(edt)) return null;
-                try { return repo.GetEdt(edt)?.BaseType; }
-                catch { return null; }
-            };
-        }
-        catch { return null; }
+        try { return FieldTypeResolver.For(RepoFactory.Create()); }
+        catch { return FieldTypeResolver.For(null); }
     }
 
     /// <summary>
@@ -763,7 +755,7 @@ public sealed class GenerateTableCommand : Command<GenerateTableCommand.Settings
         // stamps the concrete i:type discriminator on every <AxTableField>.
         var edtResolver = GenerateInstaller.BuildEdtBaseTypeResolver();
         var doc = XppScaffolder.Table(settings.Name, settings.Label, fields2, pattern, storage, settings.PrimaryKey,
-            settings.ConfigurationKey, settings.FormRef, edtResolver, fieldGroupSpecs, indexSpecs);
+            settings.ConfigurationKey, settings.FormRef, edtResolver.Resolve, fieldGroupSpecs, indexSpecs);
 
         var fieldCount = fields2.Count > 0 ? fields2.Count : TablePatternPresets.DefaultFieldsFor(pattern).Count;
         var patternStr = pattern == TablePattern.None ? null : pattern.ToString();
@@ -783,6 +775,7 @@ public sealed class GenerateTableCommand : Command<GenerateTableCommand.Settings
                 "`d365fo validate xpp` reports XML003 for that. Pass --pattern (main|transaction|parameter|group|" +
                 "worksheet-header|worksheet-line|reference|framework|miscellaneous) to stamp the table's business role.");
         }
+        if (edtResolver.Warning() is { } typeWarning) warnings.Add(typeWarning);
 
         // Grounding gate (issue #161): every generate subcommand runs it, not just the
         // extension-shaped three. A table is bound to its own name — that is what
@@ -1441,7 +1434,7 @@ internal static class GenerateFormImpl
                     return D365FO.Core.FormPatterns.FieldControlTypes.For("AxTableFieldEnum", info.EnumType);
 
                 string? baseType = null;
-                try { baseType = info.Edt is null ? null : repo.GetEdt(info.Edt)?.BaseType; }
+                try { baseType = info.Edt is null ? null : repo.GetEdtBaseType(info.Edt); }
                 catch { /* index hiccup — fall back below */ }
 
                 return D365FO.Core.FormPatterns.FieldControlTypes.ForEdtBaseType(baseType);

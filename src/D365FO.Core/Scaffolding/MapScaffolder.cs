@@ -40,7 +40,7 @@ public static class MapScaffolder
     /// <param name="label">Optional label.</param>
     /// <param name="edtBaseTypeResolver">
     /// Optional EDT → primitive base-type callback (typically
-    /// <c>MetadataRepository.GetEdt(name)?.BaseType</c>) used to stamp each field's
+    /// <see cref="FieldTypeResolver.Resolve"/>) used to stamp each field's
     /// concrete <c>i:type</c>. Shares <see cref="XppScaffolder"/>'s resolution, so a
     /// map field and a table field on the same EDT cannot disagree. Falls back to a
     /// name heuristic when null or unresolved.
@@ -83,11 +83,14 @@ public static class MapScaffolder
                 throw new ArgumentException($"Map field '{f.Name}' needs an EDT — it determines the field's type.", nameof(fields));
 
             var suffix = XppScaffolder.ConcreteFieldSuffix(f.Edt, edtBaseTypeResolver);
+            // Same rule as a table field: a base enum is written as EnumType, never as an EDT.
+            var isBaseEnum = XppScaffolder.IsBaseEnum(f.Edt, edtBaseTypeResolver);
             var el = new XElement("AxMapBaseField",
                 new XAttribute(XName.Get("type", xsi.NamespaceName), $"AxMapField{suffix}"),
                 new XElement("Name", f.Name),
-                new XElement("ExtendedDataType", f.Edt));
+                isBaseEnum ? null : new XElement("ExtendedDataType", f.Edt));
             if (!string.IsNullOrEmpty(f.Label)) el.Add(new XElement("Label", f.Label));
+            if (isBaseEnum) el.Add(new XElement("EnumType", f.Edt));
             return el;
         });
 
