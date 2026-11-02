@@ -122,6 +122,33 @@ public sealed class FindReferencesScopeTests : IDisposable
     }
 
     [Fact]
+    public void An_empty_answer_for_a_named_model_does_not_point_at_all_models()
+    {
+        var result = Find("OtherService", model: "TestModel");
+
+        Assert.Empty(result.Hits);
+        Assert.Equal(["StdModel"], result.Coverage!.NotSearched);
+        Assert.DoesNotContain("--all-models", result.Caveat ?? "");
+    }
+
+    [Fact]
+    public void Model_names_that_differ_only_in_case_do_not_break_the_search()
+    {
+        using (var conn = new Microsoft.Data.Sqlite.SqliteConnection(_repo.ConnectionString))
+        {
+            conn.Open();
+            using var cmd = conn.CreateCommand();
+            cmd.CommandText = "INSERT INTO Models(Name, IsCustom, SourceIndexed) VALUES('testmodel', 0, 0);";
+            cmd.ExecuteNonQuery();
+        }
+
+        var result = Find("FmVehicleService");
+
+        Assert.Contains(result.Hits, h => h.Model == "TestModel");
+        Assert.Equal(0, result.FilesScanned);
+    }
+
+    [Fact]
     public void With_nothing_source_indexed_or_custom_every_model_is_scanned_and_the_note_says_why()
     {
         Assert.True(IndexSync.Sync("TestModel", null, Path.Combine(_root, "packages"), _db, indexSource: false).Ok);

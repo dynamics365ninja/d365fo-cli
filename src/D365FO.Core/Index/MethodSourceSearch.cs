@@ -173,7 +173,9 @@ public static class MethodSourceSearch
         // a model with FTS rows is answered from them, every other model in scope from disk.
         var states = repo.GetModelSourceStates();
         var coverage = ResolveScope(states, model, allModels, customModelPatterns, out var inScope);
-        var levels = states.ToDictionary(m => m.Name, m => m.Level, StringComparer.OrdinalIgnoreCase);
+        var levels = states
+            .GroupBy(m => m.Name, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(g => g.Key, g => g.Max(m => m.Level), StringComparer.OrdinalIgnoreCase);
         var ftsModels = inScope
             .Where(m => levels.GetValueOrDefault(m) >= SourceIndexLevel.ClassesAndTables)
             .OrderBy(m => m, StringComparer.OrdinalIgnoreCase)
@@ -224,8 +226,9 @@ public static class MethodSourceSearch
         };
 
         // An empty answer with models left out is not "unused": say which part was not looked at.
+        // Not for a named --model: the rest was left out on purpose, and --all-models with --model is refused.
         var caveat = result.Caveat;
-        if (caveat is null && hits.Count == 0 && coverage.NotSearched.Count > 0)
+        if (caveat is null && hits.Count == 0 && coverage.Scope == "default" && coverage.NotSearched.Count > 0)
             caveat = $"{coverage.NotSearched.Count} model(s) were not searched. An empty result covers only the "
                    + "models in `coverage`. Pass --all-models (MCP: allModels) to scan the rest from disk, or "
                    + "--model to name one.";
