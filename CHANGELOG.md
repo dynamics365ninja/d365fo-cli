@@ -29,6 +29,9 @@ pointed a throwaway profile at a scratch model store.
 
 - An explicit `0` / `false` is now honoured by every `BridgeGate` helper. An unset flag keeps the
   old behaviour, so an installation that relies on finding the executable is not broken.
+- `modify` / `modify method` and `undo` of a bridge-made change, which spawned the bridge
+  directly rather than through `BridgeGate`, honour the switch-off too and say so; `--verify`
+  reports the bridge as switched off rather than missing.
 
 ### Fixed — lookups that answered nothing, or a different question, without saying so
 

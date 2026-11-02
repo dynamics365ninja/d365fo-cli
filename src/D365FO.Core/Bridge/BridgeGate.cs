@@ -388,6 +388,8 @@ public static class BridgeGate
 
         // Same availability check the read/write helpers use — no second notion of
         // "is the runtime here".
+        if (ExplicitlyDisabled())
+            return (VerifyOutcome.Skipped, "the metadata bridge is switched off (D365FO_BRIDGE_ENABLED).");
         if (!Usable())
             return (VerifyOutcome.Skipped, "the D365FO Metadata API runtime is not available.");
 
