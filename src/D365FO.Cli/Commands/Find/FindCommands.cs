@@ -201,6 +201,10 @@ public sealed class FindRefsCommand : Command<FindRefsCommand.Settings>
         [System.ComponentModel.Description("Default 0: one row per referencing object, with its matching methods (xref: members and reference kinds). N > 0: one row per method with up to N sample lines and the source path (xref: one row per reference with line/column) — several times the tokens.")]
         public int Lines { get; init; }
 
+        [CommandOption("--all-models")]
+        [System.ComponentModel.Description("Text scan without --model: also scan every model that has no source index and is not custom, from disk (minutes on a full installation). By default those are left out and counted in `coverage.notSearched`.")]
+        public bool AllModels { get; init; }
+
         [CommandOption("--xref")]
         [System.ComponentModel.Description("Answer from DYNAMICSXREFDB — compiler-resolved and complete, unlike the text scan. Queried directly (D365FO_XREF_CONNECTIONSTRING, default local SQL with integrated auth); the metadata bridge is the fallback when D365FO_BRIDGE_ENABLED=1. Fails XREF_UNAVAILABLE rather than falling back to the text scan.")]
         public bool Xref { get; init; }
@@ -219,8 +223,14 @@ public sealed class FindRefsCommand : Command<FindRefsCommand.Settings>
         // it answers or fails: the text scan is a different, less complete answer
         // and must not stand in for it unannounced.
         if (settings.Xref)
+        {
+            if (settings.AllModels)
+                return RenderHelpers.Render(kind, ToolResult<object>.Fail(D365FoErrorCodes.BadInput,
+                    "--all-models cannot be combined with --xref: the xref query is not scoped by model.",
+                    "Drop --all-models (the xref answer already covers every module), or drop --xref for the text scan."));
             return RenderHelpers.Render(kind, D365FO.Core.Xref.XrefReferences.Find(
                 settings.Name, settings.Kind, settings.Model, settings.Limit, settings.Lines));
+        }
 
         // Regex scan over indexed X++ source — shared with the unified
         // `find_references` MCP tool (D365FO.Mcp.ToolHandlers.FindReferences).
@@ -230,7 +240,8 @@ public sealed class FindRefsCommand : Command<FindRefsCommand.Settings>
         {
             var repo = RepoFactory.Create();
             var result = new D365FO.Mcp.ToolHandlers(repo)
-                .FindReferences(settings.Name, settings.Kind, settings.Model, settings.Limit, settings.Lines);
+                .FindReferences(settings.Name, settings.Kind, settings.Model, settings.Limit, settings.Lines,
+                    allModels: settings.AllModels);
             return RenderHelpers.Render(kind, result);
         }
         catch (Exception ex)
@@ -359,7 +370,8 @@ public sealed class FindRelatedCommand : Command<FindRelatedCommand.Settings>
     }
 
     private static int RenderRefs(OutputMode.Kind output, D365FO.Core.Index.MetadataRepository repo, string name, string? kind, int limit) =>
-        // Shared with `find refs` and the MCP find_references tool, so all three answer alike.
+        // Shared with `find refs` and the MCP find_references tool, so all three answer alike
+        // (names-only rows, plus the scope/coverage/hint of the text scan).
         RenderHelpers.Render(output, new D365FO.Mcp.ToolHandlers(repo).FindReferences(name, kind, model: null, limit));
 
     private static int RenderItems<T>(OutputMode.Kind output, IReadOnlyList<T> items)

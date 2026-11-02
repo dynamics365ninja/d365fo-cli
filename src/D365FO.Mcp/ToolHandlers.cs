@@ -1715,7 +1715,7 @@ public sealed partial class ToolHandlers
             });
         }
 
-        var hit = XppSourceReader.FindMethod(src, method!);
+        var hit = XppSourceReader.FindMember(src, method!);
         if (hit is null)
             return ToolResult<object>.Fail("METHOD_NOT_FOUND",
                 $"Method '{method}' not found on {kind} '{name}'.",
@@ -2725,11 +2725,20 @@ public sealed partial class ToolHandlers
     /// to that many sample lines and the source path (with <paramref name="xref"/>: one row per
     /// reference, with line and column).
     /// </param>
+    /// <param name="allModels">
+    /// Without <paramref name="model"/>, also scan from disk the models that have no source index
+    /// and are not custom. Off, those are left out and counted in <c>coverage.notSearched</c>.
+    /// </param>
     public ToolResult<object> FindReferences(
-        string name, string? kind, string? model, int limit = 200, int lines = 0, bool xref = false)
+        string name, string? kind, string? model, int limit = 200, int lines = 0, bool xref = false,
+        bool allModels = false)
     {
         if (string.IsNullOrWhiteSpace(name))
             return ToolResult<object>.Fail("BAD_INPUT", "name is required.");
+        if (allModels && xref)
+            return ToolResult<object>.Fail(D365FoErrorCodes.BadInput,
+                "allModels cannot be combined with xref: the xref query is not scoped by model.",
+                "Drop allModels (the xref answer already covers every module), or drop xref for the text scan.");
         if (xref)
             return D365FO.Core.Xref.XrefReferences.Find(name, kind, model, limit, lines);
 
@@ -2740,12 +2749,16 @@ public sealed partial class ToolHandlers
             return ToolResult<object>.Fail(D365FoErrorCodes.BadInput,
                 $"Unknown kind '{kind}' for the text scan.",
                 "Use class | table | form. A reference kind (Call, Read, Set, …) needs the xref query.");
+        if (allModels && !string.IsNullOrWhiteSpace(model))
+            return ToolResult<object>.Fail(D365FoErrorCodes.BadInput,
+                "allModels and model contradict each other.",
+                "Name one model with --model (MCP: model), or search every model with --all-models (MCP: allModels).");
         if (!ModelFilter.TryResolve(_repo, model, out model, out var badModel)) return badModel!;
         if (limit <= 0) limit = 200;
 
         if (lines > 0)
         {
-            var result = MethodSourceSearch.Find(_repo, name, kind, model, limit, sampleLinesPerHit: lines);
+            var result = MethodSourceSearch.Find(_repo, name, kind, model, limit, sampleLinesPerHit: lines, allModels: allModels);
             var items = result.Hits.Select(h => new
             {
                 kind = h.Kind,
@@ -2763,6 +2776,10 @@ public sealed partial class ToolHandlers
                 mode = "methods",
                 filesScanned = result.FilesScanned,
                 searched = result.Searched,
+                scope = result.Coverage?.Scope,
+                coverage = MethodSourceSearch.CoveragePayload(result.Coverage),
+                match = MethodSourceSearch.MemberMatchPayload(result.Member),
+                hint = result.Hint,
                 count = items.Count,
                 truncated = result.Truncated,
                 items,
@@ -2773,7 +2790,7 @@ public sealed partial class ToolHandlers
         // are read than objects returned, so the object list is not cut short by objects with
         // many matching methods.
         var hitLimit = (int)Math.Min((long)limit * HitsPerObject, 10000);
-        var scan = MethodSourceSearch.Find(_repo, name, kind, model, hitLimit, sampleLinesPerHit: 0);
+        var scan = MethodSourceSearch.Find(_repo, name, kind, model, hitLimit, sampleLinesPerHit: 0, allModels: allModels);
         var objects = scan.Hits
             .GroupBy(h => (h.Kind, h.Name, h.Model))
             .Select(g => new
@@ -2792,6 +2809,10 @@ public sealed partial class ToolHandlers
             mode = "names",
             filesScanned = scan.FilesScanned,
             searched = scan.Searched,
+            scope = scan.Coverage?.Scope,
+            coverage = MethodSourceSearch.CoveragePayload(scan.Coverage),
+            match = MethodSourceSearch.MemberMatchPayload(scan.Member),
+            hint = scan.Hint,
             count = Math.Min(objects.Count, limit),
             matchedMethods = scan.Hits.Count,
             truncated = scan.Truncated || objects.Count > limit,

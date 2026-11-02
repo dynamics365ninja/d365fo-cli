@@ -169,6 +169,12 @@ public sealed record LabelMatch(string File, string Language, string Key, string
 /// <param name="Signature">Signature as extracted, or null when the extractor captured none.</param>
 public sealed record MethodDeclaration(string Owner, string OwnerKind, string Model, string? Signature);
 
+/// <summary>One model as a method-body search sees it: custom or not, and how much of it is in the source index.</summary>
+/// <param name="Name">Model name.</param>
+/// <param name="IsCustom">Extracted as a custom model (<c>Models.IsCustom</c>).</param>
+/// <param name="Level">A <see cref="SourceIndexLevel"/> value.</param>
+public sealed record ModelSourceState(string Name, bool IsCustom, int Level);
+
 public sealed record MethodSourceMatch(
     string Kind,
     string ObjectName,

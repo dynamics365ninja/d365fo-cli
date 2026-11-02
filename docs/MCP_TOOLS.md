@@ -62,7 +62,7 @@ D365FO extensibility analyzer. Pick a `mode`: coc (Chain-of-Command extensions f
 
 ### `find_references`
 
-Where a symbol is used. Default: text scan of indexed X++ source — `kind` (class/table/form) and `model` narrow it. `xref: true`: the compiler's cross-reference (DYNAMICSXREFDB) — complete and compiler-resolved, `kind` is a reference kin…
+Where a symbol is used. Default: text scan of indexed X++ source — `kind` (class/table/form) and `model` narrow it. Without `model` the scope is the models with source indexed plus the custom models; `allModels: true` also scans every ot…
 
 | CLI command | Discriminator |
 |---|---|
