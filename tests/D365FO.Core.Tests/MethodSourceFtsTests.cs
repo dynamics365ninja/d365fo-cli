@@ -270,6 +270,26 @@ public class MethodSourceFtsTests : IDisposable
     }
 
     [Fact]
+    public void A_form_member_hit_reads_back_by_the_name_it_was_reported_under()
+    {
+        Ingest(indexSource: true);
+        var hit = Assert.Single(MethodSourceSearch.Find(_repo, "addSortField", kind: null, model: null, limit: 50).Hits);
+        var handlers = new D365FO.Mcp.ToolHandlers(_repo);
+
+        var read = handlers.ReadMethod("form", hit.Name, hit.Method, include: "source");
+
+        Assert.True(read.Ok, read.Error?.Message);
+        var json = System.Text.Json.JsonSerializer.Serialize(read.Data);
+        Assert.Contains("addSortField", json);
+        Assert.Contains("\"method\":\"FmVehicle.init\"", json);
+        Assert.True(handlers.ReadMethod("form", "FmVehicleList", "RunServiceButton.clicked", include: "source").Ok);
+        // A bare name still finds the form's own method, not the data source's.
+        Assert.DoesNotContain("addSortField",
+            System.Text.Json.JsonSerializer.Serialize(handlers.ReadMethod("form", "FmVehicleList", "init", include: "source").Data));
+        Assert.Equal("METHOD_NOT_FOUND", handlers.ReadMethod("form", "FmVehicleList", "NoSuchDs.init").Error?.Code);
+    }
+
+    [Fact]
     public void Disk_scan_names_form_members_the_same_way_as_the_index()
     {
         Ingest(indexSource: true);

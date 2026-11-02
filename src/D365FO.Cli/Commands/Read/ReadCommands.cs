@@ -19,7 +19,7 @@ public abstract class ReadBaseCommand<TSettings> : Command<TSettings>
         public string Name { get; init; } = "";
 
         [CommandOption("--method <NAME>")]
-        [System.ComponentModel.Description("If set, return only the source of this method.")]
+        [System.ComponentModel.Description("If set, return only the source of this method. On a form, also takes the owner-qualified name `find refs` reports (e.g. CustTable.init).")]
         public string? Method { get; init; }
 
         [CommandOption("--declaration")]
@@ -58,7 +58,7 @@ public abstract class ReadBaseCommand<TSettings> : Command<TSettings>
 
         if (!string.IsNullOrWhiteSpace(settings.Method))
         {
-            var m = XppSourceReader.FindMethod(src, settings.Method!);
+            var m = XppSourceReader.FindMember(src, settings.Method!);
             if (m is null)
             {
                 return RenderHelpers.Render(kind,

@@ -54,6 +54,8 @@ was ported from.
   `init` (form), `CustTable.init` (data source), `CustTable.AccountNum.modified` (data source
   field), `OkButton.clicked` (control). The bare name sent the reader to whichever `init` came
   first, and sample lines were read from it. Form-level methods keep their bare name.
+  `read form <Form> --method CustTable.init` and MCP `get_method(objectType=form, method=…)`
+  accept the qualified name, so a hit can be read back by the name it was reported under.
 
 ### Fixed — the post-write refresh no longer drops a model from the method-body index
 
