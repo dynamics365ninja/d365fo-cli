@@ -147,6 +147,14 @@ public sealed record ExtractedForm(string Name, string? SourcePath, IReadOnlyLis
     public string? PatternVersion { get; init; }
     public string? Style { get; init; }
     public string? TitleDataSource { get; init; }
+    /// <summary>
+    /// Method bodies of the form, its data sources, their fields and its controls, named by
+    /// <see cref="D365FO.Core.Extract.FormMethodSource"/>. Transient like
+    /// <see cref="ExtractedMethod.Body"/>: only filled when source capture is on, and consumed by
+    /// <c>ApplyExtract</c> to feed <c>MethodSourceFts</c>.
+    /// </summary>
+    public IReadOnlyList<D365FO.Core.Extract.FormMethodSource.Member> MethodBodies { get; init; }
+        = Array.Empty<D365FO.Core.Extract.FormMethodSource.Member>();
 }
 public sealed record ExtractedFormDataSource(string Name, string? Table)
 {

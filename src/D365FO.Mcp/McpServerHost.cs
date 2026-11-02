@@ -64,6 +64,17 @@ public static class McpServerHost
                 Name = d.Name,
                 Description = d.Description,
                 InputSchema = JsonSerializer.SerializeToElement((JsonNode)d.InputSchema),
+                // The same hints the legacy transport sends (ToolCatalog.AnnotationsFor). Without
+                // them a client on the default transport sees every tool as un-annotated, so it
+                // cannot tell delete_object from search when it decides what to confirm.
+                Annotations = new ToolAnnotations
+                {
+                    Title = (string?)ToolCatalog.AnnotationsFor(d)["title"],
+                    ReadOnlyHint = d.Effect == ToolCatalog.ToolEffect.Read,
+                    DestructiveHint = d.Effect == ToolCatalog.ToolEffect.Destructive,
+                    IdempotentHint = d.Effect != ToolCatalog.ToolEffect.Destructive,
+                    OpenWorldHint = false,
+                },
             }).ToList();
 
     public static McpServerOptions BuildOptions(ToolHandlers handlers, McpServerMode mode = McpServerMode.Full)
@@ -121,6 +132,10 @@ public static class McpServerHost
 
         var body = D365Json.Serialize(raw);
         var isError = raw is ToolResult<object> tr && !tr.Ok;
+
+        // This transport does not dedup-cache, but the cache is process-wide: flush it so a
+        // dispatcher sharing the process never serves a pre-write answer.
+        CallDedup.InvalidateAfter(request.Name);
 
         return new CallToolResult
         {

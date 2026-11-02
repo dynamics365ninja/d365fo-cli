@@ -41,6 +41,226 @@ without `--index-source` cleared the model's method-body index, so `find referen
   found no custom root and dropped the method-source index. It now watches every configured root,
   includes `*.label.txt`, and re-syncs through the same per-model path a write uses.
 
+### Changed — `find refs` answers "who uses X" by name, and `--xref` no longer needs the bridge
+
+Follow-up to the outside CLI vs XRef DB vs grep benchmark, which measured `find refs` at 3–30×
+the tokens of the cheapest route and put the cheapest, most complete route — the XRef DB —
+behind the most setup.
+
+- **Names-only by default.** `find refs` (and MCP `find_references`) returns one row per
+  referencing object with its matching methods — no sample lines, no paths — and on the FTS
+  path opens no source file at all. `--lines N` (`lines: N`) restores one row per method with up
+  to N sample lines and the path. `--limit` caps objects; more method hits are read underneath,
+  so the object list is not cut short by objects with many matches. `find related refs` uses the
+  same answer. **Breaking:** callers that read `items[].method` / `matches` / `path` must pass
+  `--lines`.
+- **`--xref` queries `DYNAMICSXREFDB` directly** through `Microsoft.Data.SqlClient`
+  (`D365FO_XREF_CONNECTIONSTRING`, default local SQL with integrated auth; `Encrypt` defaults to
+  `Optional` when unset, as the bridge's client always did). The bridge is the fallback when
+  `D365FO_BRIDGE_ENABLED=1`; both run one shared query (`D365FO.Core/Xref/XrefQuery.cs`,
+  compiled into the net48 bridge as shared source). The names-only answer is one row per
+  object with its module, reference kinds and members; `--lines 1` returns the per-reference
+  rows with line and column. MCP `find_references` gains `xref: true`. The names-only query
+  aggregates in SQL (one row per source path and kind, with a count), so a method that reads a
+  field 300 times does not use up the row budget before the next object is reached.
+- **Proven against SQL Server.** `XrefLiveSqlTests` (opt-in, `D365FO_TEST_SQLSERVER`) runs the
+  real query, connection-string default included, on a seeded throwaway database; run against
+  SQL Server 2022 in Docker, together with the trimmed single-file binary.
+- **Fixed — `--xref --kind Call` undercounted.** The reference-kind filter ran on the rows
+  `TOP` had already cut, i.e. "the Calls among the first N references of any kind". It is now
+  in the `WHERE` clause.
+- **Fixed — a bare name pooled its prefixes.** The XRef match for `SalesLine` included
+  `%/SalesLine%`, so `SalesLineType`, `SalesLine_IN` and every other object whose name merely
+  starts with the symbol counted as callers. It now matches the name as a whole path node, and
+  `LIKE` wildcards in the name (`_`, `%`, `[`) match literally — `SalesLine_IN` no longer
+  matches `SalesLineXIN`.
+- **Fixed — an unknown text-scan `--kind` matched nothing.** `--kind clas` passed through and
+  returned an empty answer; it is now `BAD_INPUT`.
+- **Globalization is no longer invariant.** `Microsoft.Data.SqlClient` refuses to connect in
+  invariant mode, so the CLI now loads ICU/NLS and pins its culture to `InvariantCulture` at
+  startup — formatting and parsing are unchanged on any OS locale (verified byte-identical on a
+  `cs_CZ` locale). Default string sorting is now linguistic rather than ordinal, as it already
+  was under the test suite. Linux without libicu: set `DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=1`
+  (xref is then unavailable). `smoke-published-cli.ps1` asserts the trimmed build reaches
+  SqlClient's connect.
+- **Dependencies:** `Microsoft.Data.SqlClient` 7.1.1 (no Azure.Identity);
+  `Microsoft.Extensions.Logging.Abstractions` 8.0.2 → 10.0.11 (SqlClient needs ≥ 9.0.18);
+  `System.Security.Cryptography.Pkcs` pinned to 10.0.13 — SqlClient's transitive 9.0.18 is
+  vulnerable to CVE-2026-84008 / CVE-2026-70162.
+
+### Fixed — `find refs` says what it searched, and stops scanning what it was not asked to
+
+- **Each model is answered from where its source is.** The search switched to the method-body
+  index as soon as ANY model had rows in it, so without `--model` the class and table callers in
+  every other model were silently missing, while every form of every model was still opened from
+  disk (104 s on a UDE). `--model` naming a model without a source index answered zero from an
+  index that held nothing for it. Now a model with source indexed is read from the index, any
+  other model from disk.
+- **Without `--model` the scope is the source-indexed models plus the custom models**
+  (`D365FO_CUSTOM_MODELS`). `--all-models` (MCP `find_references(allModels=true)`) also scans every
+  other model from disk. With nothing indexed and nothing custom, every model is scanned, as before.
+  `--all-models` with `--model` or `--xref` is `BAD_INPUT`.
+- **The answer carries `scope` and `coverage`** (`fromIndex`, `fromDisk`, `notSearched`, each
+  `{count, models}` with the names left out past 20). An empty answer with models left out says
+  so in `warnings`. The items are unchanged.
+- **`Owner.member` without `--xref` no longer returns a silent `count: 0`.** The text has no
+  `Owner.member` in it (X++ writes `Owner::member()` or `obj.member()`), so the literal search found
+  nothing. The member is searched and a method kept when it also mentions Owner or belongs to it,
+  flagged `match.kind: "member-text"`. `Owner::member` works the same way.
+- **A needle the index does not know gets a `hint`** (not an error): the search still runs, since
+  kernel functions and macros are not in the index.
+
+### Added — form methods in the method-body index
+
+- **`index extract|refresh|sync --index-source` now indexes form method bodies** (Kind `Form` in
+  `MethodSourceFts`): the form's own methods, its data sources', their fields' and its
+  controls'. Only class and table bodies went in before, so every `find refs` call opened every
+  form file of the searched models from disk — all 9,556 forms on a full UDE — even with the
+  index built. Forms of a source-indexed model are now answered from the index. A model indexed
+  by an older build keeps its forms on the disk scan until its next re-extract
+  (`Models.SourceIndexed` is a level: 1 classes and tables, 2 with forms).
+- **A form hit names the member that owns the method,** on the index and the disk path alike:
+  `init` (form), `CustTable.init` (data source), `CustTable.AccountNum.modified` (data source
+  field), `OkButton.clicked` (control). The bare name sent the reader to whichever `init` came
+  first, and sample lines were read from it. Form-level methods keep their bare name.
+  `read form <Form> --method CustTable.init` and MCP `get_method(objectType=form, method=…)`
+  accept the qualified name, so a hit can be read back by the name it was reported under.
+
+### Fixed — the post-write refresh no longer drops a model from the method-body index
+
+- **`index refresh --model X` and `index sync X` keep X's method bodies in `MethodSourceFts`.**
+  Every re-extract cleared the model's FTS rows and only refilled them when `--index-source` was
+  repeated, so the refresh the docs prescribe after a write took the model out of `find refs` —
+  which then answered from the other models as if X had no callers. Whether a model's source is
+  indexed is now stored per model (`Models.SourceIndexed`, schema v20) and a re-extract that
+  passes neither flag keeps it. The same holds for `index extract` and the daemon's watcher.
+- **`--no-index-source`** on `index extract|refresh|sync` (MCP `index_sync(noIndexSource=true)`)
+  drops a model's method bodies on purpose. Passing it with `--index-source` is `BAD_INPUT`.
+- Upgrading marks every model that already has FTS rows as indexed, so the first refresh after
+  the upgrade keeps them. `index sync` and the per-model extract output report `sourceIndexed`.
+
+### Fixed — MCP tools that write were flagged, cached and exposed as reads
+
+The write list was kept by hand and had fallen behind the catalog. `delete_object` was advertised
+`readOnlyHint: true` / `destructiveHint: false`, so clients that confirm before a destructive call
+ran it without asking. Its result went into the duplicate-call cache, and `MCP_SERVER_MODE=read-only`
+still listed it and ran it on a shared server. `index_sync` and `sdlc` were missing from the write
+list too.
+
+- **Every MCP tool declares its effect.** `ToolCatalog.Descriptor` takes a `ToolEffect` (`Read`,
+  `Write`, `Destructive`) next to the name, so a new tool cannot be added without deciding.
+  `WriteTools` is derived from it instead of kept by hand. `delete_object`, `undo_last_modification`
+  and `sdlc` (a database sync can drop columns) are destructive. `index_sync` is a write that is not
+  destructive: it rebuilds the index, which the server derives.
+- **`delete_object` is local.** `MCP_SERVER_MODE=read-only` no longer lists it, and a call fails
+  `MODE_NOT_ALLOWED`.
+- **A write flushes the duplicate-call cache.** `get_object_info` → `modify_object` →
+  `get_object_info` inside 60 s returned the pre-write object with "you already have this answer".
+  Any write-tool call now clears the cache, on stdio, `--http` and the daemon, whether or not it
+  reported success, because a refused batch or a half-failed build can still have changed disk.
+- **The invariant test reads the catalog.** It checks that every declared writer is in `WriteTools`
+  and `LocalTools` and is hidden in read-only mode, and that no tool declared `Read` takes a writer's
+  argument (`installTo`, `overwrite`, `dryRun`, `out`).
+
+### Fixed — `D365FO_BRIDGE_ENABLED=0` now switches the bridge off for writes too
+
+The write, delete, verify and model-folder helpers in `BridgeGate` only asked whether the bridge
+executable existed. With the flag set to `0`, `doctor` reported the bridge disabled while
+`generate --install-to` still created the object through the live metadata provider, which also
+writes its compiled copy under the runtime PackagesLocalDirectory. Found in a live test that
+pointed a throwaway profile at a scratch model store.
+
+- An explicit `0` / `false` is now honoured by every `BridgeGate` helper. An unset flag keeps the
+  old behaviour, so an installation that relies on finding the executable is not broken.
+- `modify` / `modify method` and `undo` of a bridge-made change, which spawned the bridge
+  directly rather than through `BridgeGate`, honour the switch-off too and say so; `--verify`
+  reports the bridge as switched off rather than missing.
+
+### Fixed — two writers on one index, and in-place edits that could lose the file
+
+Claude Desktop's MCP server and a shell often share one index. Nothing serialised their writes,
+connections had no busy timeout, and the daemon's pipe and pid file were the same for every
+profile.
+
+- **Index writers take a per-database lock.** `index extract`, `index refresh`, `index sync` and
+  the MCP `index_sync` hold a cross-process named mutex for the index file they write. A second
+  writer waits up to 30 s, then fails `INDEX_BUSY` with nothing written, instead of meeting the
+  first one's model transaction in SQLite and failing half way with "database is locked". The OS
+  releases the lock if the holder dies. The lock is per user; on Linux/macOS it is not limited to
+  one shell session, so an editor-launched MCP server and a terminal share it.
+- **Every connection sets `busy_timeout`.** A short collision (a checkpoint meeting a reader, a
+  journal write meeting a sync) now waits instead of failing on the first try.
+- **`wal_autocheckpoint = 0` is limited to the bulk extract writes.** It was set on every
+  connection and survived in the connection pool, so the WAL a small write left behind was never
+  checkpointed automatically. The extract pipeline keeps its own checkpoint schedule.
+- **The daemon's pipe, socket and pid file carry the profile name** (`d365fo-cli-<profile>`). A
+  daemon for one profile answered another profile's clients from the wrong index, and the second
+  profile's `daemon start` was refused. No profile keeps the old name.
+- **In-place edits write through the shared atomic writer.** `generate datasource-method` /
+  `control-method`, `generate role --add-to` and `generate duty` / `privilege --into-role`
+  staged through a fixed `<file>.tmp` and moved twice with no rollback, the pattern #158 fixed in
+  the scaffolder. `ScaffoldFileWriter.SaveInPlace` gives them the per-call staging name and the
+  restore-on-failure.
+
+### Added — `index refresh --prune` for models that left the configured roots
+
+Refresh only re-reads models it finds under a configured root, so a model whose folder moved away
+kept its rows forever. After a repository move, 80 classes of a test model still pointed at the old
+clone: `search` returned them, and `find references --model` scanned zero files and answered zero.
+
+- **`index status` and `doctor` report departed models.** A model is departed when no configured
+  root holds a folder of that name and the folder it was indexed from is outside every root or gone.
+  `index status` lists them under `departedModels` with a `departed-models` warning, `doctor` adds
+  an `index departed models` warning. Both name the fix.
+- **`index refresh --prune` deletes their rows**, and so does `index sync --prune` (which needs no
+  model) and the MCP `index_sync` tool with `prune: true`. A model's rows go through the same
+  model-scoped replace a re-extract uses, plus its method-body FTS rows, its label files and the
+  `Models` row.
+- **Never by default, and never under a missing root.** A default refresh only reports. A model
+  whose indexed folder sits under a configured root that does not exist right now (an unmounted
+  drive) is kept, so a standard model cannot be pruned because a disk was briefly away. While any
+  configured root is missing (it may be a mistyped spelling of a model's real root), no model is
+  judged outside the roots at all. A prune with no reachable root, or with no packages root
+  configured, is refused, and each model's rows go in one transaction. A model present under
+  another root is reported as
+  relocated, for `index sync`, not deleted.
+
+### Changed — `index refresh` walks each model once, and staleness is judged per model
+
+A refresh that changed nothing took 45 s on a 178-model UDE, and `doctor` could call the index
+fresh while a model was behind.
+
+- **One directory walk per model.** The fingerprint and the `--since` mtime came from two separate
+  recursive walks, each asking the file system for every file's mtime again. Both now come from a
+  single `DirectoryInfo.EnumerateFiles` pass, whose `FileInfo` already carries the mtime.
+- **A rename re-extracts the model.** The fingerprint was `count:newestMtime:langs`, and a rename
+  moves neither, so the index kept the old object name until a `--force`. It now carries an
+  order-independent hash of the relative file names. Fingerprints stored by an older build simply
+  differ, so each model re-extracts once on the first refresh and is skipped after that.
+- **The DB-mtime threshold no longer overrides the fingerprint.** `index refresh` seeded `--since`
+  from the index file's mtime even when it had fingerprints to compare, so a model whose only
+  change was a rename or a delete looked older than the threshold and was skipped. The threshold is
+  now only the fallback for an index without fingerprints. An explicit `--since` is honoured as before.
+- **Staleness per model.** `index status` and `doctor` compared the newest custom file with the
+  newest extract of ANY model, so syncing one model marked every other model fresh. Each custom
+  model is now held to its own `LastExtractedUtc`, and `staleness.staleModels` names the ones behind.
+- `index sync` takes the fingerprint before reading the model rather than after, so a file saved
+  during the extract is picked up by the next refresh instead of being stamped as indexed.
+
+### Performance — model folders found with one listing each, not a probe per marker
+
+Every walk of a packages root asked each package subfolder about every marker folder (`AxClass`,
+`AxTable`, … about 70 of them) with its own `Directory.Exists`. Most subfolders of a real
+PackagesLocalDirectory are not models (`bin`, `Descriptor`, `Resources`), so each one failed every
+probe: about 100,000 file-system calls and 14 s per walk on a UDE. `index refresh`, `index sync`, and
+anything that locates a model folder paid it.
+
+- `ObjectTypeRegistry.IsModelDirectory` lists the folder once and checks the names against the
+  marker set. `IndexSync.EnumerateModelDirs` and the extractor both use it, so they still agree on
+  what a model is.
+- `EnumerateModelDirs(root, model)` compares the name before it lists anything, so a one-model
+  lookup touches one folder per package.
+
 ### Fixed — lookups that answered nothing, or a different question, without saying so
 
 Found by an outside benchmark of CLI vs the XRef DB vs grep for D365 lookups, where 3 of 24 runs

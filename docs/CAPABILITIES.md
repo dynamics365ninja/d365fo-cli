@@ -8,7 +8,7 @@ Full reference of what the tool provides. For setup see [SETUP.md](SETUP.md), fo
 
 The SQLite index (`$D365FO_INDEX_DB`) stores AOT metadata extracted from `PackagesLocalDirectory`. It covers 22 AOT object types and is populated by `d365fo index extract`.
 
-By default the index stores object/method *metadata* only — method bodies (the X++ source) are parsed for lint flags and then discarded; the canonical source stays in the AOT XML on disk. Pass `--index-source` to additionally full-text index method bodies into `MethodSourceFts` (see below).
+By default the index stores object/method *metadata* only — method bodies (the X++ source) are parsed for lint flags and then discarded; the canonical source stays in the AOT XML on disk. Pass `--index-source` to additionally full-text index method bodies into `MethodSourceFts` (see below). The choice is remembered per model: a later `index extract`, `index refresh` or `index sync` that passes neither `--index-source` nor `--no-index-source` keeps each model as its last extract left it, so the post-write `index refresh --model <Model>` no longer drops the model from `find refs`.
 
 ### Index maintenance commands
 
@@ -17,10 +17,12 @@ By default the index stores object/method *metadata* only — method bodies (the
 | `index build` | Create or migrate the schema in-place |
 | `index extract` | Full extraction of all packages |
 | `index extract --model <M>` | Scoped extraction of one model (seconds) |
-| `index extract --index-source` | Also full-text index X++ method bodies (opt-in; enlarges the DB, accelerates `find refs`). Also available on `index refresh`. |
+| `index extract --index-source` | Also full-text index X++ method bodies (opt-in; enlarges the DB, accelerates `find refs`). Remembered per model. Also available on `index refresh` and `index sync`. |
+| `index extract --no-index-source` | Drop the extracted models' method bodies from `MethodSourceFts` and stop re-indexing them. Also on `index refresh` and `index sync` (MCP `index_sync(noIndexSource=true)`). |
 | `index refresh` | Re-extract only models whose content fingerprint changed |
 | `index refresh --force` | Re-extract all models regardless of fingerprint |
-| `index status` | Show per-model row counts and last-extracted timestamps |
+| `index refresh --prune` | Also delete the rows of models whose folder is no longer under any configured packages root |
+| `index status` | Show per-model row counts and last-extracted timestamps, and `departedModels`: models indexed from a folder no configured root holds any more |
 | `index history` | Show per-model extraction run history |
 | `index export` | Dump the index to a portable archive |
 | `index import` | Restore from an archive |
@@ -44,6 +46,15 @@ or for a process with `D365FO_AUTO_REFRESH=0`. The MCP server does the same for 
 that writes (`generate_object`, `modify_object`, `modify_method`, `labels`, `delete_object`,
 `undo_last_modification`). A model is the unit because the writer replaces a model's
 rows atomically: a single-object write would delete the rest of that model.
+
+A model whose folder leaves every configured root (a repository moved to a new clone, a model
+deleted, a root dropped from `D365FO_CUSTOM_PACKAGES_PATH`) is never visited by a refresh again, so
+its rows would stay forever. `index status` and `doctor` report it under `departedModels`, and
+`index refresh --prune` (or `index sync --prune`, MCP `index_sync` with `prune: true`) deletes its
+rows. Pruning is never automatic, and a model whose root is missing right now (an unmounted drive)
+is kept. While any configured root is missing (perhaps mistyped), no model is judged to be outside
+the roots. A model found under a root but indexed from another folder is reported as relocated:
+`index sync <Model>` is the fix for that, not a delete.
 
 ### `index cross-check`
 
@@ -139,8 +150,8 @@ find usages <needle> [--kind k,k,…]  — All references by kind
 find extensions <target>              — All object extensions
 find handlers <object>                — Event subscribers
 find relations <table>                — FK relations
-find refs <needle>                    — References inside method bodies (FTS5 when `--index-source` was used, else on-demand source scan)
-find refs --xref                      — Path/line/kind via DYNAMICSXREFDB
+find refs <needle>                    — Who uses it: one row per object + matching methods (FTS5 when `--index-source` was used, else on-demand source scan); --lines N for sample lines. A form hit names its member: `init`, `CustTable.init`, `CustTable.AccountNum.modified`, `OkButton.clicked`. Each model is answered from the index when it has source indexed, else from disk. Without `--model` the scope is the source-indexed models plus the custom models (`D365FO_CUSTOM_MODELS`); `--all-models` scans every other model from disk too. The answer carries `scope` and a `coverage` block (models from the index, from disk, not searched). `Owner.member` (or `Owner::member`) without `--xref` searches the member and keeps methods that also mention Owner, flagged `match.kind: member-text`. A needle the index does not know gets a `hint`
+find refs --xref                      — The compiler's where-used from DYNAMICSXREFDB, queried directly: one row per object + members + reference kinds; --lines 1 for path/line/kind
 find form-patterns [--pattern P]      — Form pattern histogram / filter
 find batch-jobs [--model M]           — RunBaseBatch subclasses
 ```
@@ -743,7 +754,7 @@ d365fo-mcp --http --port 8080
 | Env var | Purpose |
 |---|---|
 | `API_KEY` | Shared secret required in the `X-Api-Key` header on `POST /mcp`. Unset = unauthenticated (logs a startup warning); `GET /health` never requires it. |
-| `MCP_SERVER_MODE` | `full` (default) \| `read-only` \| `write-only` — gates the tool surface. `read-only` drops the tools that need the local package tree — `generate_object`, `labels`, `get_workspace_info`, `get_method`, the bridge-backed `modify_method`/`modify_object`/`undo_last_modification`, and `journal_list`; `write-only` exposes only those. No tool that writes is reachable in `read-only`. A disallowed `tools/call` fails with `MODE_NOT_ALLOWED`. |
+| `MCP_SERVER_MODE` | `full` (default) \| `read-only` \| `write-only` — gates the tool surface. `read-only` drops the tools that need the local package tree — `generate_object`, `labels`, `get_workspace_info`, `get_method`, the bridge-backed `modify_method`/`modify_object`/`undo_last_modification`, `delete_object`, `index_sync`, `sdlc`, and `journal_list`; `write-only` exposes only those. No tool that writes is reachable in `read-only`: every tool declares its effect (read, write, destructive) in the catalog, and a test fails when a declared writer is not local. The same declaration drives the `readOnlyHint` / `destructiveHint` annotations in `tools/list` and excludes writers from the 60 s duplicate-call cache, which every write call also flushes. A disallowed `tools/call` fails with `MODE_NOT_ALLOWED`. |
 | `MCP_HTTP_PORT` | Listen port when `--port` is omitted (default `3000`). |
 
 `POST /mcp` is one JSON-RPC request per call (no SSE/session state) — reuses the same dispatch, routing, and mode gate as stdio. `GET /health` reports `{status, mode, indexReachable}` and needs no auth. A simple in-memory rate limiter (429 + `RATE_LIMITED`) protects `/mcp` per API key / IP. See [MIGRATION_FROM_MCP.md](MIGRATION_FROM_MCP.md#http-transport--shared-deployment-azure-app-service) for the read-only-shared / write-only-local deployment pattern this mirrors from upstream.

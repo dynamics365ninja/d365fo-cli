@@ -19,14 +19,33 @@ namespace D365FO.Cli.Commands.Daemon;
 ///   <item><b>Unix:</b> domain socket at <c>$XDG_RUNTIME_DIR/d365fo-cli.sock</c>
 ///   (or <c>$TMPDIR/d365fo-cli.sock</c> if XDG is unset).</item>
 /// </list>
+/// With a profile active (<c>--profile</c> / <c>D365FO_PROFILE</c>) the pipe, socket and pid
+/// file carry its name — <c>d365fo-cli-&lt;profile&gt;</c> — so each profile runs its own daemon
+/// over its own index.
 /// Concurrency: each accepted connection gets its own <see cref="StdioDispatcher"/>,
 /// but all dispatchers share a single <see cref="MetadataRepository"/> — the
 /// repository is stateless across operations, so this is safe.
 /// </summary>
 internal static class DaemonEndpoint
 {
-    public const string PipeName = "d365fo-cli";
-    public const string SocketLeafName = "d365fo-cli.sock";
+    /// <summary>The endpoint name with no profile active — unchanged from before profiles.</summary>
+    public const string BaseName = "d365fo-cli";
+
+    /// <summary>
+    /// The endpoint name for <paramref name="profile"/>. The pipe, socket and pid file were
+    /// global, so a daemon started for one profile answered every other profile's clients from
+    /// its own index, and a second profile's <c>daemon start</c> was refused as "already
+    /// running". No profile keeps the bare name, so an existing setup finds its daemon where it
+    /// always was. A name that is not a valid profile name is never put into a path; the
+    /// profile check refuses such a name before the daemon starts.
+    /// </summary>
+    internal static string NameFor(string? profile) =>
+        D365FoProfiles.IsValidName(profile) ? $"{BaseName}-{profile!.Trim()}" : BaseName;
+
+    private static string ActiveName => NameFor(D365FoProfiles.GetActive()?.Name);
+
+    public static string PipeName => ActiveName;
+    public static string SocketLeafName => ActiveName + ".sock";
 
     public static string UnixSocketPath
     {
@@ -49,7 +68,7 @@ internal static class DaemonEndpoint
             var dir = Environment.GetEnvironmentVariable("XDG_RUNTIME_DIR");
             if (string.IsNullOrEmpty(dir) || !Directory.Exists(dir))
                 dir = Path.GetTempPath();
-            return Path.Combine(dir, "d365fo-cli.pid");
+            return Path.Combine(dir, ActiveName + ".pid");
         }
     }
 }

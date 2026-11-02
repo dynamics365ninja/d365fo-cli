@@ -200,7 +200,7 @@ exit 2 on errors).
 | `D365FO_BRIDGE_ENABLED` | `1`/`true` enables bridge-primary reads |
 | `D365FO_BRIDGE_PATH` | Override bridge exe location |
 
-Provides: authoritative per-object reads (`get` commands), file create/update/delete (`generate --install-to`), cross-reference queries against `DYNAMICSXREFDB` (`find refs --xref`), model folder resolution. Non-Windows environments fall back to the SQLite index automatically. `get` responses carry `_source: "bridge"` / `"index"` so callers can audit which store answered.
+Provides: authoritative per-object reads (`get` commands), file create/update/delete (`generate --install-to`), cross-reference queries against `DYNAMICSXREFDB` (the fallback for `find refs --xref`, which queries the database directly first — both run the same `D365FO.Core/Xref/XrefQuery.cs`, compiled into the bridge as shared source), model folder resolution. Non-Windows environments fall back to the SQLite index automatically. `get` responses carry `_source: "bridge"` / `"index"` so callers can audit which store answered.
 
 ## MCP coexistence
 
