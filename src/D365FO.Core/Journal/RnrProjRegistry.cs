@@ -238,6 +238,13 @@ public static class RnrProjRegistry
             var close = span.Index + span.Length - "</ItemGroup>".Length;
             at = text.LastIndexOf('\n', close - 1) + 1;
             insert = item.ToString();
+            // A group written on one line ("<ItemGroup><Content …/></ItemGroup>"): the start of
+            // the closing tag's line is outside the group, so insert right before the tag instead.
+            if (at <= span.Index)
+            {
+                at = close;
+                insert = newline + insert;
+            }
         }
         else
         {

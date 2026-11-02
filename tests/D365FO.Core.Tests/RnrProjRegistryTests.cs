@@ -187,6 +187,18 @@ public sealed class RnrProjRegistryTests : IDisposable
 
         Assert.Equal(@"AxClass\NewClass.xml", reg.Include);
         Assert.Contains("<Compile Include=\"AxClass\\NewClass.xml\"", File.ReadAllText(rnrproj));
+        // ProjectXml keeps its item group on one line: the entry must still land inside that
+        // group, beside the existing one, and leave a well-formed project.
+        var doc = System.Xml.Linq.XDocument.Load(rnrproj);
+        System.Xml.Linq.XNamespace ns = "http://schemas.microsoft.com/developer/msbuild/2003";
+        var items = doc.Root!.Elements(ns + "ItemGroup").Single().Elements(ns + "Compile")
+            .Select(e => (string?)e.Attribute("Include")).ToList();
+        Assert.Equal([@"AxTable\Existing.xml", @"AxClass\NewClass.xml"], items);
+
+        Assert.True(RnrProjRegistry.Invert(reg.Delta!));
+        var after = System.Xml.Linq.XDocument.Load(rnrproj);
+        Assert.Equal(@"AxTable\Existing.xml",
+            (string?)after.Descendants(ns + "Compile").Single().Attribute("Include"));
     }
 
     [Fact]

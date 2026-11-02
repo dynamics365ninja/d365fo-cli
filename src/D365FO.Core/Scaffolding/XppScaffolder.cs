@@ -2586,13 +2586,6 @@ public static class ScaffoldFileWriter
     }
 
     /// <summary>
-    /// Best-effort Kind/Name inference from the just-written XML: Kind from the root element's
-    /// local name (leading "Ax" stripped — purely descriptive, not the bridge kind vocabulary,
-    /// since disk-only journal entries never need to name a bridge collection), Name from the
-    /// root's child &lt;Name&gt; element (the universal AOT convention), falling back to the
-    /// file name when either is missing.
-    /// </summary>
-    /// <summary>
     /// List a just-written object in the project the caller named. Only an object that sits in
     /// its own AOT folder of a model can be listed: a project item is <c>AxClass\Name</c>
     /// relative to the model, so a file parked anywhere else has no entry that would be true.
@@ -2621,6 +2614,13 @@ public static class ScaffoldFileWriter
         }
     }
 
+    /// <summary>
+    /// Best-effort Kind/Name inference from the just-written XML: Kind from the root element's
+    /// local name (leading "Ax" stripped — purely descriptive, not the bridge kind vocabulary,
+    /// since disk-only journal entries never need to name a bridge collection), Name from the
+    /// root's child &lt;Name&gt; element (the universal AOT convention), falling back to the
+    /// file name when either is missing.
+    /// </summary>
     private static (string kind, string objectName) InferKindAndName(string fullPath)
     {
         var fallbackName = Path.GetFileNameWithoutExtension(fullPath);
