@@ -338,13 +338,26 @@ different and less complete answer: drop `--xref` to ask for that on purpose.
 
 | Reason in the message | Fix |
 |---|---|
-| `A network-related or instance-specific error` / `server was not found` | Not on the VM that hosts the database, or SQL Server is not running. Set `D365FO_XREF_CONNECTIONSTRING` to reach it. |
+| `A network-related or instance-specific error` / `server was not found` | Not on the VM that hosts the database, or SQL Server is not running. Set `D365FO_XREF_CONNECTIONSTRING` to reach it. The bridge fallback is skipped for this one: it reads the same server. For LocalDB see below. |
 | `Login failed` | The default uses integrated auth (the signed-in Windows user). Grant that user read access, or put credentials in the connection string. |
 | `Cannot open database "DYNAMICSXREFDB"` | The database has not been created: build once in Visual Studio with *Build cross reference data* enabled. |
 | `certificate chain was issued by an authority that is not trusted` | The connection string sets `Encrypt=True`/`Strict`; use `Encrypt=Optional` or add `TrustServerCertificate=True` for a local self-signed certificate. |
 
 The answer is only as fresh as the last build with cross-references enabled. Code written since
 is not in it: `index sync <model>` and the text scan see it.
+
+### LocalDB (`Server=(LocalDB)\MSSQLLocalDB`, the UDE default)
+
+LocalDB stops when it has been idle and starts again on the next connection, which can take tens of
+seconds. Two states make `--xref` fail with `server was not found`:
+
+- **Starting.** The first connection after an idle stop timed out. Ask again.
+- **Wedged.** `SqlLocalDB info MSSQLLocalDB` says `Stopped` and `SqlLocalDB start MSSQLLocalDB`
+  fails with *SQL Server process failed to start*, because a process of the previous run still
+  holds the instance. `SqlLocalDB stop MSSQLLocalDB` clears it, and the next connection starts it.
+
+A UDE platform update attaches a new, empty cross-reference database (`XRef_<env><version>`). Point
+`D365FO_XREF_CONNECTIONSTRING` at it and rebuild the custom models with `build --model <Model> --xref`.
 
 ---
 
