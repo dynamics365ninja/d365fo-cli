@@ -153,15 +153,50 @@ public class TableAugmentScaffolderTests
             "ConDemoOrderLine",
             [new FindKeyField("OrderId", "ConDemoOrderId")]);
 
-        Assert.Equal(["find", "exists", "findRecId"], methods.Select(m => m.Name));
+        Assert.Equal(["find", "exist", "findRecId"], methods.Select(m => m.Name));
         var find = methods[0].Source;
         Assert.Contains("public static ConDemoOrderLine find(ConDemoOrderId _orderId, boolean _forUpdate = false)", find);
         Assert.Contains("if (_orderId)", find);                                  // key null-guard
         Assert.Contains("conDemoOrderLine.selectForUpdate(_forUpdate);", find);  // forUpdate guard
         Assert.Contains("select firstonly conDemoOrderLine", find);
         var exists = methods[1].Source;
+        Assert.Contains("public static boolean exist(ConDemoOrderId _orderId)", exists);
         Assert.Contains("select firstonly RecId from conDemoOrderLine", exists);
         Assert.Contains(".RecId != 0;", exists);
+    }
+
+    [Theory]
+    [InlineData("CustTable", "custTable")]
+    [InlineData("XYZPilotTable", "xyzPilotTable")]
+    [InlineData("ABTable", "abTable")]
+    [InlineData("VAT", "vat")]
+    [InlineData("x", "x")]
+    public void Buffer_variable_lowers_a_leading_prefix_as_a_whole(string table, string expected)
+    {
+        Assert.Equal(expected, TableAugmentScaffolder.BufferName(table));
+    }
+
+    [Fact]
+    public void BuildFindMethods_takes_the_exists_spelling_and_a_variable_name_when_asked()
+    {
+        var methods = TableAugmentScaffolder.BuildFindMethods(
+            "XYZPilotTable", [new FindKeyField("PilotId", "XYZPilotId")], existName: "exists", bufferName: "pilot");
+
+        Assert.Equal(["find", "exists", "findRecId"], methods.Select(m => m.Name));
+        Assert.Contains("public static boolean exists(XYZPilotId _pilotId)", methods[1].Source);
+        Assert.Contains("XYZPilotTable pilot;", methods[0].Source);
+        Assert.DoesNotContain("xYZPilotTable", string.Concat(methods.Select(m => m.Source)));
+    }
+
+    [Theory]
+    [InlineData("exist", null, true)]
+    [InlineData("exists", "myVar", true)]
+    [InlineData("Exist", null, false)]
+    [InlineData("check", null, false)]
+    [InlineData(null, "1bad", false)]
+    public void Find_method_names_are_validated(string? existName, string? bufferName, bool ok)
+    {
+        Assert.Equal(ok, TableAugmentScaffolder.ValidateFindMethodNames(existName, bufferName) is null);
     }
 
     [Fact]
@@ -184,7 +219,7 @@ public class TableAugmentScaffolderTests
         var methods = TableAugmentScaffolder.BuildFindMethods(
             "ConDemoOrderLine", [new FindKeyField("OrderId", "ConDemoOrderId")]);
         var added = TableAugmentScaffolder.MergeMethods(doc, "ConDemoOrderLine", methods);
-        Assert.Equal(["find", "exists", "findRecId"], added);
+        Assert.Equal(["find", "exist", "findRecId"], added);
         Assert.Contains("public class ConDemoOrderLine extends common",
             doc.Root!.Element("SourceCode")!.Element("Declaration")!.Value);
 

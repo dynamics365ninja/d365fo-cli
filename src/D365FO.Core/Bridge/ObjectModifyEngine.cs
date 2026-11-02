@@ -8,6 +8,7 @@ using D365FO.Core.Extract;
 using D365FO.Core.FormPatterns;
 using D365FO.Core.Index;
 using D365FO.Core.Journal;
+using D365FO.Core.Metadata;
 using D365FO.Core.ObjectTypes;
 using D365FO.Core.Scaffolding;
 
@@ -102,6 +103,9 @@ public static class ObjectModifyEngine
 
         /// <summary>Remove an entry point from a security privilege.</summary>
         RemoveEntryPoint,
+
+        /// <summary>Set a property (AllowEdit, Mandatory, HelpText, …) on one field of a table.</summary>
+        SetFieldProperty,
     }
 
     /// <summary>
@@ -153,6 +157,15 @@ public static class ObjectModifyEngine
 
         /// <summary><see cref="Operation.AddField"/>: mark the field mandatory.</summary>
         public bool Mandatory { get; init; }
+
+        /// <summary><see cref="Operation.AddField"/>: write <c>AllowEdit=No</c>, as a key field usually has.</summary>
+        public bool NoEdit { get; init; }
+
+        /// <summary><see cref="Operation.AddField"/>: write <c>AllowEditOnCreate=No</c>.</summary>
+        public bool NoEditOnCreate { get; init; }
+
+        /// <summary>Field property to set for <see cref="Operation.SetFieldProperty"/>; the field is <see cref="Member"/>.</summary>
+        public string? Property { get; init; }
 
         /// <summary><see cref="Operation.AddControl"/>: name of the container to add into. Defaults to the Design root.</summary>
         public string? Parent { get; init; }
@@ -533,6 +546,11 @@ public static class ObjectModifyEngine
             Operation.RenameField when string.IsNullOrWhiteSpace(request.NewName) =>
                 ToolResult<object>.Fail(D365FoErrorCodes.BadInput,
                     "--new-name is required for `modify rename-field`."),
+            Operation.SetFieldProperty when string.IsNullOrWhiteSpace(request.Property) =>
+                ToolResult<object>.Fail(D365FoErrorCodes.BadInput,
+                    "The property name is required for `modify field-property` (AllowEdit, AllowEditOnCreate, Mandatory, HelpText, …)."),
+            Operation.SetFieldProperty when request.Value is null =>
+                ToolResult<object>.Fail(D365FoErrorCodes.BadInput, "--value is required for `modify field-property`."),
 
             Operation.RemoveEnumValue when kind != "enum" =>
                 ToolResult<object>.Fail(D365FoErrorCodes.BadInput,
@@ -576,6 +594,7 @@ public static class ObjectModifyEngine
         Operation.AddIndex, Operation.AddRelation, Operation.AddFieldGroup, Operation.AddDeleteAction,
         Operation.RemoveField, Operation.RemoveIndex, Operation.RemoveRelation,
         Operation.RemoveFieldGroup, Operation.RemoveDeleteAction, Operation.RenameField,
+        Operation.SetFieldProperty,
     };
 
     /// <summary>The four delete actions the platform defines. Anything else is a typo.</summary>
@@ -649,6 +668,7 @@ public static class ObjectModifyEngine
         Operation.RemoveQueryRange => "remove-query-range",
         Operation.AddEntryPoint => "add-entry-point",
         Operation.RemoveEntryPoint => "remove-entry-point",
+        Operation.SetFieldProperty => "field-property",
         _ => op.ToString(),
     };
 
@@ -853,6 +873,7 @@ public static class ObjectModifyEngine
             Operation.AddFieldGroup => AddFieldGroup(doc, request),
             Operation.AddDeleteAction => AddDeleteAction(doc, request),
             Operation.RenameField => RenameField(doc, request),
+            Operation.SetFieldProperty => SetFieldProperty(doc, request, target),
             Operation.RemoveControl => RemoveControl(doc, request),
             Operation.AddQueryRange => AddQueryRange(doc, request),
             Operation.RemoveQueryRange => RemoveQueryRange(doc, request),
@@ -1409,7 +1430,7 @@ public static class ObjectModifyEngine
         {
             return (null, ToolResult<object>.Fail(D365FoErrorCodes.AlreadyExists,
                 $"Field '{request.Member}' already exists on {request.ObjectName}.",
-                "Use `d365fo modify property` to change an existing field's properties."));
+                "Use `d365fo modify field-property` to change an existing field's properties."));
         }
 
         // The concrete i:type discriminator is mandatory — a plain <AxTableField> makes
@@ -1424,13 +1445,103 @@ public static class ObjectModifyEngine
             new XElement(ns + "ExtendedDataType", request.Type!));
         if (!string.IsNullOrWhiteSpace(request.Label)) field.Add(new XElement(ns + "Label", request.Label));
         if (request.Mandatory) field.Add(new XElement(ns + "Mandatory", "Yes"));
+        if (request.NoEdit) field.Add(new XElement(ns + "AllowEdit", "No"));
+        if (request.NoEditOnCreate) field.Add(new XElement(ns + "AllowEditOnCreate", "No"));
 
         // A root without the xsi prefix bound emits an unusable i:type attribute.
         if (root.Attributes().All(a => a.Value != xsi.NamespaceName))
             root.SetAttributeValue(XNamespace.Xmlns + "i", xsi.NamespaceName);
 
         fields.Add(field);
-        return (new { field = request.Member, edt = request.Type, axType = $"AxTableField{suffix}", mandatory = request.Mandatory }, null);
+        return (new
+        {
+            field = request.Member,
+            edt = request.Type,
+            axType = $"AxTableField{suffix}",
+            mandatory = request.Mandatory,
+            allowEdit = request.NoEdit ? "No" : null,
+            allowEditOnCreate = request.NoEditOnCreate ? "No" : null,
+        }, null);
+    }
+
+    /// <summary>
+    /// Set one property of one table field. The property name and, for an enum-typed property,
+    /// the value are checked against the field's AOT contract (<c>AxTableFieldString</c>, …), so
+    /// a typo is refused instead of written as an element the reader silently drops.
+    /// </summary>
+    private static (object?, ToolResult<object>?) SetFieldProperty(XDocument doc, ModifyRequest request, WriteTarget target)
+    {
+        var root = doc.Root!;
+        var ns = root.Name.Namespace;
+        XNamespace xsi = "http://www.w3.org/2001/XMLSchema-instance";
+
+        var field = root.Elements().FirstOrDefault(e => e.Name.LocalName == "Fields")?.Elements().FirstOrDefault(e =>
+            string.Equals(LocalValue(e, "Name"), request.Member, StringComparison.OrdinalIgnoreCase));
+        if (field is null)
+        {
+            return (null, target.IsExtension
+                ? ToolResult<object>.Fail(D365FoErrorCodes.BadInput,
+                    $"Field '{request.Member}' is not one the extension '{target.Name}' adds, and the properties of a field " +
+                    $"of {request.ObjectName}'s own model cannot be set from here.",
+                    "Only fields an extension adds can be changed through it. Change the base field in its own model, " +
+                    "or add the field in the extension.")
+                : ToolResult<object>.Fail(D365FoErrorCodes.FieldNotFound,
+                    $"{request.ObjectName} has no field named '{request.Member}'.",
+                    $"See the real field list with `d365fo get table {request.ObjectName}`."));
+        }
+
+        var fieldType = (string?)field.Attribute(xsi + "type") ?? field.Name.LocalName;
+        var colon = fieldType.IndexOf(':');
+        if (colon >= 0) fieldType = fieldType[(colon + 1)..];
+        var contract = MetadataContracts.Find(fieldType);
+
+        var property = request.Property!.Trim();
+        if (contract is not null)
+        {
+            var canonical = contract.Members.FirstOrDefault(m => string.Equals(m, property, StringComparison.OrdinalIgnoreCase));
+            if (canonical is null)
+            {
+                var close = contract.Members
+                    .Where(m => m.Contains(property, StringComparison.OrdinalIgnoreCase)
+                                || property.Contains(m, StringComparison.OrdinalIgnoreCase))
+                    .Take(5)
+                    .ToList();
+                return (null, ToolResult<object>.Fail(D365FoErrorCodes.BadInput,
+                    $"{fieldType} has no property '{property}'.",
+                    close.Count > 0
+                        ? $"Did you mean: {string.Join(", ", close)}?"
+                        : $"Settable on {fieldType}: {string.Join(", ", contract.Members.Where(m => m != "Name"))}."));
+            }
+            property = canonical;
+        }
+
+        if (string.Equals(property, "Name", StringComparison.OrdinalIgnoreCase))
+        {
+            return (null, ToolResult<object>.Fail(D365FoErrorCodes.BadInput,
+                "A field's Name is not a property to overwrite: indexes, field groups and relations refer to it.",
+                $"Use `d365fo modify rename-field {request.ObjectName} {request.Member} --new-name <NAME>`."));
+        }
+
+        var value = request.Value!.Trim();
+        if (contract?.EnumFor(property) is { } enumName && MetadataContracts.EnumValues(enumName) is { Count: > 0 } allowed)
+        {
+            if (enumName == "NoYes" && bool.TryParse(value, out var flag)) value = flag ? "Yes" : "No";
+            var match = allowed.FirstOrDefault(v => string.Equals(v, value, StringComparison.OrdinalIgnoreCase));
+            if (match is null)
+            {
+                return (null, ToolResult<object>.Fail(D365FoErrorCodes.BadInput,
+                    $"'{value}' is not a value of {enumName}, which {property} takes.",
+                    $"Use one of: {string.Join(", ", allowed)}."));
+            }
+            value = match;
+        }
+
+        var existing = field.Elements().FirstOrDefault(e => e.Name.LocalName == property);
+        var oldValue = existing?.Value;
+        if (existing is not null) existing.SetValue(value);
+        else field.Add(new XElement(ns + property, value));
+
+        return (new { field = LocalValue(field, "Name"), axType = fieldType, property, oldValue, newValue = value }, null);
     }
 
     private static (object?, ToolResult<object>?) AddEnumValue(XDocument doc, ModifyRequest request)
@@ -1559,6 +1670,7 @@ public static class ObjectModifyEngine
         Operation.AddField => $"modify add-field {request.ObjectName} {request.Member}",
         Operation.AddEnumValue => $"modify add-enum-value {request.ObjectName} {request.Member}",
         Operation.AddControl => $"modify add-control {request.ObjectName} {request.Member}",
+        Operation.SetFieldProperty => $"modify field-property {request.ObjectName} {request.Member} {request.Property}",
         _ => $"modify {kind} {request.ObjectName}",
     };
 

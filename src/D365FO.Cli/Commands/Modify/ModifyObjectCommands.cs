@@ -111,6 +111,14 @@ public sealed class ModifyAddFieldCommand : Command<ModifyAddFieldCommand.Settin
         [CommandOption("--mandatory")]
         [System.ComponentModel.Description("Set Mandatory=Yes on the new field.")]
         public bool Mandatory { get; init; }
+
+        [CommandOption("--no-edit")]
+        [System.ComponentModel.Description("Set AllowEdit=No on the new field (typical for key fields).")]
+        public bool NoEdit { get; init; }
+
+        [CommandOption("--no-edit-on-create")]
+        [System.ComponentModel.Description("Set AllowEditOnCreate=No on the new field.")]
+        public bool NoEditOnCreate { get; init; }
     }
 
     public override int Execute(CommandContext ctx, Settings settings) =>
@@ -123,6 +131,49 @@ public sealed class ModifyAddFieldCommand : Command<ModifyAddFieldCommand.Settin
             Type = settings.Edt,
             Label = settings.Label,
             Mandatory = settings.Mandatory,
+            NoEdit = settings.NoEdit,
+            NoEditOnCreate = settings.NoEditOnCreate,
+            Model = settings.Model,
+            ExtensionSuffix = settings.ResolvedExtensionSuffix,
+            ExtensionModel = settings.ExtensionModel,
+            RequireExtension = settings.RequireExtension,
+        });
+}
+
+/// <summary>
+/// <c>d365fo modify field-property</c> — set one property (AllowEdit, AllowEditOnCreate,
+/// Mandatory, HelpText, …) on an existing table field.
+/// </summary>
+public sealed class ModifyFieldPropertyCommand : Command<ModifyFieldPropertyCommand.Settings>
+{
+    public sealed class Settings : ModifyObjectSettings
+    {
+        [CommandArgument(0, "<TABLE>")]
+        [System.ComponentModel.Description("Table holding the field.")]
+        public string Table { get; init; } = "";
+
+        [CommandArgument(1, "<FIELD>")]
+        [System.ComponentModel.Description("Field name.")]
+        public string Field { get; init; } = "";
+
+        [CommandArgument(2, "<PROPERTY>")]
+        [System.ComponentModel.Description("Field property, e.g. AllowEdit, AllowEditOnCreate, Mandatory, Visible, HelpText, IgnoreEDTRelation, StringSize. Checked against the field's AOT contract.")]
+        public string Property { get; init; } = "";
+
+        [CommandOption("--value <VALUE>")]
+        [System.ComponentModel.Description("New value. Required. NoYes properties take Yes/No (true/false also accepted).")]
+        public string? Value { get; init; }
+    }
+
+    public override int Execute(CommandContext ctx, Settings settings) =>
+        ModifyRunner.Run(settings, new ObjectModifyEngine.ModifyRequest
+        {
+            Operation = ObjectModifyEngine.Operation.SetFieldProperty,
+            Kind = "table",
+            ObjectName = settings.Table,
+            Member = settings.Field,
+            Property = settings.Property,
+            Value = settings.Value,
             Model = settings.Model,
             ExtensionSuffix = settings.ResolvedExtensionSuffix,
             ExtensionModel = settings.ExtensionModel,

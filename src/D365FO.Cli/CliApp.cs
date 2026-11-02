@@ -240,7 +240,7 @@ public static class CliApp
                 b.SetDescription("Scaffold AOT XML skeletons.");
                 b.AddCommand<GenerateTableCommand>("table").WithDescription("Create a new AxTable.");
                 b.AddCommand<GenerateTableRelationCommand>("table-relation").WithDescription("Derive explicit AxTableRelation fragments from a table's EDT references (BPErrorEDTNotMigrated); --apply-to merges them into the table XML.");
-                b.AddCommand<GenerateFindMethodsCommand>("find-methods").WithDescription("Generate the standard static find()/exists()/findRecId() for a table from its unique index; --apply-to merges them into the table XML.");
+                b.AddCommand<GenerateFindMethodsCommand>("find-methods").WithDescription("Generate the standard static find()/exist()/findRecId() for a table from its unique index; --apply-to merges them into the table XML.");
                 b.AddCommand<GenerateClassCommand>("class").WithDescription("Create a new AxClass.");
                 b.AddCommand<GenerateCocCommand>("coc").WithDescription("Create a Chain-of-Command extension class.");
                 b.AddCommand<GenerateFormCommand>("form").WithDescription("Create an AxForm with a chosen pattern (SimpleList, DetailsMaster, DetailsTransaction, Dialog, Lookup, ListPage, Workspace, …).");
@@ -294,6 +294,7 @@ public static class CliApp
                 b.AddCommand<ModifyAddRelationCommand>("add-relation").WithDescription("Add a foreign-key relation to a live table.");
                 b.AddCommand<ModifyAddFieldGroupCommand>("add-field-group").WithDescription("Add a field group to a live table.");
                 b.AddCommand<ModifyAddDeleteActionCommand>("add-delete-action").WithDescription("Add a delete action to a live table (Cascade | Restricted | CascadeRestricted | None).");
+                b.AddCommand<ModifyFieldPropertyCommand>("field-property").WithDescription("Set a property (AllowEdit, AllowEditOnCreate, Mandatory, HelpText, …) on an existing table field, checked against the field's AOT contract.");
                 b.AddCommand<ModifyRenameFieldCommand>("rename-field").WithDescription("Rename a table field, rewriting the indexes, field groups and relations that name it.");
                 b.AddCommand<ModifyRemoveFieldCommand>("remove-field").WithDescription("Remove a field from a live table.");
                 b.AddCommand<ModifyRemoveIndexCommand>("remove-index").WithDescription("Remove an index from a live table.");

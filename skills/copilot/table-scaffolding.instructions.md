@@ -128,13 +128,23 @@ Treat the defaults as a *starting point* — always replace placeholder fields
   the implicit EDT relation is not enough any more):
   `d365fo generate table-relation <Table> [--field F] --apply-to <table-xml>`
   derives them from the indexed EDT metadata and merges them into the table's
-  `<Relations>` block (atomic, `.bak` sibling, existing relations never
-  duplicated). Omit `--apply-to` to print the fragments.
+  `<Relations>` block (atomic; existing relations never duplicated; no `.bak`
+  is left in the model folder — the previous file is journaled, `d365fo undo`
+  restores it). Omit `--apply-to` to print the fragments.
 - **Standard find methods** — `d365fo generate find-methods <Table> --apply-to
-  <table-xml>` emits `find()`/`exists()`/`findRecId()` keyed on the table's
+  <table-xml>` emits `find()`/`exist()`/`findRecId()` keyed on the table's
   alternate-key (or first unique) index, in Microsoft's shipped shape
-  (selectForUpdate guard, `firstonly`, key null-guard), and merges them into
-  `<SourceCode>` without ever overwriting a method the table already declares.
+  (selectForUpdate guard, `firstonly`, key null-guard, and `exist` — the name
+  the standard tables use), and merges them into `<SourceCode>` without ever
+  overwriting a method the table already declares. `--exist-name exists` keeps
+  the other spelling; `--var <name>` names the local buffer (default: camelCase
+  with a leading prefix lowered, `XYZPilotTable` → `xyzPilotTable`).
+- **Field properties** — `d365fo modify field-property <Table> <Field> AllowEdit
+  --value No` sets one property of an existing field (AllowEdit,
+  AllowEditOnCreate, Mandatory, Visible, HelpText, IgnoreEDTRelation,
+  StringSize, …), checked against the field type's AOT contract. A key field is
+  typically `Mandatory=Yes`, `AllowEdit=No`; `modify add-field … --mandatory
+  --no-edit` writes both when the field is added.
 
 ## Related AOT objects
 
