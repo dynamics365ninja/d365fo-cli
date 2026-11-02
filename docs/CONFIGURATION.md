@@ -36,6 +36,7 @@ With no profile selected, step 3 does not exist and resolution is exactly what i
 | `D365FO_HOME` | Root for the provenance/grounding token store | `%USERPROFILE%\.d365fo` |
 | `D365FO_GROUNDING_ENFORCE` | `true` = `generate` rejects writes without a valid grounding token or with unresolved references / BP errors | `false` (warn only) |
 | `D365FO_FORM_PATTERN_ENFORCE` | `false` = disable the form-pattern write gate; by default `generate form` rejects structural pattern violations (FP001–FP005, FP007) | `true` |
+| `D365FO_KERNEL_TYPES` | Extra kernel (binary) types and enums, comma/semicolon separated, e.g. `MyKernelEnum;OtherKernelClass`. They live in the AOS binaries, not in the metadata XML, so the index cannot prove them; listed names count as verified in `validate references` (MCP `validate_code` references), `modify method` and the `generate` grounding gate, on top of the built-in allow-list. For a kernel type the built-in list misses — please also report it | — |
 
 > ⚠️ **`D365FO_WORKSPACE_PATH` is not the same thing as your editor's "workspace".** This variable only tells the `d365fo` CLI where scaffolded X++ output should be written. It has **no effect** on where Visual Studio or VS Code loads GitHub Copilot instruction files from — that is determined purely by the folder/`.sln` you have open in the editor (see [SETUP.md — Connect your AI agent](SETUP.md#step-5--connect-your-ai-agent)). Setting `D365FO_WORKSPACE_PATH` does **not** make Copilot pick up `.github/copilot-instructions.md` from that path.
 

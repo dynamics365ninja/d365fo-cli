@@ -3,7 +3,7 @@
 
 Every tool the bundled `d365fo-mcp` adapter advertises, and the `d365fo` commands that reach the same handler. Both columns are read from the running code — the command manifest (`d365fo schema --full`) and the adapter's own `tools/list` — so a tool that stops matching a command fails the generator rather than quietly outliving the mapping.
 
-**32 tools · 189 command routes · 15 commands with no MCP route.**
+**32 tools · 190 command routes · 15 commands with no MCP route.**
 
 The adapter is consolidated on purpose: one tool dispatches on a `type` / `objectType` / `mode` / `action` discriminator instead of shipping one tool per object kind. That keeps the schema payload a host injects every turn from growing with the object model — see [TOKEN_ECONOMICS.md](TOKEN_ECONOMICS.md) for what that payload actually measures.
 
@@ -262,7 +262,7 @@ Replace the body of an EXISTING method on a live class/table/edt/form via D365FO
 
 ### `modify_object`
 
-Structured edits to an EXISTING object beyond its method bodies, via D365FO.Bridge (Windows VM, requires D365FO_BRIDGE_ENABLED=1). `action` names the edit — the same twenty the CLI's `d365fo modify` sub-commands carry:
+Structured edits to an EXISTING object beyond its method bodies, via D365FO.Bridge (Windows VM, requires D365FO_BRIDGE_ENABLED=1). `action` names the edit — the same twenty-one the CLI's `d365fo modify` sub-commands carry:
 
 | CLI command | Discriminator |
 |---|---|
@@ -276,6 +276,7 @@ Structured edits to an EXISTING object beyond its method bodies, via D365FO.Brid
 | `d365fo modify add-query-range` | `action=add-query-range` |
 | `d365fo modify add-relation` | `action=add-relation` |
 | `d365fo modify batch` | `operations[]` |
+| `d365fo modify field-property` | `action=field-property` |
 | `d365fo modify property` | `action=property` |
 | `d365fo modify remove-control` | `action=remove-control` |
 | `d365fo modify remove-delete-action` | `action=remove-delete-action` |
