@@ -733,7 +733,11 @@ public sealed partial class MetadataRepository
     /// put into <c>MethodSourceFts</c>. Models at <see cref="SourceIndexLevel.None"/> are included.
     /// </summary>
     public IReadOnlyDictionary<string, int> GetSourceIndexLevels() =>
-        GetModelSourceStates().ToDictionary(r => r.Name, r => r.Level, StringComparer.OrdinalIgnoreCase);
+        // Models.Name is case-sensitive, so an older index can hold "Foo" and "foo" side by side;
+        // ToDictionary under a case-insensitive key would throw on them. The higher level wins.
+        GetModelSourceStates()
+            .GroupBy(r => r.Name, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(g => g.Key, g => g.Max(r => r.Level), StringComparer.OrdinalIgnoreCase);
 
     /// <summary>
     /// Every indexed model with what a method-body search needs to know about it: whether it is
