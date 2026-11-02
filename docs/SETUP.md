@@ -327,7 +327,10 @@ d365fo generate datasource-method FmVehicles --datasource FmVehicle --method act
 d365fo generate control-method    FmVehicles --control VIN --method modified
 
 # Replace an existing method's body on a live class/table/edt/form (Windows VM, D365FO_BRIDGE_ENABLED=1)
+# --body is the statements between the braces: the doc comment, attributes and signature are kept
 d365fo modify method class CustBalance calc --body "return 2;"
+# --source replaces the whole method, signature included
+d365fo modify method class CustBalance calc --source "public real calc(real _factor) { return 2 * _factor; }"
 ```
 
 One example per `generate` sub-command (25 more object types, security, reports, workflows, …): **[EXAMPLES.md § Scaffold](EXAMPLES.md#scaffold)**.
