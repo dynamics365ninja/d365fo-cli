@@ -312,22 +312,10 @@ internal static class FormMethodImpl
         catch { /* best-effort */ }
     }
 
-    /// <summary>Write the document atomically (.tmp → move), keeping a .bak of any prior file.</summary>
-    private static void AtomicSave(XDocument doc, string path)
-    {
-        var full = System.IO.Path.GetFullPath(path);
-        var dir = System.IO.Path.GetDirectoryName(full);
-        if (!string.IsNullOrEmpty(dir)) System.IO.Directory.CreateDirectory(dir);
-
-        var tmp = full + ".tmp";
-        using (var fs = System.IO.File.Create(tmp)) doc.Save(fs);
-
-        if (System.IO.File.Exists(full))
-        {
-            var bak = full + ".bak";
-            if (System.IO.File.Exists(bak)) System.IO.File.Delete(bak);
-            System.IO.File.Move(full, bak);
-        }
-        System.IO.File.Move(tmp, full);
-    }
+    /// <summary>
+    /// Write the document atomically, keeping a .bak of any prior file — through the shared
+    /// writer, which stages under a per-call name and restores the original if the publish fails.
+    /// </summary>
+    internal static void AtomicSave(XDocument doc, string path) =>
+        D365FO.Core.Scaffolding.ScaffoldFileWriter.SaveInPlace(doc, path);
 }

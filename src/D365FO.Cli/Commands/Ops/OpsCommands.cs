@@ -200,6 +200,18 @@ public sealed class DoctorCommand : Command<DoctorCommand.Settings>
                 Add("index freshness (stale-index)",
                     staleness.IsStale ? DoctorSeverity.Fail : DoctorSeverity.Ok,
                     staleness.IsStale ? staleness.Detail : $"index extracted {staleness.LastExtractedUtc:O}");
+
+                // Models whose folder left every root: refresh never visits them again, so their
+                // rows answer searches with paths that lead nowhere. A warning, not a failure —
+                // the rest of the index is sound, and deleting rows is the caller's decision.
+                var departed = D365FO.Core.Index.IndexPrune.Find(repo, roots);
+                Add("index departed models",
+                    departed.Departed.Count == 0 ? DoctorSeverity.Ok : DoctorSeverity.Warn,
+                    departed.Departed.Count == 0
+                        ? "every indexed model is under a configured root"
+                        : $"{departed.Departed.Count} model(s) indexed from a folder no configured root holds: "
+                          + string.Join(", ", departed.Departed.Select(d => $"{d.Model} ({d.IndexedFolder})"))
+                          + ". " + D365FO.Core.Index.IndexPrune.PruneHint);
             }
             catch (Exception ex)
             {

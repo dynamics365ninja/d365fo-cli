@@ -26,11 +26,11 @@ With no profile selected, step 3 does not exist and resolution is exactly what i
 | `D365FO_CONFIG_DIR` | Relocates the whole config root (`settings.json`, `profiles\`, default index DB). Process env only. Useful for throw-away or portable configs — Windows ignores a changed `LOCALAPPDATA` env var | `%LOCALAPPDATA%\d365fo-cli` |
 | `D365FO_WORKSPACE_PATH` | Root of your X++ solution (enables scaffold output) | — |
 | `D365FO_CUSTOM_MODELS` | Comma-separated list of custom model names | — |
-| `D365FO_BRIDGE_ENABLED` | `1`/`true` enables the metadata bridge (required for `generate --install-to` and `find refs --xref`) | `false` |
+| `D365FO_BRIDGE_ENABLED` | `1`/`true` enables the metadata bridge (required for `generate --install-to`; the fallback for `find refs --xref` when the direct query fails) | `false` |
 | `D365FO_BRIDGE_PATH` | Path to `D365FO.Bridge.exe` (auto-detected next to `d365fo.exe` when unset) | *(auto)* |
 | `D365FO_BIN_PATH` | Folder containing `Microsoft.Dynamics.AX.Metadata.*.dll` (usually `<PackagesLocalDirectory>\bin`) | — |
 | `D365FO_MSBUILD_PATH` | MSBuild executable for `d365fo build` on non-X++ projects (an `.rnrproj` is compiled with `LabelC.exe` + `xppc.exe`, because its MSBuild tasks run only inside Visual Studio). Unset, the Visual Studio MSBuild is resolved through `vswhere` (then the known install roots) and only then `PATH` — the `msbuild.exe` first on `PATH` is usually the .NET Framework one, which cannot load the X++ build tasks and fails with `MSB4062`. `d365fo doctor` reports which one is resolved. | *(auto)* |
-| `D365FO_XREF_CONNECTIONSTRING` | Cross-reference DB connection string | — |
+| `D365FO_XREF_CONNECTIONSTRING` | `DYNAMICSXREFDB` connection string for `find refs --xref` / `find_references(xref)`, queried directly (no bridge needed). When the string does not set `Encrypt`, it defaults to `Optional` — what the bridge's `System.Data.SqlClient` always did, and what a dev VM's self-signed local SQL certificate needs | `Server=.;Database=DYNAMICSXREFDB;Integrated Security=true;Connection Timeout=5` |
 | `D365FO_FORCE_JSON` | `1` forces machine-readable JSON output even on a TTY | — |
 | `D365FO_HOME` | Root for the provenance/grounding token store | `%USERPROFILE%\.d365fo` |
 | `D365FO_GROUNDING_ENFORCE` | `true` = `generate` rejects writes without a valid grounding token or with unresolved references / BP errors | `false` (warn only) |

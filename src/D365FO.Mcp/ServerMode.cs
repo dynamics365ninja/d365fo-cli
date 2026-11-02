@@ -57,6 +57,8 @@ public static class ServerModeConfig
     ///   tree.</description></item>
     ///   <item><description><c>sdlc</c> — builds, syncs, runs SysTest and runs xppbp by
     ///   launching the Windows D365FO developer tools against the local package tree.</description></item>
+    ///   <item><description><c>delete_object</c> — removes an object's XML from the local
+    ///   package tree, or through the bridge's live metadata provider.</description></item>
     ///   <item><description><c>journal_list</c> — reads <c>&lt;index-dir&gt;/journal/</c>,
     ///   which is only populated on the instance that did the writing. Read-only itself,
     ///   but it belongs with the writer: a write-only companion needs it to inspect what
@@ -76,6 +78,9 @@ public static class ServerModeConfig
         // `index_sync` reads model XML off the local package tree. A shared instance has none,
         // and its index is fed by whoever deployed it rather than by a caller.
         "index_sync",
+        // `delete_object` removes an XML file, or deletes through the live metadata provider.
+        // It was missing here, so a read-only deployment advertised it and ran it.
+        "delete_object",
     };
 
     /// <summary>
@@ -83,7 +88,9 @@ public static class ServerModeConfig
     /// never advertises or accepts one. Exposed for the test that locks the invariant —
     /// the four bridge-backed write tools were originally absent from
     /// <see cref="LocalTools"/>, which let a read-only deployment advertise (and run)
-    /// live metadata edits.
+    /// live metadata edits, and later <c>delete_object</c> was too. The write set is
+    /// derived from each descriptor's <see cref="ToolCatalog.ToolEffect"/>, so a new
+    /// write tool shows up here until it is classified local.
     /// </summary>
     public static IEnumerable<string> WriteToolsAreLocal =>
         ToolCatalog.WriteTools.Where(t => !LocalTools.Contains(t));

@@ -46,7 +46,7 @@
     "WorksheetPart": "A .NET type written unqualified after a `using` declaration; only fully-qualified names match the System./Microsoft. prefix rule."
   },
   "prefixes": {
-    "Fm": "The corpus's Fleet example namespace — objects the reader is being told to create, plus the checked-in mini-AOT fixture (tests/Samples/MiniAot: FmVehicle, FmVehicleLine, FmVehicleService). None of them exist in a standard AOT. Note the overlap with Microsoft's FleetManagement demo model, which spells its own elements FM*: the two are different objects, and the demo model is not present in a customer environment."
+    "Fm": "The corpus's Fleet example namespace — objects the reader is being told to create, plus the checked-in mini-AOT fixture (tests/Samples/MiniAot: FmVehicle, FmVehicleLine, FmVehicleService, FmVehicleList). None of them exist in a standard AOT. Note the overlap with Microsoft's FleetManagement demo model, which spells its own elements FM*: the two are different objects, and the demo model is not present in a customer environment."
   },
   "examples": {
     "coc-extension-authoring::§🚨 NEVER copy default parameter values into the wrapper · ```xpp::COC001": "Intentional wrong-vs-right demonstration — the forbidden wrapper signature is shown next to the correct one.",

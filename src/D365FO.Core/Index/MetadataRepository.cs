@@ -15,14 +15,17 @@ public sealed partial class MetadataRepository
 {
     /// <summary>Current schema version tracked in PRAGMA user_version.</summary>
     /// <remarks>
-    /// v19: index on FormDataSources(FormId) — the one foreign key whose child column was
-    /// unindexed, so enforcing it rescanned the child table once per deleted form.
+    /// v20: Models.SourceIndexed — whether the model's method bodies are in MethodSourceFts, so a
+    /// re-extract that names neither --index-source nor --no-index-source keeps them. Backfilled
+    /// from the FTS rows already there.
+    /// &lt;para&gt;v19: index on FormDataSources(FormId) — the one foreign key whose child column was
+    /// unindexed, so enforcing it rescanned the child table once per deleted form.&lt;/para&gt;
     /// &lt;para&gt;v18: indexes on every ModelId and on the parent keys the per-model re-extract
     /// deletes filter by. Pure additions — an existing database picks them up on the next
     /// EnsureSchema, with no re-extract.&lt;/para&gt;
     /// &lt;para&gt;v17: LabelFiles table (per-label-file source paths for the disk check).&lt;/para&gt;
     /// </remarks>
-    public const int CurrentSchemaVersion = 19;
+    public const int CurrentSchemaVersion = 20;
 
     private static readonly Lazy<string> SchemaSql = new(LoadEmbeddedSchema);
 
@@ -114,6 +117,19 @@ public sealed partial class MetadataRepository
                 conn.Execute("ALTER TABLE Models ADD COLUMN LastExtractedUtc TEXT", transaction: tx);
             if (existingCols.Count > 0 && !existingCols.Contains("SourceFingerprint"))
                 conn.Execute("ALTER TABLE Models ADD COLUMN SourceFingerprint TEXT", transaction: tx);
+        }
+        // v20: Models.SourceIndexed. Added before Schema.sql for the same reason as v7; the
+        // backfill from MethodSourceFts runs after it, once the FTS table is sure to exist.
+        var addedSourceIndexed = false;
+        if (current < 20)
+        {
+            var modelCols = conn.Query<string>("SELECT name FROM pragma_table_info('Models')", transaction: tx)
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
+            if (modelCols.Count > 0 && !modelCols.Contains("SourceIndexed"))
+            {
+                conn.Execute("ALTER TABLE Models ADD COLUMN SourceIndexed INTEGER NOT NULL DEFAULT 0", transaction: tx);
+                addedSourceIndexed = true;
+            }
         }
         if (current < 8)
         {
@@ -248,6 +264,24 @@ public sealed partial class MetadataRepository
                 if (!classCols12.Contains("IsRunBaseBatch"))          conn.Execute("ALTER TABLE Classes ADD COLUMN IsRunBaseBatch          INTEGER NOT NULL DEFAULT 0", transaction: tx);
                 if (!classCols12.Contains("HasCanGoBatch"))           conn.Execute("ALTER TABLE Classes ADD COLUMN HasCanGoBatch           INTEGER NOT NULL DEFAULT 0", transaction: tx);
                 if (!classCols12.Contains("HasPublicInstanceFields")) conn.Execute("ALTER TABLE Classes ADD COLUMN HasPublicInstanceFields INTEGER NOT NULL DEFAULT 0", transaction: tx);
+            }
+        }
+
+        if (addedSourceIndexed)
+        {
+            // A database from before v20 knows which models are source-indexed only by their FTS
+            // rows. Without this, the first refresh after the upgrade would read every model as
+            // "never indexed" and drop the rows the column exists to keep.
+            try
+            {
+                // Level 1, not 2: builds before v20 put class and table bodies in the index,
+                // never form bodies, so their forms still have to be read from disk.
+                conn.Execute(@"UPDATE Models SET SourceIndexed = 1
+                               WHERE Name IN (SELECT DISTINCT Model FROM MethodSourceFts)", transaction: tx);
+            }
+            catch (Microsoft.Data.Sqlite.SqliteException)
+            {
+                // Host SQLite build lacks FTS5 — nothing can have been indexed.
             }
         }
 
@@ -668,6 +702,76 @@ public sealed partial class MetadataRepository
     }
 
     /// <summary>
+    /// Whether <paramref name="model"/>'s method bodies were full-text indexed by its last
+    /// extract (<c>Models.SourceIndexed</c>). False for a model the index does not hold.
+    /// </summary>
+    /// <remarks>
+    /// The source index is opt-in per extract, but a model is re-extracted far more often than
+    /// anyone thinks about the flag: <c>index refresh --model X</c> after every write,
+    /// <c>index sync</c>, the daemon's file watcher. When each of those cleared the model's FTS
+    /// rows unless the flag was repeated, the documented post-write refresh quietly took the
+    /// model out of <c>find refs</c>. Callers that were given no preference read this instead.
+    /// </remarks>
+    public bool IsSourceIndexed(string model)
+    {
+        using var conn = OpenReadOnly();
+        return conn.ExecuteScalar<long?>("SELECT SourceIndexed FROM Models WHERE Name=@m", new { m = model })
+            is >= SourceIndexLevel.ClassesAndTables;
+    }
+
+    /// <summary>The models whose last extract full-text indexed their method bodies.</summary>
+    public IReadOnlySet<string> GetSourceIndexedModels()
+    {
+        using var conn = OpenReadOnly();
+        return conn.Query<string>("SELECT Name FROM Models WHERE SourceIndexed >= @l",
+                new { l = SourceIndexLevel.ClassesAndTables })
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// Each indexed model's <see cref="SourceIndexLevel"/>: which method bodies its last extract
+    /// put into <c>MethodSourceFts</c>. Models at <see cref="SourceIndexLevel.None"/> are included.
+    /// </summary>
+    public IReadOnlyDictionary<string, int> GetSourceIndexLevels() =>
+        // Models.Name is case-sensitive, so an older index can hold "Foo" and "foo" side by side;
+        // ToDictionary under a case-insensitive key would throw on them. The higher level wins.
+        GetModelSourceStates()
+            .GroupBy(r => r.Name, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(g => g.Key, g => g.Max(r => r.Level), StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Every indexed model with what a method-body search needs to know about it: whether it is
+    /// custom (<c>Models.IsCustom</c>) and its <see cref="SourceIndexLevel"/>.
+    /// </summary>
+    public IReadOnlyList<ModelSourceState> GetModelSourceStates()
+    {
+        using var conn = OpenReadOnly();
+        return conn.Query<(string Name, long IsCustom, long Level)>(
+                "SELECT Name, IsCustom, SourceIndexed FROM Models ORDER BY Name")
+            .Select(r => new ModelSourceState(r.Name, r.IsCustom != 0, (int)r.Level))
+            .ToList();
+    }
+
+    /// <summary>
+    /// Whether <paramref name="name"/> is a method or field name anywhere in the index — the
+    /// members <see cref="Resolve(string)"/> does not cover.
+    /// </summary>
+    public bool IsKnownMemberName(string name)
+    {
+        if (string.IsNullOrWhiteSpace(name)) return false;
+        using var conn = OpenReadOnly();
+        return conn.ExecuteScalar<long>(@"
+            SELECT COUNT(1) FROM (
+                SELECT 1 FROM Methods      WHERE Name = @name COLLATE NOCASE
+                UNION ALL
+                SELECT 1 FROM TableMethods WHERE Name = @name COLLATE NOCASE
+                UNION ALL
+                SELECT 1 FROM TableFields  WHERE Name = @name COLLATE NOCASE
+                LIMIT 1
+            )", new { name }) > 0;
+    }
+
+    /// <summary>
     /// FTS5-backed search over X++ method bodies (the opt-in v15
     /// <c>MethodSourceFts</c> index, populated via <c>index extract --index-source</c>).
     /// Supports standard FTS5 query syntax. Returns an empty list when the index
@@ -675,9 +779,18 @@ public sealed partial class MetadataRepository
     /// regardless should fall back to scanning source on disk. The
     /// <see cref="MethodSourceMatch.Snippet"/> highlights the matched region.
     /// </summary>
-    public IReadOnlyList<MethodSourceMatch> SearchMethodSource(string query, int limit = 100, string? model = null, string? kind = null)
+    public IReadOnlyList<MethodSourceMatch> SearchMethodSource(string query, int limit = 100, string? model = null, string? kind = null) =>
+        SearchMethodSource(query, limit, model is null ? null : [model], kind, objectName: null);
+
+    /// <summary>
+    /// <see cref="SearchMethodSource(string, int, string?, string?)"/> over a set of models
+    /// (null: every model), optionally narrowed to the methods of one object.
+    /// </summary>
+    public IReadOnlyList<MethodSourceMatch> SearchMethodSource(
+        string query, int limit, IReadOnlyCollection<string>? models, string? kind, string? objectName)
     {
         limit = ClampLimit(limit, 100);
+        if (models is { Count: 0 }) return Array.Empty<MethodSourceMatch>();
         using var conn = OpenReadOnly();
         try
         {
@@ -692,14 +805,23 @@ public sealed partial class MetadataRepository
                        snippet(MethodSourceFts, 0, '«', '»', ' … ', 12) AS Snippet
                 FROM MethodSourceFts
                 WHERE MethodSourceFts MATCH $q
-                  AND ($model IS NULL OR Model = $model)
+                  {ModelFilter}
                   AND ($kind  IS NULL OR Kind  = $kind)
+                  AND ($obj   IS NULL OR ObjectName = $obj COLLATE NOCASE)
                 ORDER BY rank
                 LIMIT $limit";
+            var modelFilter = "";
+            if (models is not null)
+            {
+                var names = models.ToList();
+                modelFilter = "AND Model IN (" + string.Join(", ", names.Select((_, i) => "$m" + i)) + ")";
+                for (var i = 0; i < names.Count; i++) cmd.Parameters.AddWithValue("$m" + i, names[i]);
+            }
+            cmd.CommandText = cmd.CommandText.Replace("{ModelFilter}", modelFilter, StringComparison.Ordinal);
             cmd.Parameters.AddWithValue("$q", query);
             cmd.Parameters.AddWithValue("$limit", limit);
-            cmd.Parameters.AddWithValue("$model", (object?)model ?? DBNull.Value);
             cmd.Parameters.AddWithValue("$kind", (object?)kind ?? DBNull.Value);
+            cmd.Parameters.AddWithValue("$obj", (object?)objectName ?? DBNull.Value);
             using var reader = cmd.ExecuteReader();
             var results = new List<MethodSourceMatch>();
             while (reader.Read())
@@ -2377,7 +2499,9 @@ public sealed partial class MetadataRepository
     public void RecordExtractionRun(string model, DateTime startedUtc, long elapsedMs,
         int tables, int classes, int edts, int enums, int labels, bool isCustom)
     {
-        using var conn = Open();
+        // Bulk: it commits once per model during an extract, and an automatic checkpoint here
+        // would undo the batching ApplyExtract's own connection was set up for.
+        using var conn = Open(bulk: true);
         conn.Execute(@"INSERT INTO ExtractionRuns(StartedUtc, Model, ElapsedMs, Tables, Classes, Edts, Enums, Labels, IsCustom)
                        VALUES(@s, @m, @el, @t, @c, @ed, @en, @lb, @ic)",
             new
@@ -2448,13 +2572,22 @@ public sealed partial class MetadataRepository
     /// methods carry their <see cref="ExtractedMethod.Body"/> (opt-in via
     /// <c>index extract --index-source</c>), method bodies are also written to
     /// the <c>MethodSourceFts</c> full-text index. The model's existing FTS rows
-    /// are always cleared first, so re-extracting without the flag cleans up
-    /// stale source previously indexed for that model.
+    /// are always cleared first, so the rows never outlive the bodies they were
+    /// read from, and <c>Models.SourceIndexed</c> records which of the two this
+    /// write did. Whether to capture bodies is the caller's decision, made before
+    /// extraction — see <see cref="IsSourceIndexed"/> for how a re-extract that
+    /// names no preference keeps the previous one.
     /// </summary>
     public void ApplyExtract(ExtractBatch batch, string? sourceFingerprint, bool indexMethodSource = false)
+        => ApplyExtract(batch, sourceFingerprint, indexMethodSource, beforeCommit: null);
+
+    // beforeCommit runs inside the extract's transaction just before it commits, so extra writes
+    // (DeleteModel's cleanup) land atomically with the replace.
+    private void ApplyExtract(ExtractBatch batch, string? sourceFingerprint, bool indexMethodSource,
+        Action<SqliteConnection, SqliteTransaction>? beforeCommit)
     {
         ArgumentNullException.ThrowIfNull(batch);
-        using var conn = Open();
+        using var conn = Open(bulk: true);
         using var tx = conn.BeginTransaction();
 
         var modelId = UpsertModelInternal(conn, tx, batch.Model, batch.Publisher, batch.Layer, batch.IsCustom);
@@ -2537,6 +2670,8 @@ public sealed partial class MetadataRepository
         // (and thus the MethodSourceFts table) degrades to a no-op.
         try { conn.Execute("DELETE FROM MethodSourceFts WHERE Model=@n", new { n = batch.Model }, tx); }
         catch (Microsoft.Data.Sqlite.SqliteException) { indexMethodSource = false; }
+        conn.Execute("UPDATE Models SET SourceIndexed=@s WHERE ModelId=@m",
+            new { s = indexMethodSource ? SourceIndexLevel.WithForms : SourceIndexLevel.None, m = modelId }, tx);
         // Labels are keyed by file+lang, not model; we delete by file instead.
         foreach (var file in batch.Labels.Select(l => l.File).Distinct(StringComparer.OrdinalIgnoreCase))
             conn.Execute("DELETE FROM Labels WHERE LabelFile=@f", new { f = file }, tx);
@@ -2854,6 +2989,8 @@ public sealed partial class MetadataRepository
                              new { f = formId, n = ds.Name, t = ds.Table, o = idx, j = ds.JoinSource }, tx);
                 idx++;
             }
+            foreach (var mb in f.MethodBodies)
+                IndexBody("Form", f.Name, f.SourcePath, mb.Name, mb.Body);
         }
 
         foreach (var ext in batch.Extensions)
@@ -3030,6 +3167,7 @@ public sealed partial class MetadataRepository
 
         ftsCmd?.Dispose();
 
+        beforeCommit?.Invoke(conn, tx);
         tx.Commit();
 
         // Keep the WAL bounded across models without paying a checkpoint per model.
@@ -3211,14 +3349,40 @@ public sealed partial class MetadataRepository
         conn.Execute("PRAGMA wal_checkpoint(TRUNCATE)");
     }
 
-    internal SqliteConnection Open()
+    /// <summary>
+    /// How long a connection waits on a lock another connection or process holds before SQLite
+    /// reports "database is locked". Without it SQLite's busy handler is off, so a CLI write
+    /// that met an MCP <c>index_sync</c> mid-commit, or a <c>wal_checkpoint(TRUNCATE)</c> that
+    /// met a reader, failed on the first collision instead of waiting it out. Long index writes
+    /// are serialised by <see cref="IndexWriteLock"/>, so what is left to wait for is short.
+    /// </summary>
+    internal const int BusyTimeoutMs = 30_000;
+
+    /// <summary>
+    /// SQLite's own default, restored explicitly: connections are pooled and a pragma outlives
+    /// the <c>using</c> that set it, so a connection that ran a bulk extract would otherwise
+    /// carry <c>wal_autocheckpoint = 0</c> into its next, unrelated use.
+    /// </summary>
+    private const int DefaultWalAutocheckpointPages = 1000;
+
+    /// <summary>
+    /// A read-write connection. <paramref name="bulk"/> is for the extract pipeline's writes
+    /// (<see cref="ApplyExtract(ExtractBatch, string?, bool)"/> and <see cref="RecordExtractionRun"/>):
+    /// it turns the automatic checkpoint off, because that pipeline checkpoints on its own
+    /// schedule (<see cref="MaybeCheckpointWal"/>, <see cref="CheckpointWal"/>) and a per-commit
+    /// checkpoint is what made a model write cost seconds. Every other connection keeps the
+    /// automatic checkpoint, so the WAL a small write leaves behind does not grow unchecked.
+    /// </summary>
+    internal SqliteConnection Open(bool bulk = false)
     {
         var conn = new SqliteConnection(_connectionString);
         conn.Open();
-        // Per-connection pragmas: foreign_keys is a per-connection setting,
-        // journal_mode WAL survives across connections but is cheap to re-assert.
+        // Per-connection pragmas: foreign_keys, busy_timeout and wal_autocheckpoint are
+        // per-connection settings, journal_mode WAL survives across connections but is cheap
+        // to re-assert.
         using var cmd = conn.CreateCommand();
-        cmd.CommandText = "PRAGMA foreign_keys = ON; PRAGMA journal_mode = WAL; PRAGMA synchronous = NORMAL; PRAGMA temp_store = MEMORY; PRAGMA cache_size = -65536; PRAGMA wal_autocheckpoint = 0;";
+        cmd.CommandText = "PRAGMA foreign_keys = ON; PRAGMA journal_mode = WAL; PRAGMA synchronous = NORMAL; PRAGMA temp_store = MEMORY; PRAGMA cache_size = -65536; "
+            + $"PRAGMA busy_timeout = {BusyTimeoutMs}; PRAGMA wal_autocheckpoint = {(bulk ? 0 : DefaultWalAutocheckpointPages)};";
         cmd.ExecuteNonQuery();
         return conn;
     }
@@ -3293,7 +3457,7 @@ public sealed partial class MetadataRepository
         var conn = new SqliteConnection(_readOnlyConnectionString);
         conn.Open();
         using var cmd = conn.CreateCommand();
-        cmd.CommandText = "PRAGMA foreign_keys = ON;";
+        cmd.CommandText = $"PRAGMA foreign_keys = ON; PRAGMA busy_timeout = {BusyTimeoutMs};";
         cmd.ExecuteNonQuery();
         return conn;
     }

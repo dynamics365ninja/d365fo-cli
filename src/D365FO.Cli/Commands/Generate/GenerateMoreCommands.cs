@@ -954,13 +954,7 @@ public sealed class GenerateRoleCommand : Command<GenerateRoleCommand.Settings>
                 });
             }
 
-            var tmp = path + ".tmp";
-            using (var fs = System.IO.File.Create(tmp))
-                doc.Save(fs);
-            var backup = path + ".bak";
-            if (System.IO.File.Exists(backup)) System.IO.File.Delete(backup);
-            System.IO.File.Move(path, backup);
-            System.IO.File.Move(tmp, path);
+            var backup = D365FO.Core.Scaffolding.ScaffoldFileWriter.SaveInPlace(doc, path);
 
             return GenerateInstaller.Done(kind, gate: null, settings, new
             {
@@ -1314,12 +1308,7 @@ internal static class SecurityRoleMerge
 
         try
         {
-            var tmp = path + ".tmp";
-            using (var fs = System.IO.File.Create(tmp)) doc.Save(fs);
-            var backup = path + ".bak";
-            if (System.IO.File.Exists(backup)) System.IO.File.Delete(backup);
-            System.IO.File.Move(path, backup);
-            System.IO.File.Move(tmp, path);
+            var backup = D365FO.Core.Scaffolding.ScaffoldFileWriter.SaveInPlace(doc, path);
             result = new
             {
                 path,

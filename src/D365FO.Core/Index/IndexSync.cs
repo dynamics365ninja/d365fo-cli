@@ -36,10 +36,14 @@ public static class IndexSync
     /// </param>
     /// <param name="packagesOverride">Packages root to look in first; the configured roots are searched after it.</param>
     /// <param name="databasePath">Index database to write to. Defaults to the configured one.</param>
-    /// <param name="indexSource">Also full-text index method bodies, as <c>index extract --index-source</c> does.</param>
+    /// <param name="indexSource">
+    /// Whether to full-text index the model's method bodies: <c>true</c> as
+    /// <c>--index-source</c>, <c>false</c> as <c>--no-index-source</c>, <c>null</c> to keep
+    /// whatever the model's last extract did (see <see cref="MetadataRepository.IsSourceIndexed"/>).
+    /// </param>
     public static ToolResult<object> Sync(
         string? model, string? path, string? packagesOverride = null,
-        string? databasePath = null, bool indexSource = false)
+        string? databasePath = null, bool? indexSource = null)
     {
         var cfg = D365FoSettings.FromEnvironment(databasePath);
 
@@ -77,14 +81,24 @@ public static class IndexSync
                     ? "Set D365FO_PACKAGES_PATH (and D365FO_CUSTOM_PACKAGES_PATH for custom-model roots)."
                     : $"Looked in: {string.Join(", ", roots)}");
 
+        // The directory match is case-insensitive, but Models.Name is not: keep the on-disk
+        // spelling so `sync fleetmanagement` updates (and reads SourceIndexed of) FleetManagement.
+        modelName = Path.GetFileName(modelRoot);
+
         var repo = new MetadataRepository(cfg.DatabasePath);
         repo.EnsureSchema();
 
         var matcher = new ModelMatcher(cfg.CustomModels);
-        var extractor = new MetadataExtractor { CaptureMethodSource = indexSource };
+        var captureSource = indexSource ?? repo.IsSourceIndexed(modelName!);
+        var extractor = new MetadataExtractor { CaptureMethodSource = captureSource };
 
         var startedUtc = DateTime.UtcNow;
         var sw = System.Diagnostics.Stopwatch.StartNew();
+
+        // Taken before the extract, not after: a file saved while the model is being read then
+        // leaves the stored fingerprint behind the disk, and the next refresh picks it up. Taken
+        // after, that edit would be stamped as already indexed.
+        var fingerprint = ComputeFingerprint(modelRoot, cfg.LabelLanguages);
 
         ExtractBatch batch;
         try
@@ -97,12 +111,18 @@ public static class IndexSync
                 $"Could not read model '{modelName}' at {modelRoot}: {ex.Message}");
         }
 
-        var fingerprint = ComputeFingerprint(modelRoot, cfg.LabelLanguages);
-        repo.ApplyExtract(batch, fingerprint, indexSource);
-        sw.Stop();
-        repo.RecordExtractionRun(batch.Model, startedUtc, sw.ElapsedMilliseconds,
-            batch.Tables.Count, batch.Classes.Count, batch.Edts.Count,
-            batch.Enums.Count, batch.Labels.Count, batch.IsCustom);
+        // Parsing needs no lock; replacing the model's rows does. Taken after the parse so a
+        // sync waiting behind a refresh holds nothing while it reads XML.
+        using (var writeLock = IndexWriteLock.TryAcquire(repo.DatabasePath))
+        {
+            if (writeLock is null) return IndexWriteLock.Busy(repo.DatabasePath);
+
+            repo.ApplyExtract(batch, fingerprint, captureSource);
+            sw.Stop();
+            repo.RecordExtractionRun(batch.Model, startedUtc, sw.ElapsedMilliseconds,
+                batch.Tables.Count, batch.Classes.Count, batch.Edts.Count,
+                batch.Enums.Count, batch.Labels.Count, batch.IsCustom);
+        }
 
         return ToolResult<object>.Success(new
         {
@@ -110,6 +130,7 @@ public static class IndexSync
             modelRoot,
             isCustom = batch.IsCustom,
             elapsedMs = sw.ElapsedMilliseconds,
+            sourceIndexed = repo.IsSourceIndexed(batch.Model),
             counts = new
             {
                 tables = batch.Tables.Count,
@@ -123,6 +144,22 @@ public static class IndexSync
                  + "model synced too.",
         });
     }
+
+    /// <summary>
+    /// The tri-state a caller's <c>--index-source</c> / <c>--no-index-source</c> pair stands for:
+    /// <c>true</c>, <c>false</c>, or <c>null</c> for "keep what the model had".
+    /// </summary>
+    public static bool? SourceChoice(bool indexSource, bool noIndexSource) =>
+        indexSource ? true : noIndexSource ? false : null;
+
+    /// <summary>The refusal for a caller that asked for both, or null when the pair is consistent.</summary>
+    public static ToolResult<object>? ConflictingSourceFlags(bool indexSource, bool noIndexSource) =>
+        indexSource && noIndexSource
+            ? ToolResult<object>.Fail(D365FoErrorCodes.BadInput,
+                "--index-source and --no-index-source contradict each other.",
+                "Pass --index-source to full-text index method bodies, --no-index-source to drop them, "
+                + "or neither to keep what each model's last extract did.")
+            : null;
 
     /// <summary>The model a path belongs to, or null when the path is not in the packages layout.</summary>
     /// <remarks>
@@ -178,13 +215,6 @@ public static class IndexSync
             catch (UnauthorizedAccessException) { return Array.Empty<string>(); }
         }
 
-        static bool HasAot(string dir)
-        {
-            foreach (var s in ObjectTypeRegistry.ModelMarkerFolders())
-                if (Directory.Exists(Path.Combine(dir, s))) return true;
-            return false;
-        }
-
         foreach (var pkg in SafeDirs(packagesRoot))
         {
             // Mirror MetadataExtractor: skip FormAdaptor shim packages.
@@ -192,44 +222,124 @@ public static class IndexSync
             foreach (var model in SafeDirs(pkg))
             {
                 if (MetadataExtractor.IsFormAdaptorPackage(Path.GetFileName(model))) continue;
-                if (!HasAot(model)) continue;
+                // Name first: it costs nothing, and narrows a one-model lookup to one listing.
                 if (onlyModel is { Length: > 0 } only &&
                     !string.Equals(Path.GetFileName(model), only, StringComparison.OrdinalIgnoreCase))
                     continue;
+                if (!ObjectTypeRegistry.IsModelDirectory(model)) continue;
                 yield return model;
             }
         }
     }
 
+    /// <summary>What one walk of a model folder learns: enough for the fingerprint and for staleness.</summary>
+    /// <param name="FileCount">Metadata files (<c>*.xml</c>, <c>*.label.txt</c>) under the folder.</param>
+    /// <param name="NewestUtc">Newest last-write time among them, or <see cref="DateTime.MinValue"/> when there are none.</param>
+    /// <param name="NewestFile">Full path of that newest file, or null when there are none.</param>
+    /// <param name="NameHash">Order-independent hash of the relative file names, so a rename or a delete-and-add changes it.</param>
+    public readonly record struct ModelScan(int FileCount, DateTime NewestUtc, string? NewestFile, ulong NameHash);
+
     /// <summary>
-    /// Cheap per-model content fingerprint used by <c>index refresh</c> to skip untouched models.
-    /// Format: <c>"{fileCount}:{newestMtimeTicks}:{langs}"</c>. Sensitive enough to catch touches
-    /// (re-export, rebase, partial sync) without paying for a content hash.
+    /// Walk a model folder once and return its file count, newest mtime and a hash of the
+    /// relative file names.
     /// </summary>
-    public static string ComputeFingerprint(string dir, IReadOnlyList<string>? labelLanguages = null)
+    /// <remarks>
+    /// <para>
+    /// One enumeration, no per-file stat. <see cref="DirectoryInfo.EnumerateFiles(string, EnumerationOptions)"/>
+    /// hands back <see cref="FileInfo"/> objects already filled from the directory listing, so the
+    /// last-write time costs nothing extra. The previous shape — <c>Directory.EnumerateFiles</c>
+    /// then <c>File.GetLastWriteTimeUtc</c> per path, done once for the fingerprint and again for
+    /// <c>--since</c> — was two walks and one syscall per file, which is how a refresh that changed
+    /// nothing took 45 s on a 178-model UDE.
+    /// </para>
+    /// <para>
+    /// The name hash is what lets the fingerprint notice a rename: a renamed file keeps its mtime
+    /// and the count does not move, so <c>count:newestMtime</c> alone called the model unchanged
+    /// and the index kept the old name. Each relative path is hashed with FNV-1a (stable across
+    /// processes, unlike <see cref="string.GetHashCode()"/>) and the hashes are summed, so the
+    /// result does not depend on the order the file system lists entries in.
+    /// </para>
+    /// </remarks>
+    public static ModelScan ScanModel(string dir)
     {
-        long newestTicks = 0;
         int count = 0;
+        long newestTicks = 0;
+        string? newestFile = null;
+        ulong nameHash = 0;
         try
         {
-            foreach (var f in Directory.EnumerateFiles(dir, "*", SearchOption.AllDirectories))
+            var root = new DirectoryInfo(dir);
+            var prefix = root.FullName.Length;
+            var options = new EnumerationOptions
             {
-                if (!f.EndsWith(".xml", StringComparison.OrdinalIgnoreCase)
-                    && !f.EndsWith(".label.txt", StringComparison.OrdinalIgnoreCase))
+                RecurseSubdirectories = true,
+                IgnoreInaccessible = true,
+                AttributesToSkip = 0,
+            };
+            foreach (var f in root.EnumerateFiles("*", options))
+            {
+                var name = f.Name;
+                if (!name.EndsWith(".xml", StringComparison.OrdinalIgnoreCase)
+                    && !name.EndsWith(".label.txt", StringComparison.OrdinalIgnoreCase))
                     continue;
                 count++;
-                try
+                var full = f.FullName;
+                nameHash += HashRelativeName(full.AsSpan(prefix));
+                long ticks;
+                try { ticks = f.LastWriteTimeUtc.Ticks; }
+                catch { continue; }
+                if (ticks > newestTicks)
                 {
-                    var t = File.GetLastWriteTimeUtc(f).Ticks;
-                    if (t > newestTicks) newestTicks = t;
+                    newestTicks = ticks;
+                    newestFile = full;
                 }
-                catch { }
             }
         }
-        catch { }
+        catch { /* unreadable folder: whatever was counted so far stands */ }
+        return new ModelScan(
+            count,
+            newestTicks == 0 ? DateTime.MinValue : new DateTime(newestTicks, DateTimeKind.Utc),
+            newestFile,
+            nameHash);
+    }
+
+    /// <summary>FNV-1a over a relative path, case- and separator-insensitive.</summary>
+    private static ulong HashRelativeName(ReadOnlySpan<char> relative)
+    {
+        const ulong offset = 14695981039346656037UL;
+        const ulong prime = 1099511628211UL;
+        var h = offset;
+        foreach (var c in relative)
+        {
+            var n = c == '\\' ? '/' : char.ToUpperInvariant(c);
+            h = (h ^ (byte)n) * prime;
+            h = (h ^ (byte)(n >> 8)) * prime;
+        }
+        return h;
+    }
+
+    /// <summary>
+    /// Cheap per-model content fingerprint used by <c>index refresh</c> to skip untouched models.
+    /// Format: <c>"{fileCount}:{newestMtimeTicks}:{langs}:{nameHash}"</c>. Sensitive enough to
+    /// catch touches, deletes and renames (re-export, rebase, partial sync) without paying for a
+    /// content hash.
+    /// </summary>
+    /// <remarks>
+    /// Fingerprints stored before the name hash was added have three segments and never equal a
+    /// four-segment one, so an index written by an older build re-extracts each model once on its
+    /// first refresh and is skipped from then on. Nothing parses the stored value — it is only
+    /// compared — so an old or foreign format cannot fail a refresh.
+    /// </remarks>
+    public static string ComputeFingerprint(string dir, IReadOnlyList<string>? labelLanguages = null)
+        => FormatFingerprint(ScanModel(dir), labelLanguages);
+
+    /// <summary>The fingerprint for a scan already taken, so a caller that also needs the mtime walks once.</summary>
+    public static string FormatFingerprint(ModelScan scan, IReadOnlyList<string>? labelLanguages = null)
+    {
         var langs = labelLanguages is { Count: > 0 }
             ? string.Join(",", labelLanguages.Select(l => l.ToLowerInvariant()).OrderBy(l => l))
             : "";
-        return $"{count}:{newestTicks}:{langs}";
+        var ticks = scan.FileCount == 0 ? 0 : scan.NewestUtc.Ticks;
+        return $"{scan.FileCount}:{ticks}:{langs}:{scan.NameHash:x16}";
     }
 }

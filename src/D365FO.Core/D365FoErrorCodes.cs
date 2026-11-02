@@ -19,6 +19,11 @@ public static class D365FoErrorCodes
 
     // Index / metadata not found
     public const string NoIndex = "NO_INDEX";
+    /// <summary>
+    /// Another process holds the index write lock (<c>IndexWriteLock</c>) — a refresh, extract or
+    /// sync of the same database — and did not finish within the wait. Nothing was written.
+    /// </summary>
+    public const string IndexBusy = "INDEX_BUSY";
     public const string TableNotFound = "TABLE_NOT_FOUND";
     public const string EdtNotFound = "EDT_NOT_FOUND";
     public const string ClassNotFound = "CLASS_NOT_FOUND";
