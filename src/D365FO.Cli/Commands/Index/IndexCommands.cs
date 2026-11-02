@@ -63,6 +63,7 @@ public sealed class IndexStatusCommand : Command<IndexStatusCommand.Settings>
         ExtractCounts? counts = null;
         string? statusWarning = null;
         IndexStaleness.StalenessResult? staleness = null;
+        IndexPrune.Report? departed = null;
         if (exists)
         {
             try
@@ -75,7 +76,10 @@ public sealed class IndexStatusCommand : Command<IndexStatusCommand.Settings>
                 if (!string.IsNullOrEmpty(cfg.PackagesPath)) roots.Add(cfg.PackagesPath!);
                 roots.AddRange(cfg.CustomPackagesPaths);
                 if (roots.Count > 0)
+                {
                     staleness = IndexStaleness.Check(repo, roots);
+                    departed = IndexPrune.Find(repo, roots);
+                }
             }
             catch (Exception ex)
             {
@@ -86,6 +90,9 @@ public sealed class IndexStatusCommand : Command<IndexStatusCommand.Settings>
         var warnings = new List<string>();
         if (staleness is { IsStale: true })
             warnings.Add("stale-index");
+        if (departed is { Departed.Count: > 0 })
+            warnings.Add($"departed-models: {departed.Departed.Count} indexed model(s) no longer under any configured root "
+                + $"({string.Join(", ", departed.Departed.Select(d => d.Model))}). {IndexPrune.PruneHint}");
 
         var result = ToolResult<object>.Success(new
         {
@@ -109,6 +116,13 @@ public sealed class IndexStatusCommand : Command<IndexStatusCommand.Settings>
                 truncated = staleness.Truncated,
                 staleModels = staleness.StaleModels is { Count: > 0 } ? staleness.StaleModels : null,
             },
+            departedModels = departed is { Departed.Count: > 0 }
+                ? departed.Departed.Select(d => new { model = d.Model, isCustom = d.IsCustom, indexedFolder = d.IndexedFolder, reason = d.Reason })
+                : null,
+            relocatedModels = departed is { Relocated.Count: > 0 }
+                ? departed.Relocated.Select(r => new { model = r.Model, indexedFolder = r.IndexedFolder, currentFolder = r.CurrentFolder })
+                : null,
+            missingRoots = departed is { MissingRoots.Count: > 0 } ? departed.MissingRoots : null,
             warning = statusWarning,
         }, warnings: warnings.Count > 0 ? warnings : null);
         return RenderHelpers.Render(kind, result);
@@ -170,7 +184,8 @@ public sealed class IndexExtractCommand : Command<IndexExtractCommand.Settings>
         IReadOnlyDictionary<string, string?>? fingerprintsByModel = null,
         int? parallelism = null,
         IReadOnlyList<string>? extraPackagesPaths = null,
-        bool indexSource = false)
+        bool indexSource = false,
+        bool prune = false)
     {
         var cfg = D365FoSettings.FromEnvironment(databaseOverride);
         var root = packagesOverride ?? cfg.PackagesPath;
@@ -384,6 +399,20 @@ public sealed class IndexExtractCommand : Command<IndexExtractCommand.Settings>
             ProcessAll(null, null);
         }
 
+        // Models whose folder left every root are never visited above, so their rows would stay
+        // forever. Only on request: a root that is missing right now protects its models, but a
+        // caller who never asked for deletion should not get one from a refresh.
+        IndexPrune.Report? pruneReport = null;
+        IReadOnlyList<string>? pruned = null;
+        if (prune)
+        {
+            var pruneRoots = new List<string?> { root, cfg.PackagesPath };
+            pruneRoots.AddRange(extraPackagesPaths ?? Array.Empty<string>());
+            pruneRoots.AddRange(cfg.CustomPackagesPaths);
+            pruneReport = IndexPrune.Find(repo, pruneRoots);
+            pruned = IndexPrune.Prune(repo, pruneReport);
+        }
+
         // ApplyExtract only checkpoints once the WAL crosses its threshold, so flush what the
         // last models left behind rather than leaving it for whichever process opens next.
         repo.CheckpointWal();
@@ -401,6 +430,11 @@ public sealed class IndexExtractCommand : Command<IndexExtractCommand.Settings>
             customModelPatterns = cfg.CustomModels,
             elapsedMs = runSw.ElapsedMilliseconds,
             perModel = per,
+            pruned = prune ? pruned : null,
+            relocatedModels = pruneReport is { Relocated.Count: > 0 }
+                ? pruneReport.Relocated.Select(r => new { model = r.Model, indexedFolder = r.IndexedFolder, currentFolder = r.CurrentFolder })
+                : null,
+            missingRoots = pruneReport is { MissingRoots.Count: > 0 } ? pruneReport.MissingRoots : null,
             totals,
         });
 
@@ -409,6 +443,10 @@ public sealed class IndexExtractCommand : Command<IndexExtractCommand.Settings>
             AnsiConsole.MarkupLine("[green]OK[/] index extract completed");
             AnsiConsole.MarkupLine($"models processed: [bold]{modelCount}[/], skipped: [bold]{skippedCount}[/], custom: [bold]{customCount}[/]");
             AnsiConsole.MarkupLine($"elapsed: [bold]{runSw.ElapsedMilliseconds}[/] ms");
+            if (pruned is not null)
+                AnsiConsole.MarkupLine(pruned.Count == 0
+                    ? "pruned: [bold]0[/] (no indexed model has left the configured roots)"
+                    : $"pruned: [bold]{pruned.Count}[/] ({Markup.Escape(string.Join(", ", pruned))})");
 
             var table = new Table().Border(TableBorder.Rounded).Title("[bold]Index Totals[/]");
             table.AddColumn("Artifact");
@@ -509,6 +547,10 @@ public sealed class IndexRefreshCommand : Command<IndexRefreshCommand.Settings>
         [CommandOption("--index-source")]
         [System.ComponentModel.Description("Also full-text index X++ method bodies into MethodSourceFts (opt-in; enlarges the DB). Speeds up `find refs` and enables source search.")]
         public bool IndexSource { get; init; }
+
+        [CommandOption("--prune")]
+        [System.ComponentModel.Description("Also delete the rows of models whose folder is no longer under any configured packages root (see `index status` departedModels). Models under a root that is missing right now are kept.")]
+        public bool Prune { get; init; }
     }
 
     public override int Execute(CommandContext ctx, Settings settings)
@@ -558,7 +600,8 @@ public sealed class IndexRefreshCommand : Command<IndexRefreshCommand.Settings>
             fingerprints,
             parallelism: settings.Parallelism,
             extraPackagesPaths: extraPaths,
-            indexSource: settings.IndexSource);
+            indexSource: settings.IndexSource,
+            prune: settings.Prune);
     }
 }
 

@@ -796,12 +796,15 @@ public static class ToolCatalog
             + "what keeps re-extraction idempotent — handing it one object would delete the rest of that model. "
             + "A custom model takes seconds; naming a large standard model is a minutes-long call, and the "
             + "result reports how long it took. Re-indexing EVERYTHING is `d365fo index refresh` on a shell: "
-            + "it walks every package, which is not something to wait on in a tool call.",
+            + "it walks every package, which is not something to wait on in a tool call.\n"
+            + "`prune=true` also deletes the rows of models whose folder is no longer under any configured "
+            + "packages root (the `departedModels` of `index status`); it needs no `model`, and models under a "
+            + "root that is missing right now are kept.",
             Schema(("model", "string", false), ("path", "string", false),
-                   ("packagesPath", "string", false), ("indexSource", "boolean", false)),
-            (h, p) => D365FO.Core.Index.IndexSync.Sync(
+                   ("packagesPath", "string", false), ("indexSource", "boolean", false), ("prune", "boolean", false)),
+            (h, p) => D365FO.Core.Index.IndexPrune.SyncThenPrune(
                 StrOrNull(p, "model"), StrOrNull(p, "path"), StrOrNull(p, "packagesPath"),
-                databasePath: null, indexSource: Bool(p, "indexSource"))),
+                databasePath: null, indexSource: Bool(p, "indexSource"), prune: Bool(p, "prune"))),
 
         new Descriptor("index_history",
             "Recent ExtractionRuns telemetry (per-model timings). Returns newest first.",

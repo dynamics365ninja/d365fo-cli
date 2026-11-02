@@ -19,6 +19,29 @@ was ported from.
 
 ## [Unreleased]
 
+### Added — `index refresh --prune` for models that left the configured roots
+
+Refresh only re-reads models it finds under a configured root, so a model whose folder moved away
+kept its rows forever. After a repository move, 80 classes of a test model still pointed at the old
+clone: `search` returned them, and `find references --model` scanned zero files and answered zero.
+
+- **`index status` and `doctor` report departed models.** A model is departed when no configured
+  root holds a folder of that name and the folder it was indexed from is outside every root or gone.
+  `index status` lists them under `departedModels` with a `departed-models` warning, `doctor` adds
+  an `index departed models` warning. Both name the fix.
+- **`index refresh --prune` deletes their rows**, and so does `index sync --prune` (which needs no
+  model) and the MCP `index_sync` tool with `prune: true`. A model's rows go through the same
+  model-scoped replace a re-extract uses, plus its method-body FTS rows, its label files and the
+  `Models` row.
+- **Never by default, and never under a missing root.** A default refresh only reports. A model
+  whose indexed folder sits under a configured root that does not exist right now (an unmounted
+  drive) is kept, so a standard model cannot be pruned because a disk was briefly away. While any
+  configured root is missing (it may be a mistyped spelling of a model's real root), no model is
+  judged outside the roots at all. A prune with no reachable root, or with no packages root
+  configured, is refused, and each model's rows go in one transaction. A model present under
+  another root is reported as
+  relocated, for `index sync`, not deleted.
+
 ### Changed — `index refresh` walks each model once, and staleness is judged per model
 
 A refresh that changed nothing took 45 s on a 178-model UDE, and `doctor` could call the index

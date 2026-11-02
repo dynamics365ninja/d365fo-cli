@@ -2393,6 +2393,12 @@ public sealed partial class MetadataRepository
     /// stale source previously indexed for that model.
     /// </summary>
     public void ApplyExtract(ExtractBatch batch, string? sourceFingerprint, bool indexMethodSource = false)
+        => ApplyExtract(batch, sourceFingerprint, indexMethodSource, beforeCommit: null);
+
+    // beforeCommit runs inside the extract's transaction just before it commits, so extra writes
+    // (DeleteModel's cleanup) land atomically with the replace.
+    private void ApplyExtract(ExtractBatch batch, string? sourceFingerprint, bool indexMethodSource,
+        Action<SqliteConnection, SqliteTransaction>? beforeCommit)
     {
         ArgumentNullException.ThrowIfNull(batch);
         using var conn = Open();
@@ -2971,6 +2977,7 @@ public sealed partial class MetadataRepository
 
         ftsCmd?.Dispose();
 
+        beforeCommit?.Invoke(conn, tx);
         tx.Commit();
 
         // Keep the WAL bounded across models without paying a checkpoint per model.
