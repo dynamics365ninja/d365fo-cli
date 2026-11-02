@@ -123,6 +123,21 @@ public class MethodSourceFtsTests : IDisposable
     }
 
     [Fact]
+    public void Sync_by_a_differently_cased_model_name_keeps_the_indexed_model()
+    {
+        Assert.True(Sync(indexSource: true).Ok);
+        var indexed = _repo.CountMethodSource("TestModel");
+
+        Assert.True(IndexSync.Sync("testmodel", path: null, packagesOverride: SamplesDir,
+            databasePath: _dbPath, indexSource: null).Ok);
+
+        Assert.Equal(indexed, _repo.CountMethodSource("TestModel"));
+        Assert.True(_repo.IsSourceIndexed("TestModel"));
+        // One model row, under the on-disk spelling — not a second, unindexed "testmodel".
+        Assert.Equal("TestModel", Assert.Single(_repo.ListModels()).Name);
+    }
+
+    [Fact]
     public void Refresh_without_a_source_flag_does_not_index_a_model_that_never_was()
     {
         Assert.True(Sync(indexSource: null).Ok);

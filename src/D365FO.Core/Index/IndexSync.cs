@@ -81,6 +81,10 @@ public static class IndexSync
                     ? "Set D365FO_PACKAGES_PATH (and D365FO_CUSTOM_PACKAGES_PATH for custom-model roots)."
                     : $"Looked in: {string.Join(", ", roots)}");
 
+        // The directory match is case-insensitive, but Models.Name is not: keep the on-disk
+        // spelling so `sync fleetmanagement` updates (and reads SourceIndexed of) FleetManagement.
+        modelName = Path.GetFileName(modelRoot);
+
         var repo = new MetadataRepository(cfg.DatabasePath);
         repo.EnsureSchema();
 
