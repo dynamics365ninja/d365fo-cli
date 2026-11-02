@@ -37,6 +37,7 @@ internal static class ConfigCommandSupport
         "D365FO_HOME",
         "D365FO_GROUNDING_ENFORCE",
         "D365FO_FORM_PATTERN_ENFORCE",
+        "D365FO_KERNEL_TYPES",
         "MCP_SERVER_MODE",
         "API_KEY",
         "MCP_HTTP_PORT",
