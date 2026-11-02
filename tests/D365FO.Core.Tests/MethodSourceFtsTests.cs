@@ -306,6 +306,26 @@ public class MethodSourceFtsTests : IDisposable
     }
 
     [Fact]
+    public void Model_names_that_differ_only_in_case_do_not_break_the_form_scan()
+    {
+        Ingest(indexSource: true);
+        // Models.Name is case-sensitive; an index written by an older `index sync testmodel`
+        // holds both spellings.
+        using (var conn = new Microsoft.Data.Sqlite.SqliteConnection(_repo.ConnectionString))
+        {
+            conn.Open();
+            using var cmd = conn.CreateCommand();
+            cmd.CommandText = "INSERT INTO Models(Name, IsCustom, SourceIndexed) VALUES('testmodel', 0, 0);";
+            cmd.ExecuteNonQuery();
+        }
+
+        var result = MethodSourceSearch.Find(_repo, "addSortField", kind: null, model: null, limit: 50);
+
+        Assert.Equal("FmVehicle.init", Assert.Single(result.Hits).Method);
+        Assert.Equal(0, result.FilesScanned);
+    }
+
+    [Fact]
     public void A_form_members_own_method_name_is_what_implementations_compare()
     {
         var hit = new SourceRefHit("Form", "FmVehicleList", "TestModel", "FmVehicle.VIN.modified", null,

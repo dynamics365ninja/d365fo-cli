@@ -735,8 +735,12 @@ public sealed partial class MetadataRepository
     public IReadOnlyDictionary<string, int> GetSourceIndexLevels()
     {
         using var conn = OpenReadOnly();
-        return conn.Query<(string Name, long Level)>("SELECT Name, SourceIndexed FROM Models")
-            .ToDictionary(r => r.Name, r => (int)r.Level, StringComparer.OrdinalIgnoreCase);
+        // Models.Name is case-sensitive, so an older index can hold "Foo" and "foo" side by side;
+        // ToDictionary under a case-insensitive key would throw on them. The higher level wins.
+        var levels = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+        foreach (var (name, level) in conn.Query<(string Name, long Level)>("SELECT Name, SourceIndexed FROM Models"))
+            levels[name] = Math.Max((int)level, levels.GetValueOrDefault(name));
+        return levels;
     }
 
     /// <summary>
