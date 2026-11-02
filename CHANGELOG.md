@@ -19,6 +19,19 @@ was ported from.
 
 ## [Unreleased]
 
+### Fixed — the post-write refresh no longer drops a model from the method-body index
+
+- **`index refresh --model X` and `index sync X` keep X's method bodies in `MethodSourceFts`.**
+  Every re-extract cleared the model's FTS rows and only refilled them when `--index-source` was
+  repeated, so the refresh the docs prescribe after a write took the model out of `find refs` —
+  which then answered from the other models as if X had no callers. Whether a model's source is
+  indexed is now stored per model (`Models.SourceIndexed`, schema v20) and a re-extract that
+  passes neither flag keeps it. The same holds for `index extract` and the daemon's watcher.
+- **`--no-index-source`** on `index extract|refresh|sync` (MCP `index_sync(noIndexSource=true)`)
+  drops a model's method bodies on purpose. Passing it with `--index-source` is `BAD_INPUT`.
+- Upgrading marks every model that already has FTS rows as indexed, so the first refresh after
+  the upgrade keeps them. `index sync` and the per-model extract output report `sourceIndexed`.
+
 ### Fixed — MCP tools that write were flagged, cached and exposed as reads
 
 The write list was kept by hand and had fallen behind the catalog. `delete_object` was advertised

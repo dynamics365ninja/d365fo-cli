@@ -143,7 +143,7 @@ public static class IndexPrune
     /// </remarks>
     public static ToolResult<object> SyncThenPrune(
         string? model, string? path, string? packagesOverride, string? databasePath,
-        bool indexSource, bool prune)
+        bool? indexSource, bool prune)
     {
         var namesModel = !string.IsNullOrWhiteSpace(model) || !string.IsNullOrWhiteSpace(path);
         if (!prune)

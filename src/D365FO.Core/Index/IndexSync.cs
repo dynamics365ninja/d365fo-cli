@@ -36,10 +36,14 @@ public static class IndexSync
     /// </param>
     /// <param name="packagesOverride">Packages root to look in first; the configured roots are searched after it.</param>
     /// <param name="databasePath">Index database to write to. Defaults to the configured one.</param>
-    /// <param name="indexSource">Also full-text index method bodies, as <c>index extract --index-source</c> does.</param>
+    /// <param name="indexSource">
+    /// Whether to full-text index the model's method bodies: <c>true</c> as
+    /// <c>--index-source</c>, <c>false</c> as <c>--no-index-source</c>, <c>null</c> to keep
+    /// whatever the model's last extract did (see <see cref="MetadataRepository.IsSourceIndexed"/>).
+    /// </param>
     public static ToolResult<object> Sync(
         string? model, string? path, string? packagesOverride = null,
-        string? databasePath = null, bool indexSource = false)
+        string? databasePath = null, bool? indexSource = null)
     {
         var cfg = D365FoSettings.FromEnvironment(databasePath);
 
@@ -77,11 +81,16 @@ public static class IndexSync
                     ? "Set D365FO_PACKAGES_PATH (and D365FO_CUSTOM_PACKAGES_PATH for custom-model roots)."
                     : $"Looked in: {string.Join(", ", roots)}");
 
+        // The directory match is case-insensitive, but Models.Name is not: keep the on-disk
+        // spelling so `sync fleetmanagement` updates (and reads SourceIndexed of) FleetManagement.
+        modelName = Path.GetFileName(modelRoot);
+
         var repo = new MetadataRepository(cfg.DatabasePath);
         repo.EnsureSchema();
 
         var matcher = new ModelMatcher(cfg.CustomModels);
-        var extractor = new MetadataExtractor { CaptureMethodSource = indexSource };
+        var captureSource = indexSource ?? repo.IsSourceIndexed(modelName!);
+        var extractor = new MetadataExtractor { CaptureMethodSource = captureSource };
 
         var startedUtc = DateTime.UtcNow;
         var sw = System.Diagnostics.Stopwatch.StartNew();
@@ -108,7 +117,7 @@ public static class IndexSync
         {
             if (writeLock is null) return IndexWriteLock.Busy(repo.DatabasePath);
 
-            repo.ApplyExtract(batch, fingerprint, indexSource);
+            repo.ApplyExtract(batch, fingerprint, captureSource);
             sw.Stop();
             repo.RecordExtractionRun(batch.Model, startedUtc, sw.ElapsedMilliseconds,
                 batch.Tables.Count, batch.Classes.Count, batch.Edts.Count,
@@ -121,6 +130,7 @@ public static class IndexSync
             modelRoot,
             isCustom = batch.IsCustom,
             elapsedMs = sw.ElapsedMilliseconds,
+            sourceIndexed = repo.IsSourceIndexed(batch.Model),
             counts = new
             {
                 tables = batch.Tables.Count,
@@ -134,6 +144,22 @@ public static class IndexSync
                  + "model synced too.",
         });
     }
+
+    /// <summary>
+    /// The tri-state a caller's <c>--index-source</c> / <c>--no-index-source</c> pair stands for:
+    /// <c>true</c>, <c>false</c>, or <c>null</c> for "keep what the model had".
+    /// </summary>
+    public static bool? SourceChoice(bool indexSource, bool noIndexSource) =>
+        indexSource ? true : noIndexSource ? false : null;
+
+    /// <summary>The refusal for a caller that asked for both, or null when the pair is consistent.</summary>
+    public static ToolResult<object>? ConflictingSourceFlags(bool indexSource, bool noIndexSource) =>
+        indexSource && noIndexSource
+            ? ToolResult<object>.Fail(D365FoErrorCodes.BadInput,
+                "--index-source and --no-index-source contradict each other.",
+                "Pass --index-source to full-text index method bodies, --no-index-source to drop them, "
+                + "or neither to keep what each model's last extract did.")
+            : null;
 
     /// <summary>The model a path belongs to, or null when the path is not in the packages layout.</summary>
     /// <remarks>

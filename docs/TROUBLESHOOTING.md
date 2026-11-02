@@ -372,6 +372,12 @@ The opt-in method-body index stays empty until you re-extract *with the flag*:
 d365fo index extract --index-source   # backfill MethodSourceFts too
 ```
 
+From schema v20 the index remembers which models were extracted with `--index-source`
+(`Models.SourceIndexed`). Upgrading an older index marks every model that already has rows in
+`MethodSourceFts`, so the first refresh after the upgrade keeps them. A refresh without the flag
+used to clear them; if `find refs` lost a model's hits that way, re-run
+`d365fo index refresh --model <Model> --force --index-source` once.
+
 ### When to use `index build` vs `index extract`
 
 | Command | What it does | When to use |

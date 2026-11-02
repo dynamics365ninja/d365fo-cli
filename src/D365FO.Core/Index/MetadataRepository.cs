@@ -15,14 +15,17 @@ public sealed partial class MetadataRepository
 {
     /// <summary>Current schema version tracked in PRAGMA user_version.</summary>
     /// <remarks>
-    /// v19: index on FormDataSources(FormId) — the one foreign key whose child column was
-    /// unindexed, so enforcing it rescanned the child table once per deleted form.
+    /// v20: Models.SourceIndexed — whether the model's method bodies are in MethodSourceFts, so a
+    /// re-extract that names neither --index-source nor --no-index-source keeps them. Backfilled
+    /// from the FTS rows already there.
+    /// &lt;para&gt;v19: index on FormDataSources(FormId) — the one foreign key whose child column was
+    /// unindexed, so enforcing it rescanned the child table once per deleted form.&lt;/para&gt;
     /// &lt;para&gt;v18: indexes on every ModelId and on the parent keys the per-model re-extract
     /// deletes filter by. Pure additions — an existing database picks them up on the next
     /// EnsureSchema, with no re-extract.&lt;/para&gt;
     /// &lt;para&gt;v17: LabelFiles table (per-label-file source paths for the disk check).&lt;/para&gt;
     /// </remarks>
-    public const int CurrentSchemaVersion = 19;
+    public const int CurrentSchemaVersion = 20;
 
     private static readonly Lazy<string> SchemaSql = new(LoadEmbeddedSchema);
 
@@ -114,6 +117,19 @@ public sealed partial class MetadataRepository
                 conn.Execute("ALTER TABLE Models ADD COLUMN LastExtractedUtc TEXT", transaction: tx);
             if (existingCols.Count > 0 && !existingCols.Contains("SourceFingerprint"))
                 conn.Execute("ALTER TABLE Models ADD COLUMN SourceFingerprint TEXT", transaction: tx);
+        }
+        // v20: Models.SourceIndexed. Added before Schema.sql for the same reason as v7; the
+        // backfill from MethodSourceFts runs after it, once the FTS table is sure to exist.
+        var addedSourceIndexed = false;
+        if (current < 20)
+        {
+            var modelCols = conn.Query<string>("SELECT name FROM pragma_table_info('Models')", transaction: tx)
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
+            if (modelCols.Count > 0 && !modelCols.Contains("SourceIndexed"))
+            {
+                conn.Execute("ALTER TABLE Models ADD COLUMN SourceIndexed INTEGER NOT NULL DEFAULT 0", transaction: tx);
+                addedSourceIndexed = true;
+            }
         }
         if (current < 8)
         {
@@ -248,6 +264,22 @@ public sealed partial class MetadataRepository
                 if (!classCols12.Contains("IsRunBaseBatch"))          conn.Execute("ALTER TABLE Classes ADD COLUMN IsRunBaseBatch          INTEGER NOT NULL DEFAULT 0", transaction: tx);
                 if (!classCols12.Contains("HasCanGoBatch"))           conn.Execute("ALTER TABLE Classes ADD COLUMN HasCanGoBatch           INTEGER NOT NULL DEFAULT 0", transaction: tx);
                 if (!classCols12.Contains("HasPublicInstanceFields")) conn.Execute("ALTER TABLE Classes ADD COLUMN HasPublicInstanceFields INTEGER NOT NULL DEFAULT 0", transaction: tx);
+            }
+        }
+
+        if (addedSourceIndexed)
+        {
+            // A database from before v20 knows which models are source-indexed only by their FTS
+            // rows. Without this, the first refresh after the upgrade would read every model as
+            // "never indexed" and drop the rows the column exists to keep.
+            try
+            {
+                conn.Execute(@"UPDATE Models SET SourceIndexed = 1
+                               WHERE Name IN (SELECT DISTINCT Model FROM MethodSourceFts)", transaction: tx);
+            }
+            catch (Microsoft.Data.Sqlite.SqliteException)
+            {
+                // Host SQLite build lacks FTS5 — nothing can have been indexed.
             }
         }
 
@@ -665,6 +697,31 @@ public sealed partial class MetadataRepository
         {
             return 0;
         }
+    }
+
+    /// <summary>
+    /// Whether <paramref name="model"/>'s method bodies were full-text indexed by its last
+    /// extract (<c>Models.SourceIndexed</c>). False for a model the index does not hold.
+    /// </summary>
+    /// <remarks>
+    /// The source index is opt-in per extract, but a model is re-extracted far more often than
+    /// anyone thinks about the flag: <c>index refresh --model X</c> after every write,
+    /// <c>index sync</c>, the daemon's file watcher. When each of those cleared the model's FTS
+    /// rows unless the flag was repeated, the documented post-write refresh quietly took the
+    /// model out of <c>find refs</c>. Callers that were given no preference read this instead.
+    /// </remarks>
+    public bool IsSourceIndexed(string model)
+    {
+        using var conn = OpenReadOnly();
+        return conn.ExecuteScalar<long?>("SELECT SourceIndexed FROM Models WHERE Name=@m", new { m = model }) == 1;
+    }
+
+    /// <summary>The models whose last extract full-text indexed their method bodies.</summary>
+    public IReadOnlySet<string> GetSourceIndexedModels()
+    {
+        using var conn = OpenReadOnly();
+        return conn.Query<string>("SELECT Name FROM Models WHERE SourceIndexed = 1")
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
     }
 
     /// <summary>
@@ -2391,8 +2448,11 @@ public sealed partial class MetadataRepository
     /// methods carry their <see cref="ExtractedMethod.Body"/> (opt-in via
     /// <c>index extract --index-source</c>), method bodies are also written to
     /// the <c>MethodSourceFts</c> full-text index. The model's existing FTS rows
-    /// are always cleared first, so re-extracting without the flag cleans up
-    /// stale source previously indexed for that model.
+    /// are always cleared first, so the rows never outlive the bodies they were
+    /// read from, and <c>Models.SourceIndexed</c> records which of the two this
+    /// write did. Whether to capture bodies is the caller's decision, made before
+    /// extraction — see <see cref="IsSourceIndexed"/> for how a re-extract that
+    /// names no preference keeps the previous one.
     /// </summary>
     public void ApplyExtract(ExtractBatch batch, string? sourceFingerprint, bool indexMethodSource = false)
         => ApplyExtract(batch, sourceFingerprint, indexMethodSource, beforeCommit: null);
@@ -2486,6 +2546,8 @@ public sealed partial class MetadataRepository
         // (and thus the MethodSourceFts table) degrades to a no-op.
         try { conn.Execute("DELETE FROM MethodSourceFts WHERE Model=@n", new { n = batch.Model }, tx); }
         catch (Microsoft.Data.Sqlite.SqliteException) { indexMethodSource = false; }
+        conn.Execute("UPDATE Models SET SourceIndexed=@s WHERE ModelId=@m",
+            new { s = indexMethodSource ? 1 : 0, m = modelId }, tx);
         // Labels are keyed by file+lang, not model; we delete by file instead.
         foreach (var file in batch.Labels.Select(l => l.File).Distinct(StringComparer.OrdinalIgnoreCase))
             conn.Execute("DELETE FROM Labels WHERE LabelFile=@f", new { f = file }, tx);

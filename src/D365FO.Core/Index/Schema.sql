@@ -19,7 +19,10 @@ CREATE TABLE IF NOT EXISTS Models (
     Layer               TEXT,
     IsCustom            INTEGER NOT NULL DEFAULT 0,
     LastExtractedUtc    TEXT,
-    SourceFingerprint   TEXT
+    SourceFingerprint   TEXT,
+    -- v20: 1 when the model's method bodies are in MethodSourceFts. A re-extract that
+    -- names neither --index-source nor --no-index-source reuses it.
+    SourceIndexed       INTEGER NOT NULL DEFAULT 0
 );
 
 CREATE TABLE IF NOT EXISTS Tables (

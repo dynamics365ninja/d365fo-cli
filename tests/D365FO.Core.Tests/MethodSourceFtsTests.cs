@@ -6,8 +6,8 @@ namespace D365FO.Core.Tests;
 
 /// <summary>
 /// Covers the opt-in v15 method-body full-text index (MethodSourceFts):
-/// capture is off by default, on when requested, and cleaned up when a model
-/// is re-extracted without the flag.
+/// capture is off by default, on when requested, kept by a re-extract that
+/// names no preference, and dropped only when asked to (v20).
 /// </summary>
 public class MethodSourceFtsTests : IDisposable
 {
@@ -87,14 +87,115 @@ public class MethodSourceFtsTests : IDisposable
     }
 
     [Fact]
-    public void Reextract_without_flag_clears_stale_source_rows()
+    public void Reextract_without_source_never_leaves_stale_rows_behind()
     {
         Ingest(indexSource: true);
         Assert.True(_repo.CountMethodSource() > 0);
+        Assert.True(_repo.IsSourceIndexed("TestModel"));
 
-        // Re-extracting the same model without --index-source must drop its FTS rows.
+        // A write that carries no bodies replaces the model's rows with none, and says so —
+        // the FTS rows never outlive the extract that produced them.
         Ingest(indexSource: false);
         Assert.Equal(0, _repo.CountMethodSource());
+        Assert.False(_repo.IsSourceIndexed("TestModel"));
+    }
+
+    // ─── v20: the per-model source flag survives a re-extract ─────────────────
+
+    private ToolResult<object> Sync(bool? indexSource) =>
+        IndexSync.Sync("TestModel", path: null, packagesOverride: SamplesDir,
+            databasePath: _dbPath, indexSource: indexSource);
+
+    [Fact]
+    public void Refresh_without_a_source_flag_keeps_the_models_method_bodies_searchable()
+    {
+        Assert.True(Sync(indexSource: true).Ok);
+        var indexed = _repo.CountMethodSource("TestModel");
+        Assert.True(indexed > 0);
+
+        // The documented post-write step is `index refresh --model X` / `index sync X` with no
+        // flag. It used to delete the model's FTS rows, so find refs lost every hit in it.
+        Assert.True(Sync(indexSource: null).Ok);
+
+        Assert.Equal(indexed, _repo.CountMethodSource("TestModel"));
+        Assert.True(_repo.IsSourceIndexed("TestModel"));
+        Assert.Equal("fts", MethodSourceSearch.Find(_repo, "strFmt", kind: null, model: null, limit: 50).Via);
+    }
+
+    [Fact]
+    public void Sync_by_a_differently_cased_model_name_keeps_the_indexed_model()
+    {
+        Assert.True(Sync(indexSource: true).Ok);
+        var indexed = _repo.CountMethodSource("TestModel");
+
+        Assert.True(IndexSync.Sync("testmodel", path: null, packagesOverride: SamplesDir,
+            databasePath: _dbPath, indexSource: null).Ok);
+
+        Assert.Equal(indexed, _repo.CountMethodSource("TestModel"));
+        Assert.True(_repo.IsSourceIndexed("TestModel"));
+        // One model row, under the on-disk spelling — not a second, unindexed "testmodel".
+        Assert.Equal("TestModel", Assert.Single(_repo.ListModels()).Name);
+    }
+
+    [Fact]
+    public void Refresh_without_a_source_flag_does_not_index_a_model_that_never_was()
+    {
+        Assert.True(Sync(indexSource: null).Ok);
+
+        Assert.Equal(0, _repo.CountMethodSource());
+        Assert.False(_repo.IsSourceIndexed("TestModel"));
+    }
+
+    [Fact]
+    public void No_index_source_drops_the_models_method_bodies_and_the_choice_sticks()
+    {
+        Assert.True(Sync(indexSource: true).Ok);
+        Assert.True(_repo.CountMethodSource("TestModel") > 0);
+
+        Assert.True(Sync(indexSource: false).Ok);
+        Assert.Equal(0, _repo.CountMethodSource("TestModel"));
+        Assert.False(_repo.IsSourceIndexed("TestModel"));
+
+        // A later refresh with no flag keeps the model out, as it was left.
+        Assert.True(Sync(indexSource: null).Ok);
+        Assert.Equal(0, _repo.CountMethodSource("TestModel"));
+    }
+
+    [Fact]
+    public void Index_source_and_no_index_source_together_are_refused()
+    {
+        var refusal = IndexSync.ConflictingSourceFlags(indexSource: true, noIndexSource: true);
+
+        Assert.NotNull(refusal);
+        Assert.False(refusal!.Ok);
+        Assert.Equal(D365FoErrorCodes.BadInput, refusal.Error!.Code);
+        Assert.Contains("neither", refusal.Error.Hint, StringComparison.Ordinal);
+        Assert.Null(IndexSync.ConflictingSourceFlags(indexSource: true, noIndexSource: false));
+        Assert.Null(IndexSync.SourceChoice(indexSource: false, noIndexSource: false));
+    }
+
+    [Fact]
+    public void Upgrading_a_v19_index_keeps_models_that_already_had_source_indexed()
+    {
+        Ingest(indexSource: true);
+        var indexed = _repo.CountMethodSource("TestModel");
+
+        // Turn the database back into what a v19 build left behind: FTS rows, no column.
+        using (var conn = new Microsoft.Data.Sqlite.SqliteConnection(_repo.ConnectionString))
+        {
+            conn.Open();
+            using var cmd = conn.CreateCommand();
+            cmd.CommandText = "ALTER TABLE Models DROP COLUMN SourceIndexed; PRAGMA user_version = 19;";
+            cmd.ExecuteNonQuery();
+        }
+
+        var upgraded = new MetadataRepository(_dbPath);
+        Assert.True(upgraded.EnsureSchema());
+
+        // Read off the FTS rows by the migration, so the first refresh after the upgrade keeps them.
+        Assert.True(upgraded.IsSourceIndexed("TestModel"));
+        Assert.True(Sync(indexSource: null).Ok);
+        Assert.Equal(indexed, upgraded.CountMethodSource("TestModel"));
     }
 
     // ─── Shared search helper (backs CLI find refs + MCP find_references) ────

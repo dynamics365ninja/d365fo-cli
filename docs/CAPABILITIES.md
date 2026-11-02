@@ -8,7 +8,7 @@ Full reference of what the tool provides. For setup see [SETUP.md](SETUP.md), fo
 
 The SQLite index (`$D365FO_INDEX_DB`) stores AOT metadata extracted from `PackagesLocalDirectory`. It covers 22 AOT object types and is populated by `d365fo index extract`.
 
-By default the index stores object/method *metadata* only — method bodies (the X++ source) are parsed for lint flags and then discarded; the canonical source stays in the AOT XML on disk. Pass `--index-source` to additionally full-text index method bodies into `MethodSourceFts` (see below).
+By default the index stores object/method *metadata* only — method bodies (the X++ source) are parsed for lint flags and then discarded; the canonical source stays in the AOT XML on disk. Pass `--index-source` to additionally full-text index method bodies into `MethodSourceFts` (see below). The choice is remembered per model: a later `index extract`, `index refresh` or `index sync` that passes neither `--index-source` nor `--no-index-source` keeps each model as its last extract left it, so the post-write `index refresh --model <Model>` no longer drops the model from `find refs`.
 
 ### Index maintenance commands
 
@@ -17,7 +17,8 @@ By default the index stores object/method *metadata* only — method bodies (the
 | `index build` | Create or migrate the schema in-place |
 | `index extract` | Full extraction of all packages |
 | `index extract --model <M>` | Scoped extraction of one model (seconds) |
-| `index extract --index-source` | Also full-text index X++ method bodies (opt-in; enlarges the DB, accelerates `find refs`). Also available on `index refresh`. |
+| `index extract --index-source` | Also full-text index X++ method bodies (opt-in; enlarges the DB, accelerates `find refs`). Remembered per model. Also available on `index refresh` and `index sync`. |
+| `index extract --no-index-source` | Drop the extracted models' method bodies from `MethodSourceFts` and stop re-indexing them. Also on `index refresh` and `index sync` (MCP `index_sync(noIndexSource=true)`). |
 | `index refresh` | Re-extract only models whose content fingerprint changed |
 | `index refresh --force` | Re-extract all models regardless of fingerprint |
 | `index refresh --prune` | Also delete the rows of models whose folder is no longer under any configured packages root |
