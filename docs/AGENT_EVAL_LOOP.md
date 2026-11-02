@@ -63,8 +63,9 @@ d365fo-cli's core path is different: `generate` → `validate xpp` →
   extend or bind to an existing object (`L2-coc-extension`, the form-pattern
   cases, `L1-query-join`, …) read from the already-checked-in
   `tests/Samples/MiniAot/TestModel` fixture — two related tables
-  (`FmVehicle`, `FmVehicleLine`) plus one class — rebuilt fresh into a temp
-  index at the start of every run.
+  (`FmVehicle`, `FmVehicleLine`) plus one class and one form with form, data
+  source, field and control methods — rebuilt fresh into a temp index at the
+  start of every run.
 
 What's missing relative to the source repo, honestly: no compiler
 round-trip (`build`/`bp check` are Windows-VM-only and out of scope here) and

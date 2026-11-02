@@ -320,11 +320,7 @@ public sealed class MetadataExtractor
     /// (the <c>AxWorkflowType</c> class of bug) cannot creep back in.
     /// </summary>
     private static bool HasAnyAotSubfolder(string dir)
-    {
-        foreach (var s in D365FO.Core.ObjectTypes.ObjectTypeRegistry.ModelMarkerFolders())
-            if (Directory.Exists(Path.Combine(dir, s))) return true;
-        return false;
-    }
+        => D365FO.Core.ObjectTypes.ObjectTypeRegistry.IsModelDirectory(dir);
 
     private List<T> ReadAll<T>(string dir, Func<XDocument, string, T?> parser) where T : class
     {
@@ -1144,7 +1140,7 @@ public sealed class MetadataExtractor
 
     // -------- forms --------
 
-    private static ExtractedForm? ParseForm(XDocument doc, string file)
+    private ExtractedForm? ParseForm(XDocument doc, string file)
     {
         var root = doc.Root;
         if (root is null) return null;
@@ -1190,6 +1186,10 @@ public sealed class MetadataExtractor
             PatternVersion = patternVersion,
             Style = style,
             TitleDataSource = titleDs,
+            // v15 source capture covers form methods too (Kind=Form in MethodSourceFts).
+            MethodBodies = CaptureMethodSource
+                ? FormMethodSource.Enumerate(root)
+                : Array.Empty<FormMethodSource.Member>(),
         };
     }
 
