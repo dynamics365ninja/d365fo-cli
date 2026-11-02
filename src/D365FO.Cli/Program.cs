@@ -16,6 +16,10 @@ if (profileError is not null)
 // Global `--no-refresh`: a write re-indexes the model it touched before its result is
 // rendered (see IndexAutoRefresh). Peeled off the same way, so every write command honours it.
 var (refreshArgs, noRefresh) = AutoRefreshArgs.Strip(cliArgs);
+// Exported like --profile, so `d365fo --no-refresh mcp serve` / `daemon start` (whose tool calls
+// open their own scopes) and child processes honour it too.
+if (noRefresh)
+    Environment.SetEnvironmentVariable(D365FO.Core.Index.IndexAutoRefresh.EnvVar, "0");
 
 var app = CliApp.Build();
 

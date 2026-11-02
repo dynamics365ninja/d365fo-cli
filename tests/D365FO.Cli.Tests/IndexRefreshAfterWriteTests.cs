@@ -68,6 +68,15 @@ public sealed class IndexRefreshAfterWriteTests : IDisposable
     }
 
     [Fact]
+    public void No_refresh_after_a_literal_double_dash_is_left_alone()
+    {
+        var (rest, noRefresh) = AutoRefreshArgs.Strip(new[] { "eval", "run", "--", "--no-refresh" });
+
+        Assert.False(noRefresh);
+        Assert.Equal(new[] { "eval", "run", "--", "--no-refresh" }, rest);
+    }
+
+    [Fact]
     public void The_daemon_watches_the_custom_packages_roots_as_well()
     {
         // A UDE keeps custom models in their own root. Watching only the packages path meant an

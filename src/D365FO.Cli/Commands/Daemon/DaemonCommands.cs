@@ -209,22 +209,38 @@ public sealed class DaemonStartCommand : AsyncCommand<DaemonStartCommand.Setting
                     ScheduleRefresh(hit.Model, hit.Root);
             }
 
-            var fsw = new FileSystemWatcher(fullRoot)
+            // One root that cannot be watched (a network share without change notifications, a
+            // root removed since it was resolved) must not take the daemon or the other roots down.
+            FileSystemWatcher? fsw = null;
+            try
             {
-                IncludeSubdirectories = true,
-                NotifyFilter = NotifyFilters.LastWrite | NotifyFilters.FileName,
-            };
-            // Label files are metadata too: a label added in Visual Studio changes the model.
-            fsw.Filters.Add("*.xml");
-            fsw.Filters.Add("*.label.txt");
-            fsw.Changed += OnChanged;
-            fsw.Created += OnChanged;
-            fsw.Deleted += OnChanged;
-            fsw.Renamed += (s, e) => OnChanged(s, e);
-            fsw.EnableRaisingEvents = true;
-            watchers.Add(fsw);
+                fsw = new FileSystemWatcher(fullRoot)
+                {
+                    IncludeSubdirectories = true,
+                    NotifyFilter = NotifyFilters.LastWrite | NotifyFilters.FileName,
+                };
+                // Label files are metadata too: a label added in Visual Studio changes the model.
+                fsw.Filters.Add("*.xml");
+                fsw.Filters.Add("*.label.txt");
+                fsw.Changed += OnChanged;
+                fsw.Created += OnChanged;
+                fsw.Deleted += OnChanged;
+                fsw.Renamed += (s, e) => OnChanged(s, e);
+                // A burst larger than the buffer (git checkout, a full build) drops events silently
+                // unless this is reported; `index sync` / `index refresh` is then the repair.
+                fsw.Error += (_, e) => Console.Error.WriteLine(D365Json.Serialize(
+                    new { @event = "watch_error", root = fullRoot, error = e.GetException().Message }));
+                fsw.EnableRaisingEvents = true;
+                watchers.Add(fsw);
+            }
+            catch (Exception ex)
+            {
+                fsw?.Dispose();
+                Console.Error.WriteLine(D365Json.Serialize(
+                    new { @event = "watch_failed", root = fullRoot, error = ex.Message }));
+            }
         }
-        return new WatcherSet(watchers);
+        return watchers.Count == 0 ? null : new WatcherSet(watchers);
     }
 
     private sealed class WatcherSet(IReadOnlyList<FileSystemWatcher> watchers) : IDisposable

@@ -166,6 +166,20 @@ public class IndexAutoRefreshTests : IDisposable
         Assert.Equal("TestModel", hit?.Model);
     }
 
+    [Theory]
+    [InlineData("TestModel", "bin", "TestModel.xml")]
+    [InlineData("TestModel", "Descriptor", "TestModel.xml")]
+    [InlineData("TestModel", "XppMetadata", "TestModel", "AxClass", "ConFleetX.xml")]
+    [InlineData("TestModel", "TestModel", "TestModel.rnrproj.xml")]
+    public void Build_output_and_descriptors_are_not_mistaken_for_a_model(params string[] segments)
+    {
+        // A compile writes these under the watched roots; read as <Package>/<Model>/… they named
+        // models like "bin" and "XppMetadata", and the daemon tried to re-sync them on every build.
+        var path = Path.Combine(new[] { _root }.Concat(segments).ToArray());
+
+        Assert.Null(IndexAutoRefresh.LocateUnderRoots(path, new[] { _root }));
+    }
+
     [Fact]
     public void A_successful_refresh_drops_the_stale_not_refreshed_warning_and_reports_the_model()
     {

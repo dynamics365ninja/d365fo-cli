@@ -13,10 +13,24 @@ public static class AutoRefreshArgs
 {
     public const string Flag = "--no-refresh";
 
-    /// <summary>Remove every <c>--no-refresh</c> token. Returns the remaining arguments and whether it was present.</summary>
+    /// <summary>
+    /// Remove every <c>--no-refresh</c> token before a literal <c>--</c> (everything after it is left
+    /// alone, as <c>--profile</c> does). Returns the remaining arguments and whether it was present.
+    /// </summary>
     public static (string[] Args, bool NoRefresh) Strip(string[] args)
     {
-        var rest = args.Where(a => !string.Equals(a, Flag, StringComparison.OrdinalIgnoreCase)).ToArray();
-        return (rest, rest.Length != args.Length);
+        var rest = new List<string>(args.Length);
+        var found = false;
+        for (var i = 0; i < args.Length; i++)
+        {
+            if (args[i] == "--")
+            {
+                rest.AddRange(args[i..]);
+                break;
+            }
+            if (string.Equals(args[i], Flag, StringComparison.OrdinalIgnoreCase)) { found = true; continue; }
+            rest.Add(args[i]);
+        }
+        return (rest.ToArray(), found);
     }
 }

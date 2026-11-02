@@ -227,12 +227,20 @@ public static class IndexAutoRefresh
         catch { return null; }
         foreach (var root in roots)
         {
-            if (!full.StartsWith(root + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase)) continue;
-            var parts = full[(root.Length + 1)..].Split(
+            // A root at a drive or filesystem root already ends with the separator.
+            var prefix = Path.EndsInDirectorySeparator(root) ? root : root + Path.DirectorySeparatorChar;
+            if (!full.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)) continue;
+            var parts = full[prefix.Length..].Split(
                 new[] { Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar },
                 StringSplitOptions.RemoveEmptyEntries);
-            // <Package>/<Model>/<something> — a file directly in the package folder is a descriptor, not a model.
-            if (parts.Length >= 3) return (parts[1], root);
+            // <Package>/<Model>/Ax<Kind>/… — only the AOT folders are metadata the index reads. A build
+            // writes <Package>/bin, <Package>/XppMetadata/<Model>/… and the descriptor sits in
+            // <Package>/Descriptor; none of those is a model, and naming them would make the daemon
+            // watcher try (and fail) to re-sync a model called "bin" on every compile.
+            if (parts.Length >= 4
+                && parts[2].StartsWith("Ax", StringComparison.OrdinalIgnoreCase)
+                && !parts[1].Equals("XppMetadata", StringComparison.OrdinalIgnoreCase))
+                return (parts[1], root);
         }
         return null;
     }
