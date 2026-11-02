@@ -203,6 +203,15 @@ public sealed class IndexExtractCommand : Command<IndexExtractCommand.Settings>
         }
 
         var repo = RepoFactory.Create(databaseOverride);
+
+        // One writer per index file across processes: a second refresh, or an MCP index_sync,
+        // waits here or is refused with INDEX_BUSY, instead of meeting this run's model
+        // transactions in SQLite and failing half way with "database is locked". Held for the
+        // whole run (released when this method returns, on this thread) because every model
+        // write and the closing checkpoint belong to it.
+        using var writeLock = IndexWriteLock.TryAcquire(repo.DatabasePath);
+        if (writeLock is null) return RenderHelpers.Render(kind, IndexWriteLock.Busy(repo.DatabasePath));
+
         var extractor = new MetadataExtractor { CaptureMethodSource = indexSource };
         var matcher = new ModelMatcher(cfg.CustomModels);
         int modelCount = 0;

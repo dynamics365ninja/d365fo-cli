@@ -19,6 +19,32 @@ was ported from.
 
 ## [Unreleased]
 
+### Fixed — two writers on one index, and in-place edits that could lose the file
+
+Claude Desktop's MCP server and a shell often share one index. Nothing serialised their writes,
+connections had no busy timeout, and the daemon's pipe and pid file were the same for every
+profile.
+
+- **Index writers take a per-database lock.** `index extract`, `index refresh`, `index sync` and
+  the MCP `index_sync` hold a cross-process named mutex for the index file they write. A second
+  writer waits up to 30 s, then fails `INDEX_BUSY` with nothing written, instead of meeting the
+  first one's model transaction in SQLite and failing half way with "database is locked". The OS
+  releases the lock if the holder dies. The lock is per user; on Linux/macOS it is not limited to
+  one shell session, so an editor-launched MCP server and a terminal share it.
+- **Every connection sets `busy_timeout`.** A short collision (a checkpoint meeting a reader, a
+  journal write meeting a sync) now waits instead of failing on the first try.
+- **`wal_autocheckpoint = 0` is limited to the bulk extract writes.** It was set on every
+  connection and survived in the connection pool, so the WAL a small write left behind was never
+  checkpointed automatically. The extract pipeline keeps its own checkpoint schedule.
+- **The daemon's pipe, socket and pid file carry the profile name** (`d365fo-cli-<profile>`). A
+  daemon for one profile answered another profile's clients from the wrong index, and the second
+  profile's `daemon start` was refused. No profile keeps the old name.
+- **In-place edits write through the shared atomic writer.** `generate datasource-method` /
+  `control-method`, `generate role --add-to` and `generate duty` / `privilege --into-role`
+  staged through a fixed `<file>.tmp` and moved twice with no rollback, the pattern #158 fixed in
+  the scaffolder. `ScaffoldFileWriter.SaveInPlace` gives them the per-call staging name and the
+  restore-on-failure.
+
 ### Added — `index refresh --prune` for models that left the configured roots
 
 Refresh only re-reads models it finds under a configured root, so a model whose folder moved away

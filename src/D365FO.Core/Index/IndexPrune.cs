@@ -167,6 +167,12 @@ public static class IndexPrune
 
         var repo = new MetadataRepository(cfg.DatabasePath);
         repo.EnsureSchema();
+
+        // Judged and deleted under the index write lock, so a refresh or sync in another process
+        // cannot re-add a model between the report and the delete.
+        using var writeLock = IndexWriteLock.TryAcquire(repo.DatabasePath);
+        if (writeLock is null) return IndexWriteLock.Busy(repo.DatabasePath);
+
         var report = Find(repo, roots);
         if (report.NoRootReachable)
             return ToolResult<object>.Fail("PACKAGES_PATH_NOT_FOUND",

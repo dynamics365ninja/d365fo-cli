@@ -347,6 +347,7 @@ The [one-line install](#one-line-install) at the top of this page **is** the qui
 | `PACKAGES_PATH_NOT_FOUND` | `d365fo init --packages <PATH> --persist-profile`, or set `D365FO_PACKAGES_PATH` manually |
 | `UNSUPPORTED_PLATFORM` | `build` / `sync` / `test` / `bp` require Windows + a D365FO dev VM. Everything else still works |
 | `NO_INDEX` | `d365fo index build && d365fo index extract` |
+| `INDEX_BUSY` | Another `index refresh` / `extract` / `sync` or an MCP `index_sync` is writing the same index file and did not finish within 30 s. Nothing was written. Retry once it finishes |
 | `stale-index` warning from `doctor` | `d365fo index refresh --model <Model>` (or just start the daemon) |
 | `index departed models` warning from `doctor`, or `search` returns objects whose `sourcePath` leads nowhere | The model's folder left every configured root (repo move). Add the new root to `D365FO_CUSTOM_PACKAGES_PATH` and refresh, or remove the old rows with `d365fo index refresh --prune` |
 | Copilot Chat says "There was an error executing code search" then writes generic X++ | VS Copilot Chat cannot search AOT XML — the `d365fo-cli` skill is not being picked up. Open the skills panel (Tools icon, bottom-right of Copilot Chat) and confirm `d365fo-cli` is listed; `.github/skills/d365fo-cli/` must sit next to the `.sln` (or in `%USERPROFILE%\.copilot\skills\`). Restart VS. For full automation switch Copilot Chat to **Agent** mode |
