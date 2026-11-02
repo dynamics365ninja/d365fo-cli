@@ -193,7 +193,11 @@ namespace D365FO.Bridge
             if (args != null && args["limit"] is JsonNode ln && ln.GetValue<object>() is object lv && int.TryParse(lv.ToString(), out var li)) limit = li;
             List<string> objectKinds = null;
             if (args != null && args["objectKinds"] is JsonArray ok)
-                objectKinds = ok.Select(n => (string)n).Where(n => !string.IsNullOrEmpty(n)).ToList();
+                // Tolerant: a malformed element is skipped, not thrown — it only narrows the seek.
+                objectKinds = ok.OfType<JsonValue>()
+                    .Select(v => v.TryGetValue<string>(out var s) ? s : null)
+                    .Where(s => !string.IsNullOrEmpty(s))
+                    .ToList();
             return XrefRepository.Find(symbol, kind, limit, objectKinds);
         }
 

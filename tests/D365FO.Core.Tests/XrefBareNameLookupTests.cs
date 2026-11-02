@@ -51,7 +51,7 @@ public class XrefBareNameLookupTests
 
     [Theory]
     [InlineData(null)]
-    [InlineData("view")]
+    [InlineData("report")]
     public void A_bare_name_of_no_known_kind_keeps_the_anywhere_match(string? kind)
     {
         var p = XrefQuery.ResolveTargetPaths("SalesLine", kind is null ? null : [kind]);
@@ -121,6 +121,41 @@ public class XrefBareNameLookupTests
             bridge: null, ownerOf: _ => null);
 
         Assert.Null(asked);
+    }
+
+    [Fact]
+    public void A_name_the_index_does_not_know_is_probed_in_the_database_by_exact_paths()
+    {
+        using var conn = new Microsoft.Data.Sqlite.SqliteConnection("Data Source=:memory:");
+        conn.Open();
+        using (var setup = conn.CreateCommand())
+        {
+            setup.CommandText = @"CREATE TABLE Names (Path TEXT);
+INSERT INTO Names VALUES ('/Enums/NoYes'), ('Enum/NoYes'), ('/Enums/NoYes/EnumValues/Yes'),
+  ('DataEntityView/CustCustomerV3Entity'), ('/MenuItemDisplays/NoYes'), ('/Classes/NoYesHelper');";
+            setup.ExecuteNonQuery();
+        }
+
+        Assert.Equal(new[] { "enum" }, XrefQuery.ProbeKinds(conn, "NoYes"));
+        Assert.Equal(new[] { "dataentity" }, XrefQuery.ProbeKinds(conn, "CustCustomerV3Entity"));
+        // A namesake of a kind without a path map (a menu item) does not count: the anywhere match stays.
+        Assert.Empty(XrefQuery.ProbeKinds(conn, "Unknown"));
+    }
+
+    [Fact]
+    public void Every_probed_kind_is_reported_and_a_probe_only_kind_resolves_to_seeks()
+    {
+        using var conn = new Microsoft.Data.Sqlite.SqliteConnection("Data Source=:memory:");
+        conn.Open();
+        using (var setup = conn.CreateCommand())
+        {
+            setup.CommandText = "CREATE TABLE Names (Path TEXT); INSERT INTO Names VALUES ('/Tables/X'), ('Form/X');";
+            setup.ExecuteNonQuery();
+        }
+
+        Assert.Equal(new[] { "table", "form" }, XrefQuery.ProbeKinds(conn, "X"));
+        Assert.Equal(new[] { "/Views/X", "View/X" },
+            XrefQuery.ResolveTargetPaths("X", ["view"]).Exact);
     }
 
     [Fact]

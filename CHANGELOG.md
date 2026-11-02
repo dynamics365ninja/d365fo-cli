@@ -28,7 +28,7 @@ timeout, and `find refs DynTpmDealTable --xref` never answered. Member, label an
 already exact and fast.
 
 - **The local index names the kind.** The owner lookup the coverage check already makes now reports
-  every kind the name is (`table`, `class`, `form`, `edt`, `enum`. A table and its form often share
+  every kind the name is (`table`, `class`, `form`, `edt`, `enum`; a table and its form often share
   a name). The query then matches the object and its children in both path forms the compiler writes,
   `/Tables/X` for code and `Table/X` for metadata such as a form control bound to a field group. Every
   term is an exact path or a prefix, so it seeks. Measured on that database: 62 s before, 0.15 s
@@ -36,10 +36,20 @@ already exact and fast.
 - **What is no longer pooled in.** The other 120 references point at a different symbol that only
   shares the name, such as a form data source called `DynTpmDealTable`
   (`/Forms/X/DataSources/DynTpmDealTable/Methods/active`). That is the same kind of false match the
-  `%/X%` → `%/X` change removed for prefixes. Ask for such a node by its AOT path.
-- **Unknown kinds keep the old match.** A name the index does not know, or a kind without a path
-  map (view, query, …), is still matched anywhere. An older bridge ignores the new `objectKinds`
-  argument and does the same.
+  `%/X%` → `%/X` change removed for prefixes. On a 10.0 xref database `CustTable` (table and form)
+  likewise stops pooling in member variables named `custTable`, query/entity data sources named
+  `CustTable` (their own reference to the table is still found) and the `CustTable` menu item. Ask
+  for such a node by its AOT path, e.g. `find refs /MenuItemDisplays/CustTable --xref`.
+- **A name the index does not know is asked of the database.** Before falling back, one exact `IN`
+  over every known root (`/Enums/NoYes`, `Enum/NoYes`, `/DataEntityViews/X`, …) tells which kinds
+  the name is in the cross-reference database itself, so a platform name outside the local index
+  (`NoYes`: timeout before, 6 s after on a 4.9M-name database) or a view, map, data entity or
+  query seeks too. A kind the index knows is never widened by the probe. Only a name with no object
+  of those kinds in either place keeps the old match and scans. The answer lists the kinds it
+  matched as (`objectKinds`).
+- **Unknown kinds keep the old match.** A name the index does not know and the probe does not find
+  is still matched anywhere. An older bridge ignores the new `objectKinds` argument and does the
+  same.
 - **The answer says how it matched**: `match: "object"`, `"anywhere"` or `"exact"`.
 
 ### Added — writes re-index the model they touched

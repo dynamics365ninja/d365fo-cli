@@ -161,7 +161,7 @@ public static class XrefReferences
         // Provenance and shape ahead of the rows: a caller that reads the head of a long answer
         // must not miss which store answered.
         var rows = new JsonObject { ["_source"] = source, ["mode"] = "references" };
-        foreach (var key in new[] { "symbol", "kindFilter", "scoped", "match", "count", "truncated", "items" })
+        foreach (var key in new[] { "symbol", "kindFilter", "scoped", "match", "objectKinds", "count", "truncated", "items" })
         {
             if (raw[key] is not { } value) continue;
             raw.Remove(key);
@@ -254,6 +254,7 @@ public static class XrefReferences
         };
         var kindFilter = (string?)raw["kindFilter"];
         if (!string.IsNullOrEmpty(kindFilter)) result["kindFilter"] = kindFilter;
+        if (raw["objectKinds"] is JsonArray objectKinds) result["objectKinds"] = objectKinds.DeepClone();
         return result;
     }
 
