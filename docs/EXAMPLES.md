@@ -135,6 +135,7 @@ d365fo search workspace VendPayment --output json
 
 ```sh
 d365fo search any CustTable
+d365fo search CustTable        # same: no sub-command means `any`
 ```
 
 UNIONs every indexed kind in one query and returns `byKind` counts for triage.

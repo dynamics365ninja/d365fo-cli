@@ -25,7 +25,8 @@ approximate. The ratios, which are what the decision turns on, do not depend on 
 | | Chars | ≈ tokens | Paid |
 |---|---:|---:|---|
 | **MCP tool schemas** (32 tools) | 40 132 | ~11 100 | **every turn** |
-| MCP server instructions | 6 959 | ~1 900 | once per session |
+| MCP server instructions (`--legacy` and `--http`: full rule canon) | 6 959 | ~1 900 | once per session |
+| MCP server instructions (default SDK stdio: routing only, rules via `get_knowledge`) | 981 | ~270 | once per session |
 | **CLI skill, one-skill layout** | 366 | ~100 | **every turn** |
 | CLI skills, per-topic layout (43 skills) | 15 055 | ~4 200 | **every turn** |
 | `d365fo schema` (36 agent-first commands) | 9 368 | ~2 600 | when the agent asks |

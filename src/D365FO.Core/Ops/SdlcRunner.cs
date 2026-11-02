@@ -51,15 +51,40 @@ public static class SdlcRunner
     /// </param>
     /// <param name="incremental">xppc only: compile what changed since the last full build.</param>
     /// <param name="packagesPath">Platform packages root; defaults to <c>D365FO_PACKAGES_PATH</c>.</param>
+    /// <param name="xref">
+    /// xppc only: also update the cross-reference database named by
+    /// <c>D365FO_XREF_CONNECTIONSTRING</c> (<c>-xref</c>), which is what <c>find refs --xref</c>
+    /// reads. Nothing else writes it for a custom model on a developer machine.
+    /// </param>
     public static ToolResult<object> Build(
         string? msbuildPath, string? projectPath, string configuration = "Debug", string? xppcLogPath = null,
-        string? model = null, string engine = "auto", bool incremental = false, string? packagesPath = null)
+        string? model = null, string engine = "auto", bool incremental = false, string? packagesPath = null,
+        bool xref = false)
     {
         engine = string.IsNullOrWhiteSpace(engine) ? "auto" : engine.Trim().ToLowerInvariant();
         if (engine is not ("auto" or "xppc" or "msbuild"))
         {
             return ToolResult<object>.Fail("BAD_INPUT", $"Unknown build engine '{engine}'.",
                 "Use auto (default), xppc or msbuild.");
+        }
+
+        XppModelBuild.XrefTarget? xrefTarget = null;
+        if (xref)
+        {
+            if (engine == "msbuild")
+            {
+                return ToolResult<object>.Fail("BAD_INPUT",
+                    "--xref updates the cross-reference database through xppc, and --engine msbuild does not run xppc.",
+                    "Drop --engine msbuild (X++ projects and --model build with xppc), or drop --xref.");
+            }
+            var (target, problem) = XppModelBuild.ReadXrefTarget(D365FoSettings.Resolve("D365FO_XREF_CONNECTIONSTRING"));
+            if (target is null)
+            {
+                return ToolResult<object>.Fail("BAD_INPUT", problem!,
+                    "Point D365FO_XREF_CONNECTIONSTRING at the cross-reference database with integrated security " +
+                    "(Server=...;Database=...;Integrated Security=true), or unset it for the local DYNAMICSXREFDB.");
+            }
+            xrefTarget = target;
         }
 
         if (engine != "msbuild")
@@ -69,9 +94,9 @@ public static class SdlcRunner
             if (targets.Count > 0)
             {
                 var root = packagesPath ?? D365FoSettings.FromEnvironment().PackagesPath!;
-                return XppModelBuild.Build(targets, root, incremental, reason);
+                return XppModelBuild.Build(targets, root, incremental, reason, xrefTarget);
             }
-            if (engine == "xppc")
+            if (engine == "xppc" || xref)
             {
                 return ToolResult<object>.Fail("NO_XPP_PROJECT",
                     $"No X++ project found in '{projectPath ?? Environment.CurrentDirectory}'.",

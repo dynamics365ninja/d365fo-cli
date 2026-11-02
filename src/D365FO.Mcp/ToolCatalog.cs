@@ -55,6 +55,31 @@ public static class ToolCatalog
         Func<ToolHandlers, JsonElement, object> Invoke);
 
     /// <summary>
+    /// Run a tool and, when it journaled a write, re-index the model(s) it touched before the
+    /// result goes back — so a <c>get_object_info</c> right after <c>generate_object</c> finds the new
+    /// object. The result carries <c>data.indexRefreshed</c>. Both transports call this, so stdio and
+    /// HTTP behave the same. Turned off by <c>D365FO_AUTO_REFRESH=0</c>.
+    /// </summary>
+    public static object InvokeWithIndexRefresh(in Descriptor descriptor, ToolHandlers handlers, JsonElement args)
+    {
+        using var scope = D365FO.Core.Index.IndexAutoRefresh.BeginScope();
+        object raw;
+        try
+        {
+            raw = descriptor.Invoke(handlers, args);
+        }
+        catch
+        {
+            // The write may have landed before the throw; the index still has to follow the disk.
+            scope.Flush();
+            throw;
+        }
+        return scope.Flush() is { } refreshed && raw is ToolResult<object> result
+            ? D365FO.Core.Index.IndexAutoRefresh.Attach(result, refreshed)
+            : raw;
+    }
+
+    /// <summary>
     /// Tools whose <see cref="Descriptor.Effect"/> is not <see cref="ToolEffect.Read"/>,
     /// derived from the catalog rather than kept by hand. Drives the duplicate-call dedup
     /// exclusion and the cache flush after a write (<see cref="CallDedup"/>), and
@@ -143,13 +168,32 @@ public static class ToolCatalog
         new Descriptor("get_object_info", ToolEffect.Read,
             "Read one object's full metadata by `objectType`: table | class | edt | enum | form | query | view | " +
             "entity | report | service | service-group | menu-item | business-event | security-policy. For tables, set exactly one of " +
-            "`relations` | `methods` | `indexes` | `deleteActions` to return just that slice instead of the full table.",
+            "`relations` | `methods` | `indexes` | `deleteActions` to return just that slice instead of the full table, or " +
+            "`detail=brief` for a summary (properties, field name/type/EDT, index names and fields, relation names and " +
+            "related table) at a fraction of the size — read it first when you only need to know what the table holds.",
             Schema(("objectType", "string", true), ("name", "string", true),
                    ("relations", "boolean", false), ("methods", "boolean", false),
-                   ("indexes", "boolean", false), ("deleteActions", "boolean", false)),
+                   ("indexes", "boolean", false), ("deleteActions", "boolean", false),
+                   ("detail", "string", false)),
             (h, p) =>
             {
                 var name = Str(p, "name");
+                var detail = StrOr(p, "detail", "full").ToLowerInvariant();
+                if (detail != "full")
+                {
+                    if (detail != "brief")
+                        return D365FO.Core.ToolResult<object>.Fail("BAD_INPUT",
+                            $"Unknown detail '{Str(p, "detail")}'.", "Use detail=brief or detail=full (the default).");
+                    if (!string.Equals(StrOr(p, "objectType", ""), "table", StringComparison.OrdinalIgnoreCase))
+                        return D365FO.Core.ToolResult<object>.Fail("BAD_INPUT",
+                            $"detail=brief is available for objectType=table only, not '{Str(p, "objectType")}'.",
+                            "Drop detail for this objectType.");
+                    if (Bool(p, "relations") || Bool(p, "methods") || Bool(p, "indexes") || Bool(p, "deleteActions"))
+                        return D365FO.Core.ToolResult<object>.Fail("BAD_INPUT",
+                            "detail=brief is a fixed summary shape and does not combine with a slice flag.",
+                            "Drop detail=brief to read one slice, or drop the slice flag to read the summary.");
+                    return h.GetTableBrief(name);
+                }
                 return StrOr(p, "objectType", "").ToLowerInvariant() switch
                 {
                     "table" => Bool(p, "relations")     ? h.GetTableRelations(name)
@@ -240,12 +284,15 @@ public static class ToolCatalog
 
         new Descriptor("security_info", ToolEffect.Read,
             "Security lookup. `mode=artifact` returns a named role/duty/privilege (set `type` = role | duty | privilege, and `name`). " +
-            "`mode=coverage` returns which roles → duties → privileges grant access to `object` (set `objectKind`, default Menuitem).",
+            "`mode=coverage` returns which roles → duties → privileges grant access to `object` (set `objectKind`, default Menuitem). " +
+            "`mode=any` takes just `name` when you do not know its kind: a role, duty or privilege (in that order), else the coverage " +
+            "of the object it names under every entry-point type, menu item and table that secures it.",
             Schema(("mode", "string", true), ("type", "string", false), ("name", "string", false),
                    ("object", "string", false), ("objectKind", "string", false)),
             (h, p) => StrOr(p, "mode", "artifact").ToLowerInvariant() switch
             {
                 "coverage" => h.GetSecurity(Str(p, "object"), StrOr(p, "objectKind", "Menuitem")),
+                "any"      => h.ResolveSecurityName(StrOr(p, "name", StrOr(p, "object", ""))),
                 _ => StrOr(p, "type", "role").ToLowerInvariant() switch
                 {
                     "duty"      => h.GetSecurityDuty(Str(p, "name")),
@@ -816,8 +863,9 @@ public static class ToolCatalog
         new Descriptor("index_sync", ToolEffect.Write,
             "Re-index ONE model after an edit made outside this server — in Visual Studio, by a git pull, by "
             + "a colleague. Name the `model`, or pass a `path` to any file inside it and the model is read off "
-            + "the packages layout. Writes through `generate_object` / `modify_object` already refresh the "
-            + "index, so this is for changes this process did not make.\n"
+            + "the packages layout. Writes through `generate_object` / `modify_object` / `labels` / "
+            + "`delete_object` / `undo_last_modification` already re-index the model they touched "
+            + "(`indexRefreshed` in their result), so this is for changes this process did not make.\n"
             + "A model is the unit, not a file: the index writer replaces a model's rows atomically, which is "
             + "what keeps re-extraction idempotent — handing it one object would delete the rest of that model. "
             + "A custom model takes seconds; naming a large standard model is a minutes-long call, and the "
@@ -863,7 +911,9 @@ public static class ToolCatalog
             + "• build — compiles `project` (an .rnrproj, a solution, or a folder) or `model` "
             + "(comma-separated). X++ projects and models go to LabelC.exe + xppc.exe — the .rnrproj "
             + "MSBuild tasks only run inside Visual Studio — with `incremental` for a changed-only "
-            + "compile and `packagesPath` for the platform root; anything else goes to MSBuild "
+            + "compile, `packagesPath` for the platform root and `xref` to also update the "
+            + "cross-reference database (D365FO_XREF_CONNECTIONSTRING) that `find refs --xref` reads; "
+            + "anything else goes to MSBuild "
             + "(`configuration`, default Debug; `msbuild` to override the executable). `engine` "
             + "(auto|xppc|msbuild) forces a route. Returns per-diagnostic X++ compiler findings — object, "
             + "member, line, column, message and a fix hint — not a log tail, and says when xppc "
@@ -887,6 +937,7 @@ public static class ToolCatalog
             Schema(("action", "string", true), ("project", "string", false), ("configuration", "string", false),
                    ("msbuild", "string", false), ("xppcLog", "string", false),
                    ("engine", "string", false), ("incremental", "boolean", false),
+                   ("xref", "boolean", false),
                    ("full", "boolean", false), ("tool", "string", false),
                    ("testClasses", "array", false), ("granularity", "string", false),
                    ("resultsPath", "string", false), ("parallel", "boolean", false),
@@ -904,7 +955,7 @@ public static class ToolCatalog
                         StrOrNull(p, "msbuild"), StrOrNull(p, "project"),
                         StrOr(p, "configuration", "Debug"), StrOrNull(p, "xppcLog"),
                         StrOrNull(p, "model"), StrOr(p, "engine", "auto"), Bool(p, "incremental"),
-                        StrOrNull(p, "packagesPath")),
+                        StrOrNull(p, "packagesPath"), Bool(p, "xref")),
                     "sync" or "db-sync" => D365FO.Core.Ops.SdlcRunner.Sync(StrOrNull(p, "tool"), Bool(p, "full")),
                     "test" or "systest" => D365FO.Core.Ops.SdlcRunner.RunTests(
                         StrOrNull(p, "tool"), StrArray(p, "testClasses"), StrOrNull(p, "granularity"),
@@ -924,7 +975,8 @@ public static class ToolCatalog
             + "metadata provider, requires D365FO_BRIDGE_ENABLED=1) or `path` (deletes that XML file, `model` "
             + "optional for the journal entry). The pre-image is captured BEFORE the delete and a delete that "
             + "cannot capture one is refused — a deletion nothing can undo is not one to make by accident. "
-            + "The index is NOT refreshed automatically; the result says so.",
+            + "The model is re-indexed after the delete (`indexRefreshed` in the result) unless "
+            + "D365FO_AUTO_REFRESH=0.",
             Schema(("kind", "string", true), ("name", "string", true), ("installTo", "string", false),
                    ("path", "string", false), ("model", "string", false)),
             (h, p) => D365FO.Core.Journal.AotObjectDeleter.Delete(

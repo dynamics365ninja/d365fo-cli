@@ -87,6 +87,10 @@ public sealed class ModificationJournal
         File.Move(tmp, path, overwrite: true);
 
         Prune();
+
+        // Every reversible write passes through here, so this is where the host's auto-refresh
+        // scope learns which model changed (a no-op when no scope is open).
+        D365FO.Core.Index.IndexAutoRefresh.Touch(stamped.Model, stamped.TargetPath);
         return stamped;
     }
 

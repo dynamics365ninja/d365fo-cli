@@ -122,7 +122,7 @@ Copilot: "Since I cannot access the codebase, I'll provide generic guidance…"
 |---|---|
 | Read class structure (methods, signatures) | `d365fo get class <Name> --output json` |
 | Read X++ method body | `d365fo read class <Name> --method <M>` |
-| Read table fields / indexes / relations | `d365fo get table <Name> --output json` |
+| Read table fields / indexes / relations | `d365fo get table <Name> --brief --output json` first, the full `get table` (or `--include <parts>`) when you need labels, field groups or methods |
 | Read form controls / data sources | `d365fo get form <Name> --output json` |
 | Search objects by name | `d365fo search class\|table\|form\|edt\|enum <query> --output json` |
 | Multiple searches in one call | `d365fo search batch <q1> <q2> … --output json` |
@@ -132,7 +132,7 @@ Copilot: "Since I cannot access the codebase, I'll provide generic guidance…"
 | Who uses X — calls, reads, writes, extends (where-used) | `d365fo find refs <X> --xref --output json` — the compiler's xref, one row per object; `Owner.member` for one method/field. No XRef DB: drop `--xref` for the text scan, which can miss references |
 | Find label | `d365fo labels search "<text>" --output json` |
 | Resolve label token | `d365fo labels resolve @SYS12345 --lang en-us,cs` |
-| Trace security (Role → Duty → Privilege) | `d365fo security coverage <Role> --type Role --output json` |
+| Trace security (Role → Duty → Privilege) | `d365fo security <Name> --output json` (a role, duty or privilege, or the coverage of an object) |
 | Find table relations | `d365fo find relations <Table> --output json` |
 | Fetch several objects at once | `d365fo get batch table:CustTable class:CustTableType … --output json` (max 10) |
 | Form pattern spec (required structure) | `d365fo form-pattern spec <Pattern> --output json` |

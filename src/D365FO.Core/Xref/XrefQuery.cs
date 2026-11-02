@@ -307,7 +307,71 @@ ORDER BY srcName.Path";
         }
 
         /// <summary>
-        /// The object a source path belongs to: <c>/Classes/SalesLineType/Methods/insert</c> →
+        /// Whether the database holds any name for each of <paramref name="modules"/>. A module
+        /// that was never compiled with <c>xppc -xref</c> has no rows, and every reference
+        /// question about a symbol it declares then comes back empty for that reason alone.
+        /// One existence probe per module, so it stays cheap on a database that carries the
+        /// whole standard application.
+        /// </summary>
+        /// <returns>
+        /// <c>{ ok:true, modules:[{module, hasRows}] }</c> in the order asked, or
+        /// <c>{ ok:false, error:"XREFDB_UNAVAILABLE", message }</c>.
+        /// </returns>
+        public static JsonObject ModuleCoverage(DbConnection connection, IList<string> modules)
+        {
+            var items = new JsonArray();
+            if (modules == null || modules.Count == 0)
+                return new JsonObject { ["ok"] = true, ["modules"] = items };
+
+            var found = new Dictionary<string, bool>(StringComparer.OrdinalIgnoreCase);
+            try
+            {
+                if (connection.State != System.Data.ConnectionState.Open) connection.Open();
+                using (var cmd = connection.CreateCommand())
+                {
+                    cmd.CommandTimeout = 30;
+                    var inParams = new List<string>();
+                    for (int i = 0; i < modules.Count; i++)
+                    {
+                        var pn = "@M" + i;
+                        inParams.Add(pn);
+                        AddParameter(cmd, pn, modules[i]);
+                    }
+                    cmd.CommandText = @"
+SELECT m.Module,
+       CASE WHEN EXISTS (SELECT 1 FROM Names n WHERE n.ModuleId = m.Id) THEN 1 ELSE 0 END AS HasRows
+FROM Modules m
+WHERE m.Module IN (" + string.Join(",", inParams) + ")";
+
+                    using (var r = cmd.ExecuteReader())
+                    {
+                        while (r.Read())
+                        {
+                            var name = r["Module"] as string;
+                            if (name != null) found[name] = Convert.ToInt32(r["HasRows"]) == 1;
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                return Fail("XREFDB_UNAVAILABLE", ex.GetType().Name + ": " + ex.Message);
+            }
+
+            foreach (var module in modules)
+            {
+                items.Add(new JsonObject
+                {
+                    ["module"] = module,
+                    // A module the Modules table does not list has no rows either.
+                    ["hasRows"] = found.TryGetValue(module, out var has) && has,
+                });
+            }
+            return new JsonObject { ["ok"] = true, ["modules"] = items };
+        }
+
+        /// <summary>
+        /// The object a source path belongs to:  <c>/Classes/SalesLineType/Methods/insert</c> →
         /// <c>/Classes/SalesLineType</c>, with the rest (<c>insert</c>) as the member.
         /// </summary>
         public static string ObjectOf(string sourcePath, out string member)

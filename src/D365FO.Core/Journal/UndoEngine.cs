@@ -93,6 +93,8 @@ public static class UndoEngine
                 if (ok)
                 {
                     journal.Remove(entry.Id);
+                    // Reverting a write is a write: the index has to forget what it just learned.
+                    D365FO.Core.Index.IndexAutoRefresh.Touch(entry.Model, entry.TargetPath);
                 }
                 else
                 {

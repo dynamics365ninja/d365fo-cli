@@ -3,7 +3,7 @@
 
 Every tool the bundled `d365fo-mcp` adapter advertises, and the `d365fo` commands that reach the same handler. Both columns are read from the running code — the command manifest (`d365fo schema --full`) and the adapter's own `tools/list` — so a tool that stops matching a command fails the generator rather than quietly outliving the mapping.
 
-**32 tools · 187 command routes · 15 commands with no MCP route.**
+**32 tools · 189 command routes · 15 commands with no MCP route.**
 
 The adapter is consolidated on purpose: one tool dispatches on a `type` / `objectType` / `mode` / `action` discriminator instead of shipping one tool per object kind. That keeps the schema payload a host injects every turn from growing with the object model — see [TOKEN_ECONOMICS.md](TOKEN_ECONOMICS.md) for what that payload actually measures.
 
@@ -170,6 +170,7 @@ Read one object's full metadata by `objectType`: table | class | edt | enum | fo
 | `d365fo get service` | `objectType=service` |
 | `d365fo get service-group` | `objectType=service-group` |
 | `d365fo get table` | `objectType=table` |
+| `d365fo get table` | `objectType=table, detail=brief` |
 | `d365fo get view` | `objectType=view` |
 
 ### `get_workspace_info`
@@ -364,6 +365,7 @@ Security lookup. `mode=artifact` returns a named role/duty/privilege (set `type`
 | `d365fo get privilege` | `mode=artifact,type=privilege` |
 | `d365fo get role` | `mode=artifact,type=role` |
 | `d365fo get security` | `mode=coverage` |
+| `d365fo security any` | `mode=any` |
 | `d365fo security coverage` | `mode=coverage` |
 | `d365fo security duty` | `mode=artifact,type=duty` |
 | `d365fo security privilege` | `mode=artifact,type=privilege` |

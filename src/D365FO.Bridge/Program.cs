@@ -118,6 +118,8 @@ namespace D365FO.Bridge
                     return Ok(idNode, handlers.DeleteObject(paramsNode as JsonObject));
                 case "findReferences":
                     return Ok(idNode, handlers.FindReferences(paramsNode as JsonObject));
+                case "xrefCoverage":
+                    return Ok(idNode, handlers.XrefCoverage(paramsNode as JsonObject));
                 case "getModelFolder":
                     return Ok(idNode, handlers.GetModelFolder(paramsNode as JsonObject));
                 case "validateArtifact":

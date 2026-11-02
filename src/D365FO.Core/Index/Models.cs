@@ -295,6 +295,37 @@ public sealed record SecurityPrivilegeDetails(
 
 public sealed record SecurityEntryPointInfo(string ObjectName, string? ObjectType, string? ObjectChild, string? AccessLevel);
 
+/// <summary>
+/// What a bare security name turned out to be (<c>security any</c> /
+/// <c>security_info(mode=any)</c>), so a caller who does not know the kind gets the
+/// lookup it would have asked for instead of a usage error.
+/// </summary>
+/// <param name="Name">The name as asked.</param>
+/// <param name="ResolvedAs">
+/// <c>role</c>, <c>duty</c> or <c>privilege</c> when the name is a security artifact
+/// (checked in that order), otherwise <c>coverage</c>.
+/// </param>
+/// <param name="Role">The role, when <paramref name="ResolvedAs"/> is <c>role</c>.</param>
+/// <param name="Duty">The duty, when <paramref name="ResolvedAs"/> is <c>duty</c>.</param>
+/// <param name="Privilege">The privilege, when <paramref name="ResolvedAs"/> is <c>privilege</c>.</param>
+/// <param name="Coverage">
+/// For <c>coverage</c>: one entry per way the object is secured — each entry-point
+/// type it is granted under, each menu item that opens it, and the table itself for
+/// record-level (XDS) coverage. Empty for an artifact.
+/// </param>
+/// <param name="AlsoMatched">
+/// Other kinds the same name matched, so a caller can ask for them with the strict
+/// command (<c>security duty</c>, <c>security coverage --type …</c>).
+/// </param>
+public sealed record SecurityLookup(
+    string Name,
+    string ResolvedAs,
+    SecurityRoleDetails? Role,
+    SecurityDutyDetails? Duty,
+    SecurityPrivilegeDetails? Privilege,
+    IReadOnlyList<SecurityCoverage> Coverage,
+    IReadOnlyList<string> AlsoMatched);
+
 public sealed record TableMethodInfo(string Name, string? Signature, string? ReturnType, bool IsStatic);
 public sealed record TableIndexInfo(string Name, bool AllowDuplicates, bool AlternateKey, string? FieldsCsv);
 public sealed record TableDeleteActionInfo(string? Name, string RelatedTable, string? DeleteAction);

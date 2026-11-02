@@ -84,6 +84,7 @@ public static class McpServerHost
         return new McpServerOptions
         {
             ServerInfo = new Implementation { Name = ServerName, Version = ServerVersion },
+            ServerInstructions = ServerInstructions.Routing,
             Capabilities = new ServerCapabilities
             {
                 Tools = new ToolsCapability { ListChanged = false },
@@ -123,7 +124,7 @@ public static class McpServerHost
         object raw;
         try
         {
-            raw = descriptor.Invoke(handlers, args);
+            raw = ToolCatalog.InvokeWithIndexRefresh(descriptor, handlers, args);
         }
         catch (Exception ex)
         {
