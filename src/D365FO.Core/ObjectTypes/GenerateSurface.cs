@@ -40,7 +40,7 @@ public static class GenerateSurface
     [
         new("table", "AxTable from a business-role pattern preset", [Root.Table]),
         new("table-relation", "Explicit AxTableRelation fragments from a table's EDT references, mergeable into the table XML", [Root.Table]),
-        new("find-methods", "Standard static find()/exists()/findRecId() from a table's unique index, mergeable into the table XML", [Root.Table]),
+        new("find-methods", "Standard static find()/exist()/findRecId() from a table's unique index, mergeable into the table XML", [Root.Table]),
         new("class", "AxClass skeleton", [Root.Class]),
         new("coc", "Chain-of-Command wrapper class", [Root.Class]),
         new("form", "AxForm in one of nine patterns", [Root.Form]),

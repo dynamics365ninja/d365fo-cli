@@ -167,25 +167,62 @@ public static class TableAugmentScaffolder
         return ToKeys(pk.FieldsCsv!.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries));
     }
 
-    private static string BufferName(string table)
-        => table.Length > 0 ? char.ToLowerInvariant(table[0]) + table[1..] : table;
+    /// <summary>
+    /// The local buffer variable for <paramref name="table"/>: camelCase with a leading acronym
+    /// lowered as a whole (<c>CustTable</c> → <c>custTable</c>, <c>XYZPilotTable</c> →
+    /// <c>xyzPilotTable</c>), rather than only its first letter (<c>xYZPilotTable</c>).
+    /// </summary>
+    internal static string BufferName(string table)
+    {
+        if (table.Length == 0) return table;
+        var upper = 0;
+        while (upper < table.Length && char.IsUpper(table[upper])) upper++;
+        // In "XYZPilot" the run is XYZP, and its last capital starts the next word.
+        var lower = upper > 1 && upper < table.Length && char.IsLower(table[upper]) ? upper - 1 : Math.Max(upper, 1);
+        return table[..lower].ToLowerInvariant() + table[lower..];
+    }
 
     private static string ParamName(string field)
         => "_" + char.ToLowerInvariant(field[0]) + field[1..];
 
+    /// <summary>The name the standard application gives the existence check (<c>CustTable::exist</c>).</summary>
+    public const string DefaultExistName = "exist";
+
     /// <summary>
-    /// Render find()/exists()/findRecId() for a table, following Microsoft's shipped
+    /// Why <paramref name="existName"/> or <paramref name="bufferName"/> cannot be used, or null
+    /// when both are fine (or unset).
+    /// </summary>
+    public static string? ValidateFindMethodNames(string? existName, string? bufferName)
+    {
+        if (!string.IsNullOrWhiteSpace(existName)
+            && !string.Equals(existName.Trim(), "exist", StringComparison.Ordinal)
+            && !string.Equals(existName.Trim(), "exists", StringComparison.Ordinal))
+            return $"The existence check is named 'exist' (the standard application's convention) or 'exists', not '{existName}'.";
+        if (!string.IsNullOrWhiteSpace(bufferName)
+            && !System.Text.RegularExpressions.Regex.IsMatch(bufferName.Trim(), "^[A-Za-z_][A-Za-z0-9_]*$"))
+            return $"'{bufferName}' is not a valid X++ variable name.";
+        return null;
+    }
+
+    /// <summary>
+    /// Render find()/exist()/findRecId() for a table, following Microsoft's shipped
     /// convention (selectForUpdate guard, firstonly, key null-guard) so the output compiles
     /// and matches BP expectations. When <paramref name="keys"/> is empty, key-based
-    /// find()/exists() are skipped and only findRecId() is produced.
+    /// find()/exist() are skipped and only findRecId() is produced. The existence check is
+    /// named <c>exist</c> (the standard application's spelling) unless <paramref name="existName"/>
+    /// says <c>exists</c>; the local buffer is derived from the table name unless
+    /// <paramref name="bufferName"/> is given.
     /// </summary>
     public static IReadOnlyList<(string Name, string Source)> BuildFindMethods(
         string tableName,
         IReadOnlyList<FindKeyField> keys,
         bool includeExists = true,
-        bool includeFindRecId = true)
+        bool includeFindRecId = true,
+        string? existName = null,
+        string? bufferName = null)
     {
-        var buf = BufferName(tableName);
+        var buf = string.IsNullOrWhiteSpace(bufferName) ? BufferName(tableName) : bufferName!.Trim();
+        var exist = string.IsNullOrWhiteSpace(existName) ? DefaultExistName : existName!.Trim();
         var methods = new List<(string, string)>();
 
         if (keys.Count > 0)
@@ -218,11 +255,11 @@ public static class TableAugmentScaffolder
             {
                 var existsWhere = string.Join("", keys.Select((k, i) =>
                     $"{(i == 0 ? "" : "\n               && ")}{buf}.{k.Field} == {ParamName(k.Field)}"));
-                methods.Add(("exists",
+                methods.Add((exist,
                     "/// <summary>\n" +
                     $"/// Determines whether a <c>{tableName}</c> record exists for the supplied key.\n" +
                     "/// </summary>\n" +
-                    $"public static boolean exists({params_})\n" +
+                    $"public static boolean {exist}({params_})\n" +
                     "{\n" +
                     $"    return {guard}\n" +
                     $"        && (select firstonly RecId from {buf}\n" +
