@@ -279,7 +279,7 @@ public sealed class FindRefsCommand : Command<FindRefsCommand.Settings>
         // is not "no references", and a failed query over such a module has a precise cause
         // worth naming instead of the transport error.
         var owner = ownerOf(settings.Name);
-        var (hasRows, _) = owner is null ? ((bool?)null, (string?)null) : moduleHasRows(owner.Module);
+        var (hasRows, _) = owner?.Module is { } module ? moduleHasRows(module) : ((bool?)null, (string?)null);
 
         if (xref is null)
         {

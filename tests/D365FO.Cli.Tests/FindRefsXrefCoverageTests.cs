@@ -104,4 +104,18 @@ public class FindRefsXrefCoverageTests
         Assert.True(result.Ok);
         Assert.False(probed);
     }
+
+    [Fact]
+    public void An_unresolved_package_is_unknown_coverage_so_an_empty_answer_stays_an_answer()
+    {
+        var probed = false;
+        var result = FindRefsCommand.FindViaXref(Settings(),
+            query: (_, _, _) => (Answer(0), null),
+            ownerOf: _ => new XrefCoverage.Owner("CCTPM", null),
+            moduleHasRows: _ => { probed = true; return (false, null); });
+
+        Assert.True(result.Ok);
+        Assert.False(probed);
+        Assert.Contains(result.Warnings!, w => w.Contains("model CCTPM") && w.Contains("--xref"));
+    }
 }

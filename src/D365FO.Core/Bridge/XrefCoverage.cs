@@ -30,8 +30,11 @@ public static class XrefCoverage
 {
     /// <summary>The model and module (package) that declare a symbol.</summary>
     /// <param name="Model">Model name, the one <c>d365fo build --model</c> takes.</param>
-    /// <param name="Module">Package folder, which is what the cross-reference database keys on.</param>
-    public sealed record Owner(string Model, string Module);
+    /// <param name="Module">
+    /// Package folder, which is what the cross-reference database keys on, or null when the index
+    /// records no source path for the model to read it from (coverage is then unknown).
+    /// </param>
+    public sealed record Owner(string Model, string? Module);
 
     /// <summary>
     /// The type a symbol names: <c>SalesTable</c> for <c>SalesTable</c>,
@@ -105,12 +108,12 @@ public static class XrefCoverage
                     .Select(p => PackageOf(p.SourcePath))
                     .FirstOrDefault(p => p is not null);
             }
-            catch { /* fall through to the model name */ }
+            catch { /* the package stays unknown */ }
         }
 
-        // A custom model's package is almost always named after it; the module name is only used
-        // to look the coverage up, and a miss there reads as "not covered", never as a fact.
-        return new Owner(model!, module ?? model!);
+        // No guess from the model name: a package named otherwise would probe as "no rows" and
+        // turn a genuine empty answer into a refusal. An unknown package means unknown coverage.
+        return new Owner(model!, module);
     }
 
     /// <summary>What a reference answer means once coverage is known.</summary>
@@ -131,7 +134,20 @@ public static class XrefCoverage
     /// </param>
     public static Verdict Assess(int count, string symbol, Owner? owner, bool? moduleHasRows)
     {
-        if (owner is null || moduleHasRows is not false) return new Verdict(null, null);
+        if (owner is null) return new Verdict(null, null);
+
+        if (owner.Module is null)
+        {
+            // Coverage could not be checked; an empty answer stays an answer, with the one
+            // reason it could be empty that the caller cannot see.
+            return new Verdict(null, count == 0
+                ? $"Could not tell whether DYNAMICSXREFDB covers model {owner.Model}, which declares '{symbol}' " +
+                  "(the index records no package folder for it). If that model was never compiled with " +
+                  $"cross-references, this empty answer is not \"no references\": `d365fo build --model {owner.Model} --xref`."
+                : null);
+        }
+
+        if (moduleHasRows is not false) return new Verdict(null, null);
 
         var build = $"d365fo build --model {owner.Model} --xref";
         if (count == 0)

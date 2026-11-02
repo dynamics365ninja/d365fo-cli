@@ -29,13 +29,17 @@ over the whole standard application 10 s while the database itself allows 15 s t
 - **`d365fo build --xref`** (MCP `sdlc action=build xref=true`) passes xppc's documented switches
   (`-xref`, `-xrefSqlServer=`, `-xrefDbName=`, from `xppc.exe -?`) with the server and database read
   from `D365FO_XREF_CONNECTIONSTRING`, so the build writes where the reader looks. In a multi-model
-  build every model but the last gets `-norecreatecrossrefindexes`, as xppc's help asks. A SQL login
+  build every model but the last gets `-norecreatecrossrefindexes`, as xppc's help asks; when the build
+  stops before its last model, an `-xrefonly` run of the last model that compiled recreates the
+  indexes anyway (payload `xrefIndexes`). A SQL login
   in the connection string, or `--engine msbuild`, is refused rather than dropped.
 - **An empty xref answer over a module with no rows is refused**, with the build that fills it:
   "DYNAMICSXREFDB has 0 rows for module CCTPM … `d365fo build --model CCTPM --xref`". An answer with
   rows from other modules is kept with a warning, and a failed query over such a module names that
   cause next to the transport error. The coverage probe is one existence query per module, through
   a new bridge method `xrefCoverage`.
+  When the index records no package folder for the symbol's model, coverage is unknown: an empty
+  answer stays an answer, with a warning naming the build, rather than a guess from the model name.
 - **Cross-reference calls get a 60 s bridge budget** instead of the 10 s metadata one, so a slow
   query ends with the database's own error.
 

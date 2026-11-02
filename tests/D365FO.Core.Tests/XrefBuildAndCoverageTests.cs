@@ -56,6 +56,34 @@ public class XrefBuildAndCoverageTests
         Assert.DoesNotContain("-norecreatecrossrefindexes", last);
     }
 
+    [Theory]
+    [InlineData(3, 2, 2, null)]   // the last model ran, without the switch
+    [InlineData(3, 2, 1, null)]   // the last model ran and failed: it ran without the switch too
+    [InlineData(1, 0, -1, null)]  // a single model never defers
+    [InlineData(3, -1, -1, null)] // LabelC failed first: xppc never ran
+    [InlineData(3, 1, 0, 0)]      // stopped at the second: repeat the first, which compiled
+    [InlineData(3, 0, -1, 0)]     // the first failed: it is the only candidate
+    [InlineData(3, 1, 1, 1)]      // LabelC failed on the third after the second compiled
+    public void A_build_that_stops_before_its_last_model_still_recreates_the_cross_reference_indexes(
+        int count, int lastRun, int lastSucceeded, int? expected)
+        => Assert.Equal(expected, XppModelBuild.XrefIndexRecreateTarget(count, lastRun, lastSucceeded));
+
+    [Fact]
+    public void The_index_recreate_run_is_xref_only_without_the_deferral_and_keeps_the_build_logs()
+    {
+        var (xref, _) = XppModelBuild.ReadXrefTarget(null);
+
+        var args = XppModelBuild.XrefIndexRecreateArgs(Model, Packages, xref!);
+
+        Assert.Contains("-xref", args);
+        Assert.Contains("-xrefonly", args);
+        Assert.DoesNotContain("-norecreatecrossrefindexes", args);
+        Assert.DoesNotContain("-incremental", args);
+        Assert.Single(args, a => a.StartsWith("-log=", StringComparison.Ordinal));
+        Assert.Contains(args, a => a.StartsWith("-log=", StringComparison.Ordinal) && a.EndsWith("BuildModelResult.xrefindexes.log", StringComparison.Ordinal));
+        Assert.DoesNotContain(args, a => a.EndsWith("BuildModelResult.log", StringComparison.Ordinal));
+    }
+
     [Fact]
     public void Without_a_connection_string_xppc_keeps_its_own_default_database()
     {
@@ -148,6 +176,37 @@ public class XrefBuildAndCoverageTests
 
         Assert.Null(verdict.Failure);
         Assert.Null(verdict.Warning);
+    }
+
+    [Fact]
+    public void A_model_whose_package_the_index_cannot_name_has_unknown_coverage_not_none()
+    {
+        var db = Path.Combine(Path.GetTempPath(), $"xref-owner-{Guid.NewGuid():N}.sqlite");
+        try
+        {
+            var repo = new D365FO.Core.Index.MetadataRepository(db);
+            repo.EnsureSchema();
+            repo.ApplyExtract(new D365FO.Core.Index.ExtractBatch(
+                Model: "CCTPM", Publisher: "Test", Layer: "cus", IsCustom: true,
+                Tables: [], Classes: [],
+                Edts: [new D365FO.Core.Index.ExtractedEdt("DynTpmDealId", null, "String", null, 20)],
+                Enums: [], MenuItems: [], CocExtensions: [], Labels: []));
+
+            var owner = XrefCoverage.OwnerOf("DynTpmDealId", repo);
+
+            Assert.Equal("CCTPM", owner!.Model);
+            Assert.Null(owner.Module);
+            var verdict = XrefCoverage.Assess(0, "DynTpmDealId", owner, moduleHasRows: false);
+            Assert.Null(verdict.Failure);
+            Assert.Contains("d365fo build --model CCTPM --xref", verdict.Warning);
+            Assert.Null(XrefCoverage.Assess(4, "DynTpmDealId", owner, moduleHasRows: null).Warning);
+        }
+        finally
+        {
+            SqlitePool.ReleaseFor(db);
+            foreach (var ext in new[] { "", "-wal", "-shm" })
+                try { File.Delete(db + ext); } catch { }
+        }
     }
 
     [Fact]

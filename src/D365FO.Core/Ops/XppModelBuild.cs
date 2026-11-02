@@ -202,6 +202,42 @@ public static class XppModelBuild
         return args;
     }
 
+    /// <summary>
+    /// The model whose <c>-xrefonly</c> run recreates the cross-reference indexes when an
+    /// <c>--xref</c> build stopped before its last model, or null when nothing was deferred.
+    /// </summary>
+    /// <remarks>
+    /// Every model but the last runs with <c>-norecreatecrossrefindexes</c>, and xppc's help says
+    /// the last one must run without it so the indexes are recreated. A failure earlier stops the
+    /// build, so that run never happens. The last model that compiled is the one to repeat, as
+    /// <c>-xrefonly</c>; when none did, the one that failed is the only candidate.
+    /// </remarks>
+    /// <param name="targetCount">Models in the build.</param>
+    /// <param name="lastXppcRun">Index of the last model xppc ran for, or -1.</param>
+    /// <param name="lastSucceeded">Index of the last model xppc compiled, or -1.</param>
+    public static int? XrefIndexRecreateTarget(int targetCount, int lastXppcRun, int lastSucceeded)
+    {
+        if (lastXppcRun < 0 || lastXppcRun >= targetCount - 1) return null;
+        return lastSucceeded >= 0 ? lastSucceeded : lastXppcRun;
+    }
+
+    /// <summary>
+    /// xppc's arguments for the <c>-xrefonly</c> run that recreates the cross-reference indexes
+    /// (<see cref="XrefIndexRecreateTarget"/>). It writes its own logs so the build's logs stay.
+    /// </summary>
+    public static IReadOnlyList<string> XrefIndexRecreateArgs(Target target, string packagesRoot, XrefTarget xref)
+    {
+        var package = Path.Combine(target.MetadataRoot, target.Module);
+        var args = XppcArgs(target, packagesRoot, incremental: false, xref, lastXrefModel: true)
+            .Where(a => !a.StartsWith("-log=", StringComparison.OrdinalIgnoreCase)
+                        && !a.StartsWith("-xmlLog=", StringComparison.OrdinalIgnoreCase))
+            .ToList();
+        args.Add($"-log={Path.Combine(package, "BuildModelResult.xrefindexes.log")}");
+        args.Add($"-xmlLog={Path.Combine(package, "BuildModelResult.xrefindexes.xml")}");
+        args.Add("-xrefonly");
+        return args;
+    }
+
     /// <summary><c>LabelC.exe</c>'s arguments, as Visual Studio logs them in <c>CompileLabels.xml</c>.</summary>
     public static IReadOnlyList<string> LabelcArgs(Target target)
     {
@@ -243,6 +279,8 @@ public static class XppModelBuild
         var stale = false;
         var exit = 0;
         var tail = string.Empty;
+        var lastXppcRun = -1;
+        var lastSucceeded = -1;
 
         for (var i = 0; i < targets.Count; i++)
         {
@@ -268,6 +306,8 @@ public static class XppModelBuild
             var args = XppcArgs(target, packagesRoot, incremental, xref, lastXrefModel: i == targets.Count - 1);
             var started = DateTime.UtcNow;
             var (xExit, xOut, xErr, xElapsed) = SdlcRunner.Run(xppc.Path!, args);
+            lastXppcRun = i;
+            if (xExit == 0) lastSucceeded = i;
             // Only this run's log: a compiler that rejected its arguments writes none, and the
             // previous build's log would then be reported as this build's result.
             var log = xOut + "\n" + xErr + "\n" + ReadIfWrittenSince(Path.Combine(package, "BuildModelResult.log"), started);
@@ -300,6 +340,21 @@ public static class XppModelBuild
                 break;
             }
         }
+
+        object? xrefIndexes = null;
+        if (xref is not null && XrefIndexRecreateTarget(targets.Count, lastXppcRun, lastSucceeded) is { } r)
+        {
+            var recreateArgs = XrefIndexRecreateArgs(targets[r], packagesRoot, xref);
+            var (rExit, _, _, rElapsed) = SdlcRunner.Run(xppc.Path!, recreateArgs);
+            xrefIndexes = new
+            {
+                recreatedBy = targets[r].Model,
+                reason = "the build stopped before its last model, which recreates the cross-reference indexes",
+                exitCode = rExit,
+                elapsedMs = (long)rElapsed.TotalMilliseconds,
+                args = recreateArgs,
+            };
+        }
         sw.Stop();
 
         var errors = diagnostics.Where(d => d.Severity == "error").Select(Project).ToList();
@@ -319,6 +374,7 @@ public static class XppModelBuild
                 database = xref.Database ?? "DYNAMICSXREFDB",
                 source = xref.Source,
             },
+            xrefIndexes,
             models,
             errorCount = errors.Count,
             warningCount = warnings.Count,
