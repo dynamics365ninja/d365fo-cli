@@ -33,7 +33,7 @@ escapes, and the default MCP server sent no instructions at all.
 - **No ANSI escapes when stdout is redirected, or when `NO_COLOR` / `TERM=dumb` is set.**
   Spectre picks ANSI support from the terminal type, so under Git Bash `d365fo search --help >
   help.txt` wrote escapes into the file. An interactive terminal is unchanged.
-- **The SDK stdio MCP server sends `instructions`** in `initialize`: about 950 characters of
+- **The SDK stdio MCP server sends `instructions`** in `initialize`: about 980 characters of
   routing guidance (which tool first, prepare then generate then validate, `get_knowledge` for
   the rules), restated from the `d365fo-cli` skill's tool mapping. Clients without the skill,
   such as Claude Desktop, had 32 tool schemas and no word on which to use. `--legacy` and

@@ -41,4 +41,26 @@ public class ServerInstructionsTests
         Assert.NotEmpty(named);
         Assert.All(named, name => Assert.Contains(name, tools));
     }
+
+    /// <summary>
+    /// A tool the guidance tells the client to pass the grounding token to must accept it:
+    /// an unknown argument is refused with BAD_INPUT, so naming one that does not
+    /// (modify_object) would make the client's write fail.
+    /// </summary>
+    [Fact]
+    public void Every_tool_told_to_take_the_grounding_token_accepts_it()
+    {
+        var line = ServerInstructions.Routing.Split('\n').Single(l => l.Contains("passing that token"));
+        var named = Regex.Matches(line.Substring(0, line.IndexOf("passing that token", StringComparison.Ordinal)), "`([a-z_]+)`")
+            .Select(m => m.Groups[1].Value)
+            .ToList();
+
+        Assert.NotEmpty(named);
+        Assert.All(named, name =>
+        {
+            var schema = ToolCatalog.All.Single(d => d.Name == name).InputSchema;
+            Assert.True(schema["properties"] is System.Text.Json.Nodes.JsonObject p && p.ContainsKey("groundingToken"),
+                $"{name} does not accept groundingToken.");
+        });
+    }
 }

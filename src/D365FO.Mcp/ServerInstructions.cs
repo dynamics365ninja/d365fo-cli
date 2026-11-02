@@ -45,7 +45,7 @@ public static class ServerInstructions
         - Find objects: `search` (type=any when the kind is unknown, a queries array for several). Never grep AOT XML.
         - Read one object: `get_object_info` (tables: detail=brief first), several: `batch_get_info`, X++ source: `get_method`.
         - Before a change or a new object: `prepare` returns signature, existing CoC, naming and a grounding token in one call.
-        - Write with `generate_object` / `modify_object`, passing that token. Never write AOT XML by hand.
+        - Write with `generate_object` / `modify_method`, passing that token; structural edits: `modify_object`. Never write AOT XML by hand.
         - Check hand-written X++ with `validate` (mode=references, then mode=xpp) before writing it.
         - Where-used and extensions: `find_references`, `extension_info`. Security: `security_info`.
         - Rules and patterns: `get_knowledge` (action=search, then action=get with a section).
