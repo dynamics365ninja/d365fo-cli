@@ -61,6 +61,15 @@ public class ReferenceResolverTests : IDisposable
                 }),
                 new ExtractedClass("CustBalanceSub", "CustBalance", false, false, "x",
                     Array.Empty<ExtractedMethod>()),
+                // Kernel classes the AOT carries only in part: Args has no dataset() on disk.
+                new ExtractedClass("Args", null, false, false, "x", new[]
+                {
+                    new ExtractedMethod("caller", "public Object caller()", "Object", false),
+                }),
+                new ExtractedClass("Box", null, false, false, "x", new[]
+                {
+                    new ExtractedMethod("yesNo", "public static DialogButton yesNo(str _text, DialogButton _defaultButton)", "DialogButton", true),
+                }),
             },
             Edts: new[] { new ExtractedEdt("CustAccount", null, "String", null, 20) },
             Enums: new[] { new ExtractedEnum("CustVendorBlocked", null, new[] { new ExtractedEnumValue("No", 0, null) }) },
@@ -277,6 +286,67 @@ public class ReferenceResolverTests : IDisposable
     {
         var r = Resolve("Map m = new Map(Types::String, Types::String);");
         Assert.DoesNotContain(r.Violations, v => v.Kind == "unknown-type");
+    }
+
+    // ── Kernel types and members the AOT metadata does not carry (#230) ──────
+
+    [Fact]
+    public void Kernel_enums_controls_and_args_members_from_issue_230_verify()
+    {
+        var code = """
+            class Repro
+            {
+                public void run(Args _args)
+                {
+                    QueryBuildRange range;
+                    DialogButton answer;
+                    FormReferenceControl referenceControl;
+                    XppPrePostArgs ppa;
+
+                    range.status(RangeStatus::Hidden);
+                    answer = Box::yesNo("Continue?", DialogButton::No);
+
+                    if (answer == DialogButton::Yes
+                        && _args.dataset() == tableNum(CustTable))
+                    {
+                        info(_args.caller() ? "a" : "b");
+                    }
+                }
+            }
+            """;
+        var r = Resolve(code);
+        Assert.Empty(r.Violations);
+    }
+
+    [Fact]
+    public void Hallucinated_args_member_is_still_reported()
+    {
+        var r = Resolve("Args args = new Args();\nargs.frobnicate();");
+        Assert.Contains(r.Violations, v => v.Kind == "unknown-method" && v.Identifier == "Args.frobnicate()");
+    }
+
+    [Fact]
+    public void Kernel_types_from_the_setting_verify_in_static_access_and_declarations()
+    {
+        var saved = Environment.GetEnvironmentVariable(ReferenceResolver.ExtraKernelTypesKey);
+        try
+        {
+            const string code = "Issue230KernelEnum e = Issue230KernelEnum::Value;\nIssue230KernelClass c;";
+
+            Environment.SetEnvironmentVariable(ReferenceResolver.ExtraKernelTypesKey, null);
+            var before = Resolve(code);
+            Assert.Contains(before.Violations, v => v.Identifier == "Issue230KernelEnum::Value" && v.Severity == "error");
+            Assert.Contains(before.Violations, v => v.Identifier == "Issue230KernelClass");
+
+            Environment.SetEnvironmentVariable(ReferenceResolver.ExtraKernelTypesKey, " Issue230KernelEnum ; issue230kernelclass,");
+            var after = Resolve(code);
+            Assert.Empty(after.Violations);
+            Assert.True(ReferenceResolver.IsKernelType("ISSUE230KERNELENUM"));
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable(ReferenceResolver.ExtraKernelTypesKey, saved);
+        }
     }
 
     // ── Labels ───────────────────────────────────────────────────────────────
