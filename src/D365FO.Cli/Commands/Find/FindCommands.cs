@@ -206,7 +206,7 @@ public sealed class FindRefsCommand : Command<FindRefsCommand.Settings>
         public bool AllModels { get; init; }
 
         [CommandOption("--xref")]
-        [System.ComponentModel.Description("Answer from DYNAMICSXREFDB — compiler-resolved and complete, unlike the text scan. Queried directly (D365FO_XREF_CONNECTIONSTRING, default local SQL with integrated auth); the metadata bridge is the fallback when D365FO_BRIDGE_ENABLED=1. Fails XREF_UNAVAILABLE rather than falling back to the text scan.")]
+        [System.ComponentModel.Description("Answer from DYNAMICSXREFDB — compiler-resolved and complete, unlike the text scan. Queried directly (D365FO_XREF_CONNECTIONSTRING, default local SQL with integrated auth); the metadata bridge is the fallback when D365FO_BRIDGE_ENABLED=1. Fails XREF_UNAVAILABLE rather than falling back to the text scan, and says so when the database has no rows for the symbol's module (`d365fo build --model <Model> --xref` fills it).")]
         public bool Xref { get; init; }
     }
 
@@ -229,7 +229,8 @@ public sealed class FindRefsCommand : Command<FindRefsCommand.Settings>
                     "--all-models cannot be combined with --xref: the xref query is not scoped by model.",
                     "Drop --all-models (the xref answer already covers every module), or drop --xref for the text scan."));
             return RenderHelpers.Render(kind, D365FO.Core.Xref.XrefReferences.Find(
-                settings.Name, settings.Kind, settings.Model, settings.Limit, settings.Lines));
+                settings.Name, settings.Kind, settings.Model, settings.Limit, settings.Lines,
+                ownerOf: symbol => XrefCoverage.OwnerOf(symbol, RepoFactory.Create())));
         }
 
         // Regex scan over indexed X++ source — shared with the unified

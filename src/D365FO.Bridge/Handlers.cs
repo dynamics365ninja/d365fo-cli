@@ -3,6 +3,7 @@
 // </copyright>
 
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Reflection;
 using System.Text;
@@ -190,6 +191,20 @@ namespace D365FO.Bridge
             int    limit  = 200;
             if (args != null && args["limit"] is JsonNode ln && ln.GetValue<object>() is object lv && int.TryParse(lv.ToString(), out var li)) limit = li;
             return XrefRepository.Find(symbol, kind, limit);
+        }
+
+        internal JsonObject XrefCoverage(JsonObject args)
+        {
+            var modules = new List<string>();
+            if (args != null && args["modules"] is JsonArray arr)
+            {
+                foreach (var m in arr)
+                {
+                    var name = m?.GetValue<string>();
+                    if (!string.IsNullOrWhiteSpace(name)) modules.Add(name);
+                }
+            }
+            return XrefRepository.ModuleCoverage(modules);
         }
 
         // --- model manifest -------------------------------------------------
