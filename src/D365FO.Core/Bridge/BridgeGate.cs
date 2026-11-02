@@ -20,6 +20,24 @@ public static class BridgeGate
     public static bool ShouldTry() => D365FoSettings.ResolveFlag("D365FO_BRIDGE_ENABLED");
 
     /// <summary>
+    /// True when <c>D365FO_BRIDGE_ENABLED</c> is set to anything but <c>1</c> / <c>true</c>, i.e. the
+    /// caller switched the bridge off on purpose.
+    /// </summary>
+    /// <remarks>
+    /// The write, delete, verify and lookup helpers below used to ask only whether the bridge
+    /// executable exists. With the flag set to <c>0</c>, <c>doctor</c> reported the bridge as
+    /// disabled while <c>generate --install-to</c> still created the object through the live
+    /// metadata provider, which also writes its compiled copy under the runtime
+    /// PackagesLocalDirectory. An unset flag keeps the old behaviour, so an installation that
+    /// relies on finding the executable is not broken by this.
+    /// </remarks>
+    public static bool ExplicitlyDisabled()
+        => D365FoSettings.Resolve("D365FO_BRIDGE_ENABLED") is { } v && !D365FoSettings.ResolveFlag("D365FO_BRIDGE_ENABLED");
+
+    /// <summary>The bridge may be used: not switched off, and its executable is there.</summary>
+    private static bool Usable() => !ExplicitlyDisabled() && BridgeClient.IsAvailable();
+
+    /// <summary>
     /// Build bridge options from the unified config resolver so values set in
     /// settings.json (not just real env vars) reach the bridge child process.
     /// </summary>
@@ -46,7 +64,7 @@ public static class BridgeGate
     /// </summary>
     public static (bool ok, string? error) TrySaveObject(string kind, string name, string model, string? xml)
     {
-        if (!BridgeClient.IsAvailable())
+        if (!Usable())
         {
             return (false, "bridge is not available (set D365FO_BRIDGE_ENABLED=1 and D365FO_BRIDGE_PATH).");
         }
@@ -91,7 +109,7 @@ public static class BridgeGate
     /// </summary>
     public static (bool ok, string? error) TryUpdateObject(string kind, string name, string model, string xml)
     {
-        if (!BridgeClient.IsAvailable())
+        if (!Usable())
         {
             return (false, "bridge is not available (set D365FO_BRIDGE_ENABLED=1 and D365FO_BRIDGE_PATH).");
         }
@@ -134,7 +152,7 @@ public static class BridgeGate
     /// </summary>
     public static (bool ok, string? error) TryDeleteObject(string kind, string name, string model)
     {
-        if (!BridgeClient.IsAvailable())
+        if (!Usable())
         {
             return (false, "bridge is not available (set D365FO_BRIDGE_ENABLED=1 and D365FO_BRIDGE_PATH).");
         }
@@ -175,7 +193,7 @@ public static class BridgeGate
     /// </summary>
     public static string? TryReadObjectXml(string kind, string name)
     {
-        if (!BridgeClient.IsAvailable()) return null;
+        if (!Usable()) return null;
         try
         {
             var options = DefaultOptions();
@@ -207,7 +225,7 @@ public static class BridgeGate
     {
         if (!ShouldTry())
             return (null, "the metadata bridge is disabled — set D365FO_BRIDGE_ENABLED=1 on the dev VM.");
-        if (!BridgeClient.IsAvailable())
+        if (!Usable())
         {
             return (null, OperatingSystem.IsWindows()
                 ? "the bridge executable was not found — see `d365fo doctor` (bridge.executable) or set D365FO_BRIDGE_PATH."
@@ -244,7 +262,7 @@ public static class BridgeGate
     /// </summary>
     public static string? TryGetModelFolder(string model)
     {
-        if (!BridgeClient.IsAvailable()) return null;
+        if (!Usable()) return null;
         try
         {
             var options = DefaultOptions();
@@ -289,7 +307,7 @@ public static class BridgeGate
     /// </summary>
     public static MetadataVerdict? TryValidateArtifact(string? kind, string xml)
     {
-        if (!BridgeClient.IsAvailable()) return null;
+        if (!Usable()) return null;
         try
         {
             var options = DefaultOptions();
@@ -370,7 +388,9 @@ public static class BridgeGate
 
         // Same availability check the read/write helpers use — no second notion of
         // "is the runtime here".
-        if (!BridgeClient.IsAvailable())
+        if (ExplicitlyDisabled())
+            return (VerifyOutcome.Skipped, "the metadata bridge is switched off (D365FO_BRIDGE_ENABLED).");
+        if (!Usable())
             return (VerifyOutcome.Skipped, "the D365FO Metadata API runtime is not available.");
 
         var response = method is not null
@@ -428,7 +448,7 @@ public static class BridgeGate
     /// </summary>
     private static JsonObject? SendRaw(string method, JsonObject args)
     {
-        if (!BridgeClient.IsAvailable()) return null;
+        if (!Usable()) return null;
         try
         {
             var options = DefaultOptions();
@@ -443,7 +463,7 @@ public static class BridgeGate
 
     private static object? TryRead(string method, string name)
     {
-        if (!BridgeClient.IsAvailable())
+        if (!Usable())
         {
             return null;
         }

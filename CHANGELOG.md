@@ -19,6 +19,20 @@ was ported from.
 
 ## [Unreleased]
 
+### Fixed — `D365FO_BRIDGE_ENABLED=0` now switches the bridge off for writes too
+
+The write, delete, verify and model-folder helpers in `BridgeGate` only asked whether the bridge
+executable existed. With the flag set to `0`, `doctor` reported the bridge disabled while
+`generate --install-to` still created the object through the live metadata provider, which also
+writes its compiled copy under the runtime PackagesLocalDirectory. Found in a live test that
+pointed a throwaway profile at a scratch model store.
+
+- An explicit `0` / `false` is now honoured by every `BridgeGate` helper. An unset flag keeps the
+  old behaviour, so an installation that relies on finding the executable is not broken.
+- `modify` / `modify method` and `undo` of a bridge-made change, which spawned the bridge
+  directly rather than through `BridgeGate`, honour the switch-off too and say so; `--verify`
+  reports the bridge as switched off rather than missing.
+
 ### Fixed — two writers on one index, and in-place edits that could lose the file
 
 Claude Desktop's MCP server and a shell often share one index. Nothing serialised their writes,

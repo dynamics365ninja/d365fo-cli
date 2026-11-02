@@ -73,6 +73,14 @@ public static class UndoEngine
                     {
                         bridgeClient = bridgeClientFactory();
                     }
+                    else if (BridgeGate.ExplicitlyDisabled())
+                    {
+                        // Replaying through the provider is a write; the switch-off covers it too.
+                        results.Add(new UndoStepResult(entry, false,
+                            "the metadata bridge is switched off (D365FO_BRIDGE_ENABLED) — this change was made through it and can only be undone through it.",
+                            null, null));
+                        break;
+                    }
                     else
                     {
                         ownedClient ??= new BridgeClient(DefaultBridgeOptions());
