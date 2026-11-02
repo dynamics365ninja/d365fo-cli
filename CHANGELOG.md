@@ -30,7 +30,7 @@ creation, so the fix was delete and recreate.
 
 - **The extractor reads `i:type`** (`AxEdtReal` → `Real`, `AxEdtInt64` → `Int64`, `AxEdtEnum` →
   `Enum` with its `EnumType`, and so on). Schema v21 clears every model's fingerprint, so the
-  next `index refresh` re-extracts everything once (about ten minutes on a full installation).
+  next `index refresh` re-extracts everything once (13 minutes for 177 models on a UDE).
 - **`generate table`, `generate map`, table `generate extension` and `modify add-field`**, and
   MCP `generate_object` for tables and maps, type each field from its EDT's base type, walking
   `Extends` when the EDT row has none. A field whose type is a base enum rather than an EDT is
