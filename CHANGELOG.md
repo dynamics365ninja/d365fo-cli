@@ -19,6 +19,32 @@ was ported from.
 
 ## [Unreleased]
 
+### Fixed — `generate` writes multi-object scaffolds into the right folders of a separate model store
+
+Seen on a unified developer environment, whose model store is not `PackagesLocalDirectory`. Three
+calls of `generate workflow` needed three manual steps.
+
+- **`--install-to` finds a model under `D365FO_CUSTOM_PACKAGES_PATH`.** The model folder came from
+  the metadata bridge alone, and its provider only knows `D365FO_PACKAGES_PATH`, so every install
+  into a custom model failed `INSTALL_FAILED` until the standard packages path was pointed at the
+  model store by hand. The lookup is now one shared resolver (custom roots on disk, then the
+  bridge, then the standard root on disk), the same one `index sync` and `verify project` use, and
+  the refusal names the roots it searched.
+- **Each object goes to its own `Ax*` folder when `--out` is inside a model.** Multi-object
+  commands put every companion next to the first file, so `generate workflow --out
+  …\AxWorkflowTemplate\X.xml` left the document class, the query, the approval and the CoC class
+  in `AxWorkflowTemplate\`, where neither Visual Studio nor the compiler looks. The same bug was
+  in `custom-service`, `number-sequence`, `report` and the entity staging table. An `--out` in a
+  plain staging directory still keeps everything together.
+- **New `--project <rnrproj>` on every `generate` command** lists each written object in that
+  Visual Studio project, in the `<Content>` shape Visual Studio writes, and journals the entry so
+  `undo` removes it. The automatic registration only looks next to the model folder, which a repo
+  with `Projects\` and `Metadata\` side by side never matches. The project file is edited as text,
+  so the rest of it stays byte-for-byte as it was.
+- **A write refused by the path guard says which setting admits the root**
+  (`D365FO_CUSTOM_PACKAGES_PATH` or `D365FO_WORKSPACE_PATH`), and the write roots are one list on
+  `D365FoSettings` instead of four copies.
+
 ### Changed — leaner output where it cost tokens and told nothing
 
 Measured on a real installation: `get table` for one 60-field custom table returned 42.7k

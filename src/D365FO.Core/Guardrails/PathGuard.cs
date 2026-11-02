@@ -52,7 +52,9 @@ public static class PathGuard
 
         throw new IOException(
             $"Path traversal blocked: '{full}' is outside the allowed boundaries " +
-            $"[{string.Join(", ", roots.Select(r => r.TrimEnd(Path.DirectorySeparatorChar)))}].");
+            $"[{string.Join(", ", roots.Select(r => r.TrimEnd(Path.DirectorySeparatorChar)))}]. " +
+            "A model store outside PackagesLocalDirectory (a unified developer environment, a repo " +
+            "checkout) belongs in D365FO_CUSTOM_PACKAGES_PATH, or set D365FO_WORKSPACE_PATH to it.");
     }
 
     private static string NormalizeDirPath(string dir)

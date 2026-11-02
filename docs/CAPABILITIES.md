@@ -229,7 +229,11 @@ d365fo lint --format sarif > lint.sarif             # SARIF 2.1.0 for CI
 
 ## Scaffolding (`generate`)
 
-All scaffolders write atomically (`.tmp` + move, `.bak` on overwrite). Pass `--install-to <Model>` to drop straight into a model folder via the Bridge.
+All scaffolders write atomically (`.tmp` + move, `.bak` on overwrite). Pass `--install-to <Model>` to drop straight into a model folder. The model folder is looked up under `D365FO_CUSTOM_PACKAGES_PATH` on disk first, then through the Bridge, then under `D365FO_PACKAGES_PATH`, so a custom model in a separate model store (a UDE, a repo's `Metadata` folder) installs without repointing the standard packages path.
+
+Commands that write more than one object (`workflow`, `custom-service`, `number-sequence`, `report`, `entity` with its staging table, `business-event`, `sysoperation`, `report-extension`) put each object in its own `Ax*` folder, both under `--install-to` and when `--out` points inside a model's `Ax*` folder. An `--out` anywhere else (a staging directory) keeps every object next to the first one.
+
+Pass `--project <path>.rnrproj` to any `generate` command to list every object it writes in that Visual Studio project, in the item shape Visual Studio writes (`<Content Include="AxClass\Name">` with `SubType`, `Name` and a `Link` display folder). It is for repos that keep projects apart from the model folder, where the automatic registration next to the model folder finds nothing. The project is checked before anything is written, an object outside its model's `Ax*` folder is reported rather than listed, a project that builds a different model is refused, and `d365fo undo` removes the entry with the object. The payload's `project` field lists what was added.
 
 ### AOT object types
 
