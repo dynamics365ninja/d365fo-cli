@@ -79,6 +79,35 @@ public sealed class UndoEngineTests : IDisposable
         Assert.DoesNotContain("NewTable.xml", projXml);
     }
 
+    [Fact]
+    public void Disk_create_undo_leaves_a_project_delta_that_is_not_an_rnrproj_untouched()
+    {
+        var target = PathIn("NewTable.xml");
+        File.WriteAllText(target, "<AxTable><Name>NewTable</Name></AxTable>");
+        // A hand-edited journal pointing the delta at some other XML file that happens to hold
+        // a matching item: undo must not edit it.
+        var other = PathIn("Directory.Build.props");
+        const string otherXml =
+            "<Project xmlns=\"http://schemas.microsoft.com/developer/msbuild/2003\">\n" +
+            "  <ItemGroup>\n    <Compile Include=\"AxTable\\NewTable.xml\" />\n  </ItemGroup>\n</Project>\n";
+        File.WriteAllText(other, otherXml);
+
+        var journal = NewJournal();
+        journal.Append(new JournalEntry(
+            Id: Guid.NewGuid().ToString("N"), TimestampUtc: DateTimeOffset.UtcNow, Command: "generate table",
+            TargetType: JournalTargetType.AotObject, Kind: "table", ObjectName: "NewTable", SecondaryKey: null,
+            Model: null, Operation: JournalOperation.Create, WritePath: JournalWritePath.Disk,
+            TargetPath: target, PreImage: null, IsTombstone: true,
+            RnrProjDelta: new RnrProjDelta(other, "Compile", @"AxTable\NewTable.xml", WasAdded: true)));
+
+        var result = UndoEngine.Undo(journal, 1, dryRun: false);
+
+        Assert.True(result.AllOk);
+        Assert.False(File.Exists(target));
+        Assert.Equal(otherXml, File.ReadAllText(other));
+        Assert.Contains("is not an existing .rnrproj file", result.Steps.Single().RnrProjWarning);
+    }
+
     // ---- disk: update -------------------------------------------------------
 
     [Fact]

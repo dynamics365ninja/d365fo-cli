@@ -112,7 +112,9 @@ public static class RnrProjRegistry
     {
         try
         {
-            if (!File.Exists(delta.RnrProjPath)) return false;
+            // Only ever a project file: a delta read back from a hand-edited journal must not
+            // let undo edit some other file.
+            if (!IsProjectFile(delta.RnrProjPath)) return false;
             if (delta.WasAdded && TryRemoveItemText(delta)) return true;
 
             var doc = XDocument.Load(delta.RnrProjPath, LoadOptions.PreserveWhitespace);
@@ -177,6 +179,9 @@ public static class RnrProjRegistry
     /// <param name="model">The model the object was written to, when known. Refused when the project builds a different one.</param>
     public static ProjectRegistration RegisterInProject(string rnrprojPath, string axSubfolder, string objectName, string? model = null)
     {
+        if (!IsProjectFile(rnrprojPath))
+            throw new ArgumentException($"'{rnrprojPath}' is not an existing .rnrproj file.", nameof(rnrprojPath));
+
         var doc = XDocument.Load(rnrprojPath, LoadOptions.PreserveWhitespace);
         var root = doc.Root ?? throw new InvalidDataException($"{rnrprojPath} has no root element.");
         var ns = root.Name.Namespace;
@@ -210,18 +215,22 @@ public static class RnrProjRegistry
         var text = new System.Text.UTF8Encoding(false).GetString(bytes, hasBom ? 3 : 0, bytes.Length - (hasBom ? 3 : 0));
         var newline = text.Contains("\r\n", StringComparison.Ordinal) ? "\r\n" : "\n";
 
+        // Escaped: the item is written as text, so a name with a markup character must not be
+        // able to break (or inject into) the project XML.
+        var xInclude = System.Security.SecurityElement.Escape(include);
+        var xName = System.Security.SecurityElement.Escape(objectName);
         var item = new System.Text.StringBuilder();
         if (compileShape)
         {
-            item.Append($"    <{elementName} Include=\"{include}\" />{newline}");
+            item.Append($"    <{elementName} Include=\"{xInclude}\" />{newline}");
         }
         else
         {
-            item.Append($"    <{elementName} Include=\"{include}\">{newline}");
+            item.Append($"    <{elementName} Include=\"{xInclude}\">{newline}");
             item.Append($"      <SubType>Content</SubType>{newline}");
-            item.Append($"      <Name>{objectName}</Name>{newline}");
+            item.Append($"      <Name>{xName}</Name>{newline}");
             if (DisplayFolders.TryGetValue(axSubfolder, out var display))
-                item.Append($"      <Link>{display}\\{objectName}</Link>{newline}");
+                item.Append($"      <Link>{display}\\{xName}</Link>{newline}");
             item.Append($"    </{elementName}>{newline}");
         }
 
@@ -275,7 +284,7 @@ public static class RnrProjRegistry
         var hasBom = bytes.Length >= 3 && bytes[0] == 0xEF && bytes[1] == 0xBB && bytes[2] == 0xBF;
         var text = new System.Text.UTF8Encoding(false).GetString(bytes, hasBom ? 3 : 0, bytes.Length - (hasBom ? 3 : 0));
         var el = System.Text.RegularExpressions.Regex.Escape(delta.ItemElementName);
-        var include = System.Text.RegularExpressions.Regex.Escape(delta.Include);
+        var include = System.Text.RegularExpressions.Regex.Escape(System.Security.SecurityElement.Escape(delta.Include));
         var match = System.Text.RegularExpressions.Regex.Match(text,
             $@"^[ \t]*<{el} Include=""{include}""(\s*/>|>.*?</{el}>)[ \t]*\r?\n",
             System.Text.RegularExpressions.RegexOptions.Multiline | System.Text.RegularExpressions.RegexOptions.Singleline);
@@ -288,6 +297,15 @@ public static class RnrProjRegistry
     }
 
     private const string ContentElementName = "Content";
+
+    /// <summary>
+    /// True when <paramref name="path"/> is an existing file with the <c>.rnrproj</c> extension
+    /// (any case): the only kind of file project registration and its undo ever edit.
+    /// </summary>
+    public static bool IsProjectFile(string? path)
+        => !string.IsNullOrWhiteSpace(path)
+            && path.EndsWith(".rnrproj", StringComparison.OrdinalIgnoreCase)
+            && File.Exists(path);
 
     /// <summary>
     /// The display folder Visual Studio files a new object under, per AOT folder. A kind that is
