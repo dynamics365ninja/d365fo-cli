@@ -1515,11 +1515,11 @@ public sealed partial class ToolHandlers
     /// <c>BRIDGE_REQUIRED</c> when the bridge is unavailable.
     /// </summary>
     public ToolResult<object> ModifyMethod(
-        string kind, string name, string method, string body,
-        string? model = null, string? groundingToken = null)
+        string kind, string name, string method, string? body,
+        string? model = null, string? groundingToken = null, string? source = null)
     {
         var request = new D365FO.Core.Bridge.MethodModifyEngine.ModifyRequest(
-            kind, name, method, body, model, groundingToken);
+            kind, name, method, body, model, groundingToken, source);
         return D365FO.Core.Bridge.MethodModifyEngine.Modify(request, _repo);
     }
 

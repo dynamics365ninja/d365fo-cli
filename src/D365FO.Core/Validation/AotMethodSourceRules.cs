@@ -136,7 +136,7 @@ public static class AotMethodSourceRules
     /// <see cref="XppLexer.Mask"/> keeps comment delimiters; a header walk needs the whole
     /// comment gone so a leading <c>/// &lt;summary&gt;</c> block reads as whitespace.
     /// </summary>
-    private static string BlankComments(string source)
+    internal static string BlankComments(string source)
     {
         var scan = XppLexer.Scan(source);
         var chars = scan.Masked.ToCharArray();
