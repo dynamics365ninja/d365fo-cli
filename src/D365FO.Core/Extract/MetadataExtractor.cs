@@ -320,11 +320,7 @@ public sealed class MetadataExtractor
     /// (the <c>AxWorkflowType</c> class of bug) cannot creep back in.
     /// </summary>
     private static bool HasAnyAotSubfolder(string dir)
-    {
-        foreach (var s in D365FO.Core.ObjectTypes.ObjectTypeRegistry.ModelMarkerFolders())
-            if (Directory.Exists(Path.Combine(dir, s))) return true;
-        return false;
-    }
+        => D365FO.Core.ObjectTypes.ObjectTypeRegistry.IsModelDirectory(dir);
 
     private List<T> ReadAll<T>(string dir, Func<XDocument, string, T?> parser) where T : class
     {

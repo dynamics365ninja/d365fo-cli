@@ -253,6 +253,30 @@ public sealed partial class MetadataRepository : IReferenceIndex, IPropertyStats
             : null;
     }
 
+    /// <summary>One model's extract bookkeeping, as the staleness check reads it.</summary>
+    /// <param name="Name">Model name.</param>
+    /// <param name="IsCustom">Whether the last extract classified it as custom.</param>
+    /// <param name="LastExtractedUtc">When the model was last extracted, or null for a row no extract has written.</param>
+    public sealed record ModelExtractState(string Name, bool IsCustom, DateTime? LastExtractedUtc);
+
+    /// <summary>
+    /// Every model's own <c>LastExtractedUtc</c>, so staleness can be judged per model rather than
+    /// against the newest extract of any model.
+    /// </summary>
+    public IReadOnlyList<ModelExtractState> GetModelExtractStates()
+    {
+        using var conn = OpenReadOnly();
+        return conn.Query<(string Name, long IsCustom, string? LastExtractedUtc)>(
+                "SELECT Name, IsCustom, LastExtractedUtc FROM Models ORDER BY Name")
+            .Select(r => new ModelExtractState(
+                r.Name,
+                r.IsCustom != 0,
+                DateTime.TryParse(r.LastExtractedUtc, null, System.Globalization.DateTimeStyles.RoundtripKind, out var dt)
+                    ? dt.ToUniversalTime()
+                    : null))
+            .ToList();
+    }
+
     /// <summary>True when the PropertyStats table holds at least one mined observation.</summary>
     public bool HasPropertyStats()
     {
