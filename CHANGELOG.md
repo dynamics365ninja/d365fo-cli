@@ -19,6 +19,23 @@ was ported from.
 
 ## [Unreleased]
 
+### Fixed — an unreachable cross-reference server is reported after one timeout, not three
+
+When the direct `--xref` query could not reach the server (not found, not started, connect timeout),
+the bridge fallback connected to the same server again, and so did the coverage probe. All of them
+read `D365FO_XREF_CONNECTIONSTRING`, so each waited out the same connect timeout: about 74 s before
+the error against a stopped or wedged LocalDB on a UDE.
+
+- **No fallback for an unreachable server.** The direct query opens the connection first and marks
+  a failure where no server answered (SQL error -2, -1, 2, 26, 40, 53, 258, or any severity-20 transport failure before the handshake, which is how LocalDB reports a missing or wedged instance). The bridge fallback
+  and the coverage probe are then skipped, and the message says so. A failure a server answered
+  (login, certificate, missing database) still falls back. The bridge's other SQL client can get
+  past a certificate check that Microsoft.Data.SqlClient refuses.
+- **A LocalDB hint.** For a `(LocalDB)\<instance>` connection string the hint names
+  `SqlLocalDB info`, and `SqlLocalDB stop` for an instance that stays `Stopped` while `start` fails.
+- The connect timeout is left as it is. LocalDB starts on the first connection, and on a UDE that
+  took 15 s or more. A shorter timeout would turn a slow start into a failure.
+
 ### Changed — leaner output where it cost tokens and told nothing
 
 Measured on a real installation: `get table` for one 60-field custom table returned 42.7k
