@@ -55,6 +55,31 @@ public static class ToolCatalog
         Func<ToolHandlers, JsonElement, object> Invoke);
 
     /// <summary>
+    /// Run a tool and, when it journaled a write, re-index the model(s) it touched before the
+    /// result goes back — so a <c>get_object_info</c> right after <c>generate_object</c> finds the new
+    /// object. The result carries <c>data.indexRefreshed</c>. Both transports call this, so stdio and
+    /// HTTP behave the same. Turned off by <c>D365FO_AUTO_REFRESH=0</c>.
+    /// </summary>
+    public static object InvokeWithIndexRefresh(in Descriptor descriptor, ToolHandlers handlers, JsonElement args)
+    {
+        using var scope = D365FO.Core.Index.IndexAutoRefresh.BeginScope();
+        object raw;
+        try
+        {
+            raw = descriptor.Invoke(handlers, args);
+        }
+        catch
+        {
+            // The write may have landed before the throw; the index still has to follow the disk.
+            scope.Flush();
+            throw;
+        }
+        return scope.Flush() is { } refreshed && raw is ToolResult<object> result
+            ? D365FO.Core.Index.IndexAutoRefresh.Attach(result, refreshed)
+            : raw;
+    }
+
+    /// <summary>
     /// Tools whose <see cref="Descriptor.Effect"/> is not <see cref="ToolEffect.Read"/>,
     /// derived from the catalog rather than kept by hand. Drives the duplicate-call dedup
     /// exclusion and the cache flush after a write (<see cref="CallDedup"/>), and
@@ -816,8 +841,9 @@ public static class ToolCatalog
         new Descriptor("index_sync", ToolEffect.Write,
             "Re-index ONE model after an edit made outside this server — in Visual Studio, by a git pull, by "
             + "a colleague. Name the `model`, or pass a `path` to any file inside it and the model is read off "
-            + "the packages layout. Writes through `generate_object` / `modify_object` already refresh the "
-            + "index, so this is for changes this process did not make.\n"
+            + "the packages layout. Writes through `generate_object` / `modify_object` / `labels` / "
+            + "`delete_object` / `undo_last_modification` already re-index the model they touched "
+            + "(`indexRefreshed` in their result), so this is for changes this process did not make.\n"
             + "A model is the unit, not a file: the index writer replaces a model's rows atomically, which is "
             + "what keeps re-extraction idempotent — handing it one object would delete the rest of that model. "
             + "A custom model takes seconds; naming a large standard model is a minutes-long call, and the "
@@ -927,7 +953,8 @@ public static class ToolCatalog
             + "metadata provider, requires D365FO_BRIDGE_ENABLED=1) or `path` (deletes that XML file, `model` "
             + "optional for the journal entry). The pre-image is captured BEFORE the delete and a delete that "
             + "cannot capture one is refused — a deletion nothing can undo is not one to make by accident. "
-            + "The index is NOT refreshed automatically; the result says so.",
+            + "The model is re-indexed after the delete (`indexRefreshed` in the result) unless "
+            + "D365FO_AUTO_REFRESH=0.",
             Schema(("kind", "string", true), ("name", "string", true), ("installTo", "string", false),
                    ("path", "string", false), ("model", "string", false)),
             (h, p) => D365FO.Core.Journal.AotObjectDeleter.Delete(

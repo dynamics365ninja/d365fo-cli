@@ -237,7 +237,7 @@ public sealed class StdioDispatcher
         var generation = CallDedup.Generation;
         try
         {
-            raw = descriptor.Invoke(_handlers, args);
+            raw = ToolCatalog.InvokeWithIndexRefresh(descriptor, _handlers, args);
         }
         catch (Exception ex)
         {

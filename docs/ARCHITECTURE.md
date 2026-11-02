@@ -208,7 +208,9 @@ Provides: authoritative per-object reads (`get` commands), file create/update/de
 
 Adding or consolidating a tool: edit `ToolCatalog` (the discriminator binder) + the backing methods on `ToolHandlers`. The CLI picks it up once a command wraps the same `MetadataRepository` call; keep each command's `mcpTool` label in `SchemaCommand` pointing at the unified tool.
 
-**Daemon mode** (`d365fo daemon start`) keeps the SQLite handle and read caches hot. Also starts a `FileSystemWatcher` that auto-triggers incremental `index refresh` when `*.xml` files change (debounce 3 s; disable with `--no-watch`).
+**Daemon mode** (`d365fo daemon start`) keeps the SQLite handle and read caches hot. Also starts one `FileSystemWatcher` per packages root (`D365FO_PACKAGES_PATH` and every `D365FO_CUSTOM_PACKAGES_PATH` root) that re-syncs the changed model when `*.xml` or `*.label.txt` files change, keeping its method-source index (debounce 3 s; disable with `--no-watch`).
+
+**Refresh after writes.** Every journaled write (`generate`, `modify`, `delete`, `undo`, label writes) tells `IndexAutoRefresh` which model it touched. The CLI process and each MCP tool call open a scope around the command, and the touched models are re-synced before the result is rendered, which then carries `data.indexRefreshed`. Opt out with `--no-refresh` or `D365FO_AUTO_REFRESH=0`.
 
 ## HTTP transport
 

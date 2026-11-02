@@ -223,8 +223,9 @@ d365fo generate table <Name> --pattern <preset> --field <F1>:<Edt> … --install
 ```sh
 d365fo prepare change <Table> --goal "add fields" --output json
 d365fo get edt <Edt> --output json
-# edit / regenerate, then:
-d365fo index refresh --model <Model>
+# edit / regenerate: the write re-indexes <Model> itself (data.indexRefreshed).
+# After an edit made outside d365fo (Visual Studio, git pull):
+d365fo index sync <Model>
 ```
 
 ### Hand-written X++ gate (always before writing)
