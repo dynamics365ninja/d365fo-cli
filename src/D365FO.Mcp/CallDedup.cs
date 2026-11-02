@@ -46,15 +46,34 @@ public static class CallDedup
         return (entry.Body, entry.IsError);
     }
 
-    public static void Store(string key, string body, bool isError)
+    private static long s_generation;
+
+    /// <summary>
+    /// Bumped by every <see cref="InvalidateAfter"/> flush. A read captures it before it runs
+    /// and passes it to <see cref="Store"/>, so an answer computed before a concurrent write
+    /// (another daemon or HTTP connection) is not cached after that write's flush.
+    /// </summary>
+    public static long Generation => Interlocked.Read(ref s_generation);
+
+    /// <param name="observedGeneration">
+    /// <see cref="Generation"/> captured before the read ran. When a write has flushed the
+    /// cache since, the result is not cached.
+    /// </param>
+    public static void Store(string key, string body, bool isError, long? observedGeneration = null)
     {
+        if (observedGeneration is { } seen && seen != Generation) return;
         if (Cache.Count >= MaxEntries)
         {
             // Drop the oldest ~25% — cheap pressure valve, exactness not needed.
             foreach (var stale in Cache.OrderBy(kv => kv.Value.At).Take(MaxEntries / 4).ToList())
                 Cache.TryRemove(stale.Key, out _);
         }
-        Cache[key] = new Entry(body, isError, DateTimeOffset.UtcNow);
+        var entry = new Entry(body, isError, DateTimeOffset.UtcNow);
+        Cache[key] = entry;
+        // A flush may have landed between the check above and the write: the generation is
+        // bumped before the clear, so re-checking here catches it and withdraws this entry.
+        if (observedGeneration is { } again && again != Generation)
+            Cache.TryRemove(new KeyValuePair<string, Entry>(key, entry));
     }
 
     /// <summary>Note appended to a deduped response so the agent notices the loop.</summary>
@@ -77,6 +96,7 @@ public static class CallDedup
     public static bool InvalidateAfter(string toolName)
     {
         if (!ToolCatalog.WriteTools.Contains(toolName)) return false;
+        Interlocked.Increment(ref s_generation);
         Cache.Clear();
         return true;
     }

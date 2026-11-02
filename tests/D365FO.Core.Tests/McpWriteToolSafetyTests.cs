@@ -216,4 +216,23 @@ public class McpWriteToolSafetyTests : IDisposable
         Assert.True(CallDedup.InvalidateAfter("modify_object"));
         Assert.Null(CallDedup.TryGet(CallDedup.Key("search", "{}")));
     }
+
+    [Fact]
+    public void Read_that_started_before_a_write_is_not_cached_after_the_flush()
+    {
+        // A read on one connection captures the generation, a write on another flushes while
+        // the read is still running, then the read stores its now pre-write answer.
+        var key = CallDedup.Key("search", """{"query":"InFlight"}""");
+        var before = CallDedup.Generation;
+
+        Assert.True(CallDedup.InvalidateAfter("delete_object"));
+        Assert.NotEqual(before, CallDedup.Generation);
+        CallDedup.Store(key, "pre-write body", isError: false, observedGeneration: before);
+
+        Assert.Null(CallDedup.TryGet(key));
+
+        // A read that started after the flush is cached as before.
+        CallDedup.Store(key, "post-write body", isError: false, observedGeneration: CallDedup.Generation);
+        Assert.Equal("post-write body", CallDedup.TryGet(key)!.Value.Body);
+    }
 }
