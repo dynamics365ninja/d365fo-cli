@@ -274,7 +274,7 @@ All scaffolders write atomically (`.tmp` + move, `.bak` on overwrite). Pass `--i
 | `generate migration-script` | Data-fix `Runnable` class with `ttsbegin`/`ttscommit` batching |
 | `generate form-clone` | Copy of an existing `AxForm` under a new name, datasources optionally re-bound |
 | `generate simple-list` | Alias for `generate form --pattern SimpleList` |
-| `modify method` | Replace an existing method's body on a live class/table/edt/form via D365FO.Bridge (`IMetadataProvider`, structured `XDocument` replace — no CDATA string surgery, no on-disk fallback). Reference/BP validation always blocks on error-severity findings. |
+| `modify method` | Replace an existing method's body on a live class/table/edt/form via D365FO.Bridge (`IMetadataProvider`, structured `XDocument` replace — no CDATA string surgery, no on-disk fallback). `--body` is statements only: they replace what sits between the method's outer braces, and the doc comment, attributes and signature are kept. A full declaration passed as `--body` is refused, and so is a method with no body (abstract, delegate, interface). `--source` replaces the whole method instead and must declare exactly that one method. Reference/BP validation always blocks on error-severity findings. |
 | `modify property` | Set a property (`Label`, `ConfigurationKey`, `TableGroup`, …) on a live object. |
 | `modify add-field` | Add a field to a live table; the concrete `AxTableField*` subtype is resolved from the EDT's indexed base type. |
 | `modify add-enum-value` | Add a value to a live base enum — positional, never a hard-coded ordinal. |

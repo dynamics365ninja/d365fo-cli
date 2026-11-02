@@ -42,14 +42,21 @@ public static class MethodModifyEngine
             ["form"] = "form",
         };
 
-    /// <summary>Inputs for a single method-body replacement.</summary>
+    /// <summary>Inputs for a single method replacement.</summary>
+    /// <remarks>
+    /// Exactly one of <c>NewBody</c> and <c>NewSource</c> is supplied. <c>NewBody</c> is statements
+    /// only: they replace what sits between the method's outer braces, and the doc comment,
+    /// attributes and signature are kept (issue #231). <c>NewSource</c> is the whole method and
+    /// replaces the <c>&lt;Source&gt;</c> as given.
+    /// </remarks>
     public sealed record ModifyRequest(
         string Kind,
         string ObjectName,
         string MethodName,
-        string NewBody,
+        string? NewBody,
         string? Model = null,
-        string? GroundingToken = null);
+        string? GroundingToken = null,
+        string? NewSource = null);
 
     /// <summary>
     /// Build <see cref="BridgeOptions"/> from the unified config resolver (env vars or
@@ -71,6 +78,9 @@ public static class MethodModifyEngine
     /// </summary>
     public static ToolResult<object> Modify(ModifyRequest request, MetadataRepository? repo, BridgeOptions? bridgeOptions = null)
     {
+        if (CheckInput(request) is { } inputFailure)
+            return inputFailure;
+
         var options = bridgeOptions ?? DefaultBridgeOptions();
         var switchedOff = BridgeGate.ExplicitlyDisabled();
         if (switchedOff || !BridgeClient.IsAvailable(options))
@@ -108,8 +118,9 @@ public static class MethodModifyEngine
             return ToolResult<object>.Fail(D365FoErrorCodes.BadInput, "Object name is required.");
         if (string.IsNullOrWhiteSpace(request.MethodName))
             return ToolResult<object>.Fail(D365FoErrorCodes.BadInput, "Method name is required.");
-        if (string.IsNullOrWhiteSpace(request.NewBody))
-            return ToolResult<object>.Fail(D365FoErrorCodes.BadInput, "A method body is required.");
+        if (CheckInput(request) is { } inputFailure)
+            return inputFailure;
+        var hasBody = !string.IsNullOrWhiteSpace(request.NewBody);
 
         // ---- 1. Resolve the owning model (index lookup; --model overrides) ----
         var model = request.Model;
@@ -192,6 +203,29 @@ public static class MethodModifyEngine
 
         var oldBody = Local(existing, "Source") ?? string.Empty;
 
+        // ---- 3b. Build the new <Source> before anything is validated or journaled ----
+        // --body is spliced between the outer braces, so the doc comment, attributes and
+        // signature survive (issue #231). It used to become the whole <Source>.
+        string newSource;
+        if (hasBody)
+        {
+            if (kind == "class" && IsInterface(doc.Root))
+            {
+                return ToolResult<object>.Fail(D365FoErrorCodes.BadInput,
+                    $"'{request.ObjectName}' is an interface, and an interface method has no body to replace.",
+                    "Implement the method in a class that implements the interface.");
+            }
+
+            var spliced = MethodSourceSplicer.Splice(oldBody, request.NewBody!, request.MethodName);
+            if (spliced.Error is not null)
+                return ToolResult<object>.Fail(spliced.Code!, spliced.Error, spliced.Hint);
+            newSource = spliced.Source!;
+        }
+        else
+        {
+            newSource = request.NewSource!;
+        }
+
         // ---- 4. Grounding + fail-closed validation gate ----
         var warnings = new List<string>();
         var (grounding, gateFailure) = CheckGrounding(request, repo, warnings);
@@ -204,7 +238,7 @@ public static class MethodModifyEngine
             srcEl = new XElement(existing.Name.Namespace + "Source");
             existing.Add(srcEl);
         }
-        srcEl.ReplaceAll(new XCData(request.NewBody));
+        srcEl.ReplaceAll(new XCData(newSource));
 
         // ---- 6. Write back via the bridge (IMetadataProvider, never disk) ----
         var newXml = doc.ToString(SaveOptions.DisableFormatting);
@@ -256,8 +290,9 @@ public static class MethodModifyEngine
             method = request.MethodName,
             model,
             source = "bridge",
+            mode = hasBody ? "body" : "source",
             oldBody,
-            newBody = request.NewBody,
+            newBody = newSource,
             grounding,
         }, warnings);
     }
@@ -279,7 +314,8 @@ public static class MethodModifyEngine
         {
             try
             {
-                var resolved = ReferenceResolver.Resolve(request.NewBody, repo);
+                var code = (string.IsNullOrWhiteSpace(request.NewBody) ? request.NewSource : request.NewBody) ?? string.Empty;
+                var resolved = ReferenceResolver.Resolve(code, repo);
                 verified = resolved.VerifiedCount;
                 foreach (var v in resolved.Violations)
                 {
@@ -288,7 +324,7 @@ public static class MethodModifyEngine
                 }
 
                 var stats = repo.HasPropertyStats() ? repo : (IPropertyStatsProvider?)null;
-                foreach (var v in XppValidator.Validate(request.NewBody, XppValidator.CodeTypeXpp, stats))
+                foreach (var v in XppValidator.Validate(code, XppValidator.CodeTypeXpp, stats))
                 {
                     if (v.Severity == "error") bpErrors++; else bpWarnings++;
                     violationDetails.Add($"[{v.Rule}] line {v.Line}: {v.Excerpt} — {v.Fix}");
@@ -354,6 +390,89 @@ public static class MethodModifyEngine
             warnings.Add("validation: " + detail);
 
         return (grounding, null);
+    }
+
+    /// <summary>
+    /// Checks that need no bridge: exactly one of body and source, a body that is not a whole
+    /// declaration, a source that declares this one method. <see cref="Modify"/> runs them before
+    /// the bridge gate, so a malformed call is answered the same way on any machine.
+    /// </summary>
+    internal static ToolResult<object>? CheckInput(ModifyRequest request)
+    {
+        var hasBody = !string.IsNullOrWhiteSpace(request.NewBody);
+        var hasSource = !string.IsNullOrWhiteSpace(request.NewSource);
+        if (hasBody == hasSource)
+        {
+            return ToolResult<object>.Fail(D365FoErrorCodes.BadInput,
+                hasBody
+                    ? "Pass either a body or a full source, not both."
+                    : "A method body (or a full method source) is required.",
+                "--body (MCP: `body`) takes the statements between the braces and keeps the signature. " +
+                "--source (MCP: `source`) replaces the whole method, signature included.");
+        }
+
+        // A full declaration passed as a body would be spliced inside the old method's braces.
+        if (hasBody && MethodSourceSplicer.RefuseDeclarationAsBody(request.NewBody!, request.MethodName ?? string.Empty) is { } refusal)
+            return ToolResult<object>.Fail(refusal.Code!, refusal.Error!, refusal.Hint);
+
+        return hasSource ? CheckFullSource(request.NewSource!, request.MethodName ?? string.Empty) : null;
+    }
+
+    /// <summary>
+    /// A full source must declare exactly one method, under the method's own name. Otherwise the
+    /// write would leave a <c>&lt;Method&gt;</c> node the metadata provider rejects (XML014).
+    /// </summary>
+    private static ToolResult<object>? CheckFullSource(string source, string methodName)
+    {
+        var declared = MethodSourceSplicer.DeclaredMethodNames(source);
+        if (declared is null)
+        {
+            return ToolResult<object>.Fail(D365FoErrorCodes.BadInput,
+                "The source cannot be checked statically (a macro-declared method, or unbalanced braces).",
+                "Pass a complete X++ method with balanced braces, or edit this method in Visual Studio.");
+        }
+
+        if (declared.Count == 0)
+        {
+            return ToolResult<object>.Fail(D365FoErrorCodes.BadInput,
+                $"--source declares no method. It replaces the whole method, so it needs the signature of '{methodName}' and its braces.",
+                "To replace only the statements and keep the signature, use --body (MCP: `body`) instead.");
+        }
+
+        if (declared.Count > 1)
+        {
+            return ToolResult<object>.Fail(D365FoErrorCodes.BadInput,
+                $"--source declares {declared.Count} methods ({string.Join(", ", declared)}). One <Method> node holds one method.",
+                "Pass one method. Add further methods with `generate` instead.");
+        }
+
+        if (!string.Equals(declared[0], methodName, StringComparison.OrdinalIgnoreCase))
+        {
+            return ToolResult<object>.Fail(D365FoErrorCodes.BadInput,
+                $"--source declares '{declared[0]}', but the method being replaced is '{methodName}'.",
+                "Keep the method's name. Renaming a method is not a body change.");
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// True for an interface: the <c>IsInterface</c> property when the XML carries it, else the
+    /// <c>interface</c> keyword in the declaration's header (the on-disk AOT file has only that).
+    /// </summary>
+    private static bool IsInterface(XElement? root)
+    {
+        var value = root?.Elements().FirstOrDefault(e => e.Name.LocalName == "IsInterface")?.Value?.Trim();
+        if (string.Equals(value, "Yes", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(value, "true", StringComparison.OrdinalIgnoreCase))
+            return true;
+
+        var declaration = root?.Descendants().FirstOrDefault(e => e.Name.LocalName == "Declaration")?.Value;
+        if (string.IsNullOrEmpty(declaration)) return false;
+        var blanked = AotMethodSourceRules.BlankComments(declaration);
+        var open = blanked.IndexOf('{');
+        var header = open < 0 ? blanked : blanked[..open];
+        return System.Text.RegularExpressions.Regex.IsMatch(header, @"\binterface\b");
     }
 
     private static string NotFoundCodeFor(string kind) => kind switch

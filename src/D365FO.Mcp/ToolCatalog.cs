@@ -700,12 +700,16 @@ public static class ToolCatalog
             "structurally replaces one <Method>'s source (never raw XML/CDATA string surgery), runs the same " +
             "reference/BP validation gate as generate_object and blocks the write on any error-severity finding " +
             "(unconditionally — not gated by D365FO_GROUNDING_ENFORCE), then writes back through the provider. " +
-            "No on-disk fallback: fails BRIDGE_REQUIRED when the bridge is unavailable. Use generate_object to " +
-            "create new objects/methods; use this only to change an existing method's body.",
+            "No on-disk fallback: fails BRIDGE_REQUIRED when the bridge is unavailable. Pass exactly one of: " +
+            "`body` — statements only, they replace what sits between the method's outer braces and the doc comment, " +
+            "attributes and signature are kept (a full declaration is refused); `source` — the whole method, " +
+            "signature included, which must declare exactly one method named `method`. Use generate_object to " +
+            "create new objects/methods; use this only to change an existing method.",
             Schema(("kind", "string", true), ("name", "string", true), ("method", "string", true),
-                   ("body", "string", true), ("model", "string", false), ("groundingToken", "string", false)),
-            (h, p) => h.ModifyMethod(Str(p, "kind"), Str(p, "name"), Str(p, "method"), Str(p, "body"),
-                        StrOrNull(p, "model"), StrOrNull(p, "groundingToken"))),
+                   ("body", "string", false), ("source", "string", false), ("model", "string", false),
+                   ("groundingToken", "string", false)),
+            (h, p) => h.ModifyMethod(Str(p, "kind"), Str(p, "name"), Str(p, "method"), StrOrNull(p, "body"),
+                        StrOrNull(p, "model"), StrOrNull(p, "groundingToken"), StrOrNull(p, "source"))),
 
         new Descriptor("modify_object", ToolEffect.Destructive,
             "Structured edits to an EXISTING object beyond its method bodies, via D365FO.Bridge (Windows VM, " +

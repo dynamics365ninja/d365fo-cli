@@ -259,7 +259,7 @@ commands. Both surfaces use the same discriminator-based naming.
 | `generate_object` (`objectType=table`) | `d365fo generate table <Name> --pattern <P> --field …` |
 | `generate_object` (`objectType=form`) | `d365fo generate form <Name> --pattern <P>` (pattern-gated write) |
 | `generate_object` (XML-only `objectType=…`) | `d365fo generate edt\|enum\|query\|sysoperation\|business-event\|runbase\|security-policy` (XML only) |
-| `d365fo_file` (`action=modify`) / `modify_method` | `d365fo modify method <kind> <Object> <Method> --body "…"` (structured `XDocument` replace via D365FO.Bridge/`IMetadataProvider` — never CDATA string surgery; reference/BP validation always blocks on error-severity findings) |
+| `d365fo_file` (`action=modify`) / `modify_method` | `d365fo modify method <kind> <Object> <Method> --body "…"` (statements between the outer braces, signature kept) or `--source "…"` (the whole method) (structured `XDocument` replace via D365FO.Bridge/`IMetadataProvider` — never CDATA string surgery; reference/BP validation always blocks on error-severity findings) |
 | `undo_last_modification` | `d365fo undo [--steps N] [--dry-run]` — reverts the last N modification-journal entries (see below) |
 | `labels` (`action=create\|rename\|delete`) | `d365fo labels create\|rename\|delete` (multi-language via `--lang`) |
 | `review_workspace_changes` | `d365fo review diff` |

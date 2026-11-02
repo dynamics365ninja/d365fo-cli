@@ -88,8 +88,9 @@ public sealed class MethodModifyEngineTests : IDisposable
         Assert.True(result.Ok);
         Assert.NotNull(capturedUpdateArgs);
         Assert.Equal("ApplicationSuite", (string?)capturedUpdateArgs!["model"]);
-        Assert.Contains("return 2;", (string?)capturedUpdateArgs["xml"]);
-        Assert.DoesNotContain("return 1;", (string?)capturedUpdateArgs["xml"]);
+        // The whole method, not just the statements: the signature and braces survive (#231).
+        Assert.Equal("\n    real calc()\n    {\n        return 2;\n    }\n",
+            WrittenSource(capturedUpdateArgs["xml"]!.GetValue<string>(), "calc"));
     }
 
     [Fact]
@@ -159,6 +160,204 @@ public sealed class MethodModifyEngineTests : IDisposable
             "<AxForm><SourceCode><DataSources><DataSource><Methods><Method><Name>m</Name></Method></Methods></DataSource></DataSources></SourceCode></AxForm>");
         var container = MethodModifyEngine.LocateMethodsContainer(doc.Root);
         Assert.Null(container);
+    }
+
+    // ---- issue #231: --body is the statements between the braces, not the whole <Source> ----
+
+    private const string DocumentedClassXml =
+        "<AxClass><Name>CustBalance</Name><SourceCode><Methods>" +
+        "<Method><Name>calc</Name><Source><![CDATA[\n" +
+        "    /// <summary>\n" +
+        "    /// Calculates the balance. Not { a brace that counts.\n" +
+        "    /// </summary>\n" +
+        "    [Hookable(false)]\n" +
+        "    public real calc()\n" +
+        "    {\n" +
+        "        return 1;\n" +
+        "    }\n" +
+        "]]></Source></Method>" +
+        "</Methods></SourceCode></AxClass>";
+
+    private (ToolResult<object> Result, string? WrittenXml, bool WriteCalled) RunModify(
+        string classXml, MethodModifyEngine.ModifyRequest request)
+    {
+        string? written = null;
+        var writeCalled = false;
+        using var harness = FakeBridge.Create(r =>
+        {
+            var method = (string?)r["method"];
+            if (method == "readObjectXml")
+                return Response(r, new JsonObject { ["ok"] = true, ["xml"] = classXml });
+            if (method == "updateObject")
+            {
+                writeCalled = true;
+                written = (string?)((JsonObject?)r["params"])!["xml"];
+                return Response(r, new JsonObject { ["ok"] = true });
+            }
+            throw new InvalidOperationException("unexpected method: " + method);
+        });
+
+        var journal = Path.Combine(Path.GetTempPath(), $"methodmodify-journal-{Guid.NewGuid():N}.sqlite");
+        var result = MethodModifyEngine.ModifyCore(request, _repo, harness.Client, journal);
+        return (result, written, writeCalled);
+    }
+
+    private static string WrittenSource(string xml, string method) =>
+        System.Xml.Linq.XDocument.Parse(xml).Descendants("Method")
+            .Single(m => (string?)m.Element("Name") == method).Element("Source")!.Value;
+
+    [Fact]
+    public void Body_replaced_inside_braces_keeps_doc_comment_attributes_and_signature()
+    {
+        var (result, xml, _) = RunModify(DocumentedClassXml,
+            new MethodModifyEngine.ModifyRequest("class", "CustBalance", "calc", "real x = 2;\nreturn x;", Model: "ApplicationSuite"));
+
+        Assert.True(result.Ok, result.Error?.Message);
+        Assert.Equal(
+            "\n" +
+            "    /// <summary>\n" +
+            "    /// Calculates the balance. Not { a brace that counts.\n" +
+            "    /// </summary>\n" +
+            "    [Hookable(false)]\n" +
+            "    public real calc()\n" +
+            "    {\n" +
+            "        real x = 2;\n" +
+            "        return x;\n" +
+            "    }\n",
+            WrittenSource(xml!, "calc"));
+    }
+
+    [Fact]
+    public void Body_with_braces_in_strings_and_comments_of_the_old_body_replaces_the_whole_old_body()
+    {
+        const string xmlWithTrickyBody =
+            "<AxClass><Name>CustBalance</Name><SourceCode><Methods>" +
+            "<Method><Name>calc</Name><Source><![CDATA[\n" +
+            "    public real calc()\n" +
+            "    {\n" +
+            "        str s = \"}\"; // }\n" +
+            "        /* { */\n" +
+            "        if (s == '{')\n" +
+            "        {\n" +
+            "            return 0;\n" +
+            "        }\n" +
+            "        return 1;\n" +
+            "    }\n" +
+            "]]></Source></Method>" +
+            "</Methods></SourceCode></AxClass>";
+
+        var (result, xml, _) = RunModify(xmlWithTrickyBody,
+            new MethodModifyEngine.ModifyRequest("class", "CustBalance", "calc", "return 2;", Model: "ApplicationSuite"));
+
+        Assert.True(result.Ok, result.Error?.Message);
+        Assert.Equal("\n    public real calc()\n    {\n        return 2;\n    }\n", WrittenSource(xml!, "calc"));
+    }
+
+    [Theory]
+    [InlineData("public real calc()\n{\n    return 2;\n}")]
+    [InlineData("/// <summary>x</summary>\nreturn 2;")]
+    [InlineData("[Hookable(false)]\npublic real calc()\n{\n    return 2;\n}")]
+    [InlineData("real calculate()\n{\n    return 2;\n}")]
+    public void Full_declaration_passed_as_body_is_refused_before_the_bridge_is_touched(string body)
+    {
+        using var harness = FakeBridge.Create(_ => throw new InvalidOperationException("bridge should not be called"));
+
+        var result = MethodModifyEngine.ModifyCore(
+            new MethodModifyEngine.ModifyRequest("class", "CustBalance", "calc", body, Model: "ApplicationSuite"),
+            _repo, harness.Client);
+
+        Assert.False(result.Ok);
+        Assert.Equal(D365FoErrorCodes.BadInput, result.Error!.Code);
+        Assert.Contains("--source", result.Error.Hint);
+    }
+
+    [Theory]
+    [InlineData("[a, b] = conFunc();\nreturn a;")]
+    [InlineData("if (x)\n{\n    return 2;\n}\nreturn 1;")]
+    [InlineData("while select custTable where custTable.AccountNum == x\n{\n    i++;\n}\nreturn i;")]
+    [InlineData("void helper()\n{\n}\nhelper();\nreturn 1;")]
+    public void Statements_that_open_a_block_are_not_mistaken_for_a_declaration(string body)
+    {
+        Assert.Null(MethodSourceSplicer.RefuseDeclarationAsBody(body, "calc"));
+    }
+
+    [Theory]
+    [InlineData("    abstract real calc()\n    {\n    }\n", "abstract")]
+    [InlineData("    delegate void calc(real _x)\n    {\n    }\n", "delegate")]
+    [InlineData("    public real calc()\n", "no braces")]
+    [InlineData("    #ParmMethod(calc)\n", "macro")]
+    public void Method_without_a_body_is_refused_and_nothing_is_written(string source, string why)
+    {
+        var classXml = "<AxClass><Name>CustBalance</Name><SourceCode><Methods>" +
+                       "<Method><Name>calc</Name><Source><![CDATA[\n" + source + "]]></Source></Method>" +
+                       "</Methods></SourceCode></AxClass>";
+
+        var (result, _, writeCalled) = RunModify(classXml,
+            new MethodModifyEngine.ModifyRequest("class", "CustBalance", "calc", "return 2;", Model: "ApplicationSuite"));
+
+        Assert.False(result.Ok, why);
+        Assert.False(writeCalled, why);
+        Assert.Contains(result.Error!.Code, new[] { D365FoErrorCodes.BadInput, MethodSourceSplicer.BodyNotFound });
+    }
+
+    [Theory]
+    [InlineData("<IsInterface>Yes</IsInterface><SourceCode>")]
+    [InlineData("<SourceCode><Declaration><![CDATA[\n/// A { brace\npublic interface CustBalance\n{\n}\n]]></Declaration>")]
+    public void Interface_method_is_refused_and_nothing_is_written(string interfaceMarker)
+    {
+        var interfaceXml =
+            "<AxClass><Name>CustBalance</Name>" + interfaceMarker + "<Methods>" +
+            "<Method><Name>calc</Name><Source><![CDATA[\n    public real calc()\n    {\n    }\n]]></Source></Method>" +
+            "</Methods></SourceCode></AxClass>";
+
+        var (result, _, writeCalled) = RunModify(interfaceXml,
+            new MethodModifyEngine.ModifyRequest("class", "CustBalance", "calc", "return 2;", Model: "ApplicationSuite"));
+
+        Assert.False(result.Ok);
+        Assert.False(writeCalled);
+        Assert.Equal(D365FoErrorCodes.BadInput, result.Error!.Code);
+    }
+
+    [Fact]
+    public void Source_replaces_the_whole_method_including_its_signature()
+    {
+        const string source = "    public real calc(real _factor = 1)\n    {\n        return 2 * _factor;\n    }\n";
+        var (result, xml, _) = RunModify(DocumentedClassXml,
+            new MethodModifyEngine.ModifyRequest("class", "CustBalance", "calc", null, Model: "ApplicationSuite", NewSource: source));
+
+        Assert.True(result.Ok, result.Error?.Message);
+        Assert.Equal(source, WrittenSource(xml!, "calc"));
+    }
+
+    [Theory]
+    [InlineData("    public real other()\n    {\n        return 2;\n    }\n", "declares 'other'")]
+    [InlineData("return 2;", "declares no method")]
+    [InlineData("    void calc() { }\n    void more() { }\n", "declares 2 methods")]
+    public void Source_that_is_not_exactly_this_method_is_refused(string source, string message)
+    {
+        using var harness = FakeBridge.Create(_ => throw new InvalidOperationException("bridge should not be called"));
+
+        var result = MethodModifyEngine.ModifyCore(
+            new MethodModifyEngine.ModifyRequest("class", "CustBalance", "calc", null, Model: "ApplicationSuite", NewSource: source),
+            _repo, harness.Client);
+
+        Assert.False(result.Ok);
+        Assert.Equal(D365FoErrorCodes.BadInput, result.Error!.Code);
+        Assert.Contains(message, result.Error.Message);
+    }
+
+    [Fact]
+    public void Body_and_source_together_are_refused()
+    {
+        using var harness = FakeBridge.Create(_ => throw new InvalidOperationException("bridge should not be called"));
+
+        var result = MethodModifyEngine.ModifyCore(
+            new MethodModifyEngine.ModifyRequest("class", "CustBalance", "calc", "return 2;", Model: "ApplicationSuite",
+                NewSource: "real calc() { return 2; }"),
+            _repo, harness.Client);
+
+        Assert.False(result.Ok);
+        Assert.Equal(D365FoErrorCodes.BadInput, result.Error!.Code);
     }
 
     private static JsonObject Response(JsonObject request, JsonObject result) => new()
