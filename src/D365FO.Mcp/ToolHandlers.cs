@@ -1027,11 +1027,7 @@ public sealed partial class ToolHandlers
                 return ToolResult<object>.Fail(D365FoErrorCodes.BadInput,
                     "A model name or a path to the model folder is required.");
 
-            var cfg = D365FoSettings.FromEnvironment();
-            folder = cfg.CustomPackagesPaths.Concat(new[] { cfg.PackagesPath })
-                .Where(r => !string.IsNullOrWhiteSpace(r) && Directory.Exists(r))
-                .SelectMany(r => D365FO.Core.Index.IndexSync.EnumerateModelDirs(r!, model))
-                .FirstOrDefault();
+            folder = D365FO.Core.Index.IndexSync.FindModelDir(D365FoSettings.FromEnvironment().ModelRoots, model!);
 
             if (folder is null)
                 return ToolResult<object>.Fail("MODEL_NOT_FOUND",

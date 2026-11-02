@@ -119,9 +119,9 @@ public class XrefQueryTests
     {
         var asked = new List<bool>();
         XrefReferences.Find("SalesLine", null, null, 10, lines: 0,
-            direct: (_, _, _, agg) => { asked.Add(agg); return (Rows(false), null); }, bridge: null);
+            direct: (_, _, _, agg, _) => { asked.Add(agg); return (Rows(false), null); }, bridge: null);
         XrefReferences.Find("SalesLine", null, null, 10, lines: 1,
-            direct: (_, _, _, agg) => { asked.Add(agg); return (Rows(false), null); }, bridge: null);
+            direct: (_, _, _, agg, _) => { asked.Add(agg); return (Rows(false), null); }, bridge: null);
 
         Assert.Equal(new[] { true, false }, asked);
     }
@@ -235,7 +235,7 @@ public class XrefQueryTests
     public void Names_only_folds_references_into_one_row_per_object()
     {
         var r = XrefReferences.Find("SalesLine", null, null, 200, lines: 0,
-            direct: (_, _, _, _) => (Rows(false, Sample), null), bridge: null);
+            direct: (_, _, _, _, _) => (Rows(false, Sample), null), bridge: null);
 
         Assert.True(r.Ok);
         var data = Data(r);
@@ -261,7 +261,7 @@ public class XrefQueryTests
     {
         int asked = 0;
         XrefReferences.Find("SalesLine", null, null, 10, lines: 0,
-            direct: (_, _, limit, _) => { asked = limit; return (Rows(false, Sample), null); }, bridge: null);
+            direct: (_, _, limit, _, _) => { asked = limit; return (Rows(false, Sample), null); }, bridge: null);
 
         Assert.True(asked > 10);
     }
@@ -270,7 +270,7 @@ public class XrefQueryTests
     public void Names_only_caps_objects_and_says_it_did()
     {
         var r = XrefReferences.Find("SalesLine", null, null, 2, lines: 0,
-            direct: (_, _, _, _) => (Rows(false, Sample), null), bridge: null);
+            direct: (_, _, _, _, _) => (Rows(false, Sample), null), bridge: null);
 
         var data = Data(r);
         Assert.Equal(2, (int)data["count"]!);
@@ -282,7 +282,7 @@ public class XrefQueryTests
     {
         int asked = 0;
         var r = XrefReferences.Find("SalesLine", null, null, 50, lines: 1,
-            direct: (_, _, limit, _) => { asked = limit; return (Rows(false, Sample), null); }, bridge: null);
+            direct: (_, _, limit, _, _) => { asked = limit; return (Rows(false, Sample), null); }, bridge: null);
 
         var data = Data(r);
         Assert.Equal(50, asked);
@@ -300,8 +300,8 @@ public class XrefQueryTests
     public void The_bridge_answers_when_the_direct_query_cannot()
     {
         var r = XrefReferences.Find("SalesLine", null, null, 200, lines: 0,
-            direct: (_, _, _, _) => (null, "SqlException: no route"),
-            bridge: (_, _, _, _) => (Rows(false, Sample), null));
+            direct: (_, _, _, _, _) => (null, "SqlException: no route"),
+            bridge: (_, _, _, _, _) => (Rows(false, Sample), null));
 
         Assert.True(r.Ok);
         Assert.Equal("xrefdb-bridge", (string?)Data(r)["_source"]);
@@ -311,8 +311,8 @@ public class XrefQueryTests
     public void Both_failures_are_reported_when_neither_can_answer()
     {
         var r = XrefReferences.Find("SalesLine", null, null, 200, lines: 0,
-            direct: (_, _, _, _) => (null, "SqlException: no route"),
-            bridge: (_, _, _, _) => (null, "bridge error: timeout"));
+            direct: (_, _, _, _, _) => (null, "SqlException: no route"),
+            bridge: (_, _, _, _, _) => (null, "bridge error: timeout"));
 
         Assert.False(r.Ok);
         Assert.Equal(D365FoErrorCodes.XrefUnavailable, r.Error!.Code);
@@ -324,7 +324,7 @@ public class XrefQueryTests
     public void A_model_filter_is_rejected_rather_than_dropped()
     {
         var r = XrefReferences.Find("SalesLine", null, "Foundation", 200, 0,
-            direct: (_, _, _, _) => throw new InvalidOperationException("must not query"), bridge: null);
+            direct: (_, _, _, _, _) => throw new InvalidOperationException("must not query"), bridge: null);
 
         Assert.Equal(D365FoErrorCodes.BadInput, r.Error!.Code);
     }
@@ -335,7 +335,7 @@ public class XrefQueryTests
     public void An_artifact_kind_is_rejected_where_a_reference_kind_is_meant(string kind)
     {
         var r = XrefReferences.Find("SalesLine", kind, null, 200, 0,
-            direct: (_, _, _, _) => throw new InvalidOperationException("must not query"), bridge: null);
+            direct: (_, _, _, _, _) => throw new InvalidOperationException("must not query"), bridge: null);
 
         Assert.Equal(D365FoErrorCodes.BadInput, r.Error!.Code);
         Assert.Contains("Call", r.Error.Hint);
@@ -346,7 +346,7 @@ public class XrefQueryTests
     {
         string? asked = null;
         XrefReferences.Find("SalesLine", "call", null, 200, 0,
-            direct: (_, kind, _, _) => { asked = kind; return (Rows(false), null); }, bridge: null);
+            direct: (_, kind, _, _, _) => { asked = kind; return (Rows(false), null); }, bridge: null);
 
         Assert.Equal("Call", asked);
     }

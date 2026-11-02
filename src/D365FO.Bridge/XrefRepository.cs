@@ -56,11 +56,11 @@ namespace D365FO.Bridge
         /// The where-used query, shared with the CLI's direct path (<see cref="D365FO.Core.Xref.XrefQuery"/>)
         /// so the two cannot answer the same symbol differently.
         /// </summary>
-        internal static JsonObject Find(string symbol, string kindFilter, int limit)
+        internal static JsonObject Find(string symbol, string kindFilter, int limit, List<string> objectKinds = null)
         {
             using (var c = new SqlConnection(ConnectionString))
             {
-                return D365FO.Core.Xref.XrefQuery.Find(c, symbol, kindFilter, limit);
+                return D365FO.Core.Xref.XrefQuery.Find(c, symbol, kindFilter, limit, false, objectKinds);
             }
         }
 
