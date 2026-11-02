@@ -522,6 +522,30 @@ public sealed class GetPrivilegeCommand : Command<GetPrivilegeCommand.Settings>
     }
 }
 
+/// <summary>
+/// <c>security any &lt;NAME&gt;</c> — and the bare <c>security &lt;NAME&gt;</c>, which
+/// <see cref="ArgumentShapes"/> rewrites to it. Resolves the name as a role, duty or
+/// privilege, else returns the coverage of the object it names, without the caller
+/// having to know which it is.
+/// </summary>
+public sealed class SecurityAnyCommand : Command<SecurityAnyCommand.Settings>
+{
+    public sealed class Settings : D365OutputSettings
+    {
+        [CommandArgument(0, "<NAME>")]
+        [System.ComponentModel.Description("A role, duty or privilege name, or a secured object (menu item, form, table, entity …). Artifacts win over coverage; `alsoMatched` lists the other kinds the name matched.")]
+        public string Name { get; init; } = "";
+    }
+
+    public override int Execute(CommandContext ctx, Settings settings)
+    {
+        var kind = OutputMode.Resolve(settings.Output);
+        // Same envelope as MCP `security_info(mode=any)` — one implementation, two surfaces.
+        var result = new D365FO.Mcp.ToolHandlers(RepoFactory.Create()).ResolveSecurityName(settings.Name);
+        return RenderHelpers.Render(kind, result);
+    }
+}
+
 public sealed class GetQueryCommand : Command<GetQueryCommand.Settings>
 {
     public sealed class Settings : D365OutputSettings

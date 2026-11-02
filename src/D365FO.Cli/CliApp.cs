@@ -72,7 +72,7 @@ public static class CliApp
                 b.AddCommand<SearchReportCommand>("report").WithDescription("Find SSRS / RDL reports.");
                 b.AddCommand<SearchServiceCommand>("service").WithDescription("Find SOAP services.");
                 b.AddCommand<SearchWorkflowCommand>("workflow").WithDescription("Find workflow types.");
-                b.AddCommand<SearchAnyCommand>("any").WithDescription("Scope-agnostic search across every indexed kind.");
+                b.AddCommand<SearchAnyCommand>("any").WithDescription("Scope-agnostic search across every indexed kind. Bare `search <QUERY>` runs this.");
                 b.AddCommand<SearchBatchCommand>("batch").WithDescription("Run several scope-agnostic searches in one CLI call.");
                 b.AddCommand<SearchBusinessEventCommand>("business-event").WithDescription("Find business events (classes extending BusinessEventsBase).");
                 b.AddCommand<SearchSecurityPolicyCommand>("security-policy").WithDescription("Find XDS security policies.");
@@ -135,6 +135,7 @@ public static class CliApp
                 b.AddCommand<GetDutyCommand>("duty").WithDescription("Security duty: privileges.");
                 b.AddCommand<GetPrivilegeCommand>("privilege").WithDescription("Security privilege: entry points.");
                 b.AddCommand<GetSecurityCommand>("coverage").WithDescription("Role→Duty→Privilege routes that grant access to an object.");
+                b.AddCommand<SecurityAnyCommand>("any").WithDescription("Any security name: a role, duty or privilege, else the coverage of the object it names. Bare `security <NAME>` runs this.");
             });
 
             // Unified `form-pattern` branch — mirrors the MCP `object_patterns` tool

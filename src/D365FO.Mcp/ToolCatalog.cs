@@ -265,12 +265,15 @@ public static class ToolCatalog
 
         new Descriptor("security_info", ToolEffect.Read,
             "Security lookup. `mode=artifact` returns a named role/duty/privilege (set `type` = role | duty | privilege, and `name`). " +
-            "`mode=coverage` returns which roles → duties → privileges grant access to `object` (set `objectKind`, default Menuitem).",
+            "`mode=coverage` returns which roles → duties → privileges grant access to `object` (set `objectKind`, default Menuitem). " +
+            "`mode=any` takes just `name` when you do not know its kind: a role, duty or privilege (in that order), else the coverage " +
+            "of the object it names under every entry-point type, menu item and table that secures it.",
             Schema(("mode", "string", true), ("type", "string", false), ("name", "string", false),
                    ("object", "string", false), ("objectKind", "string", false)),
             (h, p) => StrOr(p, "mode", "artifact").ToLowerInvariant() switch
             {
                 "coverage" => h.GetSecurity(Str(p, "object"), StrOr(p, "objectKind", "Menuitem")),
+                "any"      => h.ResolveSecurityName(StrOr(p, "name", StrOr(p, "object", ""))),
                 _ => StrOr(p, "type", "role").ToLowerInvariant() switch
                 {
                     "duty"      => h.GetSecurityDuty(Str(p, "name")),

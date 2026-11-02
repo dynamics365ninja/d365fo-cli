@@ -94,6 +94,7 @@ search service|service-group|workflow|map|label|role|duty|privilege
 search business-event|security-policy|configuration-key|tile|workspace
 search batch-jobs
 search any <query>   — UNIONs all types, returns byKind counts
+search <query>       — the same: a first word that is not a sub-command runs `search any`
 ```
 
 ### `get`
@@ -117,7 +118,11 @@ security role <Name>           — Role: duties + privileges
 security duty <Name>           — Duty: privileges
 security privilege <Name>      — Privilege: entry points
 security coverage <Object>     — Role → Duty → Privilege routes that reach an object
+security any <Name>            — role, duty or privilege by that name, else the coverage of the object
+security <Name>                — the same as `security any`
 ```
+
+`security any` checks role, duty and privilege in that order, and otherwise gathers coverage from every place the index knows the object is secured: the entry-point types it is granted under, the menu items that open it, and the table itself (record-level XDS). `alsoMatched` names the other kinds the name matched, for the strict sub-command. A name none of those know is `SECURITY_NOT_FOUND`, never an empty coverage.
 
 ### `form-pattern`
 

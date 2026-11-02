@@ -19,6 +19,28 @@ was ported from.
 
 ## [Unreleased]
 
+### Changed — the argument shapes agents try first now work
+
+Measured over a month of agent sessions on a real installation: 16 of 46 `d365fo` invocations
+were `--help` lookups, most after one of these three shapes failed with a usage error.
+
+- **`d365fo search <QUERY>` runs `search any <QUERY>`.** It failed with "Unknown command
+  '<QUERY>'". The rewrite happens only when the word after `search` is not an option and not a
+  sub-command, so every strict form parses exactly as before and `search class X` is still
+  `search class`. (Spectre cannot do this with a branch default command: it only runs one when
+  nothing follows the branch.)
+- **`d365fo security <NAME>` runs the new `security any <NAME>`** (MCP `security_info(mode=any)`).
+  It returns the role, duty or privilege of that name, in that order, and otherwise the coverage
+  of the object it names under every entry-point type, menu item and table that secures it, so a
+  caller no longer has to know the literal entry-point type `security coverage --type` wants.
+  `resolvedAs` says which, `alsoMatched` lists the other kinds. A name nothing knows fails
+  `SECURITY_NOT_FOUND` rather than answering an empty coverage that reads as "nobody has access".
+- **`validate references` and `validate xpp` accept `--file <PATH>`** as well as the positional
+  `FILE`. The agent prompt and four skill topics already documented `--file`, which neither
+  command accepted. Two different paths are refused with `BAD_INPUT`.
+- An unknown sub-command (`d365fo get ContosoDealTable`) now says that the branch takes a
+  sub-command before the name and points at `d365fo get --help`, instead of the generic hint.
+
 ### Added — writes re-index the model they touched
 
 No write refreshed the index. An agent created a table, then `generate entity --table` answered

@@ -21,6 +21,10 @@ public sealed class ValidateReferencesCommand : Command<ValidateReferencesComman
         [System.ComponentModel.Description("Path to the X++ file to resolve. Omit to read from stdin.")]
         public string? File { get; init; }
 
+        [CommandOption("--file <PATH>")]
+        [System.ComponentModel.Description("Same as the FILE argument, for callers that pass the path as an option.")]
+        public string? FileOption { get; init; }
+
         [CommandOption("--context <NAME>")]
         [System.ComponentModel.Description("Owning class/table name, used in diagnostic messages.")]
         public string? Context { get; init; }
@@ -30,7 +34,10 @@ public sealed class ValidateReferencesCommand : Command<ValidateReferencesComman
     {
         var kind = OutputMode.Resolve(settings.Output);
 
-        var (code, error) = ValidateInput.ReadCode(settings.File);
+        var (file, conflict) = ValidateInput.ResolveFile(settings.File, settings.FileOption, "validate references");
+        if (conflict is not null) return RenderHelpers.Render(kind, conflict);
+
+        var (code, error) = ValidateInput.ReadCode(file);
         if (error is not null)
             return RenderHelpers.Render(kind, ToolResult<object>.Fail("INPUT_NOT_FOUND", error,
                 "Pass a file path or pipe code via stdin: `cat MyClass.xpp | d365fo validate references`."));

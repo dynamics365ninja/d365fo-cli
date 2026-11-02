@@ -97,7 +97,8 @@ public sealed class SchemaCommand : Command<SchemaCommand.Settings>
             name = "security trace",
             commands = new[]
             {
-                "d365fo security coverage <menu-item> --type Menuitem --output json",
+                "d365fo security <name> --output json",
+                "d365fo security coverage <menu-item> --type MenuItemDisplay --output json",
                 "d365fo security role <role> --output json",
                 "d365fo security duty <duty> --output json",
                 "d365fo security privilege <privilege> --output json",
@@ -110,15 +111,15 @@ public sealed class SchemaCommand : Command<SchemaCommand.Settings>
     // between the shell surface and the MCP surface. CLI-only commands carry [].
     internal static CommandSpec[] Commands() =>
     [
-        C("search any", "Scope-agnostic search across every indexed kind.", ["<QUERY>"], ["--limit", "--output"], ["search (type=any)"], true),
+        C("search any", "Scope-agnostic search across every indexed kind. Bare `search <QUERY>` runs this.", ["<QUERY>"], ["--limit", "--output"], ["search (type=any)"], true),
         C("search batch", "Run several scope-agnostic searches in one process.", ["<QUERY>..."], ["--limit", "--output"], ["search (queries[])"], true),
         C("get object", "Generic get by kind/name across object types.", ["<KIND>", "<NAME>"], ["--output", "--resolve-labels"], ["get_object_info"], true),
         C("get batch", "Fetch up to 10 objects (<kind>:<name> specs) in one call.", ["<SPEC>..."], ["--output"], ["batch_get_info"], true),
         C("prepare change", "Single-round change context + grounding token.", ["<OBJECT>"], ["--method", "--goal", "--output"], ["prepare (mode=change)"], true),
         C("prepare create", "Single-round new-object context + grounding token.", ["<NAME>"], ["--type", "--field", "--goal", "--output"], ["prepare (mode=create)"], true),
         C("prepare test", "Single-round SysTest context: methods worth covering, existing coverage, TestEssentials check, scaffold call, red-first cycle + grounding token.", ["<CLASS>"], ["--method", "--goal", "--model", "--output"], ["prepare (mode=test)"], true),
-        C("validate xpp", "Offline X++/XML best-practice validator.", ["[FILE]"], ["--code-type", "--context", "--output"], ["validate (mode=xpp)"], true),
-        C("validate references", "Verify every identifier in X++ code against the index.", ["[FILE]"], ["--output"], ["validate (mode=references)"], true),
+        C("validate xpp", "Offline X++/XML best-practice validator.", ["[FILE]"], ["--file", "--code-type", "--context", "--output"], ["validate (mode=xpp)"], true),
+        C("validate references", "Verify every identifier in X++ code against the index.", ["[FILE]"], ["--file", "--context", "--output"], ["validate (mode=references)"], true),
         C("form-pattern validate", "Structural form-pattern validator (FP001-FP010) over AxForm XML.", ["[FILE]"], ["--output"], ["object_patterns (domain=form, action=validate)"], true),
         C("form-pattern spec", "Form pattern spec catalog (structure tree, versions, when-to-use).", ["[NAME]"], ["--output"], ["object_patterns (domain=form, action=spec)"], true),
         C("form-pattern analyze", "Analyse indexed forms by pattern / primary table / similarity.", [], ["--pattern", "--table", "--similar-to", "--output"], ["object_patterns (domain=form, action=analyze)"], true),
@@ -139,6 +140,7 @@ public sealed class SchemaCommand : Command<SchemaCommand.Settings>
         C("security duty", "Security duty: privileges.", ["<NAME>"], ["--output"], ["security_info (mode=artifact,type=duty)"], true),
         C("security privilege", "Security privilege: entry points.", ["<NAME>"], ["--output"], ["security_info (mode=artifact,type=privilege)"], true),
         C("security coverage", "Role→Duty→Privilege routes that grant access to an object.", ["<OBJECT>"], ["--type", "--output"], ["security_info (mode=coverage)"], true),
+        C("security any", "Any security name: a role, duty or privilege, else the coverage of the object it names. Bare `security <NAME>` runs this.", ["<NAME>"], ["--output"], ["security_info (mode=any)"], true),
         C("labels search", "Search label keys/values; FTS5 is preferred automatically.", ["<QUERY>"], ["--lang", "--limit", "--fts", "--raw-text", "--output"], ["labels (action=search/fts)"], true),
         C("labels resolve", "Resolve a @SYS12345-style label token across languages.", ["<TOKEN>"], ["--lang", "--raw-text", "--output"], ["labels (action=resolve)"], true),
         C("labels info", "Fetch one label entry by (file, language, key).", ["<FILE_OR_KEY>", "[KEY]"], ["--lang", "--raw-text", "--output"], ["labels (action=info)"], true),
