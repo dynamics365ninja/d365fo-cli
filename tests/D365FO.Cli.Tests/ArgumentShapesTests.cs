@@ -152,6 +152,13 @@ public sealed class ArgumentShapesTests : IDisposable
         // Anything else keeps the generic hint.
         Assert.Contains("--help to see the options",
             ArgumentShapes.HintFor(["search", "table", "Cust", "--limits", "5"], "Unknown option 'limits'."));
+
+        // A leaf command reports a stray positional with the same message; it has no
+        // sub-commands, so the branch hint would send the caller looking for one.
+        Assert.Contains("--help to see the options",
+            ArgumentShapes.HintFor(["version", "foo"], "Unknown command 'foo'."));
+        Assert.Contains("d365fo index <sub-command> CustTable",
+            ArgumentShapes.HintFor(["index", "CustTable"], "Unknown command 'CustTable'."));
     }
 
     // ---- security ----

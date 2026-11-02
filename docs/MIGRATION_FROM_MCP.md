@@ -183,7 +183,7 @@ renaming `form_pattern` → `object_patterns`.
 | `get_object_info` | `objectType` (+ `relations`/`methods`/`indexes`/`deleteActions` for tables) | all `get_*_details`, `get_form/query/view/...`, `get_table_*` |
 | `get_method` | `include` (signature/source/both) | reads X++ source (was CLI `read` only) |
 | `labels` | `action` (search/fts/info/resolve/create/rename/delete); `create` also accepts a bulk `labels:[{key,value}, …]` array with shared top-level fields | `search_labels(_fts)`, `get_label`, `resolve_label`, `create/rename/delete_label` |
-| `security_info` | `mode` (artifact/coverage) | `get_security_role/duty/privilege`, `get_security_coverage_for_object` |
+| `security_info` | `mode` (artifact/coverage/any) | `get_security_role/duty/privilege`, `get_security_coverage_for_object` |
 | `object_patterns` | `domain` (form) + `action` (spec/validate) | `get_form_pattern_spec`, `validate_form_pattern`, `form_pattern` |
 | `generate_object` | `objectType` — table/class/coc/form (writes to disk) **and** edt/enum/query/sysoperation/business-event/runbase/security-policy (XML only) | `generate_table/class/coc/form` + the XML-only scaffolders (was two tools `generate` + `generate_xml`) |
 | `extension_info` | `mode` (coc/events/table-merge/points/strategy) | `find_coc_extensions`, `find_event_handlers`, `find_extensions`, `get_table_extension_info`, `analyze_extension_points` (5 tools → 1) |
@@ -228,6 +228,7 @@ commands. Both surfaces use the same discriminator-based naming.
 | `labels` (`action=info\|resolve`) | `d365fo labels info` / `d365fo labels resolve @SYS12345` |
 | `security_info` (`mode=artifact`) | `d365fo security role\|duty\|privilege <Name>` |
 | `security_info` (`mode=coverage`) | `d365fo security coverage <obj> --type <kind>` |
+| `security_info` (`mode=any`) | `d365fo security <name>` (same as `security any <name>`) |
 | `extension_info` (`mode=coc`) | `d365fo find coc <Class>[::<method>]` |
 | `extension_info` (`mode=events`) | `d365fo find event-handlers <Target>` |
 | `find_references` / `resolve_references` | `d365fo find references <Name>` / `d365fo validate references --file <F>` |

@@ -70,8 +70,18 @@ public static class ArgumentShapes
         const string generic = "Run the command with --help to see the options it actually accepts.";
         if (args.Count < 2 || args[1].StartsWith('-')) return generic;
         if (!parseMessage.StartsWith($"Unknown command '{args[1]}'", StringComparison.OrdinalIgnoreCase)) return generic;
+        // Spectre reports a stray positional after a leaf (`version foo`) with the same
+        // message; only a branch takes a sub-command.
+        if (!IsBranch(args[0])) return generic;
 
         return $"`{args[0]}` takes a sub-command before the name, e.g. `d365fo {args[0]} <sub-command> {args[1]}`. "
              + $"Run `d365fo {args[0]} --help` to list them.";
     }
+
+    // The trimmed binary cannot reflect over Spectre, so branches are read off the
+    // published manifest: a branch is a first word some command path continues past.
+    private static bool IsBranch(string word) =>
+        Branches.ContainsKey(word)
+        || Commands.Agent.SchemaCommand.Commands().Any(c =>
+            c.Command.StartsWith(word + " ", StringComparison.OrdinalIgnoreCase));
 }
