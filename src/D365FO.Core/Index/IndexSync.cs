@@ -86,6 +86,11 @@ public static class IndexSync
         var startedUtc = DateTime.UtcNow;
         var sw = System.Diagnostics.Stopwatch.StartNew();
 
+        // Taken before the extract, not after: a file saved while the model is being read then
+        // leaves the stored fingerprint behind the disk, and the next refresh picks it up. Taken
+        // after, that edit would be stamped as already indexed.
+        var fingerprint = ComputeFingerprint(modelRoot, cfg.LabelLanguages);
+
         ExtractBatch batch;
         try
         {
@@ -97,7 +102,6 @@ public static class IndexSync
                 $"Could not read model '{modelName}' at {modelRoot}: {ex.Message}");
         }
 
-        var fingerprint = ComputeFingerprint(modelRoot, cfg.LabelLanguages);
         repo.ApplyExtract(batch, fingerprint, indexSource);
         sw.Stop();
         repo.RecordExtractionRun(batch.Model, startedUtc, sw.ElapsedMilliseconds,
@@ -195,35 +199,114 @@ public static class IndexSync
         }
     }
 
+    /// <summary>What one walk of a model folder learns: enough for the fingerprint and for staleness.</summary>
+    /// <param name="FileCount">Metadata files (<c>*.xml</c>, <c>*.label.txt</c>) under the folder.</param>
+    /// <param name="NewestUtc">Newest last-write time among them, or <see cref="DateTime.MinValue"/> when there are none.</param>
+    /// <param name="NewestFile">Full path of that newest file, or null when there are none.</param>
+    /// <param name="NameHash">Order-independent hash of the relative file names, so a rename or a delete-and-add changes it.</param>
+    public readonly record struct ModelScan(int FileCount, DateTime NewestUtc, string? NewestFile, ulong NameHash);
+
     /// <summary>
-    /// Cheap per-model content fingerprint used by <c>index refresh</c> to skip untouched models.
-    /// Format: <c>"{fileCount}:{newestMtimeTicks}:{langs}"</c>. Sensitive enough to catch touches
-    /// (re-export, rebase, partial sync) without paying for a content hash.
+    /// Walk a model folder once and return its file count, newest mtime and a hash of the
+    /// relative file names.
     /// </summary>
-    public static string ComputeFingerprint(string dir, IReadOnlyList<string>? labelLanguages = null)
+    /// <remarks>
+    /// <para>
+    /// One enumeration, no per-file stat. <see cref="DirectoryInfo.EnumerateFiles(string, EnumerationOptions)"/>
+    /// hands back <see cref="FileInfo"/> objects already filled from the directory listing, so the
+    /// last-write time costs nothing extra. The previous shape — <c>Directory.EnumerateFiles</c>
+    /// then <c>File.GetLastWriteTimeUtc</c> per path, done once for the fingerprint and again for
+    /// <c>--since</c> — was two walks and one syscall per file, which is how a refresh that changed
+    /// nothing took 45 s on a 178-model UDE.
+    /// </para>
+    /// <para>
+    /// The name hash is what lets the fingerprint notice a rename: a renamed file keeps its mtime
+    /// and the count does not move, so <c>count:newestMtime</c> alone called the model unchanged
+    /// and the index kept the old name. Each relative path is hashed with FNV-1a (stable across
+    /// processes, unlike <see cref="string.GetHashCode()"/>) and the hashes are summed, so the
+    /// result does not depend on the order the file system lists entries in.
+    /// </para>
+    /// </remarks>
+    public static ModelScan ScanModel(string dir)
     {
-        long newestTicks = 0;
         int count = 0;
+        long newestTicks = 0;
+        string? newestFile = null;
+        ulong nameHash = 0;
         try
         {
-            foreach (var f in Directory.EnumerateFiles(dir, "*", SearchOption.AllDirectories))
+            var root = new DirectoryInfo(dir);
+            var prefix = root.FullName.Length;
+            var options = new EnumerationOptions
             {
-                if (!f.EndsWith(".xml", StringComparison.OrdinalIgnoreCase)
-                    && !f.EndsWith(".label.txt", StringComparison.OrdinalIgnoreCase))
+                RecurseSubdirectories = true,
+                IgnoreInaccessible = true,
+                AttributesToSkip = 0,
+            };
+            foreach (var f in root.EnumerateFiles("*", options))
+            {
+                var name = f.Name;
+                if (!name.EndsWith(".xml", StringComparison.OrdinalIgnoreCase)
+                    && !name.EndsWith(".label.txt", StringComparison.OrdinalIgnoreCase))
                     continue;
                 count++;
-                try
+                var full = f.FullName;
+                nameHash += HashRelativeName(full.AsSpan(prefix));
+                long ticks;
+                try { ticks = f.LastWriteTimeUtc.Ticks; }
+                catch { continue; }
+                if (ticks > newestTicks)
                 {
-                    var t = File.GetLastWriteTimeUtc(f).Ticks;
-                    if (t > newestTicks) newestTicks = t;
+                    newestTicks = ticks;
+                    newestFile = full;
                 }
-                catch { }
             }
         }
-        catch { }
+        catch { /* unreadable folder: whatever was counted so far stands */ }
+        return new ModelScan(
+            count,
+            newestTicks == 0 ? DateTime.MinValue : new DateTime(newestTicks, DateTimeKind.Utc),
+            newestFile,
+            nameHash);
+    }
+
+    /// <summary>FNV-1a over a relative path, case- and separator-insensitive.</summary>
+    private static ulong HashRelativeName(ReadOnlySpan<char> relative)
+    {
+        const ulong offset = 14695981039346656037UL;
+        const ulong prime = 1099511628211UL;
+        var h = offset;
+        foreach (var c in relative)
+        {
+            var n = c == '\\' ? '/' : char.ToUpperInvariant(c);
+            h = (h ^ (byte)n) * prime;
+            h = (h ^ (byte)(n >> 8)) * prime;
+        }
+        return h;
+    }
+
+    /// <summary>
+    /// Cheap per-model content fingerprint used by <c>index refresh</c> to skip untouched models.
+    /// Format: <c>"{fileCount}:{newestMtimeTicks}:{langs}:{nameHash}"</c>. Sensitive enough to
+    /// catch touches, deletes and renames (re-export, rebase, partial sync) without paying for a
+    /// content hash.
+    /// </summary>
+    /// <remarks>
+    /// Fingerprints stored before the name hash was added have three segments and never equal a
+    /// four-segment one, so an index written by an older build re-extracts each model once on its
+    /// first refresh and is skipped from then on. Nothing parses the stored value — it is only
+    /// compared — so an old or foreign format cannot fail a refresh.
+    /// </remarks>
+    public static string ComputeFingerprint(string dir, IReadOnlyList<string>? labelLanguages = null)
+        => FormatFingerprint(ScanModel(dir), labelLanguages);
+
+    /// <summary>The fingerprint for a scan already taken, so a caller that also needs the mtime walks once.</summary>
+    public static string FormatFingerprint(ModelScan scan, IReadOnlyList<string>? labelLanguages = null)
+    {
         var langs = labelLanguages is { Count: > 0 }
             ? string.Join(",", labelLanguages.Select(l => l.ToLowerInvariant()).OrderBy(l => l))
             : "";
-        return $"{count}:{newestTicks}:{langs}";
+        var ticks = scan.FileCount == 0 ? 0 : scan.NewestUtc.Ticks;
+        return $"{scan.FileCount}:{ticks}:{langs}:{scan.NameHash:x16}";
     }
 }

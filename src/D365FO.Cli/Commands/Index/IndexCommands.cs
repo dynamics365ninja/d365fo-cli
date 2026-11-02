@@ -107,6 +107,7 @@ public sealed class IndexStatusCommand : Command<IndexStatusCommand.Settings>
                 lastExtractedUtc = staleness.LastExtractedUtc,
                 scannedFiles = staleness.ScannedFiles,
                 truncated = staleness.Truncated,
+                staleModels = staleness.StaleModels is { Count: > 0 } ? staleness.StaleModels : null,
             },
             warning = statusWarning,
         }, warnings: warnings.Count > 0 ? warnings : null);
@@ -280,8 +281,11 @@ public sealed class IndexExtractCommand : Command<IndexExtractCommand.Settings>
                         modelDir =>
                         {
                             var model = Path.GetFileName(modelDir)!;
-                            var fp = ComputeFingerprint(modelDir, cfg.LabelLanguages);
-                            if (since.HasValue && NewestMtime(modelDir) is { } newest && newest < since.Value)
+                            // One walk answers both questions below: the fingerprint and the
+                            // newest mtime for --since come from the same scan.
+                            var scan = IndexSync.ScanModel(modelDir);
+                            var fp = IndexSync.FormatFingerprint(scan, cfg.LabelLanguages);
+                            if (since.HasValue && scan.FileCount > 0 && scan.NewestUtc < since.Value)
                             {
                                 System.Threading.Interlocked.Increment(ref skippedCount);
                                 return;
@@ -420,25 +424,6 @@ public sealed class IndexExtractCommand : Command<IndexExtractCommand.Settings>
         });
     }
 
-    private static DateTime? NewestMtime(string dir)
-    {
-        DateTime? max = null;
-        try
-        {
-            foreach (var f in Directory.EnumerateFiles(dir, "*.xml", SearchOption.AllDirectories))
-            {
-                try
-                {
-                    var t = File.GetLastWriteTimeUtc(f);
-                    if (!max.HasValue || t > max.Value) max = t;
-                }
-                catch { }
-            }
-        }
-        catch { }
-        return max;
-    }
-
     /// <summary>
     /// Cheap per-model content fingerprint. Delegates to <see cref="IndexSync.ComputeFingerprint"/>
     /// so `index refresh` and `index sync` cannot disagree about whether a model has changed.
@@ -486,11 +471,12 @@ public sealed class IndexExtractCommand : Command<IndexExtractCommand.Settings>
 }
 
 /// <summary>
-/// Incremental refresh: runs <see cref="IndexExtractCommand"/> but seeds
-/// <c>--since</c> from the index DB file's last-write timestamp (with a
-/// 5-minute safety lookback). Models whose XMLs haven't changed since the
-/// last extract are skipped — turning a full multi-minute rescan into a
-/// couple of seconds on a warm workspace.
+/// Incremental refresh: runs <see cref="IndexExtractCommand"/> but skips every
+/// model whose stored fingerprint (file count, newest mtime, hash of the file
+/// names) still matches the disk — turning a full multi-minute rescan into a
+/// couple of seconds on a warm workspace. When the index holds no fingerprints
+/// it falls back to seeding <c>--since</c> from the index DB file's last-write
+/// timestamp (with a 5-minute safety lookback).
 /// </summary>
 public sealed class IndexRefreshCommand : Command<IndexRefreshCommand.Settings>
 {
@@ -526,13 +512,16 @@ public sealed class IndexRefreshCommand : Command<IndexRefreshCommand.Settings>
     }
 
     public override int Execute(CommandContext ctx, Settings settings)
+        => RefreshCore(OutputMode.Resolve(settings.Output), settings);
+
+    internal static int RefreshCore(OutputMode.Kind kind, Settings settings)
     {
         var since = settings.Since;
         IReadOnlyDictionary<string, string?>? fingerprints = null;
         if (!settings.Force)
         {
             // Per-model fingerprint skip (§1.1). Cheap even for tens of models
-            // because the fingerprint is just (fileCount, newestMtimeTicks).
+            // because the fingerprint comes from one directory walk per model.
             try
             {
                 var repo = RepoFactory.Create(settings.DatabasePath);
@@ -543,7 +532,12 @@ public sealed class IndexRefreshCommand : Command<IndexRefreshCommand.Settings>
                 // Pre-v7 DB or opening failed — fall back to the --since path.
             }
 
-            if (string.IsNullOrWhiteSpace(since))
+            // The DB-mtime threshold is only a fallback for when there are no fingerprints to
+            // compare. Applied on top of them it overrode the fingerprint: a rename or a delete
+            // leaves every remaining file's mtime where it was, so the model looked older than the
+            // threshold and was skipped even though its fingerprint had changed. A --since the
+            // caller passed is still honoured as given.
+            if (string.IsNullOrWhiteSpace(since) && fingerprints is null)
             {
                 var cfg = D365FoSettings.FromEnvironment(settings.DatabasePath);
                 if (File.Exists(cfg.DatabasePath))
@@ -556,7 +550,7 @@ public sealed class IndexRefreshCommand : Command<IndexRefreshCommand.Settings>
         var cfg2 = D365FoSettings.FromEnvironment(settings.DatabasePath);
         var extraPaths = IndexExtractCommand.MergeExtraPaths(settings.ExtraPackagesPaths, cfg2.CustomPackagesPaths);
         return IndexExtractCommand.ExtractCore(
-            OutputMode.Resolve(settings.Output),
+            kind,
             settings.PackagesPath,
             settings.DatabasePath,
             settings.OnlyModel,

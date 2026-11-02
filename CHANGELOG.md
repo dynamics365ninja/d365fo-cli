@@ -19,6 +19,28 @@ was ported from.
 
 ## [Unreleased]
 
+### Changed — `index refresh` walks each model once, and staleness is judged per model
+
+A refresh that changed nothing took 45 s on a 178-model UDE, and `doctor` could call the index
+fresh while a model was behind.
+
+- **One directory walk per model.** The fingerprint and the `--since` mtime came from two separate
+  recursive walks, each asking the file system for every file's mtime again. Both now come from a
+  single `DirectoryInfo.EnumerateFiles` pass, whose `FileInfo` already carries the mtime.
+- **A rename re-extracts the model.** The fingerprint was `count:newestMtime:langs`, and a rename
+  moves neither, so the index kept the old object name until a `--force`. It now carries an
+  order-independent hash of the relative file names. Fingerprints stored by an older build simply
+  differ, so each model re-extracts once on the first refresh and is skipped after that.
+- **The DB-mtime threshold no longer overrides the fingerprint.** `index refresh` seeded `--since`
+  from the index file's mtime even when it had fingerprints to compare, so a model whose only
+  change was a rename or a delete looked older than the threshold and was skipped. The threshold is
+  now only the fallback for an index without fingerprints. An explicit `--since` is honoured as before.
+- **Staleness per model.** `index status` and `doctor` compared the newest custom file with the
+  newest extract of ANY model, so syncing one model marked every other model fresh. Each custom
+  model is now held to its own `LastExtractedUtc`, and `staleness.staleModels` names the ones behind.
+- `index sync` takes the fingerprint before reading the model rather than after, so a file saved
+  during the extract is picked up by the next refresh instead of being stamped as indexed.
+
 ### Performance — model folders found with one listing each, not a probe per marker
 
 Every walk of a packages root asked each package subfolder about every marker folder (`AxClass`,
