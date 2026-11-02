@@ -178,13 +178,6 @@ public static class IndexSync
             catch (UnauthorizedAccessException) { return Array.Empty<string>(); }
         }
 
-        static bool HasAot(string dir)
-        {
-            foreach (var s in ObjectTypeRegistry.ModelMarkerFolders())
-                if (Directory.Exists(Path.Combine(dir, s))) return true;
-            return false;
-        }
-
         foreach (var pkg in SafeDirs(packagesRoot))
         {
             // Mirror MetadataExtractor: skip FormAdaptor shim packages.
@@ -192,10 +185,11 @@ public static class IndexSync
             foreach (var model in SafeDirs(pkg))
             {
                 if (MetadataExtractor.IsFormAdaptorPackage(Path.GetFileName(model))) continue;
-                if (!HasAot(model)) continue;
+                // Name first: it costs nothing, and narrows a one-model lookup to one listing.
                 if (onlyModel is { Length: > 0 } only &&
                     !string.Equals(Path.GetFileName(model), only, StringComparison.OrdinalIgnoreCase))
                     continue;
+                if (!ObjectTypeRegistry.IsModelDirectory(model)) continue;
                 yield return model;
             }
         }

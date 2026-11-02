@@ -19,6 +19,20 @@ was ported from.
 
 ## [Unreleased]
 
+### Performance — model folders found with one listing each, not a probe per marker
+
+Every walk of a packages root asked each package subfolder about every marker folder (`AxClass`,
+`AxTable`, … about 70 of them) with its own `Directory.Exists`. Most subfolders of a real
+PackagesLocalDirectory are not models (`bin`, `Descriptor`, `Resources`), so each one failed every
+probe: about 100,000 file-system calls and 14 s per walk on a UDE. `index refresh`, `index sync`, and
+anything that locates a model folder paid it.
+
+- `ObjectTypeRegistry.IsModelDirectory` lists the folder once and checks the names against the
+  marker set. `IndexSync.EnumerateModelDirs` and the extractor both use it, so they still agree on
+  what a model is.
+- `EnumerateModelDirs(root, model)` compares the name before it lists anything, so a one-model
+  lookup touches one folder per package.
+
 ### Fixed — lookups that answered nothing, or a different question, without saying so
 
 Found by an outside benchmark of CLI vs the XRef DB vs grep for D365 lookups, where 3 of 24 runs
