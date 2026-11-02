@@ -86,10 +86,9 @@ public sealed class GenerateCustomServiceCommand : Command<GenerateCustomService
         }
         else
         {
-            var dir = System.IO.Path.GetDirectoryName(settings.Out!)!;
             servicePath = settings.Out!;
-            classPath   = settings.OutClass   ?? System.IO.Path.Combine(dir, className   + ".xml");
-            groupPath   = settings.OutGroup   ?? System.IO.Path.Combine(dir, groupName   + ".xml");
+            classPath   = settings.OutClass   ?? GenerateInstaller.CompanionPath(settings.Out!, Folders.Class,        className);
+            groupPath   = settings.OutGroup   ?? GenerateInstaller.CompanionPath(settings.Out!, Folders.ServiceGroup, groupName);
         }
 
         var ops = ParseOperations(settings.Operations, settings.ContractParam);

@@ -82,9 +82,8 @@ public sealed class GenerateBusinessEventCommand : Command<GenerateBusinessEvent
         }
         else
         {
-            var dir = System.IO.Path.GetDirectoryName(settings.Out!)!;
             eventPath    = settings.Out!;
-            contractPath = settings.OutContract ?? System.IO.Path.Combine(dir, contractName + ".xml");
+            contractPath = settings.OutContract ?? GenerateInstaller.CompanionPath(settings.Out!, Folders.Class, contractName);
         }
 
         var payload = settings.Payload.Select(ParsePayload).ToList();

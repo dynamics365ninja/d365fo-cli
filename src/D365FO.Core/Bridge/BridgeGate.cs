@@ -239,7 +239,15 @@ public static class BridgeGate
     /// through variables and aliases), and handing it back as if it were the xref answer is
     /// how 72 callers became 42 without a word.
     /// </remarks>
-    public static (JsonObject? Result, string? Error) FindReferencesViaXref(string symbol, string? kind, int limit)
+    /// <param name="symbol">A name, <c>Owner.member</c>, an AOT path, or a label reference.</param>
+    /// <param name="kind">A reference kind, or null.</param>
+    /// <param name="limit">Most rows.</param>
+    /// <param name="objectKinds">
+    /// What the local index says a bare name is, so the bridge can seek it. A bridge built before
+    /// this argument existed ignores it and keeps the "anywhere" match.
+    /// </param>
+    public static (JsonObject? Result, string? Error) FindReferencesViaXref(
+        string symbol, string? kind, int limit, IReadOnlyList<string>? objectKinds = null)
     {
         if (!ShouldTry())
             return (null, "the metadata bridge is disabled — set D365FO_BRIDGE_ENABLED=1 on the dev VM.");
@@ -256,6 +264,8 @@ public static class BridgeGate
             using var client = new BridgeClient(options);
             var args = new JsonObject { ["symbol"] = symbol, ["limit"] = limit };
             if (!string.IsNullOrEmpty(kind)) args["kind"] = kind;
+            if (objectKinds is { Count: > 0 })
+                args["objectKinds"] = new JsonArray(objectKinds.Select(o => (JsonNode)o).ToArray());
             var result = client.SendAsync("findReferences", args).GetAwaiter().GetResult();
             if (result is null) return (null, "the bridge returned no result.");
             var ok = (bool?)result["ok"] ?? false;

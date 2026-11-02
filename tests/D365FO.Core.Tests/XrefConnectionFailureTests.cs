@@ -26,8 +26,8 @@ public sealed class XrefConnectionFailureTests : IDisposable
         var probeAsked = false;
 
         var r = XrefReferences.Find("DynTpmDealTable", null, null, 200, lines: 0,
-            direct: (_, _, _, _) => (null, XrefReferences.ServerUnreachable + "A network-related or instance-specific error occurred."),
-            bridge: (_, _, _, _) => { bridgeAsked = true; return (null, "same server"); },
+            direct: (_, _, _, _, _) => (null, XrefReferences.ServerUnreachable + "A network-related or instance-specific error occurred."),
+            bridge: (_, _, _, _, _) => { bridgeAsked = true; return (null, "same server"); },
             ownerOf: _ => Custom,
             moduleHasRows: _ => { probeAsked = true; return (false, null); });
 
@@ -46,8 +46,8 @@ public sealed class XrefConnectionFailureTests : IDisposable
         var bridgeAsked = false;
 
         var r = XrefReferences.Find("DynTpmDealTable", null, null, 200, lines: 0,
-            direct: (_, _, _, _) => (null, "XREFDB_UNAVAILABLE: SqlException: The certificate chain was issued by an authority that is not trusted."),
-            bridge: (_, _, _, _) =>
+            direct: (_, _, _, _, _) => (null, "XREFDB_UNAVAILABLE: SqlException: The certificate chain was issued by an authority that is not trusted."),
+            bridge: (_, _, _, _, _) =>
             {
                 bridgeAsked = true;
                 return (new JsonObject { ["ok"] = true, ["count"] = 0, ["items"] = new JsonArray() }, null);
@@ -64,7 +64,7 @@ public sealed class XrefConnectionFailureTests : IDisposable
             "Server=(LocalDB)\\MSSQLLocalDB;Database=XRef_dev;Integrated Security=true");
 
         var r = XrefReferences.Find("DynTpmDealTable", null, null, 200, lines: 0,
-            direct: (_, _, _, _) => (null, XrefReferences.ServerUnreachable + "The server was not found."),
+            direct: (_, _, _, _, _) => (null, XrefReferences.ServerUnreachable + "The server was not found."),
             bridge: null);
 
         Assert.Contains("SqlLocalDB stop MSSQLLocalDB", r.Error!.Hint);
@@ -109,7 +109,7 @@ public sealed class XrefConnectionFailureTests : IDisposable
     public void The_marker_does_not_reach_the_message()
     {
         var r = XrefReferences.Find("DynTpmDealTable", null, null, 200, lines: 0,
-            direct: (_, _, _, _) => (null, XrefReferences.ServerUnreachable + "SqlException: The server was not found."),
+            direct: (_, _, _, _, _) => (null, XrefReferences.ServerUnreachable + "SqlException: The server was not found."),
             bridge: null);
 
         Assert.DoesNotContain(XrefReferences.ServerUnreachable, r.Error!.Message);

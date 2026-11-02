@@ -78,6 +78,20 @@ public static class GroundingGate
             _artefacts.Add(new Artefact(axKind, string.IsNullOrWhiteSpace(name) ? null : name, path));
         }
 
+        /// <summary>
+        /// The <c>.rnrproj</c> every artefact written through this gate is listed in
+        /// (<c>generate --project</c>), or null.
+        /// </summary>
+        /// <remarks>
+        /// Carried on the gate for the same reason the artefact list is: every generate command
+        /// writes through it, so the option is honoured by all of them without each one
+        /// threading it to its writes.
+        /// </remarks>
+        public string? Project { get; set; }
+
+        /// <summary>Project items this gate's writes added or found already present, in order.</summary>
+        public List<object> ProjectItems { get; } = [];
+
         /// <summary>Requested values that reached none of the written documents.</summary>
         public IReadOnlyList<PropertyGap> PropertyGaps { get; private set; } = [];
 

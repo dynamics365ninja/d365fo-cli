@@ -69,10 +69,7 @@ public static class IndexSync
         roots.AddRange(cfg.CustomPackagesPaths);
         if (!string.IsNullOrWhiteSpace(cfg.PackagesPath)) roots.Add(cfg.PackagesPath!);
 
-        var modelRoot = roots
-            .Where(Directory.Exists)
-            .SelectMany(root => EnumerateModelDirs(root, modelName))
-            .FirstOrDefault();
+        var modelRoot = FindModelDir(roots, modelName!);
 
         if (modelRoot is null)
             return ToolResult<object>.Fail("MODEL_NOT_FOUND",
@@ -199,6 +196,23 @@ public static class IndexSync
         if (name.Length == 0 || parent is null) return null;
         return string.Equals(name, Path.GetFileName(parent), StringComparison.OrdinalIgnoreCase) ? name : null;
     }
+
+    /// <summary>
+    /// The directory of <paramref name="model"/> under the first root that has one, or null.
+    /// </summary>
+    /// <remarks>
+    /// The one on-disk model lookup. <c>index sync</c>, <c>verify project</c> and the
+    /// <c>generate --install-to</c> fallback all resolve a model name through it, so they agree
+    /// about where a model lives. Pass <see cref="D365FoSettings.ModelRoots"/> for the
+    /// configured order (custom-model roots first).
+    /// </remarks>
+    public static string? FindModelDir(IEnumerable<string?> roots, string model)
+        => string.IsNullOrWhiteSpace(model)
+            ? null
+            : roots
+                .Where(r => !string.IsNullOrWhiteSpace(r) && Directory.Exists(r))
+                .SelectMany(r => EnumerateModelDirs(r!, model))
+                .FirstOrDefault();
 
     /// <summary>
     /// Model directories under a packages root, optionally narrowed to one model.

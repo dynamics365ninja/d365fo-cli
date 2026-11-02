@@ -63,14 +63,7 @@ public sealed class VerifyCommand : Command<VerifyCommand.Settings>
     }
 
     private static string? ResolveModelFolder(string model)
-    {
-        var cfg = D365FoSettings.FromEnvironment();
-        var roots = cfg.CustomPackagesPaths.Concat(new[] { cfg.PackagesPath });
-        return roots
-            .Where(r => !string.IsNullOrWhiteSpace(r) && Directory.Exists(r))
-            .SelectMany(r => D365FO.Core.Index.IndexSync.EnumerateModelDirs(r!, model))
-            .FirstOrDefault();
-    }
+        => D365FO.Core.Index.IndexSync.FindModelDir(D365FoSettings.FromEnvironment().ModelRoots, model);
 
     private static bool HasIssues(object data)
     {

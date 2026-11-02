@@ -85,11 +85,10 @@ public sealed class GenerateNumberSequenceCommand : Command<GenerateNumberSequen
         }
         else
         {
-            var dir = System.IO.Path.GetDirectoryName(settings.Out!)!;
             modulePath  = settings.Out!;
-            edtPath     = settings.OutEdt     ?? System.IO.Path.Combine(dir, edtName + ".xml");
+            edtPath     = settings.OutEdt     ?? GenerateInstaller.CompanionPath(settings.Out!, Folders.Edt, edtName);
             handlerPath = handlerClass is null ? null
-                : settings.OutHandler ?? System.IO.Path.Combine(dir, handlerClass + ".xml");
+                : settings.OutHandler ?? GenerateInstaller.CompanionPath(settings.Out!, Folders.Class, handlerClass);
         }
 
         var moduleDoc = NumberSequenceScaffolder.ModuleExtension(settings.ModuleName, edtName, scope);

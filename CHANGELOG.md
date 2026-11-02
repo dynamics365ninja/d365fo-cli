@@ -36,6 +36,65 @@ the error against a stopped or wedged LocalDB on a UDE.
 - The connect timeout is left as it is. LocalDB starts on the first connection, and on a UDE that
   took 15 s or more. A shorter timeout would turn a slow start into a failure.
 
+### Performance — `find refs <Name> --xref` seeks a bare name of a known kind
+
+A bare name was matched as a node anywhere in a path: `%/X` and `%/X/%`, ORed into the query. A
+leading wildcard cannot use the `Names.Path` index, so SQL Server scanned every name. On a UDE
+cross-reference database (6.1M names, 28.5M references) that took about 60 s, past the 30 s command
+timeout, and `find refs DynTpmDealTable --xref` never answered. Member, label and AOT-path queries were
+already exact and fast.
+
+- **The local index names the kind.** The owner lookup the coverage check already makes now reports
+  every kind the name is (`table`, `class`, `form`, `edt`, `enum`; a table and its form often share
+  a name). The query then matches the object and its children in both path forms the compiler writes,
+  `/Tables/X` for code and `Table/X` for metadata such as a form control bound to a field group. Every
+  term is an exact path or a prefix, so it seeks. Measured on that database: 62 s before, 0.15 s
+  after, for 2,268 of the 2,388 references the old match found.
+- **What is no longer pooled in.** The other 120 references point at a different symbol that only
+  shares the name, such as a form data source called `DynTpmDealTable`
+  (`/Forms/X/DataSources/DynTpmDealTable/Methods/active`). That is the same kind of false match the
+  `%/X%` → `%/X` change removed for prefixes. On a 10.0 xref database `CustTable` (table and form)
+  likewise stops pooling in member variables named `custTable`, query/entity data sources named
+  `CustTable` (their own reference to the table is still found) and the `CustTable` menu item. Ask
+  for such a node by its AOT path, e.g. `find refs /MenuItemDisplays/CustTable --xref`.
+- **A name the index does not know is asked of the database.** Before falling back, one exact `IN`
+  over every known root (`/Enums/NoYes`, `Enum/NoYes`, `/DataEntityViews/X`, …) tells which kinds
+  the name is in the cross-reference database itself, so a platform name outside the local index
+  (`NoYes`: timeout before, 6 s after on a 4.9M-name database) or a view, map, data entity or
+  query seeks too. A kind the index knows is never widened by the probe. Only a name with no object
+  of those kinds in either place keeps the old match and scans. The answer lists the kinds it
+  matched as (`objectKinds`).
+- **Unknown kinds keep the old match.** A name the index does not know and the probe does not find
+  is still matched anywhere. An older bridge ignores the new `objectKinds` argument and does the
+  same.
+- **The answer says how it matched**: `match: "object"`, `"anywhere"` or `"exact"`.
+
+### Fixed — `generate` writes multi-object scaffolds into the right folders of a separate model store
+
+Seen on a unified developer environment, whose model store is not `PackagesLocalDirectory`. Three
+calls of `generate workflow` needed three manual steps.
+
+- **`--install-to` finds a model under `D365FO_CUSTOM_PACKAGES_PATH`.** The model folder came from
+  the metadata bridge alone, and its provider only knows `D365FO_PACKAGES_PATH`, so every install
+  into a custom model failed `INSTALL_FAILED` until the standard packages path was pointed at the
+  model store by hand. The lookup is now one shared resolver (custom roots on disk, then the
+  bridge, then the standard root on disk), the same one `index sync` and `verify project` use, and
+  the refusal names the roots it searched.
+- **Each object goes to its own `Ax*` folder when `--out` is inside a model.** Multi-object
+  commands put every companion next to the first file, so `generate workflow --out
+  …\AxWorkflowTemplate\X.xml` left the document class, the query, the approval and the CoC class
+  in `AxWorkflowTemplate\`, where neither Visual Studio nor the compiler looks. The same bug was
+  in `custom-service`, `number-sequence`, `report` and the entity staging table. An `--out` in a
+  plain staging directory still keeps everything together.
+- **New `--project <rnrproj>` on every `generate` command** lists each written object in that
+  Visual Studio project, in the `<Content>` shape Visual Studio writes, and journals the entry so
+  `undo` removes it. The automatic registration only looks next to the model folder, which a repo
+  with `Projects\` and `Metadata\` side by side never matches. The project file is edited as text,
+  so the rest of it stays byte-for-byte as it was.
+- **A write refused by the path guard says which setting admits the root**
+  (`D365FO_CUSTOM_PACKAGES_PATH` or `D365FO_WORKSPACE_PATH`), and the write roots are one list on
+  `D365FoSettings` instead of four copies.
+
 ### Changed — leaner output where it cost tokens and told nothing
 
 Measured on a real installation: `get table` for one 60-field custom table returned 42.7k
