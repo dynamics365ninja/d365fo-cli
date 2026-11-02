@@ -208,10 +208,11 @@ public static class TableAugmentScaffolder
     /// Render find()/exist()/findRecId() for a table, following Microsoft's shipped
     /// convention (selectForUpdate guard, firstonly, key null-guard) so the output compiles
     /// and matches BP expectations. When <paramref name="keys"/> is empty, key-based
-    /// find()/exist() are skipped and only findRecId() is produced.
+    /// find()/exist() are skipped and only findRecId() is produced. The existence check is
+    /// named <c>exist</c> (the standard application's spelling) unless <paramref name="existName"/>
+    /// says <c>exists</c>; the local buffer is derived from the table name unless
+    /// <paramref name="bufferName"/> is given.
     /// </summary>
-    /// <param name="existName"><c>exist</c> (the standard application's spelling, default) or <c>exists</c>.</param>
-    /// <param name="bufferName">Local buffer variable; derived from the table name when null.</param>
     public static IReadOnlyList<(string Name, string Source)> BuildFindMethods(
         string tableName,
         IReadOnlyList<FindKeyField> keys,
