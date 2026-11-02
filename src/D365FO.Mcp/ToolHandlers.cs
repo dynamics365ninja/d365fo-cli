@@ -60,7 +60,7 @@ public sealed partial class ToolHandlers
         var t = _repo.GetTableDetails(name);
         return t is null
             ? ToolResult<object>.Fail("TABLE_NOT_FOUND", $"Table '{name}' not found.", "Run 'd365fo index build'.")
-            : ToolResult<object>.Success(D365FO.Core.Analysis.TableBrief.FromIndex(t));
+            : ToolResult<object>.Success(D365FO.Core.Analysis.TableBrief.FromIndex(t, _repo.GetEdtBaseType));
     }
 
     public ToolResult<object> GetEdt(string name)
@@ -1106,8 +1106,26 @@ public sealed partial class ToolHandlers
     {
         if (string.IsNullOrWhiteSpace(name))
             return ToolResult<object>.Fail("BAD_INPUT", "name is required.");
-        var doc = D365FO.Core.Scaffolding.XppScaffolder.Edt(name, extends, null, size > 0 ? size : null, label);
-        return ToolResult<object>.Success(new { name, xml = Aot(doc) });
+        // The parent's indexed base type decides the concrete AxEdt* type, as on the CLI
+        // (issue #233); the name heuristic is the last resort and is reported.
+        string? baseType = null, enumType = null;
+        List<string>? warnings = null;
+        if (!string.IsNullOrWhiteSpace(extends))
+        {
+            try
+            {
+                baseType = _repo.GetEdtBaseType(extends!);
+                if (string.Equals(baseType, "Enum", StringComparison.OrdinalIgnoreCase))
+                    enumType = _repo.GetEdtEnumType(extends!);
+            }
+            catch { /* index unavailable — heuristic below */ }
+            if (baseType is null)
+                warnings = [
+                    $"{D365FO.Core.Scaffolding.FieldTypeResolver.UnresolvedCode}: the index has no base type for '{extends}', " +
+                    "so the EDT's type was guessed from the name. Run `d365fo index refresh` if the index predates schema v21."];
+        }
+        var doc = D365FO.Core.Scaffolding.XppScaffolder.Edt(name, extends, baseType, size > 0 ? size : null, label, enumType);
+        return ToolResult<object>.Success(new { name, xml = Aot(doc) }, warnings);
     }
 
     public ToolResult<object> GenerateEnum(string name, string? label, string[]? values)
@@ -1352,7 +1370,7 @@ public sealed partial class ToolHandlers
         System.Xml.Linq.XDocument doc, string name, string kind, string axSubfolder,
         string? installTo, string? outPath, bool overwrite, object extra,
         string? groundingToken = null, string? targetObject = null,
-        IEnumerable<string>? requiredSymbols = null)
+        IEnumerable<string>? requiredSymbols = null, IEnumerable<string>? warnings = null)
     {
         var gate = D365FO.Core.Scaffolding.GroundingGate.Check(
             groundingToken, targetObject ?? name, doc,
@@ -1386,12 +1404,19 @@ public sealed partial class ToolHandlers
                 model = installTo,
                 grounding = gate.Grounding,
                 extra,
-            }, gate.Warnings.Count > 0 ? gate.Warnings : null);
+            }, MergeWarnings(warnings, gate.Warnings));
         }
         catch (Exception ex)
         {
             return ToolResult<object>.Fail(D365FoErrorCodes.WriteFailed, ex.Message);
         }
+    }
+
+    /// <summary>The caller's warnings, then the gate's, without duplicates; null when there are none.</summary>
+    private static List<string>? MergeWarnings(IEnumerable<string>? warnings, IEnumerable<string> gateWarnings)
+    {
+        var all = (warnings ?? []).Concat(gateWarnings).Distinct(StringComparer.Ordinal).ToList();
+        return all.Count > 0 ? all : null;
     }
 
     /// <summary>String-rendered counterpart of <see cref="WriteScaffold"/> (used for forms).</summary>
@@ -1475,20 +1500,17 @@ public sealed partial class ToolHandlers
         // Resolve each field's EDT base type from the index so the scaffold
         // stamps the concrete i:type discriminator on every <AxTableField>
         // (AxTableField is abstract — without it the table is invalid). See issue #91.
-        Func<string, string?> edtResolver = edt =>
-        {
-            if (string.IsNullOrWhiteSpace(edt)) return null;
-            try { return _repo.GetEdt(edt)?.BaseType; }
-            catch { return null; }
-        };
+        // A base enum resolves too, and is written as EnumType (issue #233).
+        var edtResolver = D365FO.Core.Scaffolding.FieldTypeResolver.For(_repo);
         // configurationKey / formRef stay CLI-only: the MCP surface already exposes a
         // reduced subset of generate table's options (no tableType, no primaryKey) and
         // every added property widens the shared generate_object schema for all types.
         var doc = D365FO.Core.Scaffolding.XppScaffolder.Table(name, label, fieldSpecs, pat,
-            D365FO.Core.Scaffolding.TableStorage.RegularTable, null, edtBaseTypeResolver: edtResolver);
+            D365FO.Core.Scaffolding.TableStorage.RegularTable, null, edtBaseTypeResolver: edtResolver.Resolve);
+        if (edtResolver.Warning() is { } typeWarning) warnings.Add(typeWarning);
         var extra = new { fieldCount = fieldSpecs.Count > 0 ? fieldSpecs.Count : (int?)null, pattern = pat == D365FO.Core.Scaffolding.TablePattern.None ? null : pat.ToString() };
         return WriteScaffold(doc, name, "AxTable", "AxTable", installTo, outPath, overwrite, extra,
-            groundingToken);
+            groundingToken, warnings: warnings);
     }
 
     /// <summary>

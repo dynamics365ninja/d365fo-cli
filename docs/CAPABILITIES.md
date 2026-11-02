@@ -276,7 +276,7 @@ All scaffolders write atomically (`.tmp` + move, `.bak` on overwrite). Pass `--i
 | `generate simple-list` | Alias for `generate form --pattern SimpleList` |
 | `modify method` | Replace an existing method's body on a live class/table/edt/form via D365FO.Bridge (`IMetadataProvider`, structured `XDocument` replace — no CDATA string surgery, no on-disk fallback). Reference/BP validation always blocks on error-severity findings. |
 | `modify property` | Set a property (`Label`, `ConfigurationKey`, `TableGroup`, …) on a live object. |
-| `modify add-field` | Add a field to a live table; the concrete `AxTableField*` subtype is resolved from the EDT's indexed base type. |
+| `modify add-field` | Add a field to a live table; the concrete `AxTableField*` subtype is resolved from the EDT's indexed base type, and a base enum becomes `AxTableFieldEnum` with `EnumType`. A type the index cannot resolve is guessed from its name and reported as `EDT_BASETYPE_UNRESOLVED`. |
 | `modify add-enum-value` | Add a value to a live base enum — positional, never a hard-coded ordinal. |
 | `modify add-control` | Add a control to a live form's Design, optionally inside `--parent` and bound to `--datasource`/`--datafield`. |
 

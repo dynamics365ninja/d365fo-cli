@@ -19,6 +19,28 @@ was ported from.
 
 ## [Unreleased]
 
+### Fixed — EDT base types are in the index, so generated fields get their real type (#233)
+
+Every EDT in the index had an empty `BaseType`: the extractor read it off the root element
+name, which is always the abstract `<AxEdt>`, while the type is in the `i:type` discriminator.
+Every scaffolder that types a field from the index then fell back to a name guess that defaults
+to String, so `generate table --field Amt:AmountCur` wrote an `AxTableFieldString` (NVARCHAR) for
+a Real, and `RefRecId` and `Counter` fared the same. A field's base type cannot be changed after
+creation, so the fix was delete and recreate.
+
+- **The extractor reads `i:type`** (`AxEdtReal` → `Real`, `AxEdtInt64` → `Int64`, `AxEdtEnum` →
+  `Enum` with its `EnumType`, and so on). Schema v21 clears every model's fingerprint, so the
+  next `index refresh` re-extracts everything once (about ten minutes on a full installation).
+- **`generate table`, `generate map`, table `generate extension` and `modify add-field`**, and
+  MCP `generate_object` for tables and maps, type each field from its EDT's base type, walking
+  `Extends` when the EDT row has none. A field whose type is a base enum rather than an EDT is
+  written as `AxTableFieldEnum` with `<EnumType>` and no `<ExtendedDataType>`.
+- **`generate edt --extends X`** without `--base-type` takes the concrete `AxEdt*` type of `X`.
+- **The name heuristic is the last resort and says so**: a type the index knows neither as EDT
+  nor as base enum is still guessed, with an `EDT_BASETYPE_UNRESOLVED` warning naming each guess.
+- **`get table --brief`** (and MCP `detail=brief`) reports an EDT field's base type (`Real`,
+  `Int64`, …) instead of `ExtendedDataType`.
+
 ### Changed — leaner output where it cost tokens and told nothing
 
 Measured on a real installation: `get table` for one 60-field custom table returned 42.7k

@@ -503,6 +503,7 @@ public sealed class GenerateExtensionCommand : Command<GenerateExtensionCommand.
                 "Run `d365fo suggest edt <name>` to find one, or `d365fo generate edt` to create it."));
 
         XDocument doc;
+        var typeResolver = GenerateInstaller.BuildEdtBaseTypeResolver();
         try
         {
             doc = axFolder switch
@@ -518,7 +519,7 @@ public sealed class GenerateExtensionCommand : Command<GenerateExtensionCommand.
             // AxEdt*Extension subtype; for a table extension the same resolver picks the
             // concrete AxTableField* subtype per field. The other kinds ignore it.
             _ => XppScaffolder.Extension(axFolder["Ax".Length..^"Extension".Length], targetBase, suffix,
-                     GenerateInstaller.BuildEdtBaseTypeResolver(), fieldSpecs),
+                     typeResolver.Resolve, fieldSpecs),
             };
         }
         catch (ArgumentException ex)
@@ -556,7 +557,7 @@ public sealed class GenerateExtensionCommand : Command<GenerateExtensionCommand.
                 backup = res.BackupPath,
                 model = settings.InstallTo,
                 grounding = gate.Grounding,
-            });
+            }, typeResolver.Warning() is { } typeWarning ? [typeWarning] : null);
         }
         catch (Exception ex)
         {

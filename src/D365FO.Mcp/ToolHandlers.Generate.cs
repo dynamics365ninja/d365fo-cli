@@ -125,20 +125,14 @@ public sealed partial class ToolHandlers
 
         try
         {
-            return ToolResult<object>.Success(Doc(name, MapScaffolder.Map(name, fieldSpecs, mappings, label, EdtBaseType)));
+            var types = FieldTypeResolver.For(_repo);
+            var doc = MapScaffolder.Map(name, fieldSpecs, mappings, label, types.Resolve);
+            return ToolResult<object>.Success(Doc(name, doc), types.Warning() is { } w ? [w] : null);
         }
         catch (ArgumentException ex)
         {
             return ToolResult<object>.Fail(D365FoErrorCodes.BadInput, ex.Message);
         }
-    }
-
-    /// <summary>EDT → primitive base type, so a scaffolded field gets its concrete i:type (issue #91).</summary>
-    private string? EdtBaseType(string edt)
-    {
-        if (string.IsNullOrWhiteSpace(edt)) return null;
-        try { return _repo.GetEdt(edt)?.BaseType; }
-        catch { return null; }
     }
 
     // --------------------------------------------------------------- systest

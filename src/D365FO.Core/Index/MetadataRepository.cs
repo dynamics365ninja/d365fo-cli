@@ -15,9 +15,11 @@ public sealed partial class MetadataRepository
 {
     /// <summary>Current schema version tracked in PRAGMA user_version.</summary>
     /// <remarks>
-    /// v20: Models.SourceIndexed — whether the model's method bodies are in MethodSourceFts, so a
+    /// v21: no new column — Edts.BaseType was empty for every EDT before it (issue #233), so the
+    /// migration clears every model's SourceFingerprint and the next refresh re-extracts them all.
+    /// &lt;para&gt;v20: Models.SourceIndexed — whether the model's method bodies are in MethodSourceFts, so a
     /// re-extract that names neither --index-source nor --no-index-source keeps them. Backfilled
-    /// from the FTS rows already there.
+    /// from the FTS rows already there.&lt;/para&gt;
     /// &lt;para&gt;v19: index on FormDataSources(FormId) — the one foreign key whose child column was
     /// unindexed, so enforcing it rescanned the child table once per deleted form.&lt;/para&gt;
     /// &lt;para&gt;v18: indexes on every ModelId and on the parent keys the per-model re-extract
@@ -25,7 +27,7 @@ public sealed partial class MetadataRepository
     /// EnsureSchema, with no re-extract.&lt;/para&gt;
     /// &lt;para&gt;v17: LabelFiles table (per-label-file source paths for the disk check).&lt;/para&gt;
     /// </remarks>
-    public const int CurrentSchemaVersion = 20;
+    public const int CurrentSchemaVersion = 21;
 
     private static readonly Lazy<string> SchemaSql = new(LoadEmbeddedSchema);
 
@@ -285,6 +287,17 @@ public sealed partial class MetadataRepository
             }
         }
 
+        if (current > 0 && current < 21)
+        {
+            // v21: before it the extractor read an EDT's base type from the root element name,
+            // which is always the abstract <AxEdt>, so every Edts.BaseType is empty (issue #233).
+            // Nothing in the database can recover it — the type is only in the file's i:type
+            // discriminator. Clearing the fingerprints makes the next `index refresh` re-extract
+            // every model instead of skipping the unchanged ones. SourceIndexed is kept, so the
+            // re-extract indexes method bodies exactly as the last one did.
+            conn.Execute("UPDATE Models SET SourceFingerprint = NULL", transaction: tx);
+        }
+
         conn.Execute($"PRAGMA user_version = {CurrentSchemaVersion}", transaction: tx);
         conn.Execute(
             "INSERT OR IGNORE INTO SchemaVersion(Version, AppliedUtc) VALUES(@v, @t)",
@@ -513,6 +526,41 @@ public sealed partial class MetadataRepository
         }
 
         return (edt, null);
+    }
+
+    /// <summary>
+    /// The primitive base type of an EDT (<c>String</c>, <c>Real</c>, <c>Int64</c>, <c>Enum</c>, …),
+    /// walking <c>Extends</c> when the EDT's own row has none. Null when the EDT is not indexed
+    /// or no EDT on its chain records a base type.
+    /// </summary>
+    /// <remarks>
+    /// Issue #233. An extracted EDT always carries its own base type (the AOT writes the
+    /// concrete <c>i:type</c> on derived EDTs too), so the walk only matters for a row the
+    /// index holds without one — an index from before schema v21 that has not been refreshed
+    /// yet, or a model added by a partial extract.
+    /// </remarks>
+    public string? GetEdtBaseType(string name) => FirstOnEdtChain(name, e => e.BaseType);
+
+    /// <summary>
+    /// The base enum behind an enum EDT, walking <c>Extends</c> when the EDT itself names none
+    /// (a derived enum EDT usually does not). Null when no EDT on the chain records one.
+    /// </summary>
+    public string? GetEdtEnumType(string name) => FirstOnEdtChain(name, e => e.EnumType);
+
+    private string? FirstOnEdtChain(string name, Func<EdtInfo, string?> pick)
+    {
+        var visited = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var current = name;
+        for (var depth = 0; depth <= InheritanceWalkLimit && !string.IsNullOrWhiteSpace(current); depth++)
+        {
+            if (!visited.Add(current!)) break;
+            var edt = GetEdt(current!);
+            if (edt is null) break;
+            var value = pick(edt);
+            if (!string.IsNullOrWhiteSpace(value)) return value;
+            current = edt.Extends;
+        }
+        return null;
     }
 
     /// <summary>

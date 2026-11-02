@@ -326,6 +326,53 @@ public sealed class ObjectModifyEngineTests : IDisposable
     }
 
     [Fact]
+    public void Add_field_on_a_base_enum_writes_EnumType_not_an_EDT_reference()
+    {
+        // Issue #233: a base enum is not an EDT. Written as <ExtendedDataType>CustAccountStatus
+        // on an AxTableFieldString it is a dangling reference with the wrong column type.
+        var capture = new BridgeCapture("<AxTable><Name>FmVehicle</Name></AxTable>");
+        using var harness = FakeBridge.Create(capture.Respond);
+
+        var result = ObjectModifyEngine.ModifyCore(new ObjectModifyEngine.ModifyRequest
+        {
+            Operation = ObjectModifyEngine.Operation.AddField,
+            Kind = "table",
+            ObjectName = "FmVehicle",
+            Member = "AccountStatus",
+            Type = "CustAccountStatus",
+            Model = "FleetCustom",
+        }, _repo, harness.Client, _journalDb);
+
+        Assert.True(result.Ok, result.Error?.Message);
+        var field = XDocument.Parse((string)capture.WriteArgs!["xml"]!).Descendants("AxTableField").Single();
+        Assert.Equal("AxTableFieldEnum", field.Attribute(XName.Get("type", "http://www.w3.org/2001/XMLSchema-instance"))!.Value);
+        Assert.Null(field.Element("ExtendedDataType"));
+        Assert.Equal("CustAccountStatus", field.Element("EnumType")!.Value);
+        Assert.DoesNotContain(result.Warnings ?? [], w => w.StartsWith("EDT_BASETYPE_UNRESOLVED", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void Add_field_on_an_unindexed_type_warns_that_its_type_was_guessed()
+    {
+        var capture = new BridgeCapture("<AxTable><Name>FmVehicle</Name></AxTable>");
+        using var harness = FakeBridge.Create(capture.Respond);
+
+        var result = ObjectModifyEngine.ModifyCore(new ObjectModifyEngine.ModifyRequest
+        {
+            Operation = ObjectModifyEngine.Operation.AddField,
+            Kind = "table",
+            ObjectName = "FmVehicle",
+            Member = "Odometer",
+            Type = "NotIndexedReading",
+            Model = "FleetCustom",
+        }, _repo, harness.Client, _journalDb);
+
+        Assert.True(result.Ok, result.Error?.Message);
+        Assert.Contains(result.Warnings ?? [], w => w.StartsWith("EDT_BASETYPE_UNRESOLVED", StringComparison.Ordinal)
+                                                  && w.Contains("NotIndexedReading → String", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public void A_property_added_to_the_root_lands_in_contract_order()
     {
         // SetProperty inserted straight after <Name>, which for most properties is too early:

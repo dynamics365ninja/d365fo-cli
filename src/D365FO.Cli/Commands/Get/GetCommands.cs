@@ -115,7 +115,7 @@ public sealed class GetTableCommand : Command<GetTableCommand.Settings>
             && BridgeGate.TryReadTable(settings.Name) is System.Text.Json.Nodes.JsonObject bridged)
         {
             return ToolResult<object>.Success(
-                D365FO.Core.Analysis.TableBrief.FromBridge(bridged, repo.GetTableDetails(settings.Name)));
+                D365FO.Core.Analysis.TableBrief.FromBridge(bridged, repo.GetTableDetails(settings.Name), repo.GetEdtBaseType));
         }
 
         var details = repo.GetTableDetails(settings.Name);
@@ -123,7 +123,7 @@ public sealed class GetTableCommand : Command<GetTableCommand.Settings>
             ? ToolResult<object>.Fail("TABLE_NOT_FOUND", $"Table '{settings.Name}' not found in index.",
                 NameSuggester.HintFor(repo, NameSuggester.Kind.Table, settings.Name)
                 ?? "Run 'd365fo index build' after extracting metadata.")
-            : ToolResult<object>.Success(D365FO.Core.Analysis.TableBrief.FromIndex(details));
+            : ToolResult<object>.Success(D365FO.Core.Analysis.TableBrief.FromIndex(details, repo.GetEdtBaseType));
     }
 
     private static IReadOnlyList<string>? MethodsOmitted(int count) => count == 0 ? null :

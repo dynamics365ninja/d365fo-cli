@@ -48,14 +48,16 @@ public static class XppScaffolder
     /// <param name="edtBaseTypeResolver">
     /// Optional callback resolving an EDT name to its primitive base type
     /// (<c>String</c>, <c>Int</c>, <c>Enum</c>, …) — typically backed by the
-    /// SQLite index (<c>MetadataRepository.GetEdt(name)?.BaseType</c>). Used to
+    /// SQLite index (<see cref="FieldTypeResolver.Resolve"/>). Used to
     /// stamp each <c>&lt;AxTableField&gt;</c> with the concrete
     /// <c>i:type="AxTableField{Suffix}"</c> discriminator. <c>AxTableField</c>
     /// is an abstract base in <c>Microsoft.Dynamics.AX.Metadata.MetaModel</c>;
     /// without the discriminator the metadata reader throws "Cannot create an
-    /// abstract class" and the table is invalid (issue #91). When the resolver
-    /// is null or returns null, a heuristic over well-known system EDTs is used,
-    /// defaulting to <c>AxTableFieldString</c>.
+    /// abstract class" and the table is invalid (issue #91). A field whose type
+    /// resolves to <see cref="FieldTypeResolver.BaseEnum"/> is written as
+    /// <c>AxTableFieldEnum</c> with <c>&lt;EnumType&gt;</c> (issue #233). When the
+    /// resolver is null or returns null, a heuristic over well-known system EDTs
+    /// is the last resort, defaulting to <c>AxTableFieldString</c>.
     /// </param>
     /// <param name="fieldGroups">
     /// Caller-defined field groups, appended after the scaffold's built-ins. A group whose
@@ -222,12 +224,17 @@ public static class XppScaffolder
     {
         var edtName = spec.Edt ?? "Name";
         var suffix = TableFieldConcreteSuffix(edtName, edtBaseTypeResolver);
+        // A base enum is not an EDT: naming it in <ExtendedDataType> is a dangling reference, and
+        // the field is typed by <EnumType> instead (issue #233). The AxTableFieldEnum member
+        // comes after the base AxTableField members, as the serializer writes it.
+        var isBaseEnum = IsBaseEnum(edtName, edtBaseTypeResolver);
         var el = new XElement("AxTableField",
             new XAttribute(XName.Get("type", Xsi.NamespaceName), $"AxTableField{suffix}"),
             new XElement("Name", spec.Name),
-            new XElement("ExtendedDataType", edtName));
+            isBaseEnum ? null : new XElement("ExtendedDataType", edtName));
         if (!string.IsNullOrEmpty(spec.Label)) el.Add(new XElement("Label", spec.Label));
         if (spec.Mandatory) el.Add(new XElement("Mandatory", "Yes"));
+        if (isBaseEnum) el.Add(new XElement("EnumType", edtName));
         return el;
     }
 
@@ -1737,6 +1744,20 @@ public static class XppScaffolder
     }
 
     /// <summary>
+    /// True when <paramref name="typeName"/> is a base enum rather than an EDT — the resolver
+    /// answered <see cref="FieldTypeResolver.BaseEnum"/>. Such a field carries
+    /// <c>&lt;EnumType&gt;</c> and no <c>&lt;ExtendedDataType&gt;</c>.
+    /// </summary>
+    internal static bool IsBaseEnum(string typeName, Func<string, string?>? resolver)
+        => string.Equals(resolver?.Invoke(typeName), FieldTypeResolver.BaseEnum, StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// The suffix the name heuristic picks for a type the index cannot resolve. The last
+    /// resort only: <see cref="FieldTypeResolver.Warning"/> reports every use of it.
+    /// </summary>
+    internal static string HeuristicFieldSuffix(string typeName) => InferConcreteTypeSuffixFromExtends(typeName);
+
+    /// <summary>
     /// Map an EDT primitive base type (as stored in the index — the concrete
     /// <c>AxEdt*</c> root element name minus the prefix) to the matching
     /// <c>AxTableField</c> subtype suffix. Returns null for unknown/empty input
@@ -1755,6 +1776,7 @@ public static class XppScaffolder
                 "time"                => "Time",
                 "utcdatetime"         => "UtcDateTime",
                 "enum"                => "Enum",
+                "baseenum"            => "Enum",
                 "guid"                => "Guid",
                 "container"           => "Container",
                 _                     => null,
