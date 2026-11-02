@@ -140,7 +140,7 @@ find usages <needle> [--kind k,k,…]  — All references by kind
 find extensions <target>              — All object extensions
 find handlers <object>                — Event subscribers
 find relations <table>                — FK relations
-find refs <needle>                    — References inside method bodies of classes, tables and forms (FTS5 when `--index-source` was used, else on-demand source scan). A form hit names its member: `init`, `CustTable.init`, `CustTable.AccountNum.modified`, `OkButton.clicked`
+find refs <needle>                    — References inside method bodies of classes, tables and forms (FTS5 when `--index-source` was used, else on-demand source scan). A form hit names its member: `init`, `CustTable.init`, `CustTable.AccountNum.modified`, `OkButton.clicked`. Each model is answered from the index when it has source indexed, else from disk. Without `--model` the scope is the source-indexed models plus the custom models (`D365FO_CUSTOM_MODELS`); `--all-models` scans every other model from disk too. The answer carries `scope` and a `coverage` block (models from the index, from disk, not searched). `Owner.member` (or `Owner::member`) without `--xref` searches the member and keeps methods that also mention Owner, flagged `match.kind: member-text`. A needle the index does not know gets a `hint`
 find refs --xref                      — Path/line/kind via DYNAMICSXREFDB
 find form-patterns [--pattern P]      — Form pattern histogram / filter
 find batch-jobs [--model M]           — RunBaseBatch subclasses

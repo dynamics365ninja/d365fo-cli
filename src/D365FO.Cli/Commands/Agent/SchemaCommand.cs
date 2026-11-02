@@ -188,8 +188,8 @@ public sealed class SchemaCommand : Command<SchemaCommand.Settings>
         C("find extensions", "Find Table/Form/Edt/Enum extensions targeting an object.", ["<TARGET>"], ["--kind", "--output"], ["extension_info (mode=points)"]),
         C("find handlers", "Find event subscribers.", ["<OBJECT>"], ["--kind", "--output"], ["extension_info (mode=events)"]),
         C("find event-handlers", "Alias of `find handlers`.", ["<OBJECT>"], ["--kind", "--output"], ["extension_info (mode=events)"]),
-        C("find refs", "Scan indexed X++ source for reverse references.", ["<NAME>"], ["--kind", "--model", "--limit", "--xref", "--output"], ["find_references"]),
-        C("find references", "Alias of `find refs`.", ["<NAME>"], ["--kind", "--model", "--limit", "--xref", "--output"], ["find_references"]),
+        C("find refs", "Scan indexed X++ source for reverse references.", ["<NAME>"], ["--kind", "--model", "--limit", "--all-models", "--xref", "--output"], ["find_references"]),
+        C("find references", "Alias of `find refs`.", ["<NAME>"], ["--kind", "--model", "--limit", "--all-models", "--xref", "--output"], ["find_references"]),
         C("find form-patterns", "Find forms by Microsoft form pattern, table, or peer form.", [], ["--pattern", "--table", "--similar-to", "--output"], ["object_patterns (domain=form, action=analyze)"]),
 
         C("index build", "Create or ensure the metadata index schema.", [], ["--db", "--output"], []),

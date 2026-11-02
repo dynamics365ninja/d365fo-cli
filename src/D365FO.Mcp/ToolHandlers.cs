@@ -2717,13 +2717,21 @@ public sealed partial class ToolHandlers
     /// fall back to the same disk scan otherwise. (The bridge-backed
     /// DYNAMICSXREFDB path stays CLI-only via <c>find refs --xref</c>.)
     /// </summary>
-    public ToolResult<object> FindReferences(string name, string? kind, string? model, int limit = 200)
+    /// <param name="allModels">
+    /// Without <paramref name="model"/>, also scan from disk the models that have no source index
+    /// and are not custom. Off, those are left out and counted in <c>coverage.notSearched</c>.
+    /// </param>
+    public ToolResult<object> FindReferences(string name, string? kind, string? model, int limit = 200, bool allModels = false)
     {
         if (string.IsNullOrWhiteSpace(name))
             return ToolResult<object>.Fail("BAD_INPUT", "name is required.");
+        if (allModels && !string.IsNullOrWhiteSpace(model))
+            return ToolResult<object>.Fail(D365FoErrorCodes.BadInput,
+                "allModels and model contradict each other.",
+                "Name one model with --model (MCP: model), or search every model with --all-models (MCP: allModels).");
         if (!ModelFilter.TryResolve(_repo, model, out model, out var badModel)) return badModel!;
 
-        var result = MethodSourceSearch.Find(_repo, name, kind, model, limit);
+        var result = MethodSourceSearch.Find(_repo, name, kind, model, limit, allModels: allModels);
         var items = result.Hits.Select(h => new
         {
             kind = h.Kind,
@@ -2740,6 +2748,10 @@ public sealed partial class ToolHandlers
             via = result.Via,
             filesScanned = result.FilesScanned,
             searched = result.Searched,
+            scope = result.Coverage?.Scope,
+            coverage = MethodSourceSearch.CoveragePayload(result.Coverage),
+            match = MethodSourceSearch.MemberMatchPayload(result.Member),
+            hint = result.Hint,
             count = items.Count,
             truncated = result.Truncated,
             items,

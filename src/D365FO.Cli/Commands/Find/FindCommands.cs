@@ -196,6 +196,10 @@ public sealed class FindRefsCommand : Command<FindRefsCommand.Settings>
         [CommandOption("-l|--limit <N>")]
         public int Limit { get; init; } = 200;
 
+        [CommandOption("--all-models")]
+        [System.ComponentModel.Description("Text scan without --model: also scan every model that has no source index and is not custom, from disk (minutes on a full installation). By default those are left out and counted in `coverage.notSearched`.")]
+        public bool AllModels { get; init; }
+
         [CommandOption("--xref")]
         [System.ComponentModel.Description("Answer from DYNAMICSXREFDB via the metadata bridge — compiler-resolved, unlike the text scan. Requires D365FO_BRIDGE_ENABLED=1 and a populated DYNAMICSXREFDB on the VM; fails XREF_UNAVAILABLE rather than falling back to the text scan.")]
         public bool Xref { get; init; }
@@ -212,7 +216,13 @@ public sealed class FindRefsCommand : Command<FindRefsCommand.Settings>
         // by name, so it answers or fails: the text scan is a different, less
         // complete answer and must not stand in for it unannounced.
         if (settings.Xref)
+        {
+            if (settings.AllModels)
+                return RenderHelpers.Render(kind, ToolResult<object>.Fail(D365FoErrorCodes.BadInput,
+                    "--all-models cannot be combined with --xref: the xref query is not scoped by model.",
+                    "Drop --all-models (the xref answer already covers every module), or drop --xref for the text scan."));
             return RenderHelpers.Render(kind, FindViaXref(settings));
+        }
 
         // Regex scan over indexed X++ source — shared with the unified
         // `find_references` MCP tool (D365FO.Mcp.ToolHandlers.FindReferences).
@@ -222,7 +232,7 @@ public sealed class FindRefsCommand : Command<FindRefsCommand.Settings>
         {
             var repo = RepoFactory.Create();
             var result = new D365FO.Mcp.ToolHandlers(repo)
-                .FindReferences(settings.Name, settings.Kind, settings.Model, settings.Limit);
+                .FindReferences(settings.Name, settings.Kind, settings.Model, settings.Limit, settings.AllModels);
             return RenderHelpers.Render(kind, result);
         }
         catch (Exception ex)
@@ -406,6 +416,10 @@ public sealed class FindRelatedCommand : Command<FindRelatedCommand.Settings>
             needle = result.Needle,
             via = result.Via,
             filesScanned = result.FilesScanned,
+            scope = result.Coverage?.Scope,
+            coverage = D365FO.Core.Index.MethodSourceSearch.CoveragePayload(result.Coverage),
+            match = D365FO.Core.Index.MethodSourceSearch.MemberMatchPayload(result.Member),
+            hint = result.Hint,
             count = result.Hits.Count,
             truncated = result.Truncated,
             items,

@@ -19,6 +19,28 @@ was ported from.
 
 ## [Unreleased]
 
+### Fixed — `find refs` says what it searched, and stops scanning what it was not asked to
+
+- **Each model is answered from where its source is.** The search switched to the method-body
+  index as soon as ANY model had rows in it, so without `--model` the class and table callers in
+  every other model were silently missing, while every form of every model was still opened from
+  disk (104 s on a UDE). `--model` naming a model without a source index answered zero from an
+  index that held nothing for it. Now a model with source indexed is read from the index, any
+  other model from disk.
+- **Without `--model` the scope is the source-indexed models plus the custom models**
+  (`D365FO_CUSTOM_MODELS`). `--all-models` (MCP `find_references(allModels=true)`) also scans every
+  other model from disk. With nothing indexed and nothing custom, every model is scanned, as before.
+  `--all-models` with `--model` or `--xref` is `BAD_INPUT`.
+- **The answer carries `scope` and `coverage`** (`fromIndex`, `fromDisk`, `notSearched`, each
+  `{count, models}` with the names left out past 20). An empty answer with models left out says
+  so in `warnings`. The items are unchanged.
+- **`Owner.member` without `--xref` no longer returns a silent `count: 0`.** The text has no
+  `Owner.member` in it (X++ writes `Owner::member()` or `obj.member()`), so the literal search found
+  nothing. The member is searched and a method kept when it also mentions Owner or belongs to it,
+  flagged `match.kind: "member-text"`. `Owner::member` works the same way.
+- **A needle the index does not know gets a `hint`** (not an error): the search still runs, since
+  kernel functions and macros are not in the index.
+
 ### Added — form methods in the method-body index
 
 - **`index extract|refresh|sync --index-source` now indexes form method bodies** (Kind `Form` in

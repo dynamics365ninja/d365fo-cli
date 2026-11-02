@@ -284,9 +284,15 @@ public static class ToolCatalog
         new Descriptor("find_references", ToolEffect.Read,
             "Reverse references: regex scan of indexed X++ source for where a symbol is used. " +
             "`kind` (class/table/form) and `model` narrow the scan; `limit` caps hits (default 200). " +
-            "Returns the method + up to 3 sample lines per hit.",
-            Schema(("name", "string", true), ("kind", "string", false), ("model", "string", false), ("limit", "integer", false)),
-            (h, p) => h.FindReferences(Str(p, "name"), StrOrNull(p, "kind"), StrOrNull(p, "model"), Int(p, "limit", 200))),
+            "Returns the method + up to 3 sample lines per hit. Without `model` the scope is the models with " +
+            "source indexed plus the custom models; `allModels: true` also scans every other model from disk " +
+            "(minutes on a full installation). `coverage` names what was answered from the index, from disk, " +
+            "and not searched. `Owner.member` searches the member and keeps methods that also mention Owner " +
+            "(text-based, flagged in `match`).",
+            Schema(("name", "string", true), ("kind", "string", false), ("model", "string", false), ("limit", "integer", false),
+                   ("allModels", "boolean", false)),
+            (h, p) => h.FindReferences(Str(p, "name"), StrOrNull(p, "kind"), StrOrNull(p, "model"), Int(p, "limit", 200),
+                                       Bool(p, "allModels"))),
 
         new Descriptor("find_tables_by_field", ToolEffect.Read,
             "Which tables declare a field named `name` (or whose field uses an EDT named `name`) — exact match. " +
