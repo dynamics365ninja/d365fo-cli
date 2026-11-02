@@ -3,6 +3,7 @@
 // </copyright>
 
 using System;
+using System.Collections.Generic;
 using System.Data.SqlClient;
 using System.Text.Json.Nodes;
 
@@ -60,6 +61,18 @@ namespace D365FO.Bridge
             using (var c = new SqlConnection(ConnectionString))
             {
                 return D365FO.Core.Xref.XrefQuery.Find(c, symbol, kindFilter, limit);
+            }
+        }
+
+        /// <summary>
+        /// Whether the database holds any name for each module: the bridge fallback of the
+        /// coverage probe (<see cref="D365FO.Core.Xref.XrefQuery.ModuleCoverage"/>).
+        /// </summary>
+        internal static JsonObject ModuleCoverage(List<string> modules)
+        {
+            using (var c = new SqlConnection(ConnectionString))
+            {
+                return D365FO.Core.Xref.XrefQuery.ModuleCoverage(c, modules);
             }
         }
     }

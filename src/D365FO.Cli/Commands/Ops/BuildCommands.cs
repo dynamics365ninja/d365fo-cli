@@ -41,6 +41,10 @@ public sealed class BuildCommand : Command<BuildCommand.Settings>
         [System.ComponentModel.Description("xppc: compile only what changed since the last full build. Rebuild without it when xppc reports stale symbols.")]
         public bool Incremental { get; init; }
 
+        [CommandOption("--xref")]
+        [System.ComponentModel.Description("xppc: also update the cross-reference database (xppc -xref) named by D365FO_XREF_CONNECTIONSTRING, or the local DYNAMICSXREFDB when it is unset. This is what `find refs --xref` reads, and nothing else fills it for a custom model. Adds build time.")]
+        public bool Xref { get; init; }
+
         [CommandOption("--packages <PATH>")]
         [System.ComponentModel.Description("PackagesLocalDirectory (FrameworkDirectory on UDE) holding bin\\xppc.exe. Defaults to D365FO_PACKAGES_PATH; models are also looked for under D365FO_CUSTOM_PACKAGES_PATH.")]
         public string? PackagesPath { get; init; }
@@ -61,7 +65,7 @@ public sealed class BuildCommand : Command<BuildCommand.Settings>
 
         var result = SdlcRunner.Build(
             settings.MsBuildPath, settings.ProjectPath, settings.Configuration, settings.XppcLogPath,
-            settings.Model, settings.Engine, settings.Incremental, settings.PackagesPath);
+            settings.Model, settings.Engine, settings.Incremental, settings.PackagesPath, settings.Xref);
 
         // The build's own verdict rides in a warning so the diagnostics survive; the exit code
         // is what CI reads.

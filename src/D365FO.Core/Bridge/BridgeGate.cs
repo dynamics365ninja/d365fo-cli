@@ -41,13 +41,31 @@ public static class BridgeGate
     /// Build bridge options from the unified config resolver so values set in
     /// settings.json (not just real env vars) reach the bridge child process.
     /// </summary>
-    public static BridgeOptions DefaultOptions() => new()
+    public static BridgeOptions DefaultOptions(TimeSpan? requestTimeout = null) => new()
     {
         MetadataBinPath = D365FoSettings.Resolve("D365FO_BIN_PATH"),
         PackagesPath = D365FoSettings.Resolve("D365FO_PACKAGES_PATH"),
         CustomPackagesPaths = D365FoSettings.FromEnvironment().CustomPackagesPaths,
         XrefConnectionString = D365FoSettings.Resolve("D365FO_XREF_CONNECTIONSTRING"),
+        RequestTimeout = requestTimeout ?? DefaultRequestTimeout,
     };
+
+    /// <summary>The bridge's per-request budget for metadata calls.</summary>
+    public static readonly TimeSpan DefaultRequestTimeout = TimeSpan.FromSeconds(10);
+
+    /// <summary>
+    /// The budget for a cross-reference query: above what the bridge itself allows the database
+    /// (a 15 s default connect timeout plus a 30 s command timeout), so a slow query fails with
+    /// the database's own error rather than a client-side timeout that says nothing about why.
+    /// </summary>
+    /// <remarks>
+    /// The 10 s metadata budget was applied here too. A reference query over a database that
+    /// carries the whole standard application, or the first connection to a LocalDB instance
+    /// that has to start, routinely takes longer, and the call was abandoned (and the bridge
+    /// killed) while the server was still working: <c>XREF_UNAVAILABLE … did not respond within
+    /// 10s</c>, whatever the actual state of the database.
+    /// </remarks>
+    public static readonly TimeSpan XrefRequestTimeout = TimeSpan.FromSeconds(60);
 
     public static object? TryReadClass(string name) => TryRead("readClass", name);
     public static object? TryReadTable(string name) => TryRead("readTable", name);
@@ -234,7 +252,7 @@ public static class BridgeGate
 
         try
         {
-            var options = DefaultOptions();
+            var options = DefaultOptions(XrefRequestTimeout);
             using var client = new BridgeClient(options);
             var args = new JsonObject { ["symbol"] = symbol, ["limit"] = limit };
             if (!string.IsNullOrEmpty(kind)) args["kind"] = kind;
@@ -253,6 +271,48 @@ public static class BridgeGate
         {
             return (null, "bridge error: " + ex.Message);
         }
+    }
+
+    /// <summary>
+    /// Whether DYNAMICSXREFDB holds any row for <paramref name="module"/>: null when that could
+    /// not be checked (bridge off, database unreachable), with the reason in the second value.
+    /// </summary>
+    /// <remarks>
+    /// See <see cref="XrefCoverage"/> for why this is asked after an xref query.
+    /// </remarks>
+    public static (bool? HasRows, string? Error) XrefModuleHasRows(string module)
+    {
+        if (!ShouldTry()) return (null, "the metadata bridge is disabled.");
+        if (!BridgeClient.IsAvailable()) return (null, "the bridge executable was not found.");
+
+        try
+        {
+            using var client = new BridgeClient(DefaultOptions(XrefRequestTimeout));
+            var result = client.SendAsync("xrefCoverage", new JsonObject { ["modules"] = new JsonArray(module) })
+                .GetAwaiter().GetResult();
+            return ReadCoverage(result, module);
+        }
+        catch (BridgeException ex)
+        {
+            return (null, "bridge error: " + ex.Message);
+        }
+    }
+
+    /// <summary>Read one module's verdict out of an <c>xrefCoverage</c> reply.</summary>
+    internal static (bool? HasRows, string? Error) ReadCoverage(JsonObject? result, string module)
+    {
+        if (result is null) return (null, "the bridge returned no result.");
+        if (!((bool?)result["ok"] ?? false))
+            return (null, ((string?)result["error"] ?? "UNKNOWN") + ": " + ((string?)result["message"] ?? string.Empty));
+
+        // An older bridge has no xrefCoverage method and answers with an RPC error, which
+        // SendAsync turns into a BridgeException above, so a reply here is always this shape.
+        foreach (var item in result["modules"] as JsonArray ?? [])
+        {
+            if (item is JsonObject o && string.Equals((string?)o["module"], module, StringComparison.OrdinalIgnoreCase))
+                return ((bool?)o["hasRows"] ?? false, null);
+        }
+        return (null, $"the bridge did not report module '{module}'.");
     }
 
     /// <summary>

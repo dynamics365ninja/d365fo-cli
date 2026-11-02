@@ -33,8 +33,18 @@ By default the index stores object/method *metadata* only — method bodies (the
 
 `index sync <TARGET>` re-reads a single model — pass the model name, or a path to any file
 inside it and the model is read off the packages layout. It is the repair for an edit this tool
-did not make (Visual Studio, a git pull, a colleague); writes through `generate` / `modify`
-already refresh the index themselves. A model is the unit because the writer replaces a model's
+did not make (Visual Studio, a git pull, a colleague); writes through `generate` / `modify` /
+`delete` / `undo` / the label writers already refresh the index themselves.
+
+**Every journaled write re-indexes the model it touched** before its result is returned, so
+`generate table` followed by `generate entity --table` in the same session finds the table. The
+result carries `data.indexRefreshed: { model, elapsedMs }` (plus `models` when one write touched
+several). The refresh keeps the model's method bodies in the full-text index when it had them, and
+only runs for writes that land under a configured packages root: a scaffold written with `--out`
+to a scratch folder is not part of the index. Turn it off per call with the global `--no-refresh`,
+or for a process with `D365FO_AUTO_REFRESH=0`. The MCP server does the same for every tool call
+that writes (`generate_object`, `modify_object`, `modify_method`, `labels`, `delete_object`,
+`undo_last_modification`). A model is the unit because the writer replaces a model's
 rows atomically: a single-object write would delete the rest of that model.
 
 A model whose folder leaves every configured root (a repository moved to a new clone, a model
@@ -146,7 +156,7 @@ find extensions <target>              — All object extensions
 find handlers <object>                — Event subscribers
 find relations <table>                — FK relations
 find refs <needle>                    — Who uses it: one row per object + matching methods (FTS5 when `--index-source` was used, else on-demand source scan); --lines N for sample lines. A form hit names its member: `init`, `CustTable.init`, `CustTable.AccountNum.modified`, `OkButton.clicked`. Each model is answered from the index when it has source indexed, else from disk. Without `--model` the scope is the source-indexed models plus the custom models (`D365FO_CUSTOM_MODELS`); `--all-models` scans every other model from disk too. The answer carries `scope` and a `coverage` block (models from the index, from disk, not searched). `Owner.member` (or `Owner::member`) without `--xref` searches the member and keeps methods that also mention Owner, flagged `match.kind: member-text`. A needle the index does not know gets a `hint`
-find refs --xref                      — The compiler's where-used from DYNAMICSXREFDB, queried directly: one row per object + members + reference kinds; --lines 1 for path/line/kind
+find refs --xref                      — The compiler's where-used from DYNAMICSXREFDB, queried directly: one row per object + members + reference kinds; --lines 1 for path/line/kind. Refuses an empty answer when the symbol's module has no rows there, and names the build that fills it (`build --model <Model> --xref`)
 find form-patterns [--pattern P]      — Form pattern histogram / filter
 find batch-jobs [--model M]           — RunBaseBatch subclasses
 ```
@@ -628,7 +638,7 @@ Source the output in your shell profile to get `<Tab>` completion for all subcom
 
 ### Daemon
 
-Keeps the SQLite handle and read caches hot. Starts a `FileSystemWatcher` that auto-triggers incremental refresh on `*.xml` changes (debounce 3 s).
+Keeps the SQLite handle and read caches hot. Watches every packages root (`D365FO_PACKAGES_PATH` and the `D365FO_CUSTOM_PACKAGES_PATH` roots) and re-syncs the changed model on `*.xml` / `*.label.txt` changes, keeping its method-source index (debounce 3 s).
 
 ```sh
 d365fo daemon start [--no-watch] [--watch-debounce 5000]
@@ -644,6 +654,7 @@ Wraps the Microsoft tools Visual Studio uses.
 
 ```powershell
 d365fo build --project path/to/MyModel.rnrproj   # LabelC + xppc; or --model MyModel [--incremental]
+d365fo build --model MyModel --xref              # also write DYNAMICSXREFDB (xppc -xref), what find refs --xref reads
 d365fo sync --full
 d365fo test run --suite MyModel.Tests
 d365fo bp check --model MyModel

@@ -65,14 +65,23 @@ public static class XrefReferences
     /// <param name="model">Must be null: the database is keyed by module, not model.</param>
     /// <param name="limit">Most objects (names-only) or references (<paramref name="lines"/> &gt; 0).</param>
     /// <param name="lines">0 for one row per referencing object; above 0 for one row per reference.</param>
-    public static ToolResult<object> Find(string symbol, string? kind, string? model, int limit, int lines) =>
+    /// <param name="ownerOf">
+    /// The model and module that declare a symbol (<see cref="XrefCoverage.OwnerOf"/> over the
+    /// local index), or null to skip the coverage check.
+    /// </param>
+    public static ToolResult<object> Find(
+        string symbol, string? kind, string? model, int limit, int lines,
+        Func<string, XrefCoverage.Owner?>? ownerOf = null) =>
         Find(symbol, kind, model, limit, lines, QueryDirect,
             // The bridge speaks the per-reference shape only; Group folds either.
-            BridgeGate.ShouldTry() ? (s, k, l, _) => BridgeGate.FindReferencesViaXref(s, k, l) : null);
+            BridgeGate.ShouldTry() ? (s, k, l, _) => BridgeGate.FindReferencesViaXref(s, k, l) : null,
+            ownerOf, CoverageDirectThenBridge);
 
     internal static ToolResult<object> Find(
         string symbol, string? kind, string? model, int limit, int lines,
-        XrefSource direct, XrefSource? bridge)
+        XrefSource direct, XrefSource? bridge,
+        Func<string, XrefCoverage.Owner?>? ownerOf = null,
+        Func<string, (bool? HasRows, string? Error)>? moduleHasRows = null)
     {
         if (string.IsNullOrWhiteSpace(symbol))
             return ToolResult<object>.Fail(D365FoErrorCodes.BadInput, "A symbol is required.");
@@ -104,28 +113,44 @@ public static class XrefReferences
         var aggregate = lines <= 0;
         var (raw, directError) = direct(symbol, refKind, rowLimit, aggregate);
         var source = "xrefdb";
+        string? bridgeError = null;
+        if (raw is null && bridge is not null)
+        {
+            (raw, bridgeError) = bridge(symbol, refKind, rowLimit, aggregate);
+            source = "xrefdb-bridge";
+        }
+
+        // Whether the database covers the module that declares the symbol, asked on both
+        // outcomes: an empty answer from a module never compiled with cross-references is not
+        // "no references", and a failed query over such a module has a precise cause worth naming.
+        var owner = SafeOwnerOf(ownerOf, symbol);
+        bool? hasRows = null;
+        if (owner?.Module is { } module && moduleHasRows is not null) (hasRows, _) = moduleHasRows(module);
+
         if (raw is null)
         {
-            string? bridgeError = null;
-            if (bridge is not null)
-            {
-                (raw, bridgeError) = bridge(symbol, refKind, rowLimit, aggregate);
-                source = "xrefdb-bridge";
-            }
-            if (raw is null)
-                return ToolResult<object>.Fail(D365FoErrorCodes.XrefUnavailable,
-                    "DYNAMICSXREFDB could not be queried: " + directError
-                    + (bridgeError is null ? "" : " Bridge fallback: " + bridgeError),
-                    "Check D365FO_XREF_CONNECTIONSTRING (default: local SQL, integrated auth) and that the "
-                    + "database exists — it is filled by a build with cross-references enabled. Or use the text "
-                    + "scan over indexed X++ source: it is not compiler-resolved and can miss references made "
-                    + "through variables and aliases.");
+            var queryError = directError + (bridgeError is null ? "" : " Bridge fallback: " + bridgeError);
+            if (XrefCoverage.Assess(0, symbol, owner, hasRows).Failure is { Error: { } pe })
+                return ToolResult<object>.Fail(pe.Code, pe.Message + " (The reference query itself failed: " + queryError + ")", pe.Hint);
+
+            return ToolResult<object>.Fail(D365FoErrorCodes.XrefUnavailable,
+                "DYNAMICSXREFDB could not be queried: " + queryError,
+                "Check D365FO_XREF_CONNECTIONSTRING (default: local SQL, integrated auth) and that the "
+                + "database exists — it is filled by a build with cross-references enabled "
+                + "(`d365fo build --model <Model> --xref`). Or use the text "
+                + "scan over indexed X++ source: it is not compiler-resolved and can miss references made "
+                + "through variables and aliases.");
         }
+
+        var rawCount = (raw["items"] as JsonArray)?.Count ?? (int?)raw["count"] ?? 0;
+        var verdict = XrefCoverage.Assess(rawCount, symbol, owner, hasRows);
+        if (verdict.Failure is not null) return verdict.Failure;
+        IReadOnlyList<string>? warnings = verdict.Warning is null ? null : [verdict.Warning];
 
         raw.Remove("ok");
         raw.Remove("source");
         raw["_source"] = source;
-        if (lines <= 0) return ToolResult<object>.Success(Group(raw, limit));
+        if (lines <= 0) return ToolResult<object>.Success(Group(raw, limit), warnings);
 
         // Provenance and shape ahead of the rows: a caller that reads the head of a long answer
         // must not miss which store answered.
@@ -136,7 +161,35 @@ public static class XrefReferences
             raw.Remove(key);
             rows[key] = value;
         }
-        return ToolResult<object>.Success(rows);
+        return ToolResult<object>.Success(rows, warnings);
+    }
+
+    private static XrefCoverage.Owner? SafeOwnerOf(Func<string, XrefCoverage.Owner?>? ownerOf, string symbol)
+    {
+        if (ownerOf is null) return null;
+        try { return ownerOf(symbol); }
+        catch { return null; } // no index: the coverage check is skipped, never the query
+    }
+
+    /// <summary>
+    /// Whether DYNAMICSXREFDB holds any row for <paramref name="module"/>: asked over the same
+    /// direct connection as the query, with the bridge's <c>xrefCoverage</c> as the fallback.
+    /// </summary>
+    private static (bool? HasRows, string? Error) CoverageDirectThenBridge(string module)
+    {
+        string? error;
+        try
+        {
+            using var connection = new SqlConnection(ConnectionString());
+            var answer = BridgeGate.ReadCoverage(XrefQuery.ModuleCoverage(connection, [module]), module);
+            if (answer.HasRows is not null) return answer;
+            error = answer.Error;
+        }
+        catch (Exception ex)
+        {
+            error = ex.GetType().Name + ": " + ex.Message;
+        }
+        return BridgeGate.ShouldTry() ? BridgeGate.XrefModuleHasRows(module) : (null, error);
     }
 
     /// <summary>
