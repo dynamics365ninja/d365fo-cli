@@ -94,6 +94,7 @@ search service|service-group|workflow|map|label|role|duty|privilege
 search business-event|security-policy|configuration-key|tile|workspace
 search batch-jobs
 search any <query>   — UNIONs all types, returns byKind counts
+search <query>       — the same: a first word that is not a sub-command runs `search any`
 ```
 
 ### `get`
@@ -106,6 +107,8 @@ get service|service-group|map|role|duty|privilege|label
 get business-event|security-policy
 ```
 
+`get table <T> --brief` returns a summary: the table's properties, each field's name, type and EDT, index names with their fields, and the relations the table declares with their related table. It is a fraction of the full answer (no field labels or property bags, no field groups, relation constraints or method signatures, just `methodCount`), so read it first and ask for parts with `--include` when you need them. It does not combine with `--include` or `--merged`. MCP: `get_object_info(objectType=table, detail=brief)`.
+
 `get table <T> --odata-metadata` emits an OData `<EntityType>` + `<EntitySet>` XML fragment for the table.
 
 ### `security`
@@ -117,7 +120,11 @@ security role <Name>           — Role: duties + privileges
 security duty <Name>           — Duty: privileges
 security privilege <Name>      — Privilege: entry points
 security coverage <Object>     — Role → Duty → Privilege routes that reach an object
+security any <Name>            — role, duty or privilege by that name, else the coverage of the object
+security <Name>                — the same as `security any`
 ```
+
+`security any` checks role, duty and privilege in that order, and otherwise gathers coverage from every place the index knows the object is secured: the entry-point types it is granted under, the menu items that open it, and the table itself (record-level XDS). `alsoMatched` names the other kinds the name matched, for the strict sub-command. A name none of those know is `SECURITY_NOT_FOUND`, never an empty coverage.
 
 ### `form-pattern`
 
@@ -222,7 +229,11 @@ d365fo lint --format sarif > lint.sarif             # SARIF 2.1.0 for CI
 
 ## Scaffolding (`generate`)
 
-All scaffolders write atomically (`.tmp` + move, `.bak` on overwrite). Pass `--install-to <Model>` to drop straight into a model folder via the Bridge.
+All scaffolders write atomically (`.tmp` + move, `.bak` on overwrite). Pass `--install-to <Model>` to drop straight into a model folder. The model folder is looked up under `D365FO_CUSTOM_PACKAGES_PATH` on disk first, then through the Bridge, then under `D365FO_PACKAGES_PATH`, so a custom model in a separate model store (a UDE, a repo's `Metadata` folder) installs without repointing the standard packages path.
+
+Commands that write more than one object (`workflow`, `custom-service`, `number-sequence`, `report`, `entity` with its staging table, `business-event`, `sysoperation`, `report-extension`) put each object in its own `Ax*` folder, both under `--install-to` and when `--out` points inside a model's `Ax*` folder. An `--out` anywhere else (a staging directory) keeps every object next to the first one.
+
+Pass `--project <path>.rnrproj` to any `generate` command to list every object it writes in that Visual Studio project, in the item shape Visual Studio writes (`<Content Include="AxClass\Name">` with `SubType`, `Name` and a `Link` display folder). It is for repos that keep projects apart from the model folder, where the automatic registration next to the model folder finds nothing. The project is checked before anything is written, an object outside its model's `Ax*` folder is reported rather than listed, a project that builds a different model is refused, and `d365fo undo` removes the entry with the object. The payload's `project` field lists what was added.
 
 ### AOT object types
 

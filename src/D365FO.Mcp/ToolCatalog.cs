@@ -168,13 +168,32 @@ public static class ToolCatalog
         new Descriptor("get_object_info", ToolEffect.Read,
             "Read one object's full metadata by `objectType`: table | class | edt | enum | form | query | view | " +
             "entity | report | service | service-group | menu-item | business-event | security-policy. For tables, set exactly one of " +
-            "`relations` | `methods` | `indexes` | `deleteActions` to return just that slice instead of the full table.",
+            "`relations` | `methods` | `indexes` | `deleteActions` to return just that slice instead of the full table, or " +
+            "`detail=brief` for a summary (properties, field name/type/EDT, index names and fields, relation names and " +
+            "related table) at a fraction of the size — read it first when you only need to know what the table holds.",
             Schema(("objectType", "string", true), ("name", "string", true),
                    ("relations", "boolean", false), ("methods", "boolean", false),
-                   ("indexes", "boolean", false), ("deleteActions", "boolean", false)),
+                   ("indexes", "boolean", false), ("deleteActions", "boolean", false),
+                   ("detail", "string", false)),
             (h, p) =>
             {
                 var name = Str(p, "name");
+                var detail = StrOr(p, "detail", "full").ToLowerInvariant();
+                if (detail != "full")
+                {
+                    if (detail != "brief")
+                        return D365FO.Core.ToolResult<object>.Fail("BAD_INPUT",
+                            $"Unknown detail '{Str(p, "detail")}'.", "Use detail=brief or detail=full (the default).");
+                    if (!string.Equals(StrOr(p, "objectType", ""), "table", StringComparison.OrdinalIgnoreCase))
+                        return D365FO.Core.ToolResult<object>.Fail("BAD_INPUT",
+                            $"detail=brief is available for objectType=table only, not '{Str(p, "objectType")}'.",
+                            "Drop detail for this objectType.");
+                    if (Bool(p, "relations") || Bool(p, "methods") || Bool(p, "indexes") || Bool(p, "deleteActions"))
+                        return D365FO.Core.ToolResult<object>.Fail("BAD_INPUT",
+                            "detail=brief is a fixed summary shape and does not combine with a slice flag.",
+                            "Drop detail=brief to read one slice, or drop the slice flag to read the summary.");
+                    return h.GetTableBrief(name);
+                }
                 return StrOr(p, "objectType", "").ToLowerInvariant() switch
                 {
                     "table" => Bool(p, "relations")     ? h.GetTableRelations(name)
@@ -265,12 +284,15 @@ public static class ToolCatalog
 
         new Descriptor("security_info", ToolEffect.Read,
             "Security lookup. `mode=artifact` returns a named role/duty/privilege (set `type` = role | duty | privilege, and `name`). " +
-            "`mode=coverage` returns which roles → duties → privileges grant access to `object` (set `objectKind`, default Menuitem).",
+            "`mode=coverage` returns which roles → duties → privileges grant access to `object` (set `objectKind`, default Menuitem). " +
+            "`mode=any` takes just `name` when you do not know its kind: a role, duty or privilege (in that order), else the coverage " +
+            "of the object it names under every entry-point type, menu item and table that secures it.",
             Schema(("mode", "string", true), ("type", "string", false), ("name", "string", false),
                    ("object", "string", false), ("objectKind", "string", false)),
             (h, p) => StrOr(p, "mode", "artifact").ToLowerInvariant() switch
             {
                 "coverage" => h.GetSecurity(Str(p, "object"), StrOr(p, "objectKind", "Menuitem")),
+                "any"      => h.ResolveSecurityName(StrOr(p, "name", StrOr(p, "object", ""))),
                 _ => StrOr(p, "type", "role").ToLowerInvariant() switch
                 {
                     "duty"      => h.GetSecurityDuty(Str(p, "name")),

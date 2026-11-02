@@ -39,6 +39,7 @@ public static class D365FoErrorCodes
     public const string RoleNotFound = "ROLE_NOT_FOUND";
     public const string DutyNotFound = "DUTY_NOT_FOUND";
     public const string PrivilegeNotFound = "PRIVILEGE_NOT_FOUND";
+    public const string SecurityNotFound = "SECURITY_NOT_FOUND";
     public const string ModelNotFound = "MODEL_NOT_FOUND";
     public const string LabelNotFound = "LABEL_NOT_FOUND";
     public const string MethodNotFound = "METHOD_NOT_FOUND";

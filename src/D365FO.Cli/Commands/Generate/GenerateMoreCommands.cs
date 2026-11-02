@@ -128,7 +128,7 @@ public sealed class GenerateEntityCommand : Command<GenerateEntityCommand.Settin
                 {
                     stagingPath = hasInstall && !hasOut
                         ? GenerateInstaller.ResolveInstallPath(kind, Folders.Table, stagingName, settings.InstallTo!, out var sf)
-                        : System.IO.Path.Combine(System.IO.Path.GetDirectoryName(res.Path)!, stagingName + ".xml");
+                        : GenerateInstaller.CompanionPath(res.Path, Folders.Table, stagingName);
                     if (stagingPath is null)
                         return RenderHelpers.Render(kind, ToolResult<object>.Fail(D365FoErrorCodes.WriteFailed,
                             $"Wrote the entity but could not resolve where to put its staging table '{stagingName}'."));
@@ -1166,11 +1166,10 @@ public sealed class GenerateReportCommand : Command<GenerateReportCommand.Settin
         }
         else
         {
-            var dir = System.IO.Path.GetDirectoryName(settings.Out!)!;
             reportPath   = settings.Out!;
-            dpPath       = settings.OutDp ?? System.IO.Path.Combine(dir, spec.EffectiveDpClass + ".xml");
+            dpPath       = settings.OutDp ?? GenerateInstaller.CompanionPath(settings.Out!, Folders.Class, spec.EffectiveDpClass);
             contractPath = hasContract
-                ? (settings.OutContract ?? System.IO.Path.Combine(dir, spec.ContractClass + ".xml"))
+                ? (settings.OutContract ?? GenerateInstaller.CompanionPath(settings.Out!, Folders.Class, spec.ContractClass))
                 : null;
         }
 
@@ -1199,7 +1198,7 @@ public sealed class GenerateReportCommand : Command<GenerateReportCommand.Settin
             string SiblingOf(string basePath, string objectName, string axFolder)
                 => hasInstall && !hasOut
                     ? GenerateInstaller.ResolveInstallPath(kind, axFolder, objectName, settings.InstallTo!, out _)!
-                    : System.IO.Path.Combine(System.IO.Path.GetDirectoryName(basePath)!, objectName + ".xml");
+                    : GenerateInstaller.CompanionPath(basePath, axFolder, objectName);
 
             var tmpTables = new List<object>();
             if (!settings.NoTmpTable)

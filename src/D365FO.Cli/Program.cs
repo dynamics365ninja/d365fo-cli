@@ -30,7 +30,16 @@ var (refreshArgs, noRefresh) = AutoRefreshArgs.Strip(cliArgs);
 if (noRefresh)
     Environment.SetEnvironmentVariable(D365FO.Core.Index.IndexAutoRefresh.EnvVar, "0");
 
-var app = CliApp.Build();
+// Bare `search <QUERY>` / `security <NAME>` run the scope-agnostic sub-command
+// instead of failing with "Unknown command" (see ArgumentShapes).
+refreshArgs = ArgumentShapes.Normalize(refreshArgs);
+
+// Redirected output, NO_COLOR or TERM=dumb: help and tables render without ANSI escapes.
+// Set globally too, since table renderers write through the AnsiConsole static.
+var console = ConsoleSetup.ForThisProcess();
+if (console is not null) Spectre.Console.AnsiConsole.Console = console;
+
+var app = CliApp.Build(console);
 
 using var autoRefresh = D365FO.Core.Index.IndexAutoRefresh.BeginScope(enabled: !noRefresh);
 try
@@ -47,7 +56,7 @@ catch (CommandParseException ex)
         D365FO.Core.ToolResult<object>.Fail(
             "BAD_INPUT",
             ex.Message,
-            "Run the command with --help to see the options it actually accepts.")));
+            ArgumentShapes.HintFor(refreshArgs, ex.Message))));
     return 2;
 }
 catch (Exception ex)

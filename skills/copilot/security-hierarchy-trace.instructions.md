@@ -8,6 +8,13 @@ applyTo: '**/AxSecurityRole/**,**/AxSecurityDuty/**,**/AxSecurityPrivilege/**'
 
 ## Workflow
 
+0. **Do not know the kind?** `d365fo security <Name> --output json` (the same as
+   `security any`) resolves a role, duty or privilege by that name, otherwise it
+   returns coverage for every way the object is secured (entry-point types, the
+   menu items that open it, the table's XDS state). `resolvedAs` says which,
+   `alsoMatched` lists other kinds the name matched. Use the strict commands
+   below when you need one specific answer.
+
 1. **Top-down** — which entry points does a role reach? `security coverage`
    is a reverse/bottom-up lookup, not a forward one — `Role` is not a valid
    `--type` for it. Walk the hierarchy explicitly instead:

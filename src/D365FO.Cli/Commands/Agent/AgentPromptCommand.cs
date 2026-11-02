@@ -157,7 +157,7 @@ not invent a name.
 | Relations | `d365fo find relations <Table> --output json` |
 | Existing object extensions | `d365fo find extensions <Target> --output json` |
 | Resolve label | `d365fo labels resolve @SYS12345 --lang en-us,cs` |
-| Security trace | `d365fo security coverage <Object> --type <Kind>` |
+| Security trace | `d365fo security <Name>` (role, duty, privilege or object coverage), or `d365fo security coverage <Object> --type <Kind>` |
 
 ## 🧱 Scaffolding commands
 

@@ -60,6 +60,29 @@ public sealed record D365FoSettings(
     public static string GetDefaultConfigPath() => Path.Combine(GetConfigRoot(), ConfigFileName);
 
     /// <summary>
+    /// Roots a model folder is looked up under, custom-model roots first.
+    /// </summary>
+    /// <remarks>
+    /// Custom roots come first because that is where a custom model's source lives. On a
+    /// unified developer environment the model store (<c>D365FO_CUSTOM_PACKAGES_PATH</c>) and
+    /// the standard <c>PackagesLocalDirectory</c> are different directories, and only the first
+    /// holds the files Visual Studio and git see.
+    /// </remarks>
+    public IReadOnlyList<string> ModelRoots =>
+        CustomPackagesPaths
+            .Concat(string.IsNullOrWhiteSpace(PackagesPath) ? [] : [PackagesPath!])
+            .Where(r => !string.IsNullOrWhiteSpace(r))
+            .ToList();
+
+    /// <summary>
+    /// Directories a write may land under: the standard packages root, the workspace and every
+    /// custom-model root. The one list every write path hands to
+    /// <see cref="Guardrails.PathGuard.EnsureWithinBoundary"/>.
+    /// </summary>
+    public string?[] WriteRoots =>
+        new[] { PackagesPath, WorkspacePath }.Concat(CustomPackagesPaths).ToArray();
+
+    /// <summary>
     /// settings.json and profile-file contents, loaded once per process and
     /// cached. Invalidated by the save methods. Protected by <see cref="_cacheLock"/>.
     /// </summary>

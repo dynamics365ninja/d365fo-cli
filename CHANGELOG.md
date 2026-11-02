@@ -52,6 +52,74 @@ already exact and fast.
   same.
 - **The answer says how it matched**: `match: "object"`, `"anywhere"` or `"exact"`.
 
+### Fixed — `generate` writes multi-object scaffolds into the right folders of a separate model store
+
+Seen on a unified developer environment, whose model store is not `PackagesLocalDirectory`. Three
+calls of `generate workflow` needed three manual steps.
+
+- **`--install-to` finds a model under `D365FO_CUSTOM_PACKAGES_PATH`.** The model folder came from
+  the metadata bridge alone, and its provider only knows `D365FO_PACKAGES_PATH`, so every install
+  into a custom model failed `INSTALL_FAILED` until the standard packages path was pointed at the
+  model store by hand. The lookup is now one shared resolver (custom roots on disk, then the
+  bridge, then the standard root on disk), the same one `index sync` and `verify project` use, and
+  the refusal names the roots it searched.
+- **Each object goes to its own `Ax*` folder when `--out` is inside a model.** Multi-object
+  commands put every companion next to the first file, so `generate workflow --out
+  …\AxWorkflowTemplate\X.xml` left the document class, the query, the approval and the CoC class
+  in `AxWorkflowTemplate\`, where neither Visual Studio nor the compiler looks. The same bug was
+  in `custom-service`, `number-sequence`, `report` and the entity staging table. An `--out` in a
+  plain staging directory still keeps everything together.
+- **New `--project <rnrproj>` on every `generate` command** lists each written object in that
+  Visual Studio project, in the `<Content>` shape Visual Studio writes, and journals the entry so
+  `undo` removes it. The automatic registration only looks next to the model folder, which a repo
+  with `Projects\` and `Metadata\` side by side never matches. The project file is edited as text,
+  so the rest of it stays byte-for-byte as it was.
+- **A write refused by the path guard says which setting admits the root**
+  (`D365FO_CUSTOM_PACKAGES_PATH` or `D365FO_WORKSPACE_PATH`), and the write roots are one list on
+  `D365FoSettings` instead of four copies.
+
+### Changed — leaner output where it cost tokens and told nothing
+
+Measured on a real installation: `get table` for one 60-field custom table returned 42.7k
+characters (fields 24k, field groups 12k, relations 7k), captured `--help` carried colour
+escapes, and the default MCP server sent no instructions at all.
+
+- **`get table --brief`** (MCP `get_object_info(objectType=table, detail=brief)`) returns the
+  table's properties, each field's name, type and EDT, index names with their fields, and the
+  relations the table declares with their related table, plus `methodCount`. The default
+  output is unchanged. `--brief` with `--include` or `--merged`, and `detail=brief` for another
+  object type or with a slice flag, are refused rather than ignored.
+- **No ANSI escapes when stdout is redirected, or when `NO_COLOR` / `TERM=dumb` is set.**
+  Spectre picks ANSI support from the terminal type, so under Git Bash `d365fo search --help >
+  help.txt` wrote escapes into the file. An interactive terminal is unchanged.
+- **The SDK stdio MCP server sends `instructions`** in `initialize`: about 980 characters of
+  routing guidance (which tool first, prepare then generate then validate, `get_knowledge` for
+  the rules), restated from the `d365fo-cli` skill's tool mapping. Clients without the skill,
+  such as Claude Desktop, had 32 tool schemas and no word on which to use. `--legacy` and
+  `--http` keep sending the full rule canon.
+
+### Changed — the argument shapes agents try first now work
+
+Measured over a month of agent sessions on a real installation: 16 of 46 `d365fo` invocations
+were `--help` lookups, most after one of these three shapes failed with a usage error.
+
+- **`d365fo search <QUERY>` runs `search any <QUERY>`.** It failed with "Unknown command
+  '<QUERY>'". The rewrite happens only when the word after `search` is not an option and not a
+  sub-command, so every strict form parses exactly as before and `search class X` is still
+  `search class`. (Spectre cannot do this with a branch default command: it only runs one when
+  nothing follows the branch.)
+- **`d365fo security <NAME>` runs the new `security any <NAME>`** (MCP `security_info(mode=any)`).
+  It returns the role, duty or privilege of that name, in that order, and otherwise the coverage
+  of the object it names under every entry-point type, menu item and table that secures it, so a
+  caller no longer has to know the literal entry-point type `security coverage --type` wants.
+  `resolvedAs` says which, `alsoMatched` lists the other kinds. A name nothing knows fails
+  `SECURITY_NOT_FOUND` rather than answering an empty coverage that reads as "nobody has access".
+- **`validate references` and `validate xpp` accept `--file <PATH>`** as well as the positional
+  `FILE`. The agent prompt and four skill topics already documented `--file`, which neither
+  command accepted. Two different paths are refused with `BAD_INPUT`.
+- An unknown sub-command (`d365fo get ContosoDealTable`) now says that the branch takes a
+  sub-command before the name and points at `d365fo get --help`, instead of the generic hint.
+
 ### Added — writes re-index the model they touched
 
 No write refreshed the index. An agent created a table, then `generate entity --table` answered
