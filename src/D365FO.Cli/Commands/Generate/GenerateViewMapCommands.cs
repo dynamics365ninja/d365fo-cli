@@ -223,10 +223,10 @@ public sealed class GenerateMapCommand : Command<GenerateMapCommand.Settings>
         }
 
         XDocument doc;
+        var typeResolver = GenerateInstaller.BuildEdtBaseTypeResolver();
         try
         {
-            doc = MapScaffolder.Map(settings.Name, fields, mappings, settings.Label,
-                GenerateInstaller.BuildEdtBaseTypeResolver());
+            doc = MapScaffolder.Map(settings.Name, fields, mappings, settings.Label, typeResolver.Resolve);
         }
         catch (ArgumentException ex)
         {
@@ -254,7 +254,7 @@ public sealed class GenerateMapCommand : Command<GenerateMapCommand.Settings>
                 bytes = res.Bytes,
                 backup = res.BackupPath,
                 model = settings.InstallTo,
-            });
+            }, typeResolver.Warning() is { } typeWarning ? [typeWarning] : null);
         }
         catch (Exception ex)
         {

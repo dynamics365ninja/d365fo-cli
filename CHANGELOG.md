@@ -35,6 +35,28 @@ the error against a stopped or wedged LocalDB on a UDE.
   `SqlLocalDB info`, and `SqlLocalDB stop` for an instance that stays `Stopped` while `start` fails.
 - The connect timeout is left as it is. LocalDB starts on the first connection, and on a UDE that
   took 15 s or more. A shorter timeout would turn a slow start into a failure.
+
+### Fixed — EDT base types are in the index, so generated fields get their real type (#233)
+
+Every EDT in the index had an empty `BaseType`: the extractor read it off the root element
+name, which is always the abstract `<AxEdt>`, while the type is in the `i:type` discriminator.
+Every scaffolder that types a field from the index then fell back to a name guess that defaults
+to String, so `generate table --field Amt:AmountCur` wrote an `AxTableFieldString` (NVARCHAR) for
+a Real, and `RefRecId` and `Counter` fared the same. A field's base type cannot be changed after
+creation, so the fix was delete and recreate.
+
+- **The extractor reads `i:type`** (`AxEdtReal` → `Real`, `AxEdtInt64` → `Int64`, `AxEdtEnum` →
+  `Enum` with its `EnumType`, and so on). Schema v21 clears every model's fingerprint, so the
+  next `index refresh` re-extracts everything once (13 minutes for 177 models on a UDE).
+- **`generate table`, `generate map`, table `generate extension` and `modify add-field`**, and
+  MCP `generate_object` for tables and maps, type each field from its EDT's base type, walking
+  `Extends` when the EDT row has none. A field whose type is a base enum rather than an EDT is
+  written as `AxTableFieldEnum` with `<EnumType>` and no `<ExtendedDataType>`.
+- **`generate edt --extends X`** without `--base-type` takes the concrete `AxEdt*` type of `X`.
+- **The name heuristic is the last resort and says so**: a type the index knows neither as EDT
+  nor as base enum is still guessed, with an `EDT_BASETYPE_UNRESOLVED` warning naming each guess.
+- **`get table --brief`** (and MCP `detail=brief`) reports an EDT field's base type (`Real`,
+  `Int64`, …) instead of `ExtendedDataType`.
 ### Fixed — `modify method --body` no longer deletes the method's signature (#231)
 
 `--body` is documented as "statements only — no signature/braces", but the engine wrote it as

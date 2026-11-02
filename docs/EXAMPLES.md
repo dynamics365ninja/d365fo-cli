@@ -446,7 +446,7 @@ d365fo generate edt CustCustomId --base-type String --size 20 --label "@SYS100" 
   --out c:/AOT/MyModel/AxEdt/CustCustomId.xml
 ```
 
-`--base-type` accepts `String`, `Integer`, `Real`, `Int64`, `Date`, `UtcDateTime`, `Enum`, `Guid`. `--size` applies to String EDTs. Use `--extends <BaseEdt>` to derive from an existing EDT.
+`--base-type` accepts `String`, `Integer`, `Real`, `Int64`, `Date`, `UtcDateTime`, `Enum`, `Guid`. `--size` applies to String EDTs. Use `--extends <BaseEdt>` to derive from an existing EDT. With `--extends` alone, the parent's indexed base type picks the concrete `AxEdt*` type (`--extends AmountCur` gives `AxEdtReal`).
 
 ### Enum — extensible status enum
 

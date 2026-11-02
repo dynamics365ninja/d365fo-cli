@@ -43,16 +43,30 @@ public sealed class GenerateEdtCommand : Command<GenerateEdtCommand.Settings>
         if (string.IsNullOrWhiteSpace(settings.Name))
             return RenderHelpers.Render(kind, ToolResult<object>.Fail(D365FoErrorCodes.BadInput, "EDT name required."));
 
+        // With only --extends, the parent's indexed base type decides the concrete AxEdt* type
+        // (issue #233) — `--extends AmountCur` is a Real EDT, whatever its name suggests. The
+        // name heuristic stays the last resort for a parent the index cannot type, and says so.
+        var effectiveBaseType = settings.BaseType;
+        var warnings = new List<string>();
+        if (string.IsNullOrWhiteSpace(effectiveBaseType) && !string.IsNullOrWhiteSpace(settings.Extends))
+        {
+            effectiveBaseType = ResolveBaseTypeOfExtends(settings.Extends!);
+            if (effectiveBaseType is null)
+                warnings.Add(
+                    $"{FieldTypeResolver.UnresolvedCode}: the index has no base type for '{settings.Extends}', so the EDT's " +
+                    "type was guessed from the name. Pass --base-type, or run `d365fo index refresh` if the index predates schema v21.");
+        }
+
         var effectiveEnumType = settings.EnumType;
         if (string.IsNullOrWhiteSpace(effectiveEnumType) &&
-            string.Equals(settings.BaseType, "Enum", StringComparison.OrdinalIgnoreCase) &&
+            string.Equals(effectiveBaseType, "Enum", StringComparison.OrdinalIgnoreCase) &&
             !string.IsNullOrWhiteSpace(settings.Extends))
         {
             // EnumType derivation from --extends is not always identity (e.g. AccessToSensitiveData -> NoYes).
             effectiveEnumType = ResolveEnumTypeFromExtendsChain(settings.Extends!);
         }
 
-        var doc = XppScaffolder.Edt(settings.Name, settings.Extends, settings.BaseType, settings.Size, settings.Label, effectiveEnumType);
+        var doc = XppScaffolder.Edt(settings.Name, settings.Extends, effectiveBaseType, settings.Size, settings.Label, effectiveEnumType);
 
         // An EDT that extends an EDT the index has never heard of, or is backed by a
         // non-existent enum, is exactly the hallucination the gate exists to catch.
@@ -70,7 +84,7 @@ public sealed class GenerateEdtCommand : Command<GenerateEdtCommand.Settings>
                 kind       = "AxEdt",
                 name       = settings.Name,
                 extends    = settings.Extends,
-                baseType   = settings.BaseType,
+                baseType   = effectiveBaseType,
                 enumType   = effectiveEnumType,
                 stringSize = settings.Size,
                 label      = settings.Label,
@@ -81,7 +95,13 @@ public sealed class GenerateEdtCommand : Command<GenerateEdtCommand.Settings>
                 model      = settings.InstallTo,
                 grounding  = gate.Grounding,
             },
-            gate.Warnings);
+            [.. warnings, .. gate.Warnings]);
+    }
+
+    private static string? ResolveBaseTypeOfExtends(string extendsName)
+    {
+        try { return RepoFactory.Create().GetEdtBaseType(extendsName); }
+        catch { return null; }
     }
 
     private static string? ResolveEnumTypeFromExtendsChain(string extendsName)

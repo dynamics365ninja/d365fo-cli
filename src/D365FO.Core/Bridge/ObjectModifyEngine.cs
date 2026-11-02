@@ -372,7 +372,7 @@ public static class ObjectModifyEngine
             if (stepValidation is not null)
                 return BatchFailure(stepValidation, i, operations.Count, applied);
 
-            var (stepApplied, editFailure) = ApplyOperation(doc!, step, kind, target!, repo);
+            var (stepApplied, editFailure) = ApplyOperation(doc!, step, kind, target!, repo, warnings);
             if (editFailure is not null)
                 return BatchFailure(editFailure, i, operations.Count, applied);
 
@@ -861,11 +861,12 @@ public static class ObjectModifyEngine
     // ------------------------------------------------------------------ edit leg
 
     private static (object? Applied, ToolResult<object>? Failure) ApplyOperation(
-        XDocument doc, ModifyRequest request, string kind, WriteTarget target, MetadataRepository? repo)
+        XDocument doc, ModifyRequest request, string kind, WriteTarget target, MetadataRepository? repo,
+        List<string> warnings)
         => request.Operation switch
         {
             Operation.SetProperty => SetProperty(doc, request),
-            Operation.AddField => AddField(doc, request, repo),
+            Operation.AddField => AddField(doc, request, repo, warnings),
             Operation.AddEnumValue => AddEnumValue(doc, request),
             Operation.AddControl => AddControl(doc, request),
             Operation.AddIndex => AddIndex(doc, request, target, repo),
@@ -1411,7 +1412,8 @@ public static class ObjectModifyEngine
         return (new { property = request.Member, oldValue, newValue = request.Value }, null);
     }
 
-    private static (object?, ToolResult<object>?) AddField(XDocument doc, ModifyRequest request, MetadataRepository? repo)
+    private static (object?, ToolResult<object>?) AddField(
+        XDocument doc, ModifyRequest request, MetadataRepository? repo, List<string> warnings)
     {
         var root = doc.Root!;
         var ns = root.Name.Namespace;
@@ -1436,15 +1438,19 @@ public static class ObjectModifyEngine
         // The concrete i:type discriminator is mandatory — a plain <AxTableField> makes
         // the metadata reader throw on an abstract type (issue #91). Resolve it from the
         // EDT's indexed base type, exactly as `generate table` does.
-        var resolver = BuildEdtResolver(repo);
-        var suffix = XppScaffolder.ConcreteFieldSuffix(request.Type!, resolver);
+        // A base enum (no EDT) is typed by <EnumType>, as `generate table` writes it (issue #233).
+        var resolver = FieldTypeResolver.For(repo);
+        var suffix = XppScaffolder.ConcreteFieldSuffix(request.Type!, resolver.Resolve);
+        var isBaseEnum = XppScaffolder.IsBaseEnum(request.Type!, resolver.Resolve);
+        if (resolver.Warning() is { } typeWarning) warnings.Add(typeWarning);
 
         var field = new XElement(ns + "AxTableField",
             new XAttribute(xsi + "type", $"AxTableField{suffix}"),
             new XElement(ns + "Name", request.Member),
-            new XElement(ns + "ExtendedDataType", request.Type!));
+            isBaseEnum ? null : new XElement(ns + "ExtendedDataType", request.Type!));
         if (!string.IsNullOrWhiteSpace(request.Label)) field.Add(new XElement(ns + "Label", request.Label));
         if (request.Mandatory) field.Add(new XElement(ns + "Mandatory", "Yes"));
+        if (isBaseEnum) field.Add(new XElement(ns + "EnumType", request.Type!));
         if (request.NoEdit) field.Add(new XElement(ns + "AllowEdit", "No"));
         if (request.NoEditOnCreate) field.Add(new XElement(ns + "AllowEditOnCreate", "No"));
 
@@ -1456,7 +1462,8 @@ public static class ObjectModifyEngine
         return (new
         {
             field = request.Member,
-            edt = request.Type,
+            edt = isBaseEnum ? null : request.Type,
+            enumType = isBaseEnum ? request.Type : null,
             axType = $"AxTableField{suffix}",
             mandatory = request.Mandatory,
             allowEdit = request.NoEdit ? "No" : null,
@@ -1692,17 +1699,6 @@ public static class ObjectModifyEngine
             };
         }
         catch { return null; }
-    }
-
-    private static Func<string, string?>? BuildEdtResolver(MetadataRepository? repo)
-    {
-        if (repo is null) return null;
-        return edt =>
-        {
-            if (string.IsNullOrWhiteSpace(edt)) return null;
-            try { return repo.GetEdt(edt)?.BaseType; }
-            catch { return null; }
-        };
     }
 
     private static string? LocalValue(XElement parent, string localName)

@@ -23,36 +23,70 @@ public static class TableBrief
     public const string Detail = "brief";
 
     /// <summary>Brief shape from the index.</summary>
-    public static object FromIndex(TableDetails details) => new
+    /// <param name="details">The indexed table.</param>
+    /// <param name="edtBaseType">
+    /// EDT → primitive base type (<see cref="MetadataRepository.GetEdtBaseType"/>). The index
+    /// records an EDT-typed field's kind (<c>ExtendedDataType</c>), not its type; with this the
+    /// brief reports <c>Real</c>, <c>Int64</c>, … instead (issue #233). Without it, or when the
+    /// EDT has no indexed base type, the recorded kind is reported as before.
+    /// </param>
+    public static object FromIndex(TableDetails details, Func<string, string?>? edtBaseType = null)
     {
-        detail = Detail,
-        table = details.Table,
-        fields = details.Fields.Select(f => new { name = f.Name, type = f.Type, edt = f.EdtName }).ToList(),
-        indexes = details.Indexes.Select(i => new
+        var typeOf = FieldTypes(edtBaseType);
+        return new
         {
-            name = i.Name,
-            fields = SplitCsv(i.FieldsCsv),
-            unique = i.AllowDuplicates ? (bool?)null : true,
-        }).ToList(),
-        // The index also records relations other tables declare TO this one; the brief is the
-        // table's own shape, so only the relations it declares.
-        relations = details.Relations
-            .Where(r => string.Equals(r.FromTable, details.Table.Name, StringComparison.OrdinalIgnoreCase))
-            .Select(r => new { name = r.RelationName, relatedTable = r.ToTable })
-            .ToList(),
-        methodCount = details.Methods.Count,
-    };
+            detail = Detail,
+            table = details.Table,
+            fields = details.Fields.Select(f => new { name = f.Name, type = typeOf(f), edt = f.EdtName }).ToList(),
+            indexes = details.Indexes.Select(i => new
+            {
+                name = i.Name,
+                fields = SplitCsv(i.FieldsCsv),
+                unique = i.AllowDuplicates ? (bool?)null : true,
+            }).ToList(),
+            // The index also records relations other tables declare TO this one; the brief is the
+            // table's own shape, so only the relations it declares.
+            relations = details.Relations
+                .Where(r => string.Equals(r.FromTable, details.Table.Name, StringComparison.OrdinalIgnoreCase))
+                .Select(r => new { name = r.RelationName, relatedTable = r.ToTable })
+                .ToList(),
+            methodCount = details.Methods.Count,
+        };
+    }
+
+    /// <summary>
+    /// A field's type for the brief: the base type of its EDT when it is known, else what the
+    /// index recorded. Memoised per EDT, since a table's fields share a handful of them.
+    /// </summary>
+    private static Func<TableFieldInfo, string?> FieldTypes(Func<string, string?>? edtBaseType)
+    {
+        var cache = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
+        return f =>
+        {
+            if (edtBaseType is null || string.IsNullOrWhiteSpace(f.EdtName)) return f.Type;
+            if (!cache.TryGetValue(f.EdtName, out var baseType))
+            {
+                try { baseType = edtBaseType(f.EdtName); }
+                catch { baseType = null; }
+                cache[f.EdtName] = baseType;
+            }
+            return string.IsNullOrWhiteSpace(baseType) ? f.Type : baseType;
+        };
+    }
 
     /// <summary>
     /// Brief shape from the bridge payload (the serialised AxTable, PascalCase members).
     /// <paramref name="indexed"/> supplies each field's type, which the payload does not carry
     /// (it is the concrete <c>AxTableField*</c> subclass); without it only enum fields are typed.
+    /// <paramref name="edtBaseType"/> turns an indexed EDT field's type into its base type, as in
+    /// <see cref="FromIndex"/>.
     /// </summary>
-    public static JsonObject FromBridge(JsonObject payload, TableDetails? indexed)
+    public static JsonObject FromBridge(JsonObject payload, TableDetails? indexed, Func<string, string?>? edtBaseType = null)
     {
+        var typeOf = FieldTypes(edtBaseType);
         var types = indexed?.Fields
             .GroupBy(f => f.Name, StringComparer.OrdinalIgnoreCase)
-            .ToDictionary(g => g.Key, g => g.First().Type, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(g => g.Key, g => typeOf(g.First()), StringComparer.OrdinalIgnoreCase)
             ?? new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
 
         var properties = new JsonObject();
