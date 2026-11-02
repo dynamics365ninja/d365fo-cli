@@ -44,8 +44,8 @@ public sealed class XrefLiveSqlTests : IDisposable
 
     public void Dispose()
     {
-        Environment.SetEnvironmentVariable("D365FO_XREF_CONNECTIONSTRING", _oldXref);
         if (_database is null) return;
+        Environment.SetEnvironmentVariable("D365FO_XREF_CONNECTIONSTRING", _oldXref);
         SqlConnection.ClearAllPools();
         Execute(Server!, $"ALTER DATABASE [{_database}] SET SINGLE_USER WITH ROLLBACK IMMEDIATE; DROP DATABASE [{_database}]");
     }
@@ -119,7 +119,7 @@ public sealed class XrefLiveSqlTests : IDisposable
     private static List<string> Sources(JsonObject data) =>
         data["items"]!.AsArray().Select(i => (string)i!["source"]!).ToList();
 
-    [Fact]
+    [SqlServerFact]
     public void A_bare_name_returns_one_row_per_referencing_object_and_no_prefix_matches()
     {
         if (_database is null) return;
@@ -140,7 +140,7 @@ public sealed class XrefLiveSqlTests : IDisposable
         Assert.Equal(304 + 3, (int)data["references"]!);
     }
 
-    [Fact]
+    [SqlServerFact]
     public void A_kind_filter_finds_calls_that_sort_after_the_row_limit()
     {
         if (_database is null) return;
@@ -159,7 +159,7 @@ public sealed class XrefLiveSqlTests : IDisposable
         Assert.False((bool)data["truncated"]!);
     }
 
-    [Fact]
+    [SqlServerFact]
     public void A_qualified_member_is_scoped_to_its_owner()
     {
         if (_database is null) return;
@@ -171,7 +171,7 @@ public sealed class XrefLiveSqlTests : IDisposable
         Assert.Equal(3, (int)data["items"]![0]!["refs"]!);
     }
 
-    [Fact]
+    [SqlServerFact]
     public void An_explicit_field_path_returns_its_readers()
     {
         if (_database is null) return;
@@ -181,7 +181,7 @@ public sealed class XrefLiveSqlTests : IDisposable
         Assert.Equal(new[] { "/Classes/Bulk", "/Classes/SalesLineType" }, Sources(data));
     }
 
-    [Fact]
+    [SqlServerFact]
     public void A_label_returns_its_where_used()
     {
         if (_database is null) return;
@@ -193,7 +193,7 @@ public sealed class XrefLiveSqlTests : IDisposable
         Assert.Equal(new[] { "validateWrite" }, only["members"]!.AsArray().Select(m => (string)m!));
     }
 
-    [Fact]
+    [SqlServerFact]
     public void The_object_limit_reads_enough_rows_to_fill_it()
     {
         if (_database is null) return;
@@ -205,7 +205,7 @@ public sealed class XrefLiveSqlTests : IDisposable
         Assert.True((bool)data["truncated"]!);
     }
 
-    [Fact]
+    [SqlServerFact]
     public void A_missing_database_fails_with_the_servers_reason()
     {
         if (_database is null) return;
@@ -218,5 +218,18 @@ public sealed class XrefLiveSqlTests : IDisposable
         Assert.False(r.Ok);
         Assert.Equal(D365FoErrorCodes.XrefUnavailable, r.Error!.Code);
         Assert.Contains("Cannot open database", r.Error.Message);
+    }
+}
+
+/// <summary>
+/// A fact that runs only when <c>D365FO_TEST_SQLSERVER</c> is set, and reports as skipped
+/// otherwise — not as a pass that never touched SQL Server.
+/// </summary>
+internal sealed class SqlServerFactAttribute : FactAttribute
+{
+    public SqlServerFactAttribute()
+    {
+        if (string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("D365FO_TEST_SQLSERVER")))
+            Skip = "Set D365FO_TEST_SQLSERVER to a SQL Server connection string to run (see docs/TESTING.md).";
     }
 }

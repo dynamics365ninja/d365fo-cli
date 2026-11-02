@@ -49,7 +49,9 @@ behind the most setup.
   in the `WHERE` clause.
 - **Fixed — a bare name pooled its prefixes.** The XRef match for `SalesLine` included
   `%/SalesLine%`, so `SalesLineType`, `SalesLine_IN` and every other object whose name merely
-  starts with the symbol counted as callers. It now matches the name as a whole path node.
+  starts with the symbol counted as callers. It now matches the name as a whole path node, and
+  `LIKE` wildcards in the name (`_`, `%`, `[`) match literally — `SalesLine_IN` no longer
+  matches `SalesLineXIN`.
 - **Fixed — an unknown text-scan `--kind` matched nothing.** `--kind clas` passed through and
   returned an empty answer; it is now `BAD_INPUT`.
 - **Globalization is no longer invariant.** `Microsoft.Data.SqlClient` refuses to connect in

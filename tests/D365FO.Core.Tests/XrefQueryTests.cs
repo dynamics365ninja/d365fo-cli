@@ -72,6 +72,17 @@ public class XrefQueryTests
         Assert.False(p.Scoped);
     }
 
+    [Fact]
+    public void Like_wildcards_in_a_name_match_literally()
+    {
+        // "_" is LIKE's any-one-character: "%/SalesLine_IN" also matched "/Tables/SalesLineXIN".
+        var p = XrefQuery.ResolveTargetPaths("SalesLine_IN");
+
+        Assert.Equal(new[] { "/SalesLine_IN" }, p.Exact);
+        Assert.Equal(new[] { "/SalesLine[_]IN/%", "%/SalesLine[_]IN", "%/SalesLine[_]IN/%" }, p.Like);
+        Assert.Equal(new[] { "/Tables/A[[]1[%]/%" }, XrefQuery.ResolveTargetPaths("/Tables/A[1%").Like);
+    }
+
     // ---- the SQL ----
 
     [Fact]

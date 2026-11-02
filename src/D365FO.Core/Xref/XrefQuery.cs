@@ -121,7 +121,7 @@ namespace D365FO.Core.Xref
             {
                 exact.Add("/" + trimmed);
                 var scoped = symbol.Contains("/Methods/") || symbol.Contains("/Fields/");
-                if (!scoped) like.Add("/" + trimmed + "/%");
+                if (!scoped) like.Add("/" + EscapeLike(trimmed) + "/%");
                 return new TargetPaths(exact, like, scoped);
             }
 
@@ -140,9 +140,10 @@ namespace D365FO.Core.Xref
 
             // Bare name — exact AOT root plus its children, and the name as a whole node anywhere.
             exact.Add("/" + trimmed);
-            like.Add("/" + trimmed + "/%");
-            like.Add("%/" + trimmed);
-            like.Add("%/" + trimmed + "/%");
+            var pattern = EscapeLike(trimmed);
+            like.Add("/" + pattern + "/%");
+            like.Add("%/" + pattern);
+            like.Add("%/" + pattern + "/%");
             return new TargetPaths(exact, like, false);
         }
 
@@ -334,6 +335,13 @@ ORDER BY srcName.Path";
         }
 
         private static string NullIfEmpty(string s) => string.IsNullOrWhiteSpace(s) ? null : s;
+
+        /// <summary>
+        /// Escape the T-SQL <c>LIKE</c> wildcards in a name, so it matches literally. X++ names are
+        /// full of <c>_</c> (<c>SalesLine_IN</c>), which <c>LIKE</c> reads as "any one character".
+        /// </summary>
+        internal static string EscapeLike(string s) =>
+            s.Replace("[", "[[]").Replace("%", "[%]").Replace("_", "[_]");
 
         private static void AddParameter(DbCommand cmd, string name, object value)
         {
