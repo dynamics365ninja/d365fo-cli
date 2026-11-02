@@ -179,7 +179,8 @@ public static class ToolCatalog
         new Descriptor("get_method", ToolEffect.Read,
             "Read X++ source from the index. `objectType` (class | table | form, default class), `name`, optional `method`. " +
             "`include` = signature | source | both (default both — signature is the cheap header for CoC planning). " +
-            "Omit `method` to list every method's signature.",
+            "Omit `method` to list every method's signature. On a form, `method` also takes the owner-qualified " +
+            "member name `find_references` reports (`CustTable.init`, `CustTable.AccountNum.modified`, `OkButton.clicked`).",
             Schema(("objectType", "string", false), ("name", "string", true),
                    ("method", "string", false), ("include", "string", false)),
             (h, p) => h.ReadMethod(StrOr(p, "objectType", "class"), Str(p, "name"),

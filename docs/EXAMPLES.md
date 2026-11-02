@@ -40,7 +40,7 @@ d365fo index extract --index-source     # one-time: full-text index method bodie
 d365fo find refs CustPostInvoice        # now served from FTS
 ```
 
-The flag is remembered per model. `index refresh --model <M>` and `index sync <M>` without a flag keep the model's method bodies indexed; `--no-index-source` drops them.
+Form methods (form, data source, data source field and control) are in the index too, so a source-indexed model needs no disk scan. A form hit's `method` names the member, for example `CustTable.init` or `OkButton.clicked`. The flag is remembered per model. `index refresh --model <M>` and `index sync <M>` without a flag keep the model's method bodies indexed; `--no-index-source` drops them.
 
 #### `find form-patterns`
 

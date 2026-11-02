@@ -1140,7 +1140,7 @@ public sealed class MetadataExtractor
 
     // -------- forms --------
 
-    private static ExtractedForm? ParseForm(XDocument doc, string file)
+    private ExtractedForm? ParseForm(XDocument doc, string file)
     {
         var root = doc.Root;
         if (root is null) return null;
@@ -1186,6 +1186,10 @@ public sealed class MetadataExtractor
             PatternVersion = patternVersion,
             Style = style,
             TitleDataSource = titleDs,
+            // v15 source capture covers form methods too (Kind=Form in MethodSourceFts).
+            MethodBodies = CaptureMethodSource
+                ? FormMethodSource.Enumerate(root)
+                : Array.Empty<FormMethodSource.Member>(),
         };
     }
 

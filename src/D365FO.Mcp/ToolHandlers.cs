@@ -1715,7 +1715,7 @@ public sealed partial class ToolHandlers
             });
         }
 
-        var hit = XppSourceReader.FindMethod(src, method!);
+        var hit = XppSourceReader.FindMember(src, method!);
         if (hit is null)
             return ToolResult<object>.Fail("METHOD_NOT_FOUND",
                 $"Method '{method}' not found on {kind} '{name}'.",

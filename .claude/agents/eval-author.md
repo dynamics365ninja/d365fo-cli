@@ -30,7 +30,7 @@ You author new cases for the d365fo-cli eval catalog. Full spec in
      `--output` — `eval run` supplies those itself.
    - `requires_fixture_index: true` if the instruction extends/references an
      object from `tests/Samples/MiniAot/TestModel` (currently: `FmVehicle`
-     table, `FmVehicleService` class). Do not invent new fixture
+     table, `FmVehicleService` class, `FmVehicleList` form). Do not invent new fixture
      dependencies without checking they actually exist there.
    - `tags`, `ignore` (golden-diff path globs for legitimately variable
      nodes).

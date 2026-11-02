@@ -140,7 +140,7 @@ find usages <needle> [--kind k,k,…]  — All references by kind
 find extensions <target>              — All object extensions
 find handlers <object>                — Event subscribers
 find relations <table>                — FK relations
-find refs <needle>                    — References inside method bodies (FTS5 when `--index-source` was used, else on-demand source scan)
+find refs <needle>                    — References inside method bodies of classes, tables and forms (FTS5 when `--index-source` was used, else on-demand source scan). A form hit names its member: `init`, `CustTable.init`, `CustTable.AccountNum.modified`, `OkButton.clicked`
 find refs --xref                      — Path/line/kind via DYNAMICSXREFDB
 find form-patterns [--pattern P]      — Form pattern histogram / filter
 find batch-jobs [--model M]           — RunBaseBatch subclasses

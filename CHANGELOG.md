@@ -19,6 +19,22 @@ was ported from.
 
 ## [Unreleased]
 
+### Added — form methods in the method-body index
+
+- **`index extract|refresh|sync --index-source` now indexes form method bodies** (Kind `Form` in
+  `MethodSourceFts`): the form's own methods, its data sources', their fields' and its
+  controls'. Only class and table bodies went in before, so every `find refs` call opened every
+  form file of the searched models from disk — all 9,556 forms on a full UDE — even with the
+  index built. Forms of a source-indexed model are now answered from the index. A model indexed
+  by an older build keeps its forms on the disk scan until its next re-extract
+  (`Models.SourceIndexed` is a level: 1 classes and tables, 2 with forms).
+- **A form hit names the member that owns the method,** on the index and the disk path alike:
+  `init` (form), `CustTable.init` (data source), `CustTable.AccountNum.modified` (data source
+  field), `OkButton.clicked` (control). The bare name sent the reader to whichever `init` came
+  first, and sample lines were read from it. Form-level methods keep their bare name.
+  `read form <Form> --method CustTable.init` and MCP `get_method(objectType=form, method=…)`
+  accept the qualified name, so a hit can be read back by the name it was reported under.
+
 ### Fixed — the post-write refresh no longer drops a model from the method-body index
 
 - **`index refresh --model X` and `index sync X` keep X's method bodies in `MethodSourceFts`.**

@@ -67,13 +67,19 @@ public sealed record SourceRefResult(
 /// surfaces stay in parity.
 ///
 /// When the opt-in <c>MethodSourceFts</c> index is populated
-/// (<c>index extract --index-source</c>) the bulk of the work — class and table
-/// methods — is answered by a single FTS5 <c>MATCH</c> instead of opening every
-/// source XML on disk. Form method bodies are not extracted into the index, so
-/// forms are always covered by an on-demand disk scan of just the form subset.
-/// With no FTS index the whole corpus falls back to a disk scan, preserving the
-/// previous behaviour.
+/// (<c>index extract --index-source</c>) class, table and form methods are
+/// answered by a single FTS5 <c>MATCH</c> instead of opening every source XML on
+/// disk. Forms of a model indexed before form bodies joined the index
+/// (<see cref="SourceIndexLevel.ClassesAndTables"/>) are still scanned from disk,
+/// and only those. With no FTS index the whole corpus falls back to a disk scan,
+/// preserving the previous behaviour.
 /// </summary>
+/// <remarks>
+/// A form hit's <see cref="SourceRefHit.Method"/> names the member the method belongs to
+/// (<see cref="FormMethodSource"/>): <c>init</c> on the form, <c>CustTable.init</c> on a data
+/// source, <c>CustTable.AccountNum.modified</c> on a field, <c>OkButton.clicked</c> on a
+/// control — the same on the FTS and the disk path.
+/// </remarks>
 public static class MethodSourceSearch
 {
     public static SourceRefResult Find(
@@ -92,10 +98,10 @@ public static class MethodSourceSearch
 
         if (repo.CountMethodSource() > 0)
         {
-            // Class + Table methods: answered from the FTS index.
-            if (normKind is null or "Class" or "Table")
+            // Class, Table and Form methods: answered from the FTS index.
+            if (normKind is null or "Class" or "Table" or "Form")
             {
-                var ftsKind = normKind is "Class" or "Table" ? normKind : null;
+                var ftsKind = normKind;
                 // Quote the needle so identifiers with FTS-special characters can't
                 // break MATCH syntax; unicode61 tokenization makes this an
                 // identifier-token match, close to the \bword\b disk scan.
@@ -105,14 +111,18 @@ public static class MethodSourceSearch
                     if (hits.Count >= limit) { truncated = true; break; }
                     hits.Add(new SourceRefHit(
                         mm.Kind, mm.ObjectName, mm.Model, mm.MethodName, mm.SourcePath,
-                        SampleLines(mm.SourcePath, mm.MethodName, rx, sampleLinesPerHit)));
+                        SampleLines(mm.Kind, mm.SourcePath, mm.MethodName, rx, sampleLinesPerHit)));
                 }
             }
 
-            // Forms are not in the FTS index — scan just the (small) form subset.
+            // Forms of models whose index predates form bodies: scan just those from disk.
             if (normKind is null or "Form")
-                ScanSources(repo.EnumerateSourcePaths(model).Where(s => s.Kind == "Form"),
+            {
+                var levels = repo.GetSourceIndexLevels();
+                ScanSources(repo.EnumerateSourcePaths(model).Where(s => s.Kind == "Form"
+                                && levels.GetValueOrDefault(s.Model) < SourceIndexLevel.WithForms),
                             rx, limit, sampleLinesPerHit, hits, ref scanned, ref truncated);
+            }
 
             return SourceRefResult.Finish(needle, "fts", scanned, truncated, hits, repo.CountMethodSource());
         }
@@ -134,9 +144,9 @@ public static class MethodSourceSearch
         {
             if (hits.Count >= limit) { truncated = true; break; }
             scanned++;
-            var src = XppSourceReader.Read(row.SourcePath);
+            var src = ReadMethods(row.Kind, row.SourcePath);
             if (src is null) continue;
-            foreach (var m in src.Methods)
+            foreach (var m in src)
             {
                 if (!rx.IsMatch(m.Body)) continue;
                 if (hits.Count >= limit) { truncated = true; break; }
@@ -147,12 +157,35 @@ public static class MethodSourceSearch
         }
     }
 
-    private static IReadOnlyList<SourceRefMatchLine> SampleLines(string? path, string method, Regex rx, int max)
+    private static IReadOnlyList<SourceRefMatchLine> SampleLines(string kind, string? path, string method, Regex rx, int max)
     {
         if (string.IsNullOrEmpty(path) || max <= 0) return Array.Empty<SourceRefMatchLine>();
+        var body = ReadMethodBody(kind, path, method);
+        return body is null ? Array.Empty<SourceRefMatchLine>() : SampleLinesFromBody(body, rx, max);
+    }
+
+    /// <summary>
+    /// The body of the method a hit names, read from its source file — a form member by its
+    /// qualified name (<see cref="FormMethodSource"/>), a class or table method by its own.
+    /// </summary>
+    public static string? ReadMethodBody(SourceRefHit hit) => ReadMethodBody(hit.Kind, hit.Path, hit.Method);
+
+    /// <summary>The method's own name, without the form member that owns it (<c>CustTable.init</c> → <c>init</c>).</summary>
+    public static string MethodNameOf(SourceRefHit hit) =>
+        hit.Kind == "Form" && hit.Method.LastIndexOf('.') is var dot and >= 0 ? hit.Method[(dot + 1)..] : hit.Method;
+
+    private static string? ReadMethodBody(string kind, string? path, string method)
+    {
+        if (string.IsNullOrEmpty(path)) return null;
+        if (kind == "Form") return FormMethodSource.FindBody(path, method);
         var src = XppSourceReader.Read(path);
-        var block = src is null ? null : XppSourceReader.FindMethod(src, method);
-        return block is null ? Array.Empty<SourceRefMatchLine>() : SampleLinesFromBody(block.Body, rx, max);
+        return src is null ? null : XppSourceReader.FindMethod(src, method)?.Body;
+    }
+
+    private static IEnumerable<(string Name, string Body)>? ReadMethods(string kind, string path)
+    {
+        if (kind == "Form") return FormMethodSource.Read(path)?.Select(m => (m.Name, m.Body));
+        return XppSourceReader.Read(path)?.Methods.Select(m => (m.Name, m.Body));
     }
 
     private static IReadOnlyList<SourceRefMatchLine> SampleLinesFromBody(string body, Regex rx, int max)

@@ -230,6 +230,130 @@ public class MethodSourceFtsTests : IDisposable
         Assert.Equal("run", hit.Method);
     }
 
+    // ─── Form methods (form, data source, data source field, control) ────────
+
+    private static string[] Members(IEnumerable<MethodSourceMatch> rows) =>
+        rows.Select(r => r.MethodName).OrderBy(n => n, StringComparer.Ordinal).ToArray();
+
+    [Fact]
+    public void Form_method_bodies_are_indexed_under_the_member_that_owns_them()
+    {
+        Ingest(indexSource: true);
+
+        // init exists on the form AND on its data source; the bare name would not say which.
+        Assert.Equal(new[] { "RunServiceButton.clicked", "classDeclaration", "init" },
+            Members(_repo.SearchMethodSource("\"FmVehicleService\"", kind: "Form")));
+        Assert.Equal(new[] { "FmVehicle.VIN.modified", "vehicleChanged" },
+            Members(_repo.SearchMethodSource("\"vehicleChanged\"", kind: "Form")));
+        var dsInit = Assert.Single(_repo.SearchMethodSource("\"addSortField\"", kind: "Form"));
+        Assert.Equal("FmVehicle.init", dsInit.MethodName);
+        Assert.Equal("FmVehicleList", dsInit.ObjectName);
+        Assert.Equal(SourceIndexLevel.WithForms, _repo.GetSourceIndexLevels()["TestModel"]);
+    }
+
+    [Fact]
+    public void Find_answers_form_methods_from_fts_without_scanning_form_files()
+    {
+        Ingest(indexSource: true);
+
+        var result = MethodSourceSearch.Find(_repo, "addSortField", kind: null, model: null, limit: 50);
+
+        Assert.Equal("fts", result.Via);
+        // Every form of the model is in the index, so no form file is opened to search it.
+        Assert.Equal(0, result.FilesScanned);
+        var hit = Assert.Single(result.Hits);
+        Assert.Equal("Form", hit.Kind);
+        Assert.Equal("FmVehicleList", hit.Name);
+        Assert.Equal("FmVehicle.init", hit.Method);
+        // Sample lines come from the data source's init, not the form's init of the same name.
+        Assert.Contains("addSortField", Assert.Single(hit.Matches).Text);
+    }
+
+    [Fact]
+    public void A_form_member_hit_reads_back_by_the_name_it_was_reported_under()
+    {
+        Ingest(indexSource: true);
+        var hit = Assert.Single(MethodSourceSearch.Find(_repo, "addSortField", kind: null, model: null, limit: 50).Hits);
+        var handlers = new D365FO.Mcp.ToolHandlers(_repo);
+
+        var read = handlers.ReadMethod("form", hit.Name, hit.Method, include: "source");
+
+        Assert.True(read.Ok, read.Error?.Message);
+        var json = System.Text.Json.JsonSerializer.Serialize(read.Data);
+        Assert.Contains("addSortField", json);
+        Assert.Contains("\"method\":\"FmVehicle.init\"", json);
+        Assert.True(handlers.ReadMethod("form", "FmVehicleList", "RunServiceButton.clicked", include: "source").Ok);
+        // A bare name still finds the form's own method, not the data source's.
+        Assert.DoesNotContain("addSortField",
+            System.Text.Json.JsonSerializer.Serialize(handlers.ReadMethod("form", "FmVehicleList", "init", include: "source").Data));
+        Assert.Equal("METHOD_NOT_FOUND", handlers.ReadMethod("form", "FmVehicleList", "NoSuchDs.init").Error?.Code);
+    }
+
+    [Fact]
+    public void Disk_scan_names_form_members_the_same_way_as_the_index()
+    {
+        Ingest(indexSource: true);
+        var fromIndex = MethodSourceSearch.Find(_repo, "vehicleChanged", kind: "Form", model: null, limit: 50);
+        Ingest(indexSource: false);
+        var fromDisk = MethodSourceSearch.Find(_repo, "vehicleChanged", kind: "Form", model: null, limit: 50);
+
+        Assert.Equal("fts", fromIndex.Via);
+        Assert.Equal("scan", fromDisk.Via);
+        Assert.Equal(
+            fromIndex.Hits.Select(h => h.Method).OrderBy(m => m, StringComparer.Ordinal),
+            fromDisk.Hits.Select(h => h.Method).OrderBy(m => m, StringComparer.Ordinal));
+        Assert.All(fromDisk.Hits, h => Assert.NotEmpty(h.Matches));
+    }
+
+    [Fact]
+    public void Forms_of_a_model_indexed_before_form_bodies_existed_are_still_scanned_from_disk()
+    {
+        Ingest(indexSource: true);
+        // What an index built before form bodies joined MethodSourceFts holds: class and table
+        // rows only, at level 1.
+        using (var conn = new Microsoft.Data.Sqlite.SqliteConnection(_repo.ConnectionString))
+        {
+            conn.Open();
+            using var cmd = conn.CreateCommand();
+            cmd.CommandText = "DELETE FROM MethodSourceFts WHERE Kind = 'Form'; UPDATE Models SET SourceIndexed = 1;";
+            cmd.ExecuteNonQuery();
+        }
+
+        var result = MethodSourceSearch.Find(_repo, "addSortField", kind: null, model: null, limit: 50);
+
+        Assert.Equal(1, result.FilesScanned);
+        Assert.Equal("FmVehicle.init", Assert.Single(result.Hits).Method);
+    }
+
+    [Fact]
+    public void Model_names_that_differ_only_in_case_do_not_break_the_form_scan()
+    {
+        Ingest(indexSource: true);
+        // Models.Name is case-sensitive; an index written by an older `index sync testmodel`
+        // holds both spellings.
+        using (var conn = new Microsoft.Data.Sqlite.SqliteConnection(_repo.ConnectionString))
+        {
+            conn.Open();
+            using var cmd = conn.CreateCommand();
+            cmd.CommandText = "INSERT INTO Models(Name, IsCustom, SourceIndexed) VALUES('testmodel', 0, 0);";
+            cmd.ExecuteNonQuery();
+        }
+
+        var result = MethodSourceSearch.Find(_repo, "addSortField", kind: null, model: null, limit: 50);
+
+        Assert.Equal("FmVehicle.init", Assert.Single(result.Hits).Method);
+        Assert.Equal(0, result.FilesScanned);
+    }
+
+    [Fact]
+    public void A_form_members_own_method_name_is_what_implementations_compare()
+    {
+        var hit = new SourceRefHit("Form", "FmVehicleList", "TestModel", "FmVehicle.VIN.modified", null,
+            Array.Empty<SourceRefMatchLine>());
+        Assert.Equal("modified", MethodSourceSearch.MethodNameOf(hit));
+        Assert.Equal("Cust.init", MethodSourceSearch.MethodNameOf(hit with { Kind = "Class", Method = "Cust.init" }));
+    }
+
     [Fact]
     public void Find_honours_kind_filter_on_fts_path()
     {

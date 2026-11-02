@@ -137,7 +137,7 @@ public static class CodeAnalysis
         // and only the opt-in source index knows what is inside them.
         var result = MethodSourceSearch.Find(repo, methodName, kind: null, model: model, limit: limit);
         var bodies = result.Hits
-            .Where(h => string.Equals(h.Method, methodName, StringComparison.OrdinalIgnoreCase))
+            .Where(h => string.Equals(MethodSourceSearch.MethodNameOf(h), methodName, StringComparison.OrdinalIgnoreCase))
             .ToList();
 
         var coverage = CoverageOf(repo, result);
@@ -250,12 +250,7 @@ public static class CodeAnalysis
     /// <summary>The full X++ body behind a hit, or null when the source is not reachable.</summary>
     private static string? ReadBody(SourceRefHit hit)
     {
-        if (string.IsNullOrEmpty(hit.Path)) return null;
-        try
-        {
-            var src = Extract.XppSourceReader.Read(hit.Path);
-            return src is null ? null : Extract.XppSourceReader.FindMethod(src, hit.Method)?.Body;
-        }
+        try { return MethodSourceSearch.ReadMethodBody(hit); }
         catch { return null; }
     }
 
