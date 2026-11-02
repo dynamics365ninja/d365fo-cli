@@ -165,7 +165,7 @@ public sealed class SchemaCommand : Command<SchemaCommand.Settings>
         C("search service", "Find SOAP services.", ["<QUERY>"], ["--limit", "--output"], ["search (type=service)"]),
         C("search workflow", "Find workflow types.", ["<QUERY>"], ["--limit", "--output"], ["search (type=workflow)"]),
 
-        C("get table", "Get table fields, relations, indexes, methods, and delete actions; --merged folds in every extension.", ["<NAME>"], ["--include", "--merged", "--output", "--resolve-labels"], ["get_object_info (objectType=table)", "extension_info (mode=table-merge)"]),
+        C("get table", "Get table fields, relations, indexes, methods, and delete actions; --merged folds in every extension, --brief returns a summary.", ["<NAME>"], ["--include", "--merged", "--brief", "--output", "--resolve-labels"], ["get_object_info (objectType=table)", "get_object_info (objectType=table, detail=brief)", "extension_info (mode=table-merge)"]),
         C("get edt", "Get an EDT definition.", ["<NAME>"], ["--output"], ["get_object_info (objectType=edt)"]),
         C("get class", "Get class metadata and method signatures.", ["<NAME>"], ["--output"], ["get_object_info (objectType=class)"]),
         C("get enum", "Get enum values.", ["<NAME>"], ["--output"], ["get_object_info (objectType=enum)"]),

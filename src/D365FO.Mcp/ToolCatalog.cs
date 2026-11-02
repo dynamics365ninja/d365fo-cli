@@ -168,13 +168,32 @@ public static class ToolCatalog
         new Descriptor("get_object_info", ToolEffect.Read,
             "Read one object's full metadata by `objectType`: table | class | edt | enum | form | query | view | " +
             "entity | report | service | service-group | menu-item | business-event | security-policy. For tables, set exactly one of " +
-            "`relations` | `methods` | `indexes` | `deleteActions` to return just that slice instead of the full table.",
+            "`relations` | `methods` | `indexes` | `deleteActions` to return just that slice instead of the full table, or " +
+            "`detail=brief` for a summary (properties, field name/type/EDT, index names and fields, relation names and " +
+            "related table) at a fraction of the size — read it first when you only need to know what the table holds.",
             Schema(("objectType", "string", true), ("name", "string", true),
                    ("relations", "boolean", false), ("methods", "boolean", false),
-                   ("indexes", "boolean", false), ("deleteActions", "boolean", false)),
+                   ("indexes", "boolean", false), ("deleteActions", "boolean", false),
+                   ("detail", "string", false)),
             (h, p) =>
             {
                 var name = Str(p, "name");
+                var detail = StrOr(p, "detail", "full").ToLowerInvariant();
+                if (detail != "full")
+                {
+                    if (detail != "brief")
+                        return D365FO.Core.ToolResult<object>.Fail("BAD_INPUT",
+                            $"Unknown detail '{Str(p, "detail")}'.", "Use detail=brief or detail=full (the default).");
+                    if (!string.Equals(StrOr(p, "objectType", ""), "table", StringComparison.OrdinalIgnoreCase))
+                        return D365FO.Core.ToolResult<object>.Fail("BAD_INPUT",
+                            $"detail=brief is available for objectType=table only, not '{Str(p, "objectType")}'.",
+                            "Drop detail for this objectType.");
+                    if (Bool(p, "relations") || Bool(p, "methods") || Bool(p, "indexes") || Bool(p, "deleteActions"))
+                        return D365FO.Core.ToolResult<object>.Fail("BAD_INPUT",
+                            "detail=brief is a fixed summary shape and does not combine with a slice flag.",
+                            "Drop detail=brief to read one slice, or drop the slice flag to read the summary.");
+                    return h.GetTableBrief(name);
+                }
                 return StrOr(p, "objectType", "").ToLowerInvariant() switch
                 {
                     "table" => Bool(p, "relations")     ? h.GetTableRelations(name)

@@ -107,6 +107,8 @@ get service|service-group|map|role|duty|privilege|label
 get business-event|security-policy
 ```
 
+`get table <T> --brief` returns a summary: the table's properties, each field's name, type and EDT, index names with their fields, and the relations the table declares with their related table. It is a fraction of the full answer (no field labels or property bags, no field groups, relation constraints or method signatures, just `methodCount`), so read it first and ask for parts with `--include` when you need them. It does not combine with `--include` or `--merged`. MCP: `get_object_info(objectType=table, detail=brief)`.
+
 `get table <T> --odata-metadata` emits an OData `<EntityType>` + `<EntitySet>` XML fragment for the table.
 
 ### `security`

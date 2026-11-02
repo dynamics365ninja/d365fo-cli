@@ -37,7 +37,7 @@ Every command returns the same shape:
 { "ok": false, "error": { "code": "UPPER_SNAKE", "message": "...", "hint": "..." } }
 ```
 
-JSON on non-TTY stdout, rich tables on a terminal. Override with `--output json|table|raw`. Exit codes: `0` success · `1` controlled failure · `2` unhandled exception.
+JSON on non-TTY stdout, rich tables on a terminal. Override with `--output json|table|raw`. Help and tables carry no ANSI escapes when stdout is redirected or `NO_COLOR` / `TERM=dumb` is set, so captured output is plain text. Exit codes: `0` success · `1` controlled failure · `2` unhandled exception.
 
 ## Local index (SQLite)
 

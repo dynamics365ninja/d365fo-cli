@@ -84,6 +84,7 @@ public static class McpServerHost
         return new McpServerOptions
         {
             ServerInfo = new Implementation { Name = ServerName, Version = ServerVersion },
+            ServerInstructions = ServerInstructions.Routing,
             Capabilities = new ServerCapabilities
             {
                 Tools = new ToolsCapability { ListChanged = false },

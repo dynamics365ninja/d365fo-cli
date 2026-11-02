@@ -20,6 +20,10 @@ public sealed class GetTableCommand : Command<GetTableCommand.Settings>
         [CommandOption("--merged")]
         [System.ComponentModel.Description("Return the EFFECTIVE shape: the base table with every TableExtension folded in, each member labelled with the object that contributes it. This is what the AOS sees; the plain output is the base table alone.")]
         public bool Merged { get; init; }
+
+        [CommandOption("--brief")]
+        [System.ComponentModel.Description("Summary only: properties, field name/type/EDT, index names and fields, relation names and related table. A fraction of the full answer — read it first, then ask for the parts you need. Does not combine with --include or --merged.")]
+        public bool Brief { get; init; }
     }
 
     /// <summary>The parts <c>--include</c> selects, keyed by their JSON name.</summary>
@@ -90,6 +94,38 @@ public sealed class GetTableCommand : Command<GetTableCommand.Settings>
         return omitted;
     }
 
+    /// <summary>
+    /// <c>--brief</c>: the summary shape (<see cref="D365FO.Core.Analysis.TableBrief"/>), from
+    /// the bridge when it answers, else from the index. A fixed shape, so <c>--include</c> and
+    /// <c>--merged</c> are refused rather than ignored.
+    /// </summary>
+    internal static ToolResult<object> Brief(Settings settings)
+    {
+        if (!string.IsNullOrWhiteSpace(settings.Include) || settings.Merged)
+        {
+            return ToolResult<object>.Fail(D365FoErrorCodes.BadInput,
+                "--brief is a fixed summary shape and does not combine with "
+                + (settings.Merged ? "--merged." : "--include."),
+                "Drop --brief to choose parts with --include (or fold extensions with --merged), "
+                + "or drop " + (settings.Merged ? "--merged" : "--include") + " to read the summary.");
+        }
+
+        var repo = RepoFactory.Create();
+        if (BridgeGate.ShouldTry()
+            && BridgeGate.TryReadTable(settings.Name) is System.Text.Json.Nodes.JsonObject bridged)
+        {
+            return ToolResult<object>.Success(
+                D365FO.Core.Analysis.TableBrief.FromBridge(bridged, repo.GetTableDetails(settings.Name)));
+        }
+
+        var details = repo.GetTableDetails(settings.Name);
+        return details is null
+            ? ToolResult<object>.Fail("TABLE_NOT_FOUND", $"Table '{settings.Name}' not found in index.",
+                NameSuggester.HintFor(repo, NameSuggester.Kind.Table, settings.Name)
+                ?? "Run 'd365fo index build' after extracting metadata.")
+            : ToolResult<object>.Success(D365FO.Core.Analysis.TableBrief.FromIndex(details));
+    }
+
     private static IReadOnlyList<string>? MethodsOmitted(int count) => count == 0 ? null :
         [$"{count} method(s) not shown — pass --include methods (or --include all) to list them."];
 
@@ -108,6 +144,9 @@ public sealed class GetTableCommand : Command<GetTableCommand.Settings>
     public override int Execute(CommandContext ctx, Settings settings)
     {
         var kind = OutputMode.Resolve(settings.Output);
+        if (settings.Brief)
+            return RenderHelpers.Render(kind, Brief(settings));
+
         if (!TryParseInclude(settings.Include, out var parts, out var badInclude))
             return RenderHelpers.Render(kind, badInclude!);
 

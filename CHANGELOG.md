@@ -19,6 +19,26 @@ was ported from.
 
 ## [Unreleased]
 
+### Changed — leaner output where it cost tokens and told nothing
+
+Measured on a real installation: `get table` for one 60-field custom table returned 42.7k
+characters (fields 24k, field groups 12k, relations 7k), captured `--help` carried colour
+escapes, and the default MCP server sent no instructions at all.
+
+- **`get table --brief`** (MCP `get_object_info(objectType=table, detail=brief)`) returns the
+  table's properties, each field's name, type and EDT, index names with their fields, and the
+  relations the table declares with their related table, plus `methodCount`. The default
+  output is unchanged. `--brief` with `--include` or `--merged`, and `detail=brief` for another
+  object type or with a slice flag, are refused rather than ignored.
+- **No ANSI escapes when stdout is redirected, or when `NO_COLOR` / `TERM=dumb` is set.**
+  Spectre picks ANSI support from the terminal type, so under Git Bash `d365fo search --help >
+  help.txt` wrote escapes into the file. An interactive terminal is unchanged.
+- **The SDK stdio MCP server sends `instructions`** in `initialize`: about 980 characters of
+  routing guidance (which tool first, prepare then generate then validate, `get_knowledge` for
+  the rules), restated from the `d365fo-cli` skill's tool mapping. Clients without the skill,
+  such as Claude Desktop, had 32 tool schemas and no word on which to use. `--legacy` and
+  `--http` keep sending the full rule canon.
+
 ### Changed — the argument shapes agents try first now work
 
 Measured over a month of agent sessions on a real installation: 16 of 46 `d365fo` invocations

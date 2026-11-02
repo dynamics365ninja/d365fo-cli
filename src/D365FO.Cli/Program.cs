@@ -34,7 +34,12 @@ if (noRefresh)
 // instead of failing with "Unknown command" (see ArgumentShapes).
 refreshArgs = ArgumentShapes.Normalize(refreshArgs);
 
-var app = CliApp.Build();
+// Redirected output, NO_COLOR or TERM=dumb: help and tables render without ANSI escapes.
+// Set globally too, since table renderers write through the AnsiConsole static.
+var console = ConsoleSetup.ForThisProcess();
+if (console is not null) Spectre.Console.AnsiConsole.Console = console;
+
+var app = CliApp.Build(console);
 
 using var autoRefresh = D365FO.Core.Index.IndexAutoRefresh.BeginScope(enabled: !noRefresh);
 try

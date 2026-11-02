@@ -54,6 +54,15 @@ public sealed partial class ToolHandlers
             : ToolResult<object>.Success(new { table = t.Table, fields = t.Fields, relations = t.Relations });
     }
 
+    /// <summary><c>get_object_info(objectType=table, detail=brief)</c> — see <see cref="D365FO.Core.Analysis.TableBrief"/>.</summary>
+    public ToolResult<object> GetTableBrief(string name)
+    {
+        var t = _repo.GetTableDetails(name);
+        return t is null
+            ? ToolResult<object>.Fail("TABLE_NOT_FOUND", $"Table '{name}' not found.", "Run 'd365fo index build'.")
+            : ToolResult<object>.Success(D365FO.Core.Analysis.TableBrief.FromIndex(t));
+    }
+
     public ToolResult<object> GetEdt(string name)
     {
         var resolved = _repo.GetEdtResolved(name);

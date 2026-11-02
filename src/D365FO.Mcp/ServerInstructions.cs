@@ -28,6 +28,31 @@ public static class ServerInstructions
     /// <summary>The instructions text, built once per process.</summary>
     public static string Text => TextLazy.Value;
 
+    /// <summary>
+    /// The short routing guidance the SDK stdio server (the default transport, and the one
+    /// Claude Desktop starts) sends in <c>initialize</c>. It sent none before, so a client
+    /// without the <c>d365fo-cli</c> skill got 32 tool schemas and no word on which to use
+    /// first. It restates the skill's tool mapping and the loop below in MCP tool names, and
+    /// points at <c>get_knowledge</c> for the rule canon rather than carrying it: the full
+    /// <see cref="Text"/> is ~7k characters. <c>ServerInstructionsTests</c> keeps this under
+    /// 1,500 characters and every tool it names real.
+    /// </summary>
+    public const string Routing =
+        """
+        d365fo: D365 Finance & Operations metadata index and X++ authoring.
+        Never guess a D365FO name or signature: look it up. A *_NOT_FOUND result means stop and ask.
+
+        - Find objects: `search` (type=any when the kind is unknown, a queries array for several). Never grep AOT XML.
+        - Read one object: `get_object_info` (tables: detail=brief first), several: `batch_get_info`, X++ source: `get_method`.
+        - Before a change or a new object: `prepare` returns signature, existing CoC, naming and a grounding token in one call.
+        - Write with `generate_object` / `modify_method`, passing that token; structural edits: `modify_object`. Never write AOT XML by hand.
+        - Check hand-written X++ with `validate` (mode=references, then mode=xpp) before writing it.
+        - Where-used and extensions: `find_references`, `extension_info`. Security: `security_info`.
+        - Rules and patterns: `get_knowledge` (action=search, then action=get with a section).
+
+        Build, sync, BP check and tests run only when the user asks.
+        """;
+
     private static string Build() =>
         """
         # d365fo — D365 Finance & Operations metadata and X++ authoring
