@@ -29,7 +29,8 @@ profile.
   the MCP `index_sync` hold a cross-process named mutex for the index file they write. A second
   writer waits up to 30 s, then fails `INDEX_BUSY` with nothing written, instead of meeting the
   first one's model transaction in SQLite and failing half way with "database is locked". The OS
-  releases the lock if the holder dies.
+  releases the lock if the holder dies. The lock is per user; on Linux/macOS it is not limited to
+  one shell session, so an editor-launched MCP server and a terminal share it.
 - **Every connection sets `busy_timeout`.** A short collision (a checkpoint meeting a reader, a
   journal write meeting a sync) now waits instead of failing on the first try.
 - **`wal_autocheckpoint = 0` is limited to the bulk extract writes.** It was set on every

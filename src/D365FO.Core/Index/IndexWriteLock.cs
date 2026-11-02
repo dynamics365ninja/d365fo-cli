@@ -42,16 +42,27 @@ public sealed class IndexWriteLock : IDisposable
     /// The OS name of the lock for <paramref name="databasePath"/>. Derived from the full path
     /// (case-folded on Windows, where the file system is), so two spellings of one file share a
     /// lock and two files never do. Hashed because a path is not a legal mutex name.
-    /// <c>Local\</c> scopes it to the logon session, which is where every process sharing one
-    /// user's index runs, and needs no privilege to create.
+    /// The scope comes from <see cref="Scope"/>, not a <c>Local\</c> prefix.
     /// </summary>
     public static string MutexNameFor(string databasePath)
     {
         var full = Path.GetFullPath(databasePath);
         if (OperatingSystem.IsWindows()) full = full.ToUpperInvariant();
         var hash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(full)))[..32];
-        return @"Local\d365fo-index-" + hash;
+        return "d365fo-index-" + hash;
     }
+
+    /// <summary>
+    /// Always limited to the current user. On Windows also to the logon session, where every
+    /// process sharing one user's index runs. Not on Unix: there a "session" is the shell's
+    /// (setsid) session, so a session-local mutex would not be shared between an MCP server
+    /// launched by an editor and a refresh run from a terminal — exactly the pair this lock is for.
+    /// </summary>
+    internal static NamedWaitHandleOptions Scope => new()
+    {
+        CurrentUserOnly = true,
+        CurrentSessionOnly = OperatingSystem.IsWindows(),
+    };
 
     /// <summary>
     /// Take the write lock for <paramref name="databasePath"/>, waiting up to
@@ -62,7 +73,7 @@ public sealed class IndexWriteLock : IDisposable
     /// <inheritdoc cref="TryAcquire(string)"/>
     public static IndexWriteLock? TryAcquire(string databasePath, TimeSpan timeout)
     {
-        var mutex = new Mutex(initiallyOwned: false, MutexNameFor(databasePath));
+        var mutex = new Mutex(initiallyOwned: false, MutexNameFor(databasePath), Scope);
         bool acquired;
         try
         {

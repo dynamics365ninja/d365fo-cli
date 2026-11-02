@@ -146,6 +146,16 @@ public sealed class IndexConcurrencyTests : IDisposable
     }
 
     [Fact]
+    public void Write_lock_is_user_scoped_and_not_shell_session_scoped_on_unix()
+    {
+        // On Unix a "session" is the shell's, so a session-local lock would not be shared by an
+        // editor-launched MCP server and a terminal refresh.
+        Assert.True(IndexWriteLock.Scope.CurrentUserOnly);
+        Assert.Equal(OperatingSystem.IsWindows(), IndexWriteLock.Scope.CurrentSessionOnly);
+        Assert.DoesNotContain('\\', IndexWriteLock.MutexNameFor(_dbPath));
+    }
+
+    [Fact]
     public void Write_lock_is_per_database_file()
     {
         var other = Path.Combine(Path.GetTempPath(), $"d365fo-concurrency-other-{Guid.NewGuid():N}.sqlite");

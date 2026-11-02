@@ -108,6 +108,23 @@ public sealed class ScaffoldFileWriterAtomicityTests : IDisposable
     }
 
     [Fact]
+    public void Save_in_place_that_fails_to_serialise_leaves_target_and_previous_backup_untouched()
+    {
+        var target = Path.Combine(_dir, "Unserialisable.xml");
+        File.WriteAllText(target, "<AxTable><Name>Before</Name></AxTable>");
+        File.WriteAllText(target + ".bak", "<AxTable><Name>Older</Name></AxTable>");
+
+        // U+0001 is not a legal XML character, so the writer throws while staging.
+        var bad = new XDocument(new XElement("AxTable", new XElement("Name", "\u0001")));
+
+        Assert.ThrowsAny<ArgumentException>(() => ScaffoldFileWriter.SaveInPlace(bad, target));
+
+        Assert.Equal("Before", XDocument.Load(target).Root!.Element("Name")!.Value);
+        Assert.Equal("Older", XDocument.Load(target + ".bak").Root!.Element("Name")!.Value);
+        Assert.Empty(Directory.GetFiles(_dir, "*.tmp"));
+    }
+
+    [Fact]
     public void Save_in_place_racing_one_path_never_leaves_the_target_missing_or_torn()
     {
         // The in-place editors (form methods, role --add-to) used to stage through the fixed

@@ -2433,14 +2433,6 @@ public static class ScaffoldFileWriter
     /// <returns>The <c>.bak</c> path when a prior file was kept, otherwise null.</returns>
     private static string? ReplaceAtomically(string full, Action<string> stage)
     {
-        string? backup = null;
-        if (File.Exists(full))
-        {
-            backup = full + ".bak";
-            if (File.Exists(backup)) File.Delete(backup);
-            File.Move(full, backup);
-        }
-
         // The staging name is unique per call, not the deterministic "<target>.tmp" it used to
         // be (issue #158). Two writers aiming at the same path shared that sibling: the second
         // File.Create truncated the first one's staged bytes, so whichever move landed first
@@ -2448,9 +2440,30 @@ public static class ScaffoldFileWriter
         // from a path that looks like a successful atomic write. A per-call name makes the
         // stage-then-rename genuinely private to the call, which is what "atomic" claimed.
         var tmp = full + "." + Guid.NewGuid().ToString("N") + ".tmp";
+
+        // Staged before the target is moved aside, so a failed or interrupted serialisation
+        // leaves the original untouched rather than parked under .bak.
         try
         {
             stage(tmp);
+        }
+        catch
+        {
+            try { if (File.Exists(tmp)) File.Delete(tmp); }
+            catch { /* best-effort cleanup */ }
+            throw;
+        }
+
+        string? backup = null;
+        try
+        {
+            if (File.Exists(full))
+            {
+                backup = full + ".bak";
+                if (File.Exists(backup)) File.Delete(backup);
+                File.Move(full, backup);
+            }
+
             MoveOntoTarget(tmp, full);
         }
         catch
