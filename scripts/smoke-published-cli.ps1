@@ -196,6 +196,8 @@ $cases = @(
     @('prepare', 'create', 'ConFmVehicleProbe', '--type', 'table', '--output', 'json'),
     @('prepare', 'change', 'FmVehicle', '--output', 'json'),
     @('report-integrations', '--output', 'json'),
+    @('find', 'refs', 'FmVehicle', '--output', 'json'),
+    @('find', 'refs', 'FmVehicle', '--lines', '2', '--output', 'json'),
     @('knowledge', 'list', '--output', 'json'),
     @('form-pattern', 'spec', '--output', 'json'),
     @('validate', 'name', 'table', 'ConFmVehicle', '--output', 'json')
@@ -247,6 +249,22 @@ foreach ($build in @('baseline', 'published')) {
         Write-Ok "[$build] journal list -> $count entries"
     }
 }
+
+Write-Step 'The xref query reaches SQL Server (Microsoft.Data.SqlClient survives trimming)'
+# Nothing listens on port 9, so the query must fail - with the server's own SqlException. A
+# trimmed-away SNI transport, config section or auth provider fails before that, as a type
+# load or initializer error, and would read to a user as "the database is down".
+$env:D365FO_XREF_CONNECTIONSTRING = 'Server=tcp:127.0.0.1,9;Database=DYNAMICSXREFDB;Integrated Security=true;Connect Timeout=2'
+$env:D365FO_BRIDGE_ENABLED = '0'
+foreach ($build in @('baseline', 'published')) {
+    $xref = Invoke-Cli $build @('find', 'refs', 'FmVehicle', '--xref', '--output', 'json')
+    if ($xref -notmatch '"code":\s*"XREF_UNAVAILABLE"' -or $xref -notmatch 'SqlException') {
+        Add-Failure "[$build] find refs --xref did not reach SqlClient's connect: $(Get-Excerpt $xref)"
+    } else {
+        Write-Ok "[$build] find refs --xref -> XREF_UNAVAILABLE (SqlException)"
+    }
+}
+Remove-Item Env:D365FO_XREF_CONNECTIONSTRING, Env:D365FO_BRIDGE_ENABLED -ErrorAction SilentlyContinue
 
 Write-Step 'The single-file binary runs with no sibling files (bundled native SQLite)'
 $aloneDir = Join-Path $WorkDir 'alone'

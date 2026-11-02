@@ -106,6 +106,14 @@ built before an external edit answers with full confidence about a file that no 
 and everything that reads `SourcePath` — `get method`, `find refs`, `analyze` — is reading the
 file the index remembers.
 
+When a model moves to a different clone or root, point `D365FO_CUSTOM_PACKAGES_PATH` at the new
+place and refresh. The rows read from the old place stay until you prune them:
+
+```sh
+d365fo index status --output json   # departedModels lists them, with the folder they came from
+d365fo index refresh --prune        # delete them
+```
+
 ---
 
 ## See also
