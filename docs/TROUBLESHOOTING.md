@@ -180,7 +180,7 @@ The `D365FO.Bridge` child process requires the .NET Framework 4.8 runtime, which
 warning: bridge unavailable on this platform; falling back to index
 ```
 
-This is expected behaviour — the index still serves `search`, `get`, `find`, and `generate` commands. Only `find refs --xref` (which queries `DYNAMICSXREFDB` directly) requires the bridge, and it fails with `XREF_UNAVAILABLE` and the reason rather than quietly answering from the text scan. Drop `--xref` to get the text scan on purpose — it is not compiler-resolved and can miss references made through variables and aliases.
+This is expected behaviour — the index still serves `search`, `get`, `find`, and `generate` commands. `find refs --xref` does not need the bridge: it queries `DYNAMICSXREFDB` directly (see [find refs --xref fails](#find-refs---xref-fails-with-xref_unavailable)).
 
 ---
 
@@ -299,7 +299,7 @@ d365fo-index.sqlite-shm      ← shared memory for WAL
 
 ## Bridge child process issues
 
-**Symptom:** Commands that normally use the bridge (`get table`) return stale or incomplete data, or `_source: "index"` when you expect `"bridge"`; `find refs --xref` fails with `XREF_UNAVAILABLE`.
+**Symptom:** Commands that normally use the bridge (`get table`) return stale or incomplete data, or `_source: "index"` when you expect `"bridge"`.
 
 **Checklist:**
 
@@ -324,9 +324,27 @@ declares the symbol. The compiler writes it only when a build asks (`xppc -xref`
 (MCP: `sdlc action=build xref=true`). The build takes longer with it, so it is opt-in.
 
 **A reference query timed out.** A bare name is matched as a substring of every path in the database, which
-on a database holding the whole standard application takes tens of seconds. The client allows an xref query
-60 s, above the database's own connect and command timeouts, so a slow query now ends with the database's
-error rather than an anonymous timeout. A qualified `Owner.member` is an exact match and much faster.
+on a database holding the whole standard application takes tens of seconds. The direct query allows it the
+database's own 30 s command timeout; the bridge fallback allows 60 s, above the bridge's connect and command
+timeouts, so a slow query ends with the database's error rather than an anonymous timeout. A qualified `Owner.member` is an exact match and much faster.
+
+---
+
+## `find refs --xref` fails with `XREF_UNAVAILABLE`
+
+`--xref` queries `DYNAMICSXREFDB` directly, then — when `D365FO_BRIDGE_ENABLED=1` — through the
+bridge; the error carries the reason from each. It never falls back to the text scan, which is a
+different and less complete answer: drop `--xref` to ask for that on purpose.
+
+| Reason in the message | Fix |
+|---|---|
+| `A network-related or instance-specific error` / `server was not found` | Not on the VM that hosts the database, or SQL Server is not running. Set `D365FO_XREF_CONNECTIONSTRING` to reach it. |
+| `Login failed` | The default uses integrated auth (the signed-in Windows user). Grant that user read access, or put credentials in the connection string. |
+| `Cannot open database "DYNAMICSXREFDB"` | The database has not been created: build once in Visual Studio with *Build cross reference data* enabled. |
+| `certificate chain was issued by an authority that is not trusted` | The connection string sets `Encrypt=True`/`Strict`; use `Encrypt=Optional` or add `TrustServerCertificate=True` for a local self-signed certificate. |
+
+The answer is only as fresh as the last build with cross-references enabled. Code written since
+is not in it: `index sync <model>` and the text scan see it.
 
 ---
 
@@ -381,6 +399,12 @@ The opt-in method-body index stays empty until you re-extract *with the flag*:
 ```sh
 d365fo index extract --index-source   # backfill MethodSourceFts too
 ```
+
+From schema v20 the index remembers which models were extracted with `--index-source`
+(`Models.SourceIndexed`). Upgrading an older index marks every model that already has rows in
+`MethodSourceFts`, so the first refresh after the upgrade keeps them. A refresh without the flag
+used to clear them; if `find refs` lost a model's hits that way, re-run
+`d365fo index refresh --model <Model> --force --index-source` once.
 
 ### When to use `index build` vs `index extract`
 

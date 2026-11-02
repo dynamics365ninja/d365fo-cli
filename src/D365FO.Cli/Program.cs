@@ -1,5 +1,14 @@
+using System.Globalization;
 using D365FO.Cli;
 using Spectre.Console.Cli;
+
+// Globalization is not invariant (Microsoft.Data.SqlClient refuses to connect in that mode —
+// see D365FO.Cli.csproj), so pin the culture instead: output, number formatting and parsing
+// stay identical on a cs-CZ VM and an en-US laptop, as they were under invariant mode.
+CultureInfo.DefaultThreadCurrentCulture = CultureInfo.InvariantCulture;
+CultureInfo.DefaultThreadCurrentUICulture = CultureInfo.InvariantCulture;
+CultureInfo.CurrentCulture = CultureInfo.InvariantCulture;
+CultureInfo.CurrentUICulture = CultureInfo.InvariantCulture;
 
 // Global `--profile <name>` (issue #210). Spectre.Console.Cli has no real
 // global options, so it is peeled off here before parsing. The name is also

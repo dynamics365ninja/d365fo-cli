@@ -72,11 +72,14 @@ public static class MethodModifyEngine
     public static ToolResult<object> Modify(ModifyRequest request, MetadataRepository? repo, BridgeOptions? bridgeOptions = null)
     {
         var options = bridgeOptions ?? DefaultBridgeOptions();
-        if (!BridgeClient.IsAvailable(options))
+        var switchedOff = BridgeGate.ExplicitlyDisabled();
+        if (switchedOff || !BridgeClient.IsAvailable(options))
         {
             return ToolResult<object>.Fail(D365FoErrorCodes.BridgeRequired,
                 "d365fo modify method requires D365FO.Bridge (.NET Framework 4.8, Windows-only, IMetadataProvider-backed) — " +
-                "it is not available in this environment (non-Windows OS, or the bridge executable could not be resolved).",
+                (switchedOff
+                    ? "it is switched off here (D365FO_BRIDGE_ENABLED is set to something other than 1/true)."
+                    : "it is not available in this environment (non-Windows OS, or the bridge executable could not be resolved)."),
                 "Run on a D365FO VM with D365FO_BRIDGE_ENABLED=1 and D365FO_BRIDGE_PATH / D365FO_PACKAGES_PATH set. " +
                 "This command intentionally has no raw-XML fallback (see docs/MIGRATION_FROM_MCP.md, issue #112).");
         }

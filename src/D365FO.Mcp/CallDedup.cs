@@ -20,8 +20,8 @@ public static class CallDedup
     /// <summary>Tools whose repeated identical calls are legitimate — never dedup, never loop-hint.</summary>
     public static readonly HashSet<string> ExcludedTools = new(StringComparer.Ordinal)
     {
-        // Write tools (`generate_object`, `labels`) are already excluded via
-        // ToolCatalog.WriteTools; these are stateful reads whose answer can
+        // Write tools are already excluded via ToolCatalog.WriteTools (and flush
+        // the cache, see InvalidateAfter); these are stateful reads whose answer can
         // change between identical calls (index freshness, workspace config).
         "index_status", "get_workspace_info", "index_history",
         // `prepare` issues a fresh provenance token on every call — never dedup.
@@ -46,15 +46,34 @@ public static class CallDedup
         return (entry.Body, entry.IsError);
     }
 
-    public static void Store(string key, string body, bool isError)
+    private static long s_generation;
+
+    /// <summary>
+    /// Bumped by every <see cref="InvalidateAfter"/> flush. A read captures it before it runs
+    /// and passes it to <see cref="Store"/>, so an answer computed before a concurrent write
+    /// (another daemon or HTTP connection) is not cached after that write's flush.
+    /// </summary>
+    public static long Generation => Interlocked.Read(ref s_generation);
+
+    /// <param name="observedGeneration">
+    /// <see cref="Generation"/> captured before the read ran. When a write has flushed the
+    /// cache since, the result is not cached.
+    /// </param>
+    public static void Store(string key, string body, bool isError, long? observedGeneration = null)
     {
+        if (observedGeneration is { } seen && seen != Generation) return;
         if (Cache.Count >= MaxEntries)
         {
             // Drop the oldest ~25% — cheap pressure valve, exactness not needed.
             foreach (var stale in Cache.OrderBy(kv => kv.Value.At).Take(MaxEntries / 4).ToList())
                 Cache.TryRemove(stale.Key, out _);
         }
-        Cache[key] = new Entry(body, isError, DateTimeOffset.UtcNow);
+        var entry = new Entry(body, isError, DateTimeOffset.UtcNow);
+        Cache[key] = entry;
+        // A flush may have landed between the check above and the write: the generation is
+        // bumped before the clear, so re-checking here catches it and withdraws this entry.
+        if (observedGeneration is { } again && again != Generation)
+            Cache.TryRemove(new KeyValuePair<string, Entry>(key, entry));
     }
 
     /// <summary>Note appended to a deduped response so the agent notices the loop.</summary>
@@ -62,6 +81,25 @@ public static class CallDedup
         "\n\n[dedup] Identical call within 60 s — served from cache. " +
         "You already have this answer; use it instead of re-asking. " +
         "If you need different data, change the arguments.";
+
+    /// <summary>
+    /// Drop every cached answer after a call to a tool in <see cref="ToolCatalog.WriteTools"/>.
+    /// The cache is keyed on the call, not on what the call read, so there is no narrower
+    /// invalidation that is still correct: <c>modify_object</c> on a table changes what
+    /// <c>get_object_info</c>, <c>search</c> and <c>find_references</c> would answer. It runs
+    /// whether or not the write reported success, because a refused batch or a build that
+    /// failed half way can still have changed disk or the index. One process-wide cache, so a
+    /// write on one daemon or HTTP connection flushes the reads of every other one too — they
+    /// share the index the write just changed.
+    /// </summary>
+    /// <returns>True when <paramref name="toolName"/> is a write tool and the cache was cleared.</returns>
+    public static bool InvalidateAfter(string toolName)
+    {
+        if (!ToolCatalog.WriteTools.Contains(toolName)) return false;
+        Interlocked.Increment(ref s_generation);
+        Cache.Clear();
+        return true;
+    }
 
     /// <summary>Test hook.</summary>
     public static void Clear() => Cache.Clear();

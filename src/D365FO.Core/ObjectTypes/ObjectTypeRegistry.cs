@@ -419,5 +419,41 @@ namespace D365FO.Core.ObjectTypes
                     list.Add(_all[i].AotSubfolder);
             return list.ToArray();
         }
+
+        // Same case rule as the Directory.Exists probe it replaces: exact on Linux, where the
+        // extractor then reads the folder by its exact name; case-insensitive on Windows and macOS.
+        private static readonly Lazy<HashSet<string>> s_markerSet = new(() =>
+            new HashSet<string>(ModelMarkerFolders(),
+                System.Runtime.InteropServices.RuntimeInformation.IsOSPlatform(System.Runtime.InteropServices.OSPlatform.Linux)
+                    ? StringComparer.Ordinal : StringComparer.OrdinalIgnoreCase));
+
+        /// <summary>
+        /// Whether <paramref name="dir"/> holds at least one <see cref="ModelMarkerFolders"/> folder,
+        /// i.e. is a model root.
+        /// </summary>
+        /// <remarks>
+        /// One listing of the folder, not one <c>Directory.Exists</c> per marker. A packages root has
+        /// about 1,500 package subfolders (<c>bin</c>, <c>Descriptor</c>, <c>Resources</c>, …) that are
+        /// not models, and each of those used to cost a failed probe for every marker: about 100,000
+        /// file-system calls and about 14 s per walk on a real UDE installation, paid by every caller that
+        /// lists the model folders. Matched with the file system's case rule, as the probe was. A
+        /// folder that cannot be listed (list right denied, traverse allowed) falls back to the probe,
+        /// so it is still found when its marker folders are reachable.
+        /// </remarks>
+        public static bool IsModelDirectory(string dir)
+        {
+            try
+            {
+                foreach (var sub in System.IO.Directory.EnumerateDirectories(dir))
+                    if (s_markerSet.Value.Contains(System.IO.Path.GetFileName(sub))) return true;
+                return false;
+            }
+            catch (Exception ex) when (ex is System.IO.IOException or System.UnauthorizedAccessException)
+            {
+                foreach (var s in ModelMarkerFolders())
+                    if (System.IO.Directory.Exists(System.IO.Path.Combine(dir, s))) return true;
+                return false;
+            }
+        }
     }
 }
