@@ -42,6 +42,30 @@ was ported from.
   budget, since it also loads the metadata assemblies. A cold `generate … --install-to` no longer
   times out on `createObject` and falls back to the raw scaffold.
 
+### Fixed — `validate references` no longer fails valid code on kernel enums and types (#230)
+
+`RangeStatus::Hidden`, `DialogButton::No` and similar kernel enums live in the AOS binaries, not
+in the metadata XML, so the index cannot prove them. A `Type::member` access on a name outside the
+kernel allow-list is an error (that is how a hallucinated class is caught), so valid code exited 2.
+
+- **The kernel allow-list knows more names**, each checked absent from a full 10.0.2790 index:
+  `RangeStatus`, `DialogButton`, `FormReferenceControl`, the remaining kernel form controls
+  (`FormTimeControl`, `FormGuidControl`, `FormContainerControl`, `FormRadioControl`,
+  `FormHtmlControl`, `FormImageControl`), `FormBuildDataSource`, `QueryBuildDynalink`,
+  `QueryOrderByField`, `DictMethod`, `DictFieldGroup`, and the event-handler argument classes
+  (`XppPrePostArgs`, `FormControlEventArgs`, `DataEventArgs`, `ValidateEventArgs`,
+  `ValidateFieldValueEventArgs`).
+- **Kernel members of `Args`** (`dataset`, `openMode`, `copyCallerQuery`, `lookupRecord`) are
+  accepted. The indexed `Args` carries only part of its members, so `_args.dataset()` was
+  reported as unknown.
+- **`D365FO_KERNEL_TYPES`** adds names to the allow-list (comma or semicolon separated, env,
+  profile or `settings.json`), so a kernel type the list does not know yet no longer needs a new
+  release. It applies wherever the allow-list does: `validate references`, MCP
+  `validate_code`, `modify method` and the `generate` grounding gate. The `unknown-type` message
+  names it.
+- A hallucinated `Type::member` on a name that is neither indexed nor allow-listed is still an
+  error.
+
 ### Performance — `find refs <Name> --xref` seeks a bare name of a known kind
 
 A bare name was matched as a node anywhere in a path: `%/X` and `%/X/%`, ORed into the query. A

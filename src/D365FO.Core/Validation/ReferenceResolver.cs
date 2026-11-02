@@ -133,15 +133,47 @@ public static class ReferenceResolver
         // DECLARED types degrade to warnings rather than errors).
         "utilelementtype", "tablegroup", "accessright", "accesstype", "sortorder",
         "joinmode", "menuitemtype", "messageseverity", "openmode", "units",
+        // Reported in #230 and checked absent from a full 10.0.2790 index: query range status,
+        // the Box/dialog answer enum, the reference-group form control, the remaining kernel
+        // form controls and query/reflection classes, and the event-handler argument classes.
+        "rangestatus", "dialogbutton", "formreferencecontrol",
+        "formtimecontrol", "formguidcontrol", "formcontainercontrol", "formradiocontrol",
+        "formhtmlcontrol", "formimagecontrol", "formbuilddatasource",
+        "querybuilddynalink", "queryorderbyfield", "dictmethod", "dictfieldgroup",
+        "xppprepostargs", "formcontroleventargs", "dataeventargs", "validateeventargs",
+        "validatefieldvalueeventargs",
     };
+
+    /// <summary>
+    /// Setting that adds names to the kernel allow-list (comma or semicolon separated), so a
+    /// team can unblock a kernel type this list does not know yet without a new release.
+    /// </summary>
+    public const string ExtraKernelTypesKey = "D365FO_KERNEL_TYPES";
+
+    private static (string? Raw, HashSet<string> Set) _extraKernelTypes = (null, new(StringComparer.OrdinalIgnoreCase));
+
+    private static HashSet<string> ExtraKernelTypes()
+    {
+        string? raw;
+        try { raw = D365FoSettings.Resolve(ExtraKernelTypesKey); }
+        catch { raw = null; }
+        var cached = _extraKernelTypes;
+        if (string.Equals(cached.Raw, raw, StringComparison.Ordinal)) return cached.Set;
+
+        var set = new HashSet<string>(
+            (raw ?? "").Split([',', ';'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries),
+            StringComparer.OrdinalIgnoreCase);
+        _extraKernelTypes = (raw, set);
+        return set;
+    }
 
     /// <summary>
     /// True when <paramref name="name"/> is a kernel (binary) type or kernel enum. Those are
     /// NOT present in PackagesLocalDirectory metadata XML, so an index-only existence check is
     /// in no position to judge them — callers must treat a hit here as verified, never as a
-    /// hallucination.
+    /// hallucination. Names listed in <see cref="ExtraKernelTypesKey"/> count as well.
     /// </summary>
-    public static bool IsKernelType(string name) => KernelTypes.Contains(name);
+    public static bool IsKernelType(string name) => KernelTypes.Contains(name) || ExtraKernelTypes().Contains(name);
 
     /// <summary>Methods available on every table buffer via the kernel xRecord/Common base.</summary>
     private static readonly HashSet<string> TableBuiltinMethods = new(StringComparer.OrdinalIgnoreCase)
@@ -173,6 +205,19 @@ public static class ReferenceResolver
         "new", "finalize", "tostring", "handle", "notify", "wait", "objectonserver",
         "usagecount", "owner", "gettimeouttimerhandle", "cancurrenttimeout",
         "setrefcountzero", "equal",
+    };
+
+    /// <summary>
+    /// Kernel members of classes the index does know: the AOT carries only part of them (the
+    /// indexed <c>Args</c> has <c>caller</c>, <c>record</c>, <c>parm</c>, … but not
+    /// <c>dataset</c>), so a miss on these would be a false positive.
+    /// </summary>
+    private static readonly Dictionary<string, HashSet<string>> KernelClassMethods = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ["args"] = new(StringComparer.OrdinalIgnoreCase)
+        {
+            "dataset", "openmode", "copycallerquery", "lookuprecord",
+        },
     };
 
     private static readonly HashSet<string> TableLikeTypes = new(StringComparer.OrdinalIgnoreCase)
@@ -402,9 +447,12 @@ public static class ReferenceResolver
             return kinds;
         }
 
+        var extraKernelTypes = ExtraKernelTypes();
+        bool IsKernel(string name) => KernelTypes.Contains(name) || extraKernelTypes.Contains(name);
+
         bool IsKnownType(string name)
             => XppBuiltinTypes.Contains(name)
-               || KernelTypes.Contains(name)
+               || IsKernel(name)
                || locals.DeclaredNames.Contains(name)
                || LookupKinds(name).Count > 0;
 
@@ -527,14 +575,15 @@ public static class ReferenceResolver
             int line = LineOf(cleaned, m.Index);
 
             if (locals.DeclaredNames.Contains(typeName)) continue;
-            if (KernelTypes.Contains(typeName)) { verifiedCount++; continue; } // no metadata for kernel statics
+            if (IsKernel(typeName)) { verifiedCount++; continue; } // no metadata for kernel statics
 
             var kinds = LookupKinds(typeName);
             if (kinds.Count == 0)
             {
                 violations.Add(new ReferenceViolation("unknown-type", "error", line,
                     $"{typeName}::{member}",
-                    $"\"{typeName}\" not found in the index. Use `d365fo search any {typeName}` to find the correct name."));
+                    $"\"{typeName}\" not found in the index. Use `d365fo search any {typeName}` to find the correct name. " +
+                    $"If it is a kernel type or enum (not in the AOT metadata), add it to {ExtraKernelTypesKey}."));
                 continue;
             }
             if (kinds.Contains("enum", StringComparer.OrdinalIgnoreCase))
@@ -594,7 +643,7 @@ public static class ReferenceResolver
             {
                 violations.Add(new ReferenceViolation("unknown-type", "warning", 0, typeName,
                     $"Declared type \"{typeName}\" not found in the index. " +
-                    $"If it is a kernel class this is a false positive; otherwise use `d365fo search any {typeName}`."));
+                    $"If it is a kernel class this is a false positive (add it to {ExtraKernelTypesKey}); otherwise use `d365fo search any {typeName}`."));
             }
         }
 
@@ -619,7 +668,8 @@ public static class ReferenceResolver
                 {
                     bool builtin = isTableLike
                         ? TableBuiltinMethods.Contains(member)
-                        : ObjectBuiltinMethods.Contains(member);
+                        : ObjectBuiltinMethods.Contains(member)
+                          || (KernelClassMethods.TryGetValue(typeName, out var kernelMembers) && kernelMembers.Contains(member));
                     if (builtin || SafeFindMethod(index, typeName, member) is not null)
                     {
                         verifiedCount++;
