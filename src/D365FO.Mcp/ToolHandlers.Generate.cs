@@ -432,9 +432,12 @@ public sealed partial class ToolHandlers
     // ------------------------------------------------- table augmentation
 
     public ToolResult<object> GenerateFindMethods(
-        string table, string[]? keys, bool includeExists, bool includeFindRecId)
+        string table, string[]? keys, bool includeExists, bool includeFindRecId,
+        string? existName = null, string? bufferName = null)
     {
         if (string.IsNullOrWhiteSpace(table)) return Required("table", "objectType=find-methods");
+        if (TableAugmentScaffolder.ValidateFindMethodNames(existName, bufferName) is { } badName)
+            return ToolResult<object>.Fail(D365FoErrorCodes.BadInput, badName);
 
         var details = _repo.GetTableDetails(table);
         if (details is null)
@@ -447,7 +450,7 @@ public sealed partial class ToolHandlers
                 $"'{table}' has no unique index to key find() on.",
                 "Pass `keys` explicitly, or add a unique index first with modify_object(action=add-index).");
 
-        var methods = TableAugmentScaffolder.BuildFindMethods(table, keyFields, includeExists, includeFindRecId);
+        var methods = TableAugmentScaffolder.BuildFindMethods(table, keyFields, includeExists, includeFindRecId, existName, bufferName);
         return ToolResult<object>.Success(new
         {
             table,

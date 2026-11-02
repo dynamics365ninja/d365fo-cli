@@ -3,7 +3,7 @@
   <!--
     A table that has NOT had its EDT reference migrated to a relation, and that carries its own
     alternate key. It is the starting point the two table-augmenting generators need: one derives
-    the missing <Relations> entry, the other the standard find()/exists() keyed on the index.
+    the missing <Relations> entry, the other the standard find()/exist() keyed on the index.
     Deliberately kept without a <Relations> block, which is the state those commands exist for.
   -->
   <Name>FmServiceOrder</Name>
@@ -35,11 +35,11 @@ public static FmServiceOrder find(str _serviceOrderId, boolean _forUpdate = fals
 ]]></Source>
       </Method>
       <Method>
-        <Name>exists</Name>
+        <Name>exist</Name>
         <Source><![CDATA[/// <summary>
 /// Determines whether a <c>FmServiceOrder</c> record exists for the supplied key.
 /// </summary>
-public static boolean exists(str _serviceOrderId)
+public static boolean exist(str _serviceOrderId)
 {
     return _serviceOrderId
         && (select firstonly RecId from fmServiceOrder

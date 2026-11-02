@@ -756,6 +756,141 @@ public sealed class ObjectModifyEngineTests : IDisposable
         Assert.Null(capture.WriteVerb);
     }
 
+    // ---- field properties (#232) --------------------------------------------
+
+    private ToolResult<object> ModifyField(BridgeCapture capture, string field, string property, string value)
+    {
+        using var harness = FakeBridge.Create(capture.Respond);
+        return ObjectModifyEngine.ModifyCore(new ObjectModifyEngine.ModifyRequest
+        {
+            Operation = ObjectModifyEngine.Operation.SetFieldProperty,
+            Kind = "table",
+            ObjectName = "FmVehicle",
+            Member = field,
+            Property = property,
+            Value = value,
+        }, _repo, harness.Client, _journalDb);
+    }
+
+    private static XElement WrittenField(BridgeCapture capture, string name) =>
+        XDocument.Parse((string)capture.WriteArgs!["xml"]!).Descendants("AxTableField")
+            .Single(e => e.Element("Name")?.Value == name);
+
+    [Fact]
+    public void Field_property_sets_allow_edit_with_the_contract_spelling_and_order()
+    {
+        var capture = new BridgeCapture(
+            "<AxTable xmlns:i=\"http://www.w3.org/2001/XMLSchema-instance\"><Name>FmVehicle</Name>" +
+            "<Fields><AxTableField i:type=\"AxTableFieldString\"><Name>VIN</Name>" +
+            "<ExtendedDataType>Name</ExtendedDataType><Mandatory>Yes</Mandatory></AxTableField></Fields></AxTable>");
+
+        var result = ModifyField(capture, "vin", "allowedit", "false");
+
+        Assert.True(result.Ok, result.Error?.Message);
+        var field = WrittenField(capture, "VIN");
+        Assert.Equal("No", field.Element("AllowEdit")!.Value);
+        // Contract order: AllowEdit comes before ExtendedDataType and Mandatory, or the reader drops it.
+        Assert.Equal(["Name", "AllowEdit", "ExtendedDataType", "Mandatory"], field.Elements().Select(e => e.Name.LocalName));
+    }
+
+    [Fact]
+    public void Field_property_replaces_an_existing_value()
+    {
+        var capture = new BridgeCapture(
+            "<AxTable xmlns:i=\"http://www.w3.org/2001/XMLSchema-instance\"><Name>FmVehicle</Name>" +
+            "<Fields><AxTableField i:type=\"AxTableFieldString\"><Name>VIN</Name><AllowEditOnCreate>No</AllowEditOnCreate>" +
+            "</AxTableField></Fields></AxTable>");
+
+        var result = ModifyField(capture, "VIN", "AllowEditOnCreate", "Yes");
+
+        Assert.True(result.Ok, result.Error?.Message);
+        Assert.Equal("Yes", WrittenField(capture, "VIN").Elements("AllowEditOnCreate").Single().Value);
+    }
+
+    [Theory]
+    [InlineData("AllowEditt", "Yes", "AllowEdit")]   // a typo names the near miss
+    [InlineData("AllowEdit", "Maybe", "is not a value of NoYes")]     // a NoYes property takes Yes/No only
+    [InlineData("StringSize", "10", "StringSize")]   // a Real field has no StringSize
+    [InlineData("Name", "Other", "rename-field")]    // renaming is its own operation
+    public void Field_property_refuses_what_the_contract_does_not_allow(string property, string value, string expected)
+    {
+        var capture = new BridgeCapture(
+            "<AxTable xmlns:i=\"http://www.w3.org/2001/XMLSchema-instance\"><Name>FmVehicle</Name>" +
+            "<Fields><AxTableField i:type=\"AxTableFieldReal\"><Name>Mileage</Name></AxTableField></Fields></AxTable>");
+
+        var result = ModifyField(capture, "Mileage", property, value);
+
+        Assert.False(result.Ok);
+        Assert.Equal(D365FoErrorCodes.BadInput, result.Error!.Code);
+        Assert.Contains(expected, result.Error.Message + " " + result.Error.Hint);
+        Assert.Null(capture.WriteVerb);
+    }
+
+    [Fact]
+    public void Field_property_on_a_missing_field_is_refused()
+    {
+        var capture = new BridgeCapture(CustomTableXml);
+
+        var result = ModifyField(capture, "NoSuchField", "AllowEdit", "No");
+
+        Assert.False(result.Ok);
+        Assert.Equal(D365FoErrorCodes.FieldNotFound, result.Error!.Code);
+        Assert.Null(capture.WriteVerb);
+    }
+
+    [Fact]
+    public void Field_property_through_an_extension_is_refused_for_a_base_field()
+    {
+        var capture = new BridgeCapture(readXml: null);
+        using var harness = FakeBridge.Create(capture.Respond);
+
+        var result = ObjectModifyEngine.ModifyCore(new ObjectModifyEngine.ModifyRequest
+        {
+            Operation = ObjectModifyEngine.Operation.SetFieldProperty,
+            Kind = "table",
+            ObjectName = "CustTable",
+            Member = "AccountNum",
+            Property = "AllowEdit",
+            Value = "No",
+        }, _repo, harness.Client, _journalDb);
+
+        Assert.False(result.Ok);
+        Assert.Equal(D365FoErrorCodes.BadInput, result.Error!.Code);
+        Assert.Null(capture.WriteVerb);
+    }
+
+    [Fact]
+    public void Field_property_is_reachable_by_its_command_name()
+    {
+        Assert.True(ObjectModifyEngine.TryParseOperation("field-property", out var op));
+        Assert.Equal(ObjectModifyEngine.Operation.SetFieldProperty, op);
+    }
+
+    [Fact]
+    public void Add_field_can_write_a_key_field_that_is_not_editable()
+    {
+        var capture = new BridgeCapture(CustomTableXml);
+        using var harness = FakeBridge.Create(capture.Respond);
+
+        var result = ObjectModifyEngine.ModifyCore(new ObjectModifyEngine.ModifyRequest
+        {
+            Operation = ObjectModifyEngine.Operation.AddField,
+            Kind = "table",
+            ObjectName = "FmVehicle",
+            Member = "VehicleId",
+            Type = "Name",
+            Mandatory = true,
+            NoEdit = true,
+            NoEditOnCreate = true,
+        }, _repo, harness.Client, _journalDb);
+
+        Assert.True(result.Ok, result.Error?.Message);
+        var field = WrittenField(capture, "VehicleId");
+        Assert.Equal("No", field.Element("AllowEdit")!.Value);
+        Assert.Equal("No", field.Element("AllowEditOnCreate")!.Value);
+        Assert.Equal("Yes", field.Element("Mandatory")!.Value);
+    }
+
     [Fact]
     public void Set_property_replaces_an_existing_value_and_reports_the_old_one()
     {
