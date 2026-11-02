@@ -31,7 +31,7 @@ Supports `get class|edt|enum|form|menu-item|security|label|role|duty|privilege|q
 d365fo find coc CustTable::validateWrite
 ```
 
-Also available: `find relations|usages|extensions|handlers`. `find refs --xref` queries `DYNAMICSXREFDB` for path/line/column/kind.
+Also available: `find relations|usages|extensions|handlers`. `find refs --xref` answers from `DYNAMICSXREFDB` — the compiler's where-used, queried directly (`D365FO_XREF_CONNECTIONSTRING`, default local SQL); add `--lines 1` for path/line/column/kind per reference.
 
 `find refs <needle>` searches inside X++ method bodies. By default it scans the source on disk on demand; if you extracted with `--index-source` it answers from the `MethodSourceFts` full-text index instead (much faster, and the result carries `via: "fts"`):
 
@@ -40,7 +40,9 @@ d365fo index extract --index-source     # one-time: full-text index method bodie
 d365fo find refs CustPostInvoice        # now served from FTS
 ```
 
-Form methods (form, data source, data source field and control) are in the index too, so a source-indexed model needs no disk scan. A form hit's `method` names the member, for example `CustTable.init` or `OkButton.clicked`. Without `--model`, `find refs` searches the source-indexed models and the custom models only, and says so:
+Both answer one row per referencing object with the methods that match — the answer to "who uses X", at a fraction of the tokens. `--lines N` returns one row per method with up to N sample lines and the source path instead.
+
+Form methods (form, data source, data source field and control) are in the index too, so a source-indexed model needs no disk scan. A form hit's `methods` name the member, for example `CustTable.init` or `OkButton.clicked`. Without `--model`, `find refs` searches the source-indexed models and the custom models only, and says so:
 
 ```sh
 d365fo find refs CustPostInvoice                # coverage.notSearched counts the models left out

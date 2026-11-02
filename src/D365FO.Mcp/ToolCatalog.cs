@@ -282,17 +282,19 @@ public static class ToolCatalog
             }),
 
         new Descriptor("find_references", ToolEffect.Read,
-            "Reverse references: regex scan of indexed X++ source for where a symbol is used. " +
-            "`kind` (class/table/form) and `model` narrow the scan; `limit` caps hits (default 200). " +
-            "Returns the method + up to 3 sample lines per hit. Without `model` the scope is the models with " +
-            "source indexed plus the custom models; `allModels: true` also scans every other model from disk " +
-            "(minutes on a full installation). `coverage` names what was answered from the index, from disk, " +
-            "and not searched. `Owner.member` searches the member and keeps methods that also mention Owner " +
-            "(text-based, flagged in `match`).",
+            "Where a symbol is used. Default: text scan of indexed X++ source — `kind` (class/table/form) and " +
+            "`model` narrow it. Without `model` the scope is the models with source indexed plus the custom " +
+            "models; `allModels: true` also scans every other model from disk (minutes on a full installation). " +
+            "`coverage` names what was answered from the index, from disk, and not searched. `Owner.member` " +
+            "searches the member and keeps methods that also mention Owner (text-based, flagged in `match`). " +
+            "`xref: true`: the compiler's cross-reference (DYNAMICSXREFDB) — complete and compiler-resolved, " +
+            "`kind` is a reference kind (Call/Read/Set/Type/…), no `model`/`allModels`. Returns one row per " +
+            "referencing object (`limit` caps objects, default 200); `lines: N` returns one row per method with " +
+            "up to N sample lines (xref: one row per reference with line/column).",
             Schema(("name", "string", true), ("kind", "string", false), ("model", "string", false), ("limit", "integer", false),
-                   ("allModels", "boolean", false)),
+                   ("lines", "integer", false), ("allModels", "boolean", false), ("xref", "boolean", false)),
             (h, p) => h.FindReferences(Str(p, "name"), StrOrNull(p, "kind"), StrOrNull(p, "model"), Int(p, "limit", 200),
-                                       Bool(p, "allModels"))),
+                                       Int(p, "lines", 0), Bool(p, "xref"), Bool(p, "allModels"))),
 
         new Descriptor("find_tables_by_field", ToolEffect.Read,
             "Which tables declare a field named `name` (or whose field uses an EDT named `name`) — exact match. " +

@@ -33,6 +33,10 @@
     friends return the MCP tool handlers' anonymous-type payloads, and a trimmed
     build that drops those properties serialized them as an empty {} object.
 
+    Microsoft.Data.SqlClient (the direct DYNAMICSXREFDB query behind the xref mode of `find refs`)
+    loads its SNI transport, configuration section and auth providers by reflection too;
+    a connection that cannot be created reads as "XREF_UNAVAILABLE" in a trimmed build only.
+
     Root all of them.
   -->
   <assembly fullname="d365fo" preserve="all" />
@@ -44,4 +48,8 @@
   <assembly fullname="SQLitePCLRaw.core" preserve="all" />
   <assembly fullname="SQLitePCLRaw.batteries_v2" preserve="all" />
   <assembly fullname="SQLitePCLRaw.provider.e_sqlite3" preserve="all" />
+  <assembly fullname="Microsoft.Data.SqlClient" preserve="all" />
+  <assembly fullname="Microsoft.Data.SqlClient.Extensions.Abstractions" preserve="all" />
+  <assembly fullname="Microsoft.Data.SqlClient.Internal.Logging" preserve="all" />
+  <assembly fullname="System.Configuration.ConfigurationManager" preserve="all" />
 </linker>

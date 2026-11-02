@@ -227,7 +227,21 @@ public sealed class FindReferencesScopeTests : IDisposable
         Assert.Contains("\"scope\":\"all\"", json, StringComparison.Ordinal);
         Assert.Contains("\"coverage\":{", json, StringComparison.Ordinal);
         Assert.Contains("\"kind\":\"member-text\"", json, StringComparison.Ordinal);
-        Assert.Contains("\"method\":\"callService\"", json, StringComparison.Ordinal);
+        Assert.Contains("\"methods\":[\"callService\"]", json, StringComparison.Ordinal);
+
+        var withLines = D365Json.Serialize(new ToolHandlers(_repo).FindReferences(
+            "FmVehicleService.construct", null, null, 50, lines: 1, allModels: true));
+        Assert.Contains("\"scope\":\"all\"", withLines, StringComparison.Ordinal);
+        Assert.Contains("\"method\":\"callService\"", withLines, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void All_models_with_xref_is_refused()
+    {
+        var result = new ToolHandlers(_repo).FindReferences("FmVehicleService", null, null, 50, xref: true, allModels: true);
+
+        Assert.False(result.Ok);
+        Assert.Equal(D365FoErrorCodes.BadInput, result.Error!.Code);
     }
 
     [Fact]

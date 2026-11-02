@@ -180,7 +180,7 @@ The `D365FO.Bridge` child process requires the .NET Framework 4.8 runtime, which
 warning: bridge unavailable on this platform; falling back to index
 ```
 
-This is expected behaviour — the index still serves `search`, `get`, `find`, and `generate` commands. Only `find refs --xref` (which queries `DYNAMICSXREFDB` directly) requires the bridge, and it fails with `XREF_UNAVAILABLE` and the reason rather than quietly answering from the text scan. Drop `--xref` to get the text scan on purpose — it is not compiler-resolved and can miss references made through variables and aliases.
+This is expected behaviour — the index still serves `search`, `get`, `find`, and `generate` commands. `find refs --xref` does not need the bridge: it queries `DYNAMICSXREFDB` directly (see [find refs --xref fails](#find-refs---xref-fails-with-xref_unavailable)).
 
 ---
 
@@ -299,7 +299,7 @@ d365fo-index.sqlite-shm      ← shared memory for WAL
 
 ## Bridge child process issues
 
-**Symptom:** Commands that normally use the bridge (`get table`) return stale or incomplete data, or `_source: "index"` when you expect `"bridge"`; `find refs --xref` fails with `XREF_UNAVAILABLE`.
+**Symptom:** Commands that normally use the bridge (`get table`) return stale or incomplete data, or `_source: "index"` when you expect `"bridge"`.
 
 **Checklist:**
 
@@ -317,6 +317,24 @@ d365fo get table CustTable --output json 2>bridge-stderr.txt
 ```
 
 Common message: `Assembly not found: Microsoft.Dynamics.Ax.Xpp.Support`. Fix: ensure `D365FO_BIN_PATH` points to the correct version of the D365FO binaries.
+
+---
+
+## `find refs --xref` fails with `XREF_UNAVAILABLE`
+
+`--xref` queries `DYNAMICSXREFDB` directly, then — when `D365FO_BRIDGE_ENABLED=1` — through the
+bridge; the error carries the reason from each. It never falls back to the text scan, which is a
+different and less complete answer: drop `--xref` to ask for that on purpose.
+
+| Reason in the message | Fix |
+|---|---|
+| `A network-related or instance-specific error` / `server was not found` | Not on the VM that hosts the database, or SQL Server is not running. Set `D365FO_XREF_CONNECTIONSTRING` to reach it. |
+| `Login failed` | The default uses integrated auth (the signed-in Windows user). Grant that user read access, or put credentials in the connection string. |
+| `Cannot open database "DYNAMICSXREFDB"` | The database has not been created: build once in Visual Studio with *Build cross reference data* enabled. |
+| `certificate chain was issued by an authority that is not trusted` | The connection string sets `Encrypt=True`/`Strict`; use `Encrypt=Optional` or add `TrustServerCertificate=True` for a local self-signed certificate. |
+
+The answer is only as fresh as the last build with cross-references enabled. Code written since
+is not in it: `index sync <model>` and the text scan see it.
 
 ---
 
