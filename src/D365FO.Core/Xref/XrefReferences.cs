@@ -5,10 +5,12 @@ using Microsoft.Data.SqlClient;
 namespace D365FO.Core.Xref;
 
 /// <summary>
-/// One source of xref rows: the raw <see cref="XrefQuery.Find"/> payload, or null with the
-/// reason it could not be queried.
+/// One source of xref rows: the raw <see cref="XrefQuery.Find(System.Data.Common.DbConnection, string, string, int, bool, IList{string})"/> payload, or null with the
+/// reason it could not be queried. <c>objectKinds</c> is what the local index says a bare name
+/// is (null when unknown), so the query can seek it instead of scanning.
 /// </summary>
-internal delegate (JsonObject? Result, string? Error) XrefSource(string symbol, string? kind, int limit, bool aggregate);
+internal delegate (JsonObject? Result, string? Error) XrefSource(
+    string symbol, string? kind, int limit, bool aggregate, IReadOnlyList<string>? objectKinds);
 
 /// <summary>
 /// The compiler's where-used, answered from <c>DYNAMICSXREFDB</c> — shared by
@@ -74,7 +76,7 @@ public static class XrefReferences
         Func<string, XrefCoverage.Owner?>? ownerOf = null) =>
         Find(symbol, kind, model, limit, lines, QueryDirect,
             // The bridge speaks the per-reference shape only; Group folds either.
-            BridgeGate.ShouldTry() ? (s, k, l, _) => BridgeGate.FindReferencesViaXref(s, k, l) : null,
+            BridgeGate.ShouldTry() ? (s, k, l, _, o) => BridgeGate.FindReferencesViaXref(s, k, l, o) : null,
             ownerOf, CoverageDirectThenBridge);
 
     internal static ToolResult<object> Find(
@@ -110,20 +112,24 @@ public static class XrefReferences
         if (limit <= 0) limit = 200;
         var rowLimit = lines > 0 ? limit : (int)Math.Min((long)limit * RowsPerObject, MaxRows);
 
+        // Who declares the symbol, asked before the query: its kinds let a bare name seek the
+        // Names.Path index instead of scanning it (see XrefQuery.ResolveTargetPaths).
+        var owner = SafeOwnerOf(ownerOf, symbol);
+        var objectKinds = owner?.Kinds is { Count: > 0 } k ? k : null;
+
         var aggregate = lines <= 0;
-        var (raw, directError) = direct(symbol, refKind, rowLimit, aggregate);
+        var (raw, directError) = direct(symbol, refKind, rowLimit, aggregate, objectKinds);
         var source = "xrefdb";
         string? bridgeError = null;
         if (raw is null && bridge is not null)
         {
-            (raw, bridgeError) = bridge(symbol, refKind, rowLimit, aggregate);
+            (raw, bridgeError) = bridge(symbol, refKind, rowLimit, aggregate, objectKinds);
             source = "xrefdb-bridge";
         }
 
         // Whether the database covers the module that declares the symbol, asked on both
         // outcomes: an empty answer from a module never compiled with cross-references is not
         // "no references", and a failed query over such a module has a precise cause worth naming.
-        var owner = SafeOwnerOf(ownerOf, symbol);
         bool? hasRows = null;
         if (owner?.Module is { } module && moduleHasRows is not null) (hasRows, _) = moduleHasRows(module);
 
@@ -155,7 +161,7 @@ public static class XrefReferences
         // Provenance and shape ahead of the rows: a caller that reads the head of a long answer
         // must not miss which store answered.
         var rows = new JsonObject { ["_source"] = source, ["mode"] = "references" };
-        foreach (var key in new[] { "symbol", "kindFilter", "scoped", "count", "truncated", "items" })
+        foreach (var key in new[] { "symbol", "kindFilter", "scoped", "match", "count", "truncated", "items" })
         {
             if (raw[key] is not { } value) continue;
             raw.Remove(key);
@@ -239,6 +245,7 @@ public static class XrefReferences
             ["symbol"] = (string?)raw["symbol"],
             ["scoped"] = (bool?)raw["scoped"] ?? false,
             ["mode"] = "names",
+            ["match"] = (string?)raw["match"],
             ["count"] = items.Count,
             ["references"] = groups.Sum(g => g.Refs),
             // Cut off by the object cap, or the row read stopped before the last object.
@@ -250,12 +257,13 @@ public static class XrefReferences
         return result;
     }
 
-    private static (JsonObject? Result, string? Error) QueryDirect(string symbol, string? kind, int limit, bool aggregate)
+    private static (JsonObject? Result, string? Error) QueryDirect(
+        string symbol, string? kind, int limit, bool aggregate, IReadOnlyList<string>? objectKinds)
     {
         try
         {
             using var connection = new SqlConnection(ConnectionString());
-            var result = XrefQuery.Find(connection, symbol, kind, limit, aggregate);
+            var result = XrefQuery.Find(connection, symbol, kind, limit, aggregate, objectKinds?.ToList());
             if ((bool?)result["ok"] == true) return (result, null);
             return (null, (string?)result["error"] + ": " + (string?)result["message"]);
         }

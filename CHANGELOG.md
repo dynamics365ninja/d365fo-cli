@@ -19,6 +19,29 @@ was ported from.
 
 ## [Unreleased]
 
+### Performance — `find refs <Name> --xref` seeks a bare name of a known kind
+
+A bare name was matched as a node anywhere in a path: `%/X` and `%/X/%`, ORed into the query. A
+leading wildcard cannot use the `Names.Path` index, so SQL Server scanned every name. On a UDE
+cross-reference database (6.1M names, 28.5M references) that took about 60 s, past the 30 s command
+timeout, and `find refs DynTpmDealTable --xref` never answered. Member, label and AOT-path queries were
+already exact and fast.
+
+- **The local index names the kind.** The owner lookup the coverage check already makes now reports
+  every kind the name is (`table`, `class`, `form`, `edt`, `enum`. A table and its form often share
+  a name). The query then matches the object and its children in both path forms the compiler writes,
+  `/Tables/X` for code and `Table/X` for metadata such as a form control bound to a field group. Every
+  term is an exact path or a prefix, so it seeks. Measured on that database: 62 s before, 0.15 s
+  after, for 2,268 of the 2,388 references the old match found.
+- **What is no longer pooled in.** The other 120 references point at a different symbol that only
+  shares the name, such as a form data source called `DynTpmDealTable`
+  (`/Forms/X/DataSources/DynTpmDealTable/Methods/active`). That is the same kind of false match the
+  `%/X%` → `%/X` change removed for prefixes. Ask for such a node by its AOT path.
+- **Unknown kinds keep the old match.** A name the index does not know, or a kind without a path
+  map (view, query, …), is still matched anywhere. An older bridge ignores the new `objectKinds`
+  argument and does the same.
+- **The answer says how it matched**: `match: "object"`, `"anywhere"` or `"exact"`.
+
 ### Added — writes re-index the model they touched
 
 No write refreshed the index. An agent created a table, then `generate entity --table` answered

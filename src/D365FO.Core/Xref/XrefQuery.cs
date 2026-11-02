@@ -98,8 +98,23 @@ namespace D365FO.Core.Xref
         /// <c>%/CustTable/%</c>). It used to be <c>%/CustTable%</c>, a prefix match that
         /// pooled every object whose name merely starts with the symbol — <c>SalesLine</c>
         /// collected <c>SalesLineType</c>, <c>SalesLine_IN</c> and the rest into its callers.
+        /// <para>
+        /// With object kinds (what the local index says the name is: <c>table</c>, <c>class</c>,
+        /// <c>form</c>, <c>edt</c>, <c>enum</c>), a bare name resolves to that object and its children in
+        /// both path forms the compiler writes: <c>/Tables/X</c> for code, <c>Table/X</c> for metadata
+        /// such as a form control bound to a field group. Every term is an exact path or a prefix,
+        /// so the query seeks the <c>Names.Path</c> index instead of scanning it. The leading-wildcard
+        /// terms cost about 60 s on a 6M-name database. A name that is a node deeper inside another
+        /// object (a form data source named after the table) is a different symbol and is no longer
+        /// pooled in. Without a known kind the bare name keeps the "anywhere" match.
+        /// </para>
         /// </remarks>
-        public static TargetPaths ResolveTargetPaths(string symbol)
+        public static TargetPaths ResolveTargetPaths(string symbol) => ResolveTargetPaths(symbol, null);
+
+        /// <inheritdoc cref="ResolveTargetPaths(string)"/>
+        /// <param name="symbol">The caller's symbol.</param>
+        /// <param name="objectKinds">Object kinds the bare name is known to be, or null.</param>
+        public static TargetPaths ResolveTargetPaths(string symbol, IList<string> objectKinds)
         {
             // Container segments that can own methods/fields.
             string[] memberContainers = { "Tables", "Classes", "Forms", "Views", "DataEntityViews", "Queries", "Maps" };
@@ -138,6 +153,19 @@ namespace D365FO.Core.Xref
                 return new TargetPaths(exact, like, true);
             }
 
+            // Bare name of a known kind: the object and its children, in both path forms. Exact
+            // paths and prefixes only, so every term seeks.
+            var known = PathRootsFor(objectKinds);
+            if (known.Count > 0)
+            {
+                foreach (var root in known)
+                {
+                    exact.Add(root + trimmed);
+                    like.Add(EscapeLike(root + trimmed) + "/%");
+                }
+                return new TargetPaths(exact, like, false);
+            }
+
             // Bare name — exact AOT root plus its children, and the name as a whole node anywhere.
             exact.Add("/" + trimmed);
             var pattern = EscapeLike(trimmed);
@@ -151,7 +179,7 @@ namespace D365FO.Core.Xref
         /// Fill <paramref name="cmd"/> with the where-used query for <paramref name="paths"/>.
         /// </summary>
         /// <param name="cmd">The command to fill; its connection is not touched.</param>
-        /// <param name="paths">The target paths, from <see cref="ResolveTargetPaths"/>.</param>
+        /// <param name="paths">The target paths, from <see cref="ResolveTargetPaths(string, IList{string})"/>.</param>
         /// <param name="kindId">A reference kind id to filter on, or -1 for every kind. Filtered in
         /// SQL, before <c>TOP</c> — filtering the returned rows instead answered "the Calls among
         /// the first N references of any kind", which undercounts without saying so.</param>
@@ -229,7 +257,17 @@ ORDER BY srcName.Path";
         /// <c>{source, kind, kindId, module, refs}</c> — or <c>{ ok:false, error:"XREFDB_UNAVAILABLE",
         /// message }</c> when the database could not be queried.
         /// </returns>
-        public static JsonObject Find(DbConnection connection, string symbol, string kindFilter, int limit, bool aggregate = false)
+        public static JsonObject Find(DbConnection connection, string symbol, string kindFilter, int limit, bool aggregate = false) =>
+            Find(connection, symbol, kindFilter, limit, aggregate, null);
+
+        /// <inheritdoc cref="Find(DbConnection, string, string, int, bool)"/>
+        /// <param name="connection">An open-able connection to the cross-reference database.</param>
+        /// <param name="symbol">A name, <c>Owner.member</c>, an AOT path, or a label reference.</param>
+        /// <param name="kindFilter">A reference kind, or null for every kind.</param>
+        /// <param name="limit">Most rows.</param>
+        /// <param name="aggregate">One row per (source, kind) instead of one per reference.</param>
+        /// <param name="objectKinds">What the local index says a bare name is, or null.</param>
+        public static JsonObject Find(DbConnection connection, string symbol, string kindFilter, int limit, bool aggregate, IList<string> objectKinds)
         {
             if (string.IsNullOrWhiteSpace(symbol))
                 return Fail("MISSING_ARG", "symbol is required");
@@ -244,7 +282,7 @@ ORDER BY srcName.Path";
                         + string.Join(" | ", ReferenceKinds) + ".");
             }
 
-            var paths = ResolveTargetPaths(symbol);
+            var paths = ResolveTargetPaths(symbol, objectKinds);
             var items = new JsonArray();
             try
             {
@@ -302,6 +340,9 @@ ORDER BY srcName.Path";
                 // exact leaf, so an empty list is an authoritative "no callers" — not a hint to
                 // fall back to a looser name-only scan.
                 ["scoped"] = paths.Scoped,
+                // How the target was matched: "exact" (a member, label or AOT path), "object" (a bare
+                // name of a known kind, seeks only) or "anywhere" (the name as a node in any path).
+                ["match"] = MatchOf(symbol, paths, objectKinds),
                 ["items"] = items,
             };
         }
@@ -368,6 +409,42 @@ WHERE m.Module IN (" + string.Join(",", inParams) + ")";
                 });
             }
             return new JsonObject { ["ok"] = true, ["modules"] = items };
+        }
+
+        /// <summary>
+        /// The path roots the compiler writes for each object kind the local index can name: the
+        /// plural form under <c>/</c> for code references, and the root-element form without a
+        /// leading slash for metadata references. Read off a 10.0.2790 cross-reference database.
+        /// </summary>
+        private static readonly Dictionary<string, string[]> KindRoots = new Dictionary<string, string[]>(StringComparer.OrdinalIgnoreCase)
+        {
+            { "table", new[] { "/Tables/", "Table/" } },
+            { "class", new[] { "/Classes/", "Class/" } },
+            { "form", new[] { "/Forms/", "Form/" } },
+            { "enum", new[] { "/Enums/", "Enum/" } },
+            { "edt", new[] { "/Edts/", "EdtString/", "EdtInt/", "EdtInt64/", "EdtReal/", "EdtDate/", "EdtUtcDateTime/",
+                             "EdtEnum/", "EdtGuid/", "EdtContainer/", "EdtTime/" } },
+        };
+
+        /// <summary>The path roots for <paramref name="objectKinds"/>; empty when none is known.</summary>
+        internal static List<string> PathRootsFor(IList<string> objectKinds)
+        {
+            var roots = new List<string>();
+            if (objectKinds == null) return roots;
+            foreach (var kind in objectKinds)
+            {
+                string[] r;
+                if (kind != null && KindRoots.TryGetValue(kind, out r))
+                    foreach (var root in r)
+                        if (!roots.Contains(root)) roots.Add(root);
+            }
+            return roots;
+        }
+
+        private static string MatchOf(string symbol, TargetPaths paths, IList<string> objectKinds)
+        {
+            if (paths.Scoped || (symbol ?? string.Empty).TrimStart().StartsWith("/", StringComparison.Ordinal)) return "exact";
+            return PathRootsFor(objectKinds).Count > 0 ? "object" : "anywhere";
         }
 
         /// <summary>

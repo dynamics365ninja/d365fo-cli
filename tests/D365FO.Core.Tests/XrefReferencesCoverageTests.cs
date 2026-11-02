@@ -38,7 +38,7 @@ public class XrefReferencesCoverageTests
     [InlineData(3)]
     public void An_empty_answer_over_a_module_with_no_rows_is_refused_with_the_build_that_fills_it(int lines)
     {
-        var r = Find((_, _, _, _) => (Answer(0), null), null, Custom, (false, null), lines: lines);
+        var r = Find((_, _, _, _, _) => (Answer(0), null), null, Custom, (false, null), lines: lines);
 
         Assert.False(r.Ok);
         Assert.Equal(D365FoErrorCodes.XrefUnavailable, r.Error!.Code);
@@ -49,7 +49,7 @@ public class XrefReferencesCoverageTests
     [Fact]
     public void The_bridge_fallback_answer_is_judged_the_same_way()
     {
-        var r = Find((_, _, _, _) => (null, "SqlException: no route"), (_, _, _, _) => (Answer(0), null), Custom, (false, null));
+        var r = Find((_, _, _, _, _) => (null, "SqlException: no route"), (_, _, _, _, _) => (Answer(0), null), Custom, (false, null));
 
         Assert.False(r.Ok);
         Assert.Contains("0 rows for module CCTPM", r.Error!.Message);
@@ -58,7 +58,7 @@ public class XrefReferencesCoverageTests
     [Fact]
     public void A_failed_query_over_an_uncovered_module_names_the_cause_and_keeps_both_errors()
     {
-        var r = Find((_, _, _, _) => (null, "SqlException: timeout"), (_, _, _, _) => (null, "bridge error: did not respond"),
+        var r = Find((_, _, _, _, _) => (null, "SqlException: timeout"), (_, _, _, _, _) => (null, "bridge error: did not respond"),
             Custom, (false, null));
 
         Assert.Equal(D365FoErrorCodes.XrefUnavailable, r.Error!.Code);
@@ -70,7 +70,7 @@ public class XrefReferencesCoverageTests
     [Fact]
     public void A_failed_query_whose_coverage_is_unknown_keeps_the_generic_refusal()
     {
-        var r = Find((_, _, _, _) => (null, "SqlException: no route"), null, Custom, (null, "no route"));
+        var r = Find((_, _, _, _, _) => (null, "SqlException: no route"), null, Custom, (null, "no route"));
 
         Assert.Equal(D365FoErrorCodes.XrefUnavailable, r.Error!.Code);
         Assert.Contains("could not be queried", r.Error.Message);
@@ -79,7 +79,7 @@ public class XrefReferencesCoverageTests
     [Fact]
     public void An_answer_from_a_covered_module_comes_back_unchanged()
     {
-        var r = Find((_, _, _, _) => (Answer(0), null), null, new XrefCoverage.Owner("ApplicationSuite", "ApplicationSuite"), (true, null),
+        var r = Find((_, _, _, _, _) => (Answer(0), null), null, new XrefCoverage.Owner("ApplicationSuite", "ApplicationSuite"), (true, null),
             symbol: "CustTable");
 
         Assert.True(r.Ok);
@@ -91,7 +91,7 @@ public class XrefReferencesCoverageTests
     [InlineData(3)]
     public void Rows_from_other_modules_are_kept_with_a_warning_about_the_missing_one(int lines)
     {
-        var r = Find((_, _, _, _) => (Answer(2), null), null, Custom, (false, null), lines: lines);
+        var r = Find((_, _, _, _, _) => (Answer(2), null), null, Custom, (false, null), lines: lines);
 
         Assert.True(r.Ok);
         Assert.Contains(r.Warnings!, w => w.Contains("module CCTPM") && w.Contains("--xref"));
@@ -101,7 +101,7 @@ public class XrefReferencesCoverageTests
     public void A_symbol_the_index_does_not_know_skips_the_coverage_probe()
     {
         var probed = false;
-        var r = Find((_, _, _, _) => (Answer(0), null), null, null, (false, null), () => probed = true, symbol: "Unknown");
+        var r = Find((_, _, _, _, _) => (Answer(0), null), null, null, (false, null), () => probed = true, symbol: "Unknown");
 
         Assert.True(r.Ok);
         Assert.False(probed);
@@ -111,7 +111,7 @@ public class XrefReferencesCoverageTests
     public void An_unresolved_package_is_unknown_coverage_so_an_empty_answer_stays_an_answer()
     {
         var probed = false;
-        var r = Find((_, _, _, _) => (Answer(0), null), null, new XrefCoverage.Owner("CCTPM", null), (false, null), () => probed = true);
+        var r = Find((_, _, _, _, _) => (Answer(0), null), null, new XrefCoverage.Owner("CCTPM", null), (false, null), () => probed = true);
 
         Assert.True(r.Ok);
         Assert.False(probed);
@@ -122,7 +122,7 @@ public class XrefReferencesCoverageTests
     public void An_index_that_cannot_be_read_skips_the_check_never_the_query()
     {
         var r = XrefReferences.Find("DynTpmDealTable", null, null, 200, 0,
-            (_, _, _, _) => (Answer(0), null), null,
+            (_, _, _, _, _) => (Answer(0), null), null,
             ownerOf: _ => throw new InvalidOperationException("no index"),
             moduleHasRows: _ => (false, null));
 
@@ -134,7 +134,7 @@ public class XrefReferencesCoverageTests
     public void Without_an_owner_lookup_the_answer_is_as_before()
     {
         var r = XrefReferences.Find("DynTpmDealTable", null, null, 200, 0,
-            (_, _, _, _) => (Answer(0), null), null);
+            (_, _, _, _, _) => (Answer(0), null), null);
 
         Assert.True(r.Ok);
         Assert.Null(r.Warnings);

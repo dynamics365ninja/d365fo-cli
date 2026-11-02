@@ -5,6 +5,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Reflection;
 using System.Text;
 using System.Text.Json.Nodes;
@@ -190,7 +191,10 @@ namespace D365FO.Bridge
             string kind   = args != null ? (string)args["kind"]   : null;
             int    limit  = 200;
             if (args != null && args["limit"] is JsonNode ln && ln.GetValue<object>() is object lv && int.TryParse(lv.ToString(), out var li)) limit = li;
-            return XrefRepository.Find(symbol, kind, limit);
+            List<string> objectKinds = null;
+            if (args != null && args["objectKinds"] is JsonArray ok)
+                objectKinds = ok.Select(n => (string)n).Where(n => !string.IsNullOrEmpty(n)).ToList();
+            return XrefRepository.Find(symbol, kind, limit, objectKinds);
         }
 
         internal JsonObject XrefCoverage(JsonObject args)

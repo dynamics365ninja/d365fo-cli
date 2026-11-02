@@ -34,7 +34,11 @@ public static class XrefCoverage
     /// Package folder, which is what the cross-reference database keys on, or null when the index
     /// records no source path for the model to read it from (coverage is then unknown).
     /// </param>
-    public sealed record Owner(string Model, string? Module);
+    /// <param name="Kinds">
+    /// Every object kind the index knows the name as (<c>table</c>, <c>form</c>, …). A table and its
+    /// form often share one. The xref query uses them to seek a bare name instead of scanning.
+    /// </param>
+    public sealed record Owner(string Model, string? Module, IReadOnlyList<string>? Kinds = null);
 
     /// <summary>
     /// The type a symbol names: <c>SalesTable</c> for <c>SalesTable</c>,
@@ -84,13 +88,15 @@ public static class XrefCoverage
 
         string? model = null;
         string? path = null;
+        var kinds = new List<string>();
         try
         {
-            if (repo.GetClassDetails(name) is { } c) (model, path) = (c.Class.Model, c.Class.SourcePath);
-            else if (repo.GetTableDetails(name) is { } t) (model, path) = (t.Table.Model, t.Table.SourcePath);
-            else if (repo.GetForm(name) is { } f) (model, path) = (f.Form.Model, f.Form.SourcePath);
-            else if (repo.GetEdt(name) is { } e) model = e.Model;
-            else if (repo.GetEnum(name) is { } en) model = en.Enum.Model;
+            // The first hit decides the model and path, as before. Every hit is a kind.
+            if (repo.GetClassDetails(name) is { } c) { (model, path) = (c.Class.Model, c.Class.SourcePath); kinds.Add("class"); }
+            if (repo.GetTableDetails(name) is { } t) { if (model is null) (model, path) = (t.Table.Model, t.Table.SourcePath); kinds.Add("table"); }
+            if (repo.GetForm(name) is { } f) { if (model is null) (model, path) = (f.Form.Model, f.Form.SourcePath); kinds.Add("form"); }
+            if (repo.GetEdt(name) is { } e) { model ??= e.Model; kinds.Add("edt"); }
+            if (repo.GetEnum(name) is { } en) { model ??= en.Enum.Model; kinds.Add("enum"); }
         }
         catch
         {
@@ -113,7 +119,7 @@ public static class XrefCoverage
 
         // No guess from the model name: a package named otherwise would probe as "no rows" and
         // turn a genuine empty answer into a refusal. An unknown package means unknown coverage.
-        return new Owner(model!, module);
+        return new Owner(model!, module, kinds);
     }
 
     /// <summary>What a reference answer means once coverage is known.</summary>
