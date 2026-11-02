@@ -6,7 +6,7 @@ namespace D365FO.Core.Index;
 ///
 /// The index is the single source of truth for grounding — but only while it
 /// reflects the current workspace. This compares the newest XML/label mtime
-/// under the packages root(s) with the index's <c>Models.LastExtractedUtc</c>
+/// under each custom model's folder with that model's <c>Models.LastExtractedUtc</c>
 /// bookkeeping and produces the <c>stale-index</c> warning when the workspace
 /// has changed since the last (re)extract.
 /// </summary>
@@ -20,6 +20,14 @@ public static class IndexStaleness
 
     public sealed record MtimeScanResult(DateTime NewestMtimeUtc, string NewestFile, int ScannedFiles, bool Truncated);
 
+    /// <param name="IsStale">True when at least one model changed on disk after it was last extracted.</param>
+    /// <param name="Detail">What changed and what to run, or null when fresh.</param>
+    /// <param name="NewestFileMtimeUtc">Newest metadata mtime seen (of a stale model when there is one).</param>
+    /// <param name="NewestFile">The file carrying that mtime.</param>
+    /// <param name="LastExtractedUtc">The extract time the newest file was compared with.</param>
+    /// <param name="ScannedFiles">Metadata files looked at.</param>
+    /// <param name="Truncated">True when a scan hit <see cref="MaxScannedFiles"/>.</param>
+    /// <param name="StaleModels">Models whose folder changed after their own last extract, or null when the check could not judge per model.</param>
     public sealed record StalenessResult(
         bool IsStale,
         string? Detail,
@@ -27,12 +35,17 @@ public static class IndexStaleness
         string? NewestFile,
         DateTime? LastExtractedUtc,
         int ScannedFiles,
-        bool Truncated);
+        bool Truncated,
+        IReadOnlyList<string>? StaleModels = null);
 
     /// <summary>
     /// Recursively find the newest metadata file mtime under <paramref name="rootDir"/>.
     /// Returns null when the directory does not exist or contains no metadata files.
     /// </summary>
+    /// <remarks>
+    /// Reads the mtime off the <see cref="FileSystemInfo"/> the directory listing already
+    /// returned, rather than asking the file system again for each path.
+    /// </remarks>
     public static MtimeScanResult? FindNewestMetadataMtime(string rootDir)
     {
         if (!Directory.Exists(rootDir)) return null;
@@ -41,48 +54,54 @@ public static class IndexStaleness
         int scanned = 0;
         bool truncated = false;
 
-        void Walk(string dir)
+        void Walk(DirectoryInfo dir)
         {
             if (truncated) return;
-            IEnumerable<string> entries;
-            try { entries = Directory.EnumerateFileSystemEntries(dir); }
-            catch { return; }
-            foreach (var entry in entries)
+            try
             {
-                if (truncated) return;
-                if (Directory.Exists(entry))
+                foreach (var entry in dir.EnumerateFileSystemInfos())
                 {
-                    // bin/obj and Descriptor churn are not metadata edits.
-                    var name = Path.GetFileName(entry);
-                    if (name is "bin" or "obj" or ".git" or "XppMetadata") continue;
-                    Walk(entry);
-                }
-                else if (entry.EndsWith(".xml", StringComparison.OrdinalIgnoreCase)
-                         || entry.EndsWith(".label.txt", StringComparison.OrdinalIgnoreCase))
-                {
-                    scanned++;
-                    if (scanned >= MaxScannedFiles) truncated = true;
-                    DateTime mtime;
-                    try { mtime = File.GetLastWriteTimeUtc(entry); }
-                    catch { continue; }
-                    if (mtime > newest)
+                    if (truncated) return;
+                    if (entry is DirectoryInfo sub)
                     {
-                        newest = mtime;
-                        newestFile = entry;
+                        // bin/obj and Descriptor churn are not metadata edits.
+                        if (sub.Name is "bin" or "obj" or ".git" or "XppMetadata") continue;
+                        Walk(sub);
+                    }
+                    else if (entry.Name.EndsWith(".xml", StringComparison.OrdinalIgnoreCase)
+                             || entry.Name.EndsWith(".label.txt", StringComparison.OrdinalIgnoreCase))
+                    {
+                        scanned++;
+                        if (scanned >= MaxScannedFiles) truncated = true;
+                        DateTime mtime;
+                        try { mtime = entry.LastWriteTimeUtc; }
+                        catch { continue; }
+                        if (mtime > newest)
+                        {
+                            newest = mtime;
+                            newestFile = entry.FullName;
+                        }
                     }
                 }
             }
+            catch { /* unreadable, or the folder vanished mid-walk */ }
         }
 
-        Walk(rootDir);
+        Walk(new DirectoryInfo(rootDir));
         if (scanned == 0) return null;
         return new MtimeScanResult(newest, newestFile, scanned, truncated);
     }
 
     /// <summary>
-    /// Compare the newest metadata mtime under the custom-model folders (or the
-    /// whole roots when no custom models are known) against the index bookkeeping.
+    /// Compare each custom model's folder with that model's own <c>LastExtractedUtc</c>, or — when
+    /// no custom model folder is found — the whole roots with the newest extract of any model.
     /// </summary>
+    /// <remarks>
+    /// Per model, not global. Comparing every folder against the newest extract of ANY model meant
+    /// that syncing one model stamped a fresh time that covered all the others: edit model A, run
+    /// <c>index sync B</c>, and A's edit was reported as indexed. Each model is now held to its own
+    /// extract time, so the answer names the models that really are behind.
+    /// </remarks>
     public static StalenessResult Check(MetadataRepository repo, IReadOnlyCollection<string> packagesRoots)
     {
         DateTime? lastExtracted = repo.GetNewestExtractTimestampUtc();
@@ -94,27 +113,19 @@ public static class IndexStaleness
 
         // Scan only custom models' folders when known: standard models do not
         // change outside platform updates, and the 5000-file cap goes further.
-        var roots = new List<string>();
-        try
-        {
-            var customModels = repo.ListModels()
-                .Where(m => m.IsCustom)
-                .Select(m => m.Name)
-                .ToList();
-            foreach (var root in packagesRoots)
-            {
-                foreach (var model in customModels)
-                {
-                    var dir = Path.Combine(root, model);
-                    if (Directory.Exists(dir)) roots.Add(dir);
-                }
-            }
-        }
-        catch { /* fall back to full roots */ }
-        if (roots.Count == 0) roots.AddRange(packagesRoots.Where(Directory.Exists));
+        IReadOnlyList<MetadataRepository.ModelExtractState> custom;
+        try { custom = repo.GetModelExtractStates().Where(m => m.IsCustom).ToList(); }
+        catch { custom = Array.Empty<MetadataRepository.ModelExtractState>(); }
 
+        if (custom.Count > 0)
+        {
+            var perModel = CheckPerModel(custom, packagesRoots, lastExtracted.Value);
+            if (perModel is not null) return perModel;
+        }
+
+        // No custom model folder found: fall back to the whole roots against the global time.
         MtimeScanResult? newest = null;
-        foreach (var root in roots)
+        foreach (var root in packagesRoots.Where(Directory.Exists))
         {
             var scan = FindNewestMetadataMtime(root);
             if (scan is null) continue;
@@ -139,5 +150,86 @@ public static class IndexStaleness
             lastExtracted,
             newest.ScannedFiles,
             newest.Truncated);
+    }
+
+    /// <summary>
+    /// Hold each custom model's folder to that model's own extract time. Null when none of the
+    /// models has a folder under the roots, so the caller can fall back to the whole roots.
+    /// </summary>
+    private static StalenessResult? CheckPerModel(
+        IReadOnlyList<MetadataRepository.ModelExtractState> custom,
+        IReadOnlyCollection<string> packagesRoots,
+        DateTime newestExtract)
+    {
+        // One listing per root maps model name to folder(s): a package can hold several models,
+        // and a model's folder is not always named after its package.
+        var wanted = new HashSet<string>(custom.Select(m => m.Name), StringComparer.OrdinalIgnoreCase);
+        var dirsByModel = new Dictionary<string, List<string>>(StringComparer.OrdinalIgnoreCase);
+        foreach (var root in packagesRoots.Where(Directory.Exists))
+        {
+            foreach (var dir in IndexSync.EnumerateModelDirs(root, onlyModel: null))
+            {
+                var name = Path.GetFileName(dir);
+                if (!wanted.Contains(name)) continue;
+                if (!dirsByModel.TryGetValue(name, out var list)) dirsByModel[name] = list = new List<string>();
+                if (!list.Contains(dir, StringComparer.OrdinalIgnoreCase)) list.Add(dir);
+            }
+        }
+        if (dirsByModel.Count == 0) return null;
+
+        var staleModels = new List<string>();
+        int scanned = 0;
+        bool truncated = false;
+        MtimeScanResult? newestStale = null, newestAny = null;
+        DateTime staleBaseline = newestExtract;
+
+        foreach (var model in custom)
+        {
+            if (!dirsByModel.TryGetValue(model.Name, out var dirs)) continue;
+            // A row no extract has stamped has no time of its own. The global one is the best
+            // stand-in, and is what every model was judged by before.
+            var baseline = model.LastExtractedUtc ?? newestExtract;
+            MtimeScanResult? modelNewest = null;
+            foreach (var dir in dirs)
+            {
+                var scan = FindNewestMetadataMtime(dir);
+                if (scan is null) continue;
+                scanned += scan.ScannedFiles;
+                truncated |= scan.Truncated;
+                if (modelNewest is null || scan.NewestMtimeUtc > modelNewest.NewestMtimeUtc) modelNewest = scan;
+            }
+            if (modelNewest is null) continue;
+            if (newestAny is null || modelNewest.NewestMtimeUtc > newestAny.NewestMtimeUtc) newestAny = modelNewest;
+            if (modelNewest.NewestMtimeUtc > baseline + Tolerance)
+            {
+                staleModels.Add(model.Name);
+                if (newestStale is null || modelNewest.NewestMtimeUtc > newestStale.NewestMtimeUtc)
+                {
+                    newestStale = modelNewest;
+                    staleBaseline = baseline;
+                }
+            }
+        }
+
+        if (newestStale is null)
+        {
+            return new StalenessResult(false, null, newestAny?.NewestMtimeUtc, newestAny?.NewestFile,
+                newestExtract, scanned, truncated, staleModels);
+        }
+
+        var next = staleModels.Count == 1
+            ? $"Run `d365fo index sync {staleModels[0]}` or `d365fo index refresh`."
+            : "Run `d365fo index refresh` (or `d365fo index sync <model>` for each).";
+        return new StalenessResult(
+            true,
+            $"{staleModels.Count} model(s) changed after their last extract ({string.Join(", ", staleModels)}): " +
+            $"\"{newestStale.NewestFile}\" ({newestStale.NewestMtimeUtc:O}) is newer than that model's index " +
+            $"({staleBaseline:O}). {next}",
+            newestStale.NewestMtimeUtc,
+            newestStale.NewestFile,
+            staleBaseline,
+            scanned,
+            truncated,
+            staleModels);
     }
 }
