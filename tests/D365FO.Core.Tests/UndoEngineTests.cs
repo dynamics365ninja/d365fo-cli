@@ -79,6 +79,35 @@ public sealed class UndoEngineTests : IDisposable
         Assert.DoesNotContain("NewTable.xml", projXml);
     }
 
+    [Fact]
+    public void Disk_create_undo_leaves_a_project_delta_that_is_not_an_rnrproj_untouched()
+    {
+        var target = PathIn("NewTable.xml");
+        File.WriteAllText(target, "<AxTable><Name>NewTable</Name></AxTable>");
+        // A hand-edited journal pointing the delta at some other XML file that happens to hold
+        // a matching item: undo must not edit it.
+        var other = PathIn("Directory.Build.props");
+        const string otherXml =
+            "<Project xmlns=\"http://schemas.microsoft.com/developer/msbuild/2003\">\n" +
+            "  <ItemGroup>\n    <Compile Include=\"AxTable\\NewTable.xml\" />\n  </ItemGroup>\n</Project>\n";
+        File.WriteAllText(other, otherXml);
+
+        var journal = NewJournal();
+        journal.Append(new JournalEntry(
+            Id: Guid.NewGuid().ToString("N"), TimestampUtc: DateTimeOffset.UtcNow, Command: "generate table",
+            TargetType: JournalTargetType.AotObject, Kind: "table", ObjectName: "NewTable", SecondaryKey: null,
+            Model: null, Operation: JournalOperation.Create, WritePath: JournalWritePath.Disk,
+            TargetPath: target, PreImage: null, IsTombstone: true,
+            RnrProjDelta: new RnrProjDelta(other, "Compile", @"AxTable\NewTable.xml", WasAdded: true)));
+
+        var result = UndoEngine.Undo(journal, 1, dryRun: false);
+
+        Assert.True(result.AllOk);
+        Assert.False(File.Exists(target));
+        Assert.Equal(otherXml, File.ReadAllText(other));
+        Assert.Contains("is not an existing .rnrproj file", result.Steps.Single().RnrProjWarning);
+    }
+
     // ---- disk: update -------------------------------------------------------
 
     [Fact]
@@ -381,6 +410,43 @@ public sealed class UndoEngineTests : IDisposable
 
         Assert.True(result.AllOk);
         Assert.Equal("deleteObject", calledMethod);
+    }
+
+    [Fact]
+    public void Bridge_create_undo_takes_the_object_out_of_the_project_it_was_registered_in()
+    {
+        // generate --install-to --project goes through the provider, not a file write. Its
+        // journal entry used to carry no project change, so undo deleted the object and left
+        // its <Content> entry behind (found in a live test on a UDE).
+        const string project = """
+            <?xml version="1.0" encoding="utf-8"?>
+            <Project ToolsVersion="14.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+              <PropertyGroup>
+                <Model>MyModel</Model>
+              </PropertyGroup>
+              <ItemGroup>
+                <Folder Include="Classes\" />
+              </ItemGroup>
+            </Project>
+            """;
+        var rnrproj = Path.Combine(_dir, "MyProject.rnrproj");
+        File.WriteAllText(rnrproj, project);
+        var reg = RnrProjRegistry.RegisterInProject(rnrproj, "AxTable", "Foo", "MyModel");
+        Assert.Contains("Foo", File.ReadAllText(rnrproj));
+
+        using var harness = FakeBridge.Create(req => Ok(req, new JsonObject { ["ok"] = true }));
+        var journal = NewJournal();
+        journal.Append(new JournalEntry(
+            Id: Guid.NewGuid().ToString("N"), TimestampUtc: DateTimeOffset.UtcNow, Command: "generate table --install-to",
+            TargetType: JournalTargetType.AotObject, Kind: "table", ObjectName: "Foo", SecondaryKey: null,
+            Model: "MyModel", Operation: JournalOperation.Create, WritePath: JournalWritePath.Bridge,
+            TargetPath: null, PreImage: null, IsTombstone: true, RnrProjDelta: reg.Delta));
+
+        var result = UndoEngine.Undo(journal, 1, dryRun: false, bridgeClientFactory: () => harness.Client);
+
+        Assert.True(result.AllOk);
+        Assert.Null(result.Steps[0].RnrProjWarning);
+        Assert.DoesNotContain("Foo", File.ReadAllText(rnrproj));
     }
 
     [Fact]

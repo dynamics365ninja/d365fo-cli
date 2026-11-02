@@ -46,6 +46,21 @@ d365fo generate workflow FmVehicleServiceApproval \
   --install-to FleetManagement
 ```
 
+One command writes up to six objects, and each lands in its own folder: the
+template in `AxWorkflowTemplate`, the document class and the `canSubmitToWorkflow`
+CoC class in `AxClass`, the query in `AxQuery`, the approval and task in
+`AxWorkflowApproval` / `AxWorkflowTask`. `--install-to` finds a model under
+`D365FO_CUSTOM_PACKAGES_PATH` (a UDE model store, a repo's `Metadata` folder) as
+well as under `D365FO_PACKAGES_PATH`. An `--out` inside a model's `Ax*` folder
+gets the same per-folder layout. When the Visual Studio project lives apart from
+the model folder, pass `--project <path>.rnrproj` and every object is listed in it:
+
+```sh
+d365fo generate workflow FmVehicleServiceApproval --table FmVehicleService \
+  --category FmVehicleServiceCategory --approval-name FmVehicleServiceApprovalStep \
+  --install-to FleetManagement --project Projects/Fleet/FleetWorkflow/FleetWorkflow.rnrproj
+```
+
 ## Rules
 
 - The **document class extends `WorkflowDocument`** and exposes the table whose

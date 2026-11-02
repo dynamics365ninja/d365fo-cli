@@ -315,7 +315,7 @@ public static class XppScaffolder
     /// <summary>
     /// Scaffolds a pattern-correct <c>AxForm</c>. Returns the rendered XML as
     /// a string (preserving the exact element ordering expected by the AOT)
-    /// so the caller can hand it to <see cref="ScaffoldFileWriter.Write(string, string, bool)"/>.
+    /// so the caller can hand it to <see cref="ScaffoldFileWriter.Write(string, string, bool, string)"/>.
     /// Mirrors upstream MCP <c>generate_smart_form</c>.
     /// </summary>
     /// <param name="formName">AOT form name (also used for <c>classDeclaration</c>).</param>
@@ -2023,7 +2023,18 @@ public sealed record EnumValueSpec(string Name, int IntValue, string? Label = nu
 /// </summary>
 public static class ScaffoldFileWriter
 {
-    public sealed record WriteResult(string Path, long Bytes, string? BackupPath);
+    public sealed record WriteResult(string Path, long Bytes, string? BackupPath)
+    {
+        /// <summary>The <c>--project</c> registration, when one was asked for and succeeded.</summary>
+        public RnrProjRegistry.ProjectRegistration? Project { get; init; }
+
+        /// <summary>Why the <c>--project</c> registration did not happen, when one was asked for.</summary>
+        /// <remarks>
+        /// Reported rather than thrown: the object is on disk by the time the project is touched,
+        /// and failing the command there would hide a write that did happen.
+        /// </remarks>
+        public string? ProjectError { get; init; }
+    }
 
     // AOT root elements that are abstract bases in Microsoft.Dynamics.AX.Metadata.MetaModel.
     // Writing one of these as the document root makes VS metadata reader throw
@@ -2066,11 +2077,18 @@ public static class ScaffoldFileWriter
         "true", "false", "1", "0",
     };
 
-    public static WriteResult Write(XDocument doc, string path, bool overwrite = false)
+    /// <param name="doc">The document to write.</param>
+    /// <param name="path">Target file.</param>
+    /// <param name="overwrite">Replace an existing file (a <c>.bak</c> is kept).</param>
+    /// <param name="project">
+    /// A <c>.rnrproj</c> to list the object in (<c>generate --project</c>). The outcome is on
+    /// <see cref="WriteResult.Project"/> / <see cref="WriteResult.ProjectError"/>.
+    /// </param>
+    public static WriteResult Write(XDocument doc, string path, bool overwrite = false, string? project = null)
     {
         ArgumentNullException.ThrowIfNull(doc);
         Finalize(doc, path);
-        return WriteCore(doc.ToString(SaveOptions.None), path, overwrite, declarationOnSaveFromXDoc: true, doc);
+        return WriteCore(doc.ToString(SaveOptions.None), path, overwrite, declarationOnSaveFromXDoc: true, doc, project);
     }
 
     /// <summary>
@@ -2122,7 +2140,7 @@ public static class ScaffoldFileWriter
     /// document is therefore canonicalised here too, and only re-rendered when that actually
     /// changed something — a template already in order keeps its byte-for-byte formatting.
     /// </remarks>
-    public static WriteResult Write(string xml, string path, bool overwrite = false)
+    public static WriteResult Write(string xml, string path, bool overwrite = false, string? project = null)
     {
         ArgumentException.ThrowIfNullOrEmpty(xml);
         var effective = CanonicalizeIfNeeded(xml);
@@ -2131,7 +2149,7 @@ public static class ScaffoldFileWriter
         EnsureValidEdtRoot(root);
         EnsureValueShapes(root);
         EnsureContractShape(effective, path);
-        return WriteCore(effective, path, overwrite, declarationOnSaveFromXDoc: false, null);
+        return WriteCore(effective, path, overwrite, declarationOnSaveFromXDoc: false, null, project);
     }
 
     private static string CanonicalizeIfNeeded(string xml)
@@ -2167,7 +2185,7 @@ public static class ScaffoldFileWriter
         var full = Path.GetFullPath(path);
 
         var cfg = D365FoSettings.FromEnvironment();
-        PathGuard.EnsureWithinBoundary(full, new[] { cfg.PackagesPath, cfg.WorkspacePath }.Concat(cfg.CustomPackagesPaths).ToArray());
+        PathGuard.EnsureWithinBoundary(full, cfg.WriteRoots);
 
         if (!File.Exists(full))
             throw new FileNotFoundException($"Target does not exist: {full}", full);
@@ -2379,7 +2397,7 @@ public static class ScaffoldFileWriter
         }
     }
 
-    private static WriteResult WriteCore(string xml, string path, bool overwrite, bool declarationOnSaveFromXDoc, XDocument? doc)
+    private static WriteResult WriteCore(string xml, string path, bool overwrite, bool declarationOnSaveFromXDoc, XDocument? doc, string? project = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(path);
 
@@ -2387,7 +2405,7 @@ public static class ScaffoldFileWriter
 
         // Prevent directory traversal: output must stay within packages or workspace.
         var cfg = D365FoSettings.FromEnvironment();
-        PathGuard.EnsureWithinBoundary(full, new[] { cfg.PackagesPath, cfg.WorkspacePath }.Concat(cfg.CustomPackagesPaths).ToArray());
+        PathGuard.EnsureWithinBoundary(full, cfg.WriteRoots);
 
         var dir = Path.GetDirectoryName(full);
         if (!string.IsNullOrEmpty(dir)) Directory.CreateDirectory(dir);
@@ -2415,13 +2433,14 @@ public static class ScaffoldFileWriter
         });
 
         var bytes = new FileInfo(full).Length;
-        RecordJournalEntry(full, preImage, preImageHadBom);
-        return new WriteResult(full, bytes, backup);
+        var (registration, projectError) = project is null ? (null, null) : RegisterInProject(full, project);
+        RecordJournalEntry(full, preImage, preImageHadBom, registration?.Delta, explicitProject: project is not null);
+        return new WriteResult(full, bytes, backup) { Project = registration, ProjectError = projectError };
     }
 
     /// <summary>
     /// Replace (or create) <paramref name="path"/> with <paramref name="doc"/> through the same
-    /// stage-then-rename as <see cref="Write(XDocument, string, bool)"/>, keeping a <c>.bak</c>
+    /// stage-then-rename as <see cref="Write(XDocument, string, bool, string?)"/>, keeping a <c>.bak</c>
     /// of any prior file — without the scaffold checks, the boundary guard or the journal entry.
     /// </summary>
     /// <remarks>
@@ -2566,8 +2585,8 @@ public static class ScaffoldFileWriter
 
     /// <summary>
     /// Best-effort modification-journal append (issue #113) — never lets a journal failure
-    /// fail the write it is recording. Fires for EVERY caller of <see cref="Write(XDocument,string,bool)"/>
-    /// / <see cref="Write(string,string,bool)"/>: the CLI `generate *` commands, the MCP
+    /// fail the write it is recording. Fires for EVERY caller of <see cref="Write(XDocument,string,bool,string)"/>
+    /// / <see cref="Write(string,string,bool,string)"/>: the CLI `generate *` commands, the MCP
     /// `generate_object` tool, and any future disk-scaffold caller — this is the single choke
     /// point the journal's "shared by every write path" design relies on for on-disk writes.
     /// Kind/ObjectName/Model are inferred from the written XML and the D365FO packages layout
@@ -2575,14 +2594,19 @@ public static class ScaffoldFileWriter
     /// best-effort: when the path doesn't match that convention, Model is left null and the
     /// entry is still recorded (disk replay only needs the path + pre-image, not the model).
     /// </summary>
-    private static void RecordJournalEntry(string fullPath, string? preImage, bool? preImageHadBom = null)
+    private static void RecordJournalEntry(
+        string fullPath, string? preImage, bool? preImageHadBom = null,
+        RnrProjDelta? explicitDelta = null, bool explicitProject = false)
     {
         try
         {
             var (kind, objectName) = InferKindAndName(fullPath);
             var model = InferModel(fullPath);
-            RnrProjDelta? delta = null;
-            if (preImage is null && model is not null)
+            // A project the caller named replaces the guess next to the model folder: they said
+            // which project the object belongs to. Recorded only for a create, because undoing an
+            // update leaves the file in place and its project entry with it.
+            RnrProjDelta? delta = preImage is null ? explicitDelta : null;
+            if (!explicitProject && preImage is null && model is not null)
             {
                 var modelFolder = Path.GetDirectoryName(Path.GetDirectoryName(fullPath));
                 var axSubfolder = Path.GetFileName(Path.GetDirectoryName(fullPath));
@@ -2638,6 +2662,35 @@ public static class ScaffoldFileWriter
                    && head[0] == 0xEF && head[1] == 0xBB && head[2] == 0xBF;
         }
         catch { return null; }
+    }
+
+    /// <summary>
+    /// List a just-written object in the project the caller named. Only an object that sits in
+    /// its own AOT folder of a model can be listed: a project item is <c>AxClass\Name</c>
+    /// relative to the model, so a file parked anywhere else has no entry that would be true.
+    /// </summary>
+    private static (RnrProjRegistry.ProjectRegistration? Registration, string? Error) RegisterInProject(string fullPath, string project)
+    {
+        try
+        {
+            var axFolder = Path.GetFileName(Path.GetDirectoryName(fullPath)) ?? string.Empty;
+            var rootName = XElement.Load(fullPath).Name.LocalName;
+            var expected = D365FO.Core.ObjectTypes.ObjectTypeRegistry.Find(rootName)?.AotSubfolder;
+            if (expected is null || !string.Equals(axFolder, expected, StringComparison.OrdinalIgnoreCase))
+            {
+                return (null,
+                    $"not registered in {Path.GetFileName(project)}: '{fullPath}' is not in the model's " +
+                    $"{expected ?? "Ax*"} folder, so no project item would point at it. " +
+                    "Write it with --install-to, or with an --out inside the model folder, to register it.");
+            }
+
+            var (_, objectName) = InferKindAndName(fullPath);
+            return (RnrProjRegistry.RegisterInProject(project, axFolder, objectName, InferModel(fullPath)), null);
+        }
+        catch (Exception ex)
+        {
+            return (null, $"not registered in {Path.GetFileName(project)}: {ex.Message}");
+        }
     }
 
     /// <summary>

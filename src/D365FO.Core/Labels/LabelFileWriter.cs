@@ -241,7 +241,7 @@ public static class LabelFileWriter
 
         // Prevent directory traversal: output must stay within packages or workspace.
         var cfg = D365FoSettings.FromEnvironment();
-        PathGuard.EnsureWithinBoundary(fullPath, new[] { cfg.PackagesPath, cfg.WorkspacePath }.Concat(cfg.CustomPackagesPaths).ToArray());
+        PathGuard.EnsureWithinBoundary(fullPath, cfg.WriteRoots);
 
         var dir = Path.GetDirectoryName(fullPath);
         if (!string.IsNullOrEmpty(dir)) Directory.CreateDirectory(dir);

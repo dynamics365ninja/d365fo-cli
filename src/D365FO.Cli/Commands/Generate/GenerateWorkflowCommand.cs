@@ -128,16 +128,17 @@ public sealed class GenerateWorkflowCommand : Command<GenerateWorkflowCommand.Se
         // 'XQuery' is not found"). The driving table is already known, so scaffold it.
         var generateQuery = !settings.NoQuery;
 
-        // Resolve output paths.
+        // Resolve output paths. The template goes first: it is the one whose failure is
+        // reported, and every other part resolves against the same model folder.
         string? workflowPath, documentPath, submitPath, approvalPath, taskPath, queryPath;
         if (hasInstall && !hasOut)
         {
+            workflowPath  = GenerateInstaller.ResolveInstallPath(kind, WorkflowScaffolder.TemplateRoot, settings.Name, settings.InstallTo!, out var f1);
+            if (f1.HasValue) return f1.Value;
             queryPath = !generateQuery ? null
                 : string.IsNullOrWhiteSpace(settings.OutQuery)
                     ? GenerateInstaller.ResolveInstallPath(kind, Folders.Query, queryName, settings.InstallTo!, out _)
                     : settings.OutQuery;
-            workflowPath  = GenerateInstaller.ResolveInstallPath(kind, WorkflowScaffolder.TemplateRoot, settings.Name, settings.InstallTo!, out var f1);
-            if (f1.HasValue) return f1.Value;
             documentPath  = string.IsNullOrWhiteSpace(settings.OutDocument)
                 ? GenerateInstaller.ResolveInstallPath(kind, Folders.Class, docClassName, settings.InstallTo!, out _)
                 : settings.OutDocument;
@@ -156,17 +157,19 @@ public sealed class GenerateWorkflowCommand : Command<GenerateWorkflowCommand.Se
         }
         else
         {
-            var dir = System.IO.Path.GetDirectoryName(settings.Out!)!;
-            workflowPath  = settings.Out!;
-            documentPath  = settings.OutDocument ?? System.IO.Path.Combine(dir, docClassName + ".xml");
+            // Each part to its own Ax* folder when --out is inside a model, next to the
+            // template otherwise (see GenerateInstaller.CompanionPath).
+            var main = settings.Out!;
+            workflowPath  = main;
+            documentPath  = settings.OutDocument ?? GenerateInstaller.CompanionPath(main, Folders.Class, docClassName);
             submitPath    = !generateSubmit ? null
-                : settings.OutSubmit ?? System.IO.Path.Combine(dir, submitExtName + ".xml");
+                : settings.OutSubmit ?? GenerateInstaller.CompanionPath(main, Folders.Class, submitExtName);
             approvalPath  = approvalName is null ? null
-                : settings.OutApproval ?? System.IO.Path.Combine(dir, approvalName + ".xml");
+                : settings.OutApproval ?? GenerateInstaller.CompanionPath(main, WorkflowScaffolder.ApprovalRoot, approvalName);
             taskPath      = taskName is null ? null
-                : settings.OutTask ?? System.IO.Path.Combine(dir, taskName + ".xml");
+                : settings.OutTask ?? GenerateInstaller.CompanionPath(main, WorkflowScaffolder.TaskRoot, taskName);
             queryPath     = !generateQuery ? null
-                : settings.OutQuery ?? System.IO.Path.Combine(dir, queryName + ".xml");
+                : settings.OutQuery ?? GenerateInstaller.CompanionPath(main, Folders.Query, queryName);
         }
 
         var documentDoc = WorkflowScaffolder.WorkflowDocument(docClassName, queryName);

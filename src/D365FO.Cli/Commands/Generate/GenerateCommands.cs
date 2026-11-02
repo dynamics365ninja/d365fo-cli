@@ -19,7 +19,7 @@ public abstract class GenerateSettings : D365OutputSettings
     public bool Overwrite { get; init; }
 
     [CommandOption("--install-to <MODEL>")]
-    [System.ComponentModel.Description("Install the generated artefact directly into <MODEL> via the metadata bridge. Requires D365FO_BRIDGE_ENABLED=1.")]
+    [System.ComponentModel.Description("Install the generated artefact directly into <MODEL>: through the metadata bridge when D365FO_BRIDGE_ENABLED=1, otherwise into the model's Ax* folders found under D365FO_CUSTOM_PACKAGES_PATH or D365FO_PACKAGES_PATH.")]
     public string? InstallTo { get; init; }
 
     [CommandOption("--grounding-token <TOKEN>")]
@@ -29,6 +29,10 @@ public abstract class GenerateSettings : D365OutputSettings
     [CommandOption("--verify")]
     [System.ComponentModel.Description("After writing, read every artefact back through the D365FO Metadata API the way Visual Studio would. Applies to --install-to; skipped (never fails) when the runtime is unavailable. The payload's `verify` field reports which happened. Requires D365FO_BRIDGE_ENABLED=1.")]
     public bool Verify { get; init; }
+
+    [CommandOption("--project <RNRPROJ>")]
+    [System.ComponentModel.Description("Also list every object this command writes in this Visual Studio project (.rnrproj), the way Visual Studio's Add > New item does. For repos that keep projects apart from the model folder. Each object must land in its model's Ax* folder (--install-to, or --out inside the model).")]
+    public string? Project { get; init; }
 }
 
 internal static class GenerateInstaller
@@ -58,9 +62,29 @@ internal static class GenerateInstaller
         System.Xml.Linq.XDocument? doc = null,
         IEnumerable<(string Owner, string Method)>? requiredMethods = null,
         IEnumerable<string>? requiredSymbols = null)
-        => GroundingGate.Check(
+    {
+        // --project is checked before anything is written: a project that is not there would
+        // otherwise surface only after every object had landed, as one warning per file.
+        string? project = null;
+        if (!string.IsNullOrWhiteSpace(settings.Project))
+        {
+            project = System.IO.Path.GetFullPath(settings.Project!);
+            if (!project.EndsWith(".rnrproj", StringComparison.OrdinalIgnoreCase) || !System.IO.File.Exists(project))
+            {
+                return new GroundingGate.GateResult(new { }, [], ToolResult<object>.Fail(
+                    D365FoErrorCodes.BadInput,
+                    $"--project '{settings.Project}' is not an existing .rnrproj file.",
+                    "Pass the path of the Visual Studio project that should list the objects " +
+                    "(for example Projects\\<Solution>\\<Project>\\<Project>.rnrproj), or drop --project."));
+            }
+        }
+
+        var gate = GroundingGate.Check(
             settings.GroundingToken, targetObject, doc, requiredMethods, requiredSymbols,
             RequestedValues(settings), TryRepo());
+        gate.Project = project;
+        return gate;
+    }
 
     /// <summary>The index the gate proves identifiers against, or null when there is none.</summary>
     /// <remarks>
@@ -139,12 +163,13 @@ internal static class GenerateInstaller
         GroundingGate.GateResult gate, System.Xml.Linq.XDocument doc, string path, bool overwrite = false)
     {
         ArgumentNullException.ThrowIfNull(gate);
-        var result = ScaffoldFileWriter.Write(doc, path, overwrite);
+        var result = ScaffoldFileWriter.Write(doc, path, overwrite, gate.Project);
         // Write finalises the document in place, so this is the form that reached disk — not the
         // scaffolder's pre-canonicalisation draft.
         gate.Observe(doc.ToString());
         var (axKind, name) = IdentityOf(doc.Root);
         gate.RecordArtefact(axKind, name, result.Path);
+        RecordProject(gate, result);
         return result;
     }
 
@@ -153,13 +178,46 @@ internal static class GenerateInstaller
         GroundingGate.GateResult gate, string xml, string path, bool overwrite = false)
     {
         ArgumentNullException.ThrowIfNull(gate);
-        var result = ScaffoldFileWriter.Write(xml, path, overwrite);
+        var result = ScaffoldFileWriter.Write(xml, path, overwrite, gate.Project);
         gate.Observe(xml);
         System.Xml.Linq.XElement? root = null;
         try { root = System.Xml.Linq.XDocument.Parse(xml).Root; } catch { /* identity stays unknown */ }
         var (axKind, name) = IdentityOf(root);
         gate.RecordArtefact(axKind, name, result.Path);
+        RecordProject(gate, result);
         return result;
+    }
+
+    /// <summary>Fold one write's <c>--project</c> outcome into the gate.</summary>
+    private static void RecordProject(GroundingGate.GateResult gate, ScaffoldFileWriter.WriteResult result)
+    {
+        if (gate.Project is null) return;
+        if (result.Project is { } reg)
+            gate.ProjectItems.Add(new { include = reg.Include, added = reg.Added });
+        if (result.ProjectError is { } err)
+            gate.Warnings.Add("--project: " + err);
+    }
+
+    /// <summary>
+    /// <c>--project</c> for an object the metadata provider created: nothing went through the
+    /// file writer, so register it here from its kind and name.
+    /// </summary>
+    /// <returns>What changed in the project, for the journal entry, or null when nothing did.</returns>
+    private static D365FO.Core.Journal.RnrProjDelta? RegisterBridgeCreate(GroundingGate.GateResult gate, string axKind, string name, string model)
+    {
+        if (gate.Project is null) return null;
+        try
+        {
+            var reg = D365FO.Core.Journal.RnrProjRegistry.RegisterInProject(
+                gate.Project, D365FO.Core.ObjectTypes.ObjectTypeRegistry.Subfolder(axKind), name, model);
+            gate.ProjectItems.Add(new { include = reg.Include, added = reg.Added });
+            return reg.Delta;
+        }
+        catch (Exception ex)
+        {
+            gate.Warnings.Add($"--project: not registered in {System.IO.Path.GetFileName(gate.Project)}: {ex.Message}");
+            return null;
+        }
     }
 
     /// <summary>
@@ -182,27 +240,83 @@ internal static class GenerateInstaller
     }
 
     /// <summary>
-    /// Resolve the on-disk install path for a scaffolded artefact. When
-    /// <c>--install-to &lt;MODEL&gt;</c> is supplied we ask the bridge where
-    /// the model lives on disk and compose
-    /// <c>&lt;modelFolder&gt;/Ax&lt;Kind&gt;/&lt;Name&gt;.xml</c> — the
-    /// canonical location Visual Studio and the D365FO build tools expect.
-    /// The caller then invokes the regular <see cref="ScaffoldFileWriter"/>
-    /// against this path. Returns null on failure and renders an error into
-    /// <paramref name="failure"/>.
+    /// Resolve the on-disk install path for a scaffolded artefact:
+    /// <c>&lt;modelFolder&gt;/Ax&lt;Kind&gt;/&lt;Name&gt;.xml</c>, the canonical location
+    /// Visual Studio and the D365FO build tools expect, with the model folder from
+    /// <see cref="ResolveModelFolder"/>. The caller then invokes the regular
+    /// <see cref="ScaffoldFileWriter"/> against this path. Returns null on failure and renders
+    /// an error into <paramref name="failure"/>.
     /// </summary>
     internal static string? ResolveInstallPath(OutputMode.Kind kind, string axSubfolder, string name, string model, out int? failure)
     {
         failure = null;
-        var folder = BridgeGate.TryGetModelFolder(model);
+        var folder = ResolveModelFolder(model);
         if (string.IsNullOrEmpty(folder))
         {
-            failure = RenderHelpers.Render(kind, ToolResult<object>.Fail(
-                "INSTALL_FAILED",
-                $"Could not resolve folder for model '{model}'. Ensure the bridge can see the model: set D365FO_BRIDGE_ENABLED=1 and point D365FO_PACKAGES_PATH (and D365FO_CUSTOM_PACKAGES_PATH for custom-model roots) at the directories that contain the model, on a D365FO VM."));
+            failure = RenderHelpers.Render(kind, ModelFolderNotFound(model));
             return null;
         }
         return System.IO.Path.Combine(folder!, axSubfolder, name + ".xml");
+    }
+
+    /// <summary>
+    /// The folder that holds <paramref name="model"/>'s <c>Ax*</c> folders, or null.
+    /// </summary>
+    /// <remarks>
+    /// Looked up in this order: the custom-model roots on disk
+    /// (<c>D365FO_CUSTOM_PACKAGES_PATH</c>), then the metadata bridge, then
+    /// <c>D365FO_PACKAGES_PATH</c> on disk. The bridge used to be the only source, and its
+    /// provider only knows the standard packages root: on a unified developer environment,
+    /// whose model store is a separate directory, every <c>--install-to</c> of a custom model
+    /// failed until <c>D365FO_PACKAGES_PATH</c> was pointed at the model store by hand. Custom
+    /// roots go first because that is where a custom model's source lives, which is the copy a
+    /// write has to land in.
+    /// </remarks>
+    internal static string? ResolveModelFolder(string model)
+    {
+        if (string.IsNullOrWhiteSpace(model)) return null;
+        var cfg = D365FoSettings.FromEnvironment();
+        return D365FO.Core.Index.IndexSync.FindModelDir(cfg.CustomPackagesPaths, model)
+            ?? BridgeGate.TryGetModelFolder(model)
+            ?? D365FO.Core.Index.IndexSync.FindModelDir([cfg.PackagesPath], model);
+    }
+
+    private static ToolResult<object> ModelFolderNotFound(string model)
+    {
+        var roots = D365FoSettings.FromEnvironment().ModelRoots;
+        return ToolResult<object>.Fail(
+            "INSTALL_FAILED",
+            $"Could not resolve the folder of model '{model}'. Searched " +
+            (roots.Count == 0 ? "no configured packages path" : string.Join(", ", roots)) +
+            " on disk, and the metadata bridge did not know it either.",
+            "Point D365FO_CUSTOM_PACKAGES_PATH at the directory that holds the model " +
+            "(<root>\\<Package>\\<Model>\\Ax*), or D365FO_PACKAGES_PATH on a standard-layout VM. " +
+            "Or write with --out <path inside the model's Ax* folder>.");
+    }
+
+    /// <summary>
+    /// Where a companion object goes when the command's primary object was given as
+    /// <c>--out</c>.
+    /// </summary>
+    /// <remarks>
+    /// When <paramref name="primaryOut"/> sits in an AOT folder of a model
+    /// (<c>…\&lt;Model&gt;\AxWorkflowTemplate\X.xml</c>), the companion goes to its own folder
+    /// beside it (<c>…\&lt;Model&gt;\AxClass\Y.xml</c>). Anywhere else, such as a staging
+    /// directory, it stays next to the primary as before. Multi-object commands used to put
+    /// every companion next to the primary unconditionally, so <c>generate workflow --out</c>
+    /// into a model left the document class, the query and the approval inside
+    /// <c>AxWorkflowTemplate\</c>, where neither Visual Studio nor the compiler looks for them.
+    /// </remarks>
+    internal static string CompanionPath(string primaryOut, string axSubfolder, string name)
+    {
+        var dir = System.IO.Path.GetDirectoryName(System.IO.Path.GetFullPath(primaryOut))!;
+        var folder = System.IO.Path.GetFileName(dir);
+        var modelDir = System.IO.Path.GetDirectoryName(dir);
+        var inAotFolder = modelDir is not null && D365FO.Core.ObjectTypes.ObjectTypeRegistry.All
+            .Any(t => string.Equals(t.AotSubfolder, folder, StringComparison.OrdinalIgnoreCase));
+        return inAotFolder
+            ? System.IO.Path.Combine(modelDir!, axSubfolder, name + ".xml")
+            : System.IO.Path.Combine(dir, name + ".xml");
     }
 
     /// <summary>
@@ -225,7 +339,13 @@ internal static class GenerateInstaller
     /// calling the bridge's <c>deleteObject</c>. Never lets a journal failure fail the
     /// create it is recording.
     /// </summary>
-    private static void RecordBridgeCreate(string axKind, string name, string model)
+    /// <remarks>
+    /// Written after the <c>--project</c> registration rather than inside <see cref="PlanInstall"/>,
+    /// so the entry carries that project change and <c>undo</c> takes the object out of the
+    /// project too. Recorded before, it had no delta, and undoing a bridge create left a
+    /// <c>&lt;Content&gt;</c> entry pointing at an object that no longer existed.
+    /// </remarks>
+    private static void RecordBridgeCreate(string axKind, string name, string model, D365FO.Core.Journal.RnrProjDelta? projectDelta)
     {
         try
         {
@@ -243,7 +363,7 @@ internal static class GenerateInstaller
                 TargetPath: null,
                 PreImage: null,
                 IsTombstone: true,
-                RnrProjDelta: null));
+                RnrProjDelta: projectDelta));
         }
         catch { /* best-effort */ }
     }
@@ -265,14 +385,10 @@ internal static class GenerateInstaller
 
         // 1) Metadata-API path — canonical, consistent output.
         var (ok, err) = BridgeGate.TrySaveObject(axKind, name, model, xml);
-        if (ok)
-        {
-            RecordBridgeCreate(axKind, name, model);
-            return (InstallOutcome.CreatedViaApi, null, null, warnings);
-        }
+        if (ok) return (InstallOutcome.CreatedViaApi, null, null, warnings);
 
         // 2) Fallback — write the scaffold into the model folder if resolvable.
-        var folder = BridgeGate.TryGetModelFolder(model);
+        var folder = ResolveModelFolder(model);
         if (!string.IsNullOrEmpty(folder))
         {
             warnings.Add(
@@ -283,12 +399,11 @@ internal static class GenerateInstaller
         }
 
         // 3) Neither path worked.
+        var notFound = ModelFolderNotFound(model).Error!;
         var failure = RenderHelpers.Render(kind, ToolResult<object>.Fail(
             "INSTALL_FAILED",
-            $"Could not install '{name}' into model '{model}'. Metadata API: {err}. " +
-            "Could not resolve the model folder either — set D365FO_BRIDGE_ENABLED=1 and point " +
-            "D365FO_PACKAGES_PATH (and D365FO_CUSTOM_PACKAGES_PATH for custom-model roots) at the " +
-            "directories that contain the model, on a D365FO VM."));
+            $"Could not install '{name}' into model '{model}'. Metadata API: {err}. " + notFound.Message,
+            notFound.Hint));
         return (InstallOutcome.Failed, null, failure, warnings);
     }
 
@@ -428,7 +543,7 @@ internal static class GenerateInstaller
     /// renderer uses keeps naming and null-dropping identical to a payload that was never
     /// touched.
     /// </remarks>
-    private static object WithVerify(object payload, object verify)
+    private static object WithVerify(object payload, object verify, object? project = null)
     {
         try
         {
@@ -436,6 +551,8 @@ internal static class GenerateInstaller
                 is System.Text.Json.Nodes.JsonObject obj)
             {
                 obj["verify"] = System.Text.Json.JsonSerializer.SerializeToNode(verify, D365Json.Options);
+                if (project is not null)
+                    obj["project"] = System.Text.Json.JsonSerializer.SerializeToNode(project, D365Json.Options);
                 return obj;
             }
         }
@@ -467,7 +584,25 @@ internal static class GenerateInstaller
         if (gate is not null) WithHonesty(warnings, gate);
 
         return RenderHelpers.Render(kind, ToolResult<object>.Success(
-            WithVerify(payload, report), warnings.Count > 0 ? warnings : null));
+            WithVerify(payload, report, ProjectReport(gate, warnings)), warnings.Count > 0 ? warnings : null));
+    }
+
+    /// <summary>
+    /// What <c>--project</c> did, for the payload, or null when it was not passed. Registration
+    /// failures were recorded on the gate as each write happened, which can be after a command
+    /// took its copy of the gate's warnings, so they are folded in here.
+    /// </summary>
+    private static object? ProjectReport(GroundingGate.GateResult? gate, List<string> warnings)
+    {
+        if (gate?.Project is null) return null;
+
+        foreach (var w in gate.Warnings.Where(w => w.StartsWith("--project:", StringComparison.Ordinal)))
+            if (!warnings.Contains(w)) warnings.Add(w);
+
+        if (gate.Artefacts.Count == 0)
+            warnings.Add("--project: this command wrote no object, so nothing was registered.");
+
+        return new { path = gate.Project, items = gate.ProjectItems };
     }
 
     /// <summary>Gate warnings plus the caller's own, deduplicated and order-preserving.</summary>
@@ -528,6 +663,7 @@ internal static class GenerateInstaller
                 // back. Recorded explicitly because no Write ran to derive it.
                 gate.Observe(xml);
                 gate.RecordArtefact(axKind, name, null);
+                RecordBridgeCreate(axKind, name, installTo!, RegisterBridgeCreate(gate, axKind, name, installTo!));
                 return Finish(kind, gate, verify, installTo,
                     buildPayload(new EmitResult("bridge", null, null, null)), all);
             }

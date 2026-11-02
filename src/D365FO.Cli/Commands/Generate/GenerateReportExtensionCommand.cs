@@ -165,7 +165,7 @@ public sealed class GenerateReportExtensionCommand : Command<GenerateReportExten
                 {
                     handlerPath = hasInstall && !hasOut
                         ? GenerateInstaller.ResolveInstallPath(kind, Folders.Class, handlerName, settings.InstallTo!, out _)
-                        : System.IO.Path.Combine(System.IO.Path.GetDirectoryName(controllerRes.Path)!, handlerName + ".xml");
+                        : GenerateInstaller.CompanionPath(controllerRes.Path, Folders.Class, handlerName);
                 }
                 handlerRes = GenerateInstaller.Write(gate, handlerDoc, handlerPath!, settings.Overwrite);
             }

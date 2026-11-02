@@ -90,10 +90,9 @@ public sealed class GenerateSysOperationCommand : Command<GenerateSysOperationCo
         }
         else
         {
-            var dir = System.IO.Path.GetDirectoryName(settings.Out!)!;
             controllerPath = settings.Out!;
-            contractPath   = settings.OutContract  ?? System.IO.Path.Combine(dir, contractName  + ".xml");
-            servicePath    = settings.OutService    ?? System.IO.Path.Combine(dir, serviceName   + ".xml");
+            contractPath   = settings.OutContract  ?? GenerateInstaller.CompanionPath(settings.Out!, Folders.Class, contractName);
+            servicePath    = settings.OutService    ?? GenerateInstaller.CompanionPath(settings.Out!, Folders.Class, serviceName);
         }
 
         var parms = settings.Params.Select(ParseParam).ToList();

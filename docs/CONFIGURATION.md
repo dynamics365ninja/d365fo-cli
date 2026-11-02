@@ -19,7 +19,7 @@ With no profile selected, step 3 does not exist and resolution is exactly what i
 | Variable | Purpose | Default |
 |---|---|---|
 | `D365FO_PACKAGES_PATH` | Primary `PackagesLocalDirectory` root | *(required for indexing)* |
-| `D365FO_CUSTOM_PACKAGES_PATH` | Additional `PackagesLocalDirectory` roots (semicolon/comma separated). Indexed for reads **and** forwarded to the bridge so `generate --install-to <Model>` can resolve custom models that live outside the primary packages path (UDE dual-folder setups). Formerly named `D365FO_EXTRA_PACKAGES_PATH` — the old name is still honored as a fallback when the new one is unset, but is deprecated; `d365fo doctor` warns when it is in use. | — |
+| `D365FO_CUSTOM_PACKAGES_PATH` | Additional `PackagesLocalDirectory` roots (semicolon/comma separated). Indexed for reads, searched on disk first when `generate --install-to <Model>` resolves the model folder (so a custom model outside the primary packages path installs without the bridge, as in UDE dual-folder setups), and allowed as a write root. Formerly named `D365FO_EXTRA_PACKAGES_PATH` — the old name is still honored as a fallback when the new one is unset, but is deprecated; `d365fo doctor` warns when it is in use. | — |
 | `D365FO_LABEL_LANGUAGES` | Label languages to extract, e.g. `en-us,cs,de` | `en-us` |
 | `D365FO_INDEX_DB` | Path to the SQLite index file | `%LOCALAPPDATA%\d365fo-cli\d365fo-index.sqlite`; with a profile active, `%LOCALAPPDATA%\d365fo-cli\profiles\<name>\d365fo-index.sqlite` |
 | `D365FO_PROFILE` | Selects a [named profile](#named-profiles). Read from the process env or `settings.json` (where `d365fo config use` writes it), never from a profile file | — |

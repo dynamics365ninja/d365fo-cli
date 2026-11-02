@@ -158,7 +158,7 @@ find extensions <target>              — All object extensions
 find handlers <object>                — Event subscribers
 find relations <table>                — FK relations
 find refs <needle>                    — Who uses it: one row per object + matching methods (FTS5 when `--index-source` was used, else on-demand source scan); --lines N for sample lines. A form hit names its member: `init`, `CustTable.init`, `CustTable.AccountNum.modified`, `OkButton.clicked`. Each model is answered from the index when it has source indexed, else from disk. Without `--model` the scope is the source-indexed models plus the custom models (`D365FO_CUSTOM_MODELS`); `--all-models` scans every other model from disk too. The answer carries `scope` and a `coverage` block (models from the index, from disk, not searched). `Owner.member` (or `Owner::member`) without `--xref` searches the member and keeps methods that also mention Owner, flagged `match.kind: member-text`. A needle the index does not know gets a `hint`
-find refs --xref                      — The compiler's where-used from DYNAMICSXREFDB, queried directly: one row per object + members + reference kinds; --lines 1 for path/line/kind. Refuses an empty answer when the symbol's module has no rows there, and names the build that fills it (`build --model <Model> --xref`)
+find refs --xref                      — The compiler's where-used from DYNAMICSXREFDB, queried directly: one row per object + members + reference kinds; --lines 1 for path/line/kind. Refuses an empty answer when the symbol's module has no rows there, and names the build that fills it (`build --model <Model> --xref`). A bare name the index knows (table, class, form, EDT, enum) — or, failing that, one the cross-reference database has as a table, class, form, EDT, enum, view, map, data entity or query — is matched as that object and its children by index seeks (`match: "object"`, `objectKinds`); a namesake of another kind (menu item, data source, …) is asked for by its AOT path (`/MenuItemDisplays/CustTable`). Any other name is matched anywhere in a path, which scans the whole database
 find form-patterns [--pattern P]      — Form pattern histogram / filter
 find batch-jobs [--model M]           — RunBaseBatch subclasses
 ```
@@ -229,7 +229,11 @@ d365fo lint --format sarif > lint.sarif             # SARIF 2.1.0 for CI
 
 ## Scaffolding (`generate`)
 
-All scaffolders write atomically (`.tmp` + move, `.bak` on overwrite). Pass `--install-to <Model>` to drop straight into a model folder via the Bridge.
+All scaffolders write atomically (`.tmp` + move, `.bak` on overwrite). Pass `--install-to <Model>` to drop straight into a model folder. The model folder is looked up under `D365FO_CUSTOM_PACKAGES_PATH` on disk first, then through the Bridge, then under `D365FO_PACKAGES_PATH`, so a custom model in a separate model store (a UDE, a repo's `Metadata` folder) installs without repointing the standard packages path.
+
+Commands that write more than one object (`workflow`, `custom-service`, `number-sequence`, `report`, `entity` with its staging table, `business-event`, `sysoperation`, `report-extension`) put each object in its own `Ax*` folder, both under `--install-to` and when `--out` points inside a model's `Ax*` folder. An `--out` anywhere else (a staging directory) keeps every object next to the first one.
+
+Pass `--project <path>.rnrproj` to any `generate` command to list every object it writes in that Visual Studio project, in the item shape Visual Studio writes (`<Content Include="AxClass\Name">` with `SubType`, `Name` and a `Link` display folder). It is for repos that keep projects apart from the model folder, where the automatic registration next to the model folder finds nothing. The project is checked before anything is written, an object outside its model's `Ax*` folder is reported rather than listed, a project that builds a different model is refused, and `d365fo undo` removes the entry with the object. The payload's `project` field lists what was added.
 
 ### AOT object types
 

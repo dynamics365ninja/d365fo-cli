@@ -112,7 +112,11 @@ public static class RnrProjRegistry
     {
         try
         {
-            if (!File.Exists(delta.RnrProjPath)) return false;
+            // Only ever a project file: a delta read back from a hand-edited journal must not
+            // let undo edit some other file.
+            if (!IsProjectFile(delta.RnrProjPath)) return false;
+            if (delta.WasAdded && TryRemoveItemText(delta)) return true;
+
             var doc = XDocument.Load(delta.RnrProjPath, LoadOptions.PreserveWhitespace);
             var ns = doc.Root?.Name.Namespace ?? XNamespace.None;
             var itemGroups = doc.Root?.Elements(ns + "ItemGroup").ToList();
@@ -141,16 +145,225 @@ public static class RnrProjRegistry
         }
     }
 
+    /// <summary>Outcome of <see cref="RegisterInProject"/>.</summary>
+    /// <param name="ProjectPath">The project file that was checked.</param>
+    /// <param name="Include">The item the object is listed under (<c>AxClass\Name</c>).</param>
+    /// <param name="Added">True when this call added the entry, false when it was already there.</param>
+    /// <param name="Delta">What changed, for the journal; null when nothing did.</param>
+    public sealed record ProjectRegistration(string ProjectPath, string Include, bool Added, RnrProjDelta? Delta);
+
+    /// <summary>
+    /// Register an object in a project the caller named (<c>generate --project</c>), in the
+    /// item shape Visual Studio writes.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <see cref="TryRegisterCreate"/> only looks next to the model folder, which is where a
+    /// project sits in a classic <c>PackagesLocalDirectory</c> layout. A repository that keeps
+    /// projects apart from metadata (<c>Projects\&lt;Solution&gt;\&lt;Project&gt;.rnrproj</c>
+    /// beside <c>Metadata\&lt;Model&gt;\&lt;Model&gt;</c>) never matches that, so a generated
+    /// object stayed out of the solution until someone added it by hand.
+    /// </para>
+    /// <para>
+    /// Visual Studio lists a D365FO object as
+    /// <c>&lt;Content Include="AxClass\Name"&gt;</c> with <c>SubType</c>, <c>Name</c> and a
+    /// <c>Link</c> that places it under a display folder. A project that already uses the
+    /// <c>&lt;Compile Include="AxClass\Name.xml"/&gt;</c> shape keeps it. Unlike the
+    /// best-effort helpers above, this throws: the caller asked for the registration by name,
+    /// so a failure is reported rather than swallowed.
+    /// </para>
+    /// </remarks>
+    /// <param name="rnrprojPath">The <c>.rnrproj</c> to register the object in.</param>
+    /// <param name="axSubfolder">The object's AOT folder (<c>AxClass</c>).</param>
+    /// <param name="objectName">The object's name.</param>
+    /// <param name="model">The model the object was written to, when known. Refused when the project builds a different one.</param>
+    public static ProjectRegistration RegisterInProject(string rnrprojPath, string axSubfolder, string objectName, string? model = null)
+    {
+        if (!IsProjectFile(rnrprojPath))
+            throw new ArgumentException($"'{rnrprojPath}' is not an existing .rnrproj file.", nameof(rnrprojPath));
+
+        var doc = XDocument.Load(rnrprojPath, LoadOptions.PreserveWhitespace);
+        var root = doc.Root ?? throw new InvalidDataException($"{rnrprojPath} has no root element.");
+        var ns = root.Name.Namespace;
+
+        var projectModel = root.Descendants(ns + "Model").FirstOrDefault()?.Value.Trim();
+        if (!string.IsNullOrEmpty(model) && !string.IsNullOrEmpty(projectModel)
+            && !string.Equals(model, projectModel, StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException(
+                $"{Path.GetFileName(rnrprojPath)} builds model '{projectModel}', but '{objectName}' was written to model '{model}'.");
+        }
+
+        var itemGroups = root.Elements(ns + "ItemGroup").ToList();
+        var compileShape = itemGroups.SelectMany(g => g.Elements(ns + ItemElementName))
+            .Any(e => ((string?)e.Attribute("Include"))?.StartsWith("Ax", StringComparison.OrdinalIgnoreCase) == true);
+        var elementName = compileShape ? ItemElementName : ContentElementName;
+        var include = axSubfolder + "\\" + objectName + (compileShape ? ".xml" : string.Empty);
+
+        if (HasInclude(itemGroups, include))
+            return new ProjectRegistration(rnrprojPath, include, Added: false, Delta: null);
+
+        // The group that already lists objects, so the new entry lands beside its siblings rather
+        // than among the <Folder> entries; a project with none gets a group of its own.
+        var allGroups = root.Descendants(ns + "ItemGroup").ToList();
+        var group = itemGroups.FirstOrDefault(g => g.Elements().Any(e =>
+                        (e.Name == ns + ContentElementName || e.Name == ns + ItemElementName)
+                        && ((string?)e.Attribute("Include"))?.StartsWith("Ax", StringComparison.OrdinalIgnoreCase) == true));
+
+        var bytes = File.ReadAllBytes(rnrprojPath);
+        var hasBom = bytes.Length >= 3 && bytes[0] == 0xEF && bytes[1] == 0xBB && bytes[2] == 0xBF;
+        var text = new System.Text.UTF8Encoding(false).GetString(bytes, hasBom ? 3 : 0, bytes.Length - (hasBom ? 3 : 0));
+        var newline = text.Contains("\r\n", StringComparison.Ordinal) ? "\r\n" : "\n";
+
+        // Escaped: the item is written as text, so a name with a markup character must not be
+        // able to break (or inject into) the project XML.
+        var xInclude = System.Security.SecurityElement.Escape(include);
+        var xName = System.Security.SecurityElement.Escape(objectName);
+        var item = new System.Text.StringBuilder();
+        if (compileShape)
+        {
+            item.Append($"    <{elementName} Include=\"{xInclude}\" />{newline}");
+        }
+        else
+        {
+            item.Append($"    <{elementName} Include=\"{xInclude}\">{newline}");
+            item.Append($"      <SubType>Content</SubType>{newline}");
+            item.Append($"      <Name>{xName}</Name>{newline}");
+            if (DisplayFolders.TryGetValue(axSubfolder, out var display))
+                item.Append($"      <Link>{display}\\{xName}</Link>{newline}");
+            item.Append($"    </{elementName}>{newline}");
+        }
+
+        // Inserted as text, not by re-serialising the document: XDocument rewrites every
+        // self-closing tag ("<Folder Include=\"Classes\\\"/>" gains a space), so a one-item
+        // registration would otherwise show up in git as a change to every folder line.
+        var groupSpans = System.Text.RegularExpressions.Regex.Matches(
+            text, @"<ItemGroup\b[^>]*?(/>|>.*?</ItemGroup>)", System.Text.RegularExpressions.RegexOptions.Singleline);
+        int at;
+        string insert;
+        if (group is not null && groupSpans.Count == allGroups.Count
+            && groupSpans[allGroups.IndexOf(group)] is { } span && span.Value.EndsWith("</ItemGroup>", StringComparison.Ordinal))
+        {
+            var close = span.Index + span.Length - "</ItemGroup>".Length;
+            at = text.LastIndexOf('\n', close - 1) + 1;
+            insert = item.ToString();
+            // A group written on one line ("<ItemGroup><Content …/></ItemGroup>"): the start of
+            // the closing tag's line is outside the group, so insert right before the tag instead.
+            if (at <= span.Index)
+            {
+                at = close;
+                insert = newline + insert;
+            }
+        }
+        else
+        {
+            var anchor = System.Text.RegularExpressions.Regex.Match(text, @"^[ \t]*<Import\b", System.Text.RegularExpressions.RegexOptions.Multiline);
+            if (!anchor.Success)
+                anchor = System.Text.RegularExpressions.Regex.Match(text, @"^[ \t]*</Project>", System.Text.RegularExpressions.RegexOptions.Multiline);
+            if (!anchor.Success)
+                throw new InvalidDataException($"{Path.GetFileName(rnrprojPath)} has no </Project> line to add an item group before.");
+            at = anchor.Index;
+            insert = $"  <ItemGroup>{newline}{item}  </ItemGroup>{newline}";
+        }
+
+        text = text.Insert(at, insert);
+        File.WriteAllBytes(rnrprojPath, (hasBom ? new byte[] { 0xEF, 0xBB, 0xBF } : [])
+            .Concat(new System.Text.UTF8Encoding(false).GetBytes(text)).ToArray());
+
+        return new ProjectRegistration(rnrprojPath, include, Added: true,
+            Delta: new RnrProjDelta(rnrprojPath, elementName, include, WasAdded: true));
+    }
+
+    /// <summary>
+    /// Remove an item <see cref="RegisterInProject"/> added, as text, so undo leaves the rest of
+    /// the file byte-for-byte as it was. False when the item is not found in the shape written.
+    /// </summary>
+    private static bool TryRemoveItemText(RnrProjDelta delta)
+    {
+        var bytes = File.ReadAllBytes(delta.RnrProjPath);
+        var hasBom = bytes.Length >= 3 && bytes[0] == 0xEF && bytes[1] == 0xBB && bytes[2] == 0xBF;
+        var text = new System.Text.UTF8Encoding(false).GetString(bytes, hasBom ? 3 : 0, bytes.Length - (hasBom ? 3 : 0));
+        var el = System.Text.RegularExpressions.Regex.Escape(delta.ItemElementName);
+        var include = System.Text.RegularExpressions.Regex.Escape(System.Security.SecurityElement.Escape(delta.Include));
+        var match = System.Text.RegularExpressions.Regex.Match(text,
+            $@"^[ \t]*<{el} Include=""{include}""(\s*/>|>.*?</{el}>)[ \t]*\r?\n",
+            System.Text.RegularExpressions.RegexOptions.Multiline | System.Text.RegularExpressions.RegexOptions.Singleline);
+        if (!match.Success) return false;
+
+        text = text.Remove(match.Index, match.Length);
+        File.WriteAllBytes(delta.RnrProjPath, (hasBom ? new byte[] { 0xEF, 0xBB, 0xBF } : [])
+            .Concat(new System.Text.UTF8Encoding(false).GetBytes(text)).ToArray());
+        return true;
+    }
+
+    private const string ContentElementName = "Content";
+
+    /// <summary>
+    /// True when <paramref name="path"/> is an existing file with the <c>.rnrproj</c> extension
+    /// (any case): the only kind of file project registration and its undo ever edit.
+    /// </summary>
+    public static bool IsProjectFile(string? path)
+        => !string.IsNullOrWhiteSpace(path)
+            && path.EndsWith(".rnrproj", StringComparison.OrdinalIgnoreCase)
+            && File.Exists(path);
+
+    /// <summary>
+    /// The display folder Visual Studio files a new object under, per AOT folder. A kind that is
+    /// not listed gets no <c>Link</c>, and Visual Studio shows it at the project root.
+    /// </summary>
+    private static readonly Dictionary<string, string> DisplayFolders = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ["AxClass"] = "Classes",
+        ["AxTable"] = "Tables",
+        ["AxTableExtension"] = "Table Extensions",
+        ["AxForm"] = "Forms",
+        ["AxFormExtension"] = "Form Extensions",
+        ["AxEdt"] = "Extended Data Types",
+        ["AxEnum"] = "Base Enums",
+        ["AxEnumExtension"] = "Base Enum Extensions",
+        ["AxQuery"] = "Queries",
+        ["AxView"] = "Views",
+        ["AxMap"] = "Maps",
+        ["AxDataEntityView"] = "Data Entities",
+        ["AxDataEntityViewExtension"] = "Data Entity Extensions",
+        ["AxMenu"] = "Menus",
+        ["AxMenuExtension"] = "Menu Extensions",
+        ["AxMenuItemDisplay"] = "Display Menu Items",
+        ["AxMenuItemAction"] = "Action Menu Items",
+        ["AxMenuItemOutput"] = "Output Menu Items",
+        ["AxReport"] = "Reports",
+        ["AxService"] = "Services",
+        ["AxServiceGroup"] = "Service Groups",
+        ["AxSecurityRole"] = "Security Roles",
+        ["AxSecurityDuty"] = "Security Duties",
+        ["AxSecurityPrivilege"] = "Security Privileges",
+        ["AxSecurityPolicy"] = "Security Policies",
+        ["AxConfigurationKey"] = "Configuration Keys",
+        ["AxLabelFile"] = "Label Files",
+        ["AxTile"] = "Tiles",
+        ["AxResource"] = "Resources",
+        ["AxWorkflowCategory"] = "Workflow Categories",
+        ["AxWorkflowTemplate"] = "Workflow Types",
+        ["AxWorkflowApproval"] = "Workflow Approvals",
+        ["AxWorkflowTask"] = "Workflow Tasks",
+    };
+
     private static bool HasInclude(IEnumerable<XElement> itemGroups, string include)
         => FindInclude(itemGroups, include) is not null;
 
     // .rnrproj files are always Windows/Visual-Studio-authored (backslash-separated Include
     // paths) regardless of which OS this CLI runs on — normalize both sides so a lookup for
     // "AxTable\Foo.xml" matches an on-disk entry that (rarely) uses "AxTable/Foo.xml" or vice versa.
+    // The ".xml" suffix is dropped too: Visual Studio lists an object as "AxTable\Foo", and that
+    // entry is the same object as a "AxTable\Foo.xml" one.
     private static XElement? FindInclude(IEnumerable<XElement> itemGroups, string include)
         => itemGroups.SelectMany(g => g.Elements())
             .FirstOrDefault(e => string.Equals(
                 Normalize((string?)e.Attribute("Include")), Normalize(include), StringComparison.OrdinalIgnoreCase));
 
-    private static string? Normalize(string? path) => path?.Replace('/', '\\');
+    private static string? Normalize(string? path)
+    {
+        var p = path?.Replace('/', '\\');
+        return p is not null && p.EndsWith(".xml", StringComparison.OrdinalIgnoreCase) ? p[..^4] : p;
+    }
 }

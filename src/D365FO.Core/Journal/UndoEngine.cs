@@ -160,9 +160,7 @@ public static class UndoEngine
         // D365FO_PACKAGES_PATH — or hand-edited — would otherwise let `undo` delete or rewrite
         // files anywhere on disk.
         var cfg = D365FoSettings.FromEnvironment();
-        PathGuard.EnsureWithinBoundary(
-            entry.TargetPath,
-            new[] { cfg.PackagesPath, cfg.WorkspacePath }.Concat(cfg.CustomPackagesPaths).ToArray());
+        PathGuard.EnsureWithinBoundary(entry.TargetPath, cfg.WriteRoots);
 
         string? rnrWarn = null;
         switch (entry.Operation)
@@ -172,8 +170,7 @@ public static class UndoEngine
                 {
                     File.Delete(entry.TargetPath);
                 }
-                if (entry.RnrProjDelta is not null && !RnrProjRegistry.Invert(entry.RnrProjDelta))
-                    rnrWarn = $".rnrproj entry for '{entry.ObjectName}' could not be removed automatically — check {entry.RnrProjDelta.RnrProjPath}.";
+                rnrWarn = RevertProjectDelta(entry, "removed");
                 return (true, null, $"deleted {entry.TargetPath}", rnrWarn);
 
             case JournalOperation.Update:
@@ -186,8 +183,7 @@ public static class UndoEngine
                 if (entry.PreImage is null)
                     return (false, "No pre-image recorded for this delete — cannot restore the file.", null, null);
                 AtomicWriteText(entry.TargetPath, entry.PreImage, entry.PreImageHadBom);
-                if (entry.RnrProjDelta is not null && !RnrProjRegistry.Invert(entry.RnrProjDelta))
-                    rnrWarn = $".rnrproj entry for '{entry.ObjectName}' could not be restored automatically — check {entry.RnrProjDelta.RnrProjPath}.";
+                rnrWarn = RevertProjectDelta(entry, "restored");
                 return (true, null, $"recreated {entry.TargetPath}", rnrWarn);
 
             default:
@@ -283,7 +279,26 @@ public static class UndoEngine
             var msg = (string?)result["message"] ?? string.Empty;
             return (false, $"{code}: {msg}", null, null);
         }
-        return (true, null, detail, null);
+
+        // The provider took the object out (or put it back); the project has to follow, as it
+        // does for a disk write. A bridge create made with --project records that registration.
+        return (true, null, detail, RevertProjectDelta(entry, "reverted"));
+    }
+
+    /// <summary>
+    /// Invert the entry's project change, or say why it was not. A delta whose path is not an
+    /// existing <c>.rnrproj</c> (a hand-edited journal) is skipped rather than replayed, so undo
+    /// never edits any other file.
+    /// </summary>
+    private static string? RevertProjectDelta(JournalEntry entry, string verb)
+    {
+        var delta = entry.RnrProjDelta;
+        if (delta is null) return null;
+        if (!RnrProjRegistry.IsProjectFile(delta.RnrProjPath))
+            return $".rnrproj entry for '{entry.ObjectName}' was not {verb}: '{delta.RnrProjPath}' is not an existing .rnrproj file, so undo left it untouched.";
+        return RnrProjRegistry.Invert(delta)
+            ? null
+            : $".rnrproj entry for '{entry.ObjectName}' could not be {verb} automatically — check {delta.RnrProjPath}.";
     }
 
     /// <summary>Build <see cref="BridgeOptions"/> from the unified config resolver.</summary>
