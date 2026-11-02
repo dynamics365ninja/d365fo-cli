@@ -35,6 +35,30 @@ the error against a stopped or wedged LocalDB on a UDE.
   `SqlLocalDB info`, and `SqlLocalDB stop` for an instance that stays `Stopped` while `start` fails.
 - The connect timeout is left as it is. LocalDB starts on the first connection, and on a UDE that
   took 15 s or more. A shorter timeout would turn a slow start into a failure.
+### Fixed — `modify method --body` no longer deletes the method's signature (#231)
+
+`--body` is documented as "statements only — no signature/braces", but the engine wrote it as
+the whole `<Source>`. A caller who followed the help got `ok: true` and a method reduced to its
+statements: the doc comment, the attributes, the signature and the braces were gone, and the
+class no longer compiled. The MCP `modify_method` tool did the same with `body`.
+
+- **`--body` (MCP `body`) now replaces only what sits between the method's outer braces.** The
+  doc comment, attributes, signature and braces are kept, and the statements are indented one
+  level inside the method in the method's own style (tabs or spaces, CRLF or LF). The brace
+  pair is found on the lexer-masked source, so a brace in a string, a comment or a doc comment
+  does not count.
+- **A full declaration passed as a body is refused** with `BAD_INPUT` before the bridge is
+  touched: text that starts with a `///` doc comment, an attribute, or a signature followed by
+  its block. Statements that open a block (`if`, `while select … where`, a container
+  assignment, a local function followed by more statements) still pass.
+- **A method with no body is refused** rather than given one: no braces (`METHOD_BODY_NOT_FOUND`),
+  an `abstract` method or a `delegate`, an interface method, or a macro-declared method.
+- **`--source` (MCP `source`) replaces the whole method**, signature included, for the callers
+  who passed the full method as `--body` to work around this. It must declare exactly one
+  method, named like the one being replaced. Exactly one of `--body` and `--source` is
+  required. The result reports `mode: body | source`, and `newBody` is now the `<Source>` as
+  written.
+
 ### Added — table field properties, `exist()` naming and smaller fixes from a skill rewrite (#232)
 
 - **`modify field-property <TABLE> <FIELD> <PROPERTY> --value <V>`** (MCP `modify_object`
