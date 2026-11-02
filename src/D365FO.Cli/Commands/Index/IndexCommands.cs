@@ -63,6 +63,7 @@ public sealed class IndexStatusCommand : Command<IndexStatusCommand.Settings>
         ExtractCounts? counts = null;
         string? statusWarning = null;
         IndexStaleness.StalenessResult? staleness = null;
+        IndexPrune.Report? departed = null;
         if (exists)
         {
             try
@@ -75,7 +76,10 @@ public sealed class IndexStatusCommand : Command<IndexStatusCommand.Settings>
                 if (!string.IsNullOrEmpty(cfg.PackagesPath)) roots.Add(cfg.PackagesPath!);
                 roots.AddRange(cfg.CustomPackagesPaths);
                 if (roots.Count > 0)
+                {
                     staleness = IndexStaleness.Check(repo, roots);
+                    departed = IndexPrune.Find(repo, roots);
+                }
             }
             catch (Exception ex)
             {
@@ -86,6 +90,9 @@ public sealed class IndexStatusCommand : Command<IndexStatusCommand.Settings>
         var warnings = new List<string>();
         if (staleness is { IsStale: true })
             warnings.Add("stale-index");
+        if (departed is { Departed.Count: > 0 })
+            warnings.Add($"departed-models: {departed.Departed.Count} indexed model(s) no longer under any configured root "
+                + $"({string.Join(", ", departed.Departed.Select(d => d.Model))}). {IndexPrune.PruneHint}");
 
         var result = ToolResult<object>.Success(new
         {
@@ -107,7 +114,15 @@ public sealed class IndexStatusCommand : Command<IndexStatusCommand.Settings>
                 lastExtractedUtc = staleness.LastExtractedUtc,
                 scannedFiles = staleness.ScannedFiles,
                 truncated = staleness.Truncated,
+                staleModels = staleness.StaleModels is { Count: > 0 } ? staleness.StaleModels : null,
             },
+            departedModels = departed is { Departed.Count: > 0 }
+                ? departed.Departed.Select(d => new { model = d.Model, isCustom = d.IsCustom, indexedFolder = d.IndexedFolder, reason = d.Reason })
+                : null,
+            relocatedModels = departed is { Relocated.Count: > 0 }
+                ? departed.Relocated.Select(r => new { model = r.Model, indexedFolder = r.IndexedFolder, currentFolder = r.CurrentFolder })
+                : null,
+            missingRoots = departed is { MissingRoots.Count: > 0 } ? departed.MissingRoots : null,
             warning = statusWarning,
         }, warnings: warnings.Count > 0 ? warnings : null);
         return RenderHelpers.Render(kind, result);
@@ -169,7 +184,8 @@ public sealed class IndexExtractCommand : Command<IndexExtractCommand.Settings>
         IReadOnlyDictionary<string, string?>? fingerprintsByModel = null,
         int? parallelism = null,
         IReadOnlyList<string>? extraPackagesPaths = null,
-        bool indexSource = false)
+        bool indexSource = false,
+        bool prune = false)
     {
         var cfg = D365FoSettings.FromEnvironment(databaseOverride);
         var root = packagesOverride ?? cfg.PackagesPath;
@@ -187,6 +203,15 @@ public sealed class IndexExtractCommand : Command<IndexExtractCommand.Settings>
         }
 
         var repo = RepoFactory.Create(databaseOverride);
+
+        // One writer per index file across processes: a second refresh, or an MCP index_sync,
+        // waits here or is refused with INDEX_BUSY, instead of meeting this run's model
+        // transactions in SQLite and failing half way with "database is locked". Held for the
+        // whole run (released when this method returns, on this thread) because every model
+        // write and the closing checkpoint belong to it.
+        using var writeLock = IndexWriteLock.TryAcquire(repo.DatabasePath);
+        if (writeLock is null) return RenderHelpers.Render(kind, IndexWriteLock.Busy(repo.DatabasePath));
+
         var extractor = new MetadataExtractor { CaptureMethodSource = indexSource };
         var matcher = new ModelMatcher(cfg.CustomModels);
         int modelCount = 0;
@@ -280,8 +305,11 @@ public sealed class IndexExtractCommand : Command<IndexExtractCommand.Settings>
                         modelDir =>
                         {
                             var model = Path.GetFileName(modelDir)!;
-                            var fp = ComputeFingerprint(modelDir, cfg.LabelLanguages);
-                            if (since.HasValue && NewestMtime(modelDir) is { } newest && newest < since.Value)
+                            // One walk answers both questions below: the fingerprint and the
+                            // newest mtime for --since come from the same scan.
+                            var scan = IndexSync.ScanModel(modelDir);
+                            var fp = IndexSync.FormatFingerprint(scan, cfg.LabelLanguages);
+                            if (since.HasValue && scan.FileCount > 0 && scan.NewestUtc < since.Value)
                             {
                                 System.Threading.Interlocked.Increment(ref skippedCount);
                                 return;
@@ -380,6 +408,20 @@ public sealed class IndexExtractCommand : Command<IndexExtractCommand.Settings>
             ProcessAll(null, null);
         }
 
+        // Models whose folder left every root are never visited above, so their rows would stay
+        // forever. Only on request: a root that is missing right now protects its models, but a
+        // caller who never asked for deletion should not get one from a refresh.
+        IndexPrune.Report? pruneReport = null;
+        IReadOnlyList<string>? pruned = null;
+        if (prune)
+        {
+            var pruneRoots = new List<string?> { root, cfg.PackagesPath };
+            pruneRoots.AddRange(extraPackagesPaths ?? Array.Empty<string>());
+            pruneRoots.AddRange(cfg.CustomPackagesPaths);
+            pruneReport = IndexPrune.Find(repo, pruneRoots);
+            pruned = IndexPrune.Prune(repo, pruneReport);
+        }
+
         // ApplyExtract only checkpoints once the WAL crosses its threshold, so flush what the
         // last models left behind rather than leaving it for whichever process opens next.
         repo.CheckpointWal();
@@ -397,6 +439,11 @@ public sealed class IndexExtractCommand : Command<IndexExtractCommand.Settings>
             customModelPatterns = cfg.CustomModels,
             elapsedMs = runSw.ElapsedMilliseconds,
             perModel = per,
+            pruned = prune ? pruned : null,
+            relocatedModels = pruneReport is { Relocated.Count: > 0 }
+                ? pruneReport.Relocated.Select(r => new { model = r.Model, indexedFolder = r.IndexedFolder, currentFolder = r.CurrentFolder })
+                : null,
+            missingRoots = pruneReport is { MissingRoots.Count: > 0 } ? pruneReport.MissingRoots : null,
             totals,
         });
 
@@ -405,6 +452,10 @@ public sealed class IndexExtractCommand : Command<IndexExtractCommand.Settings>
             AnsiConsole.MarkupLine("[green]OK[/] index extract completed");
             AnsiConsole.MarkupLine($"models processed: [bold]{modelCount}[/], skipped: [bold]{skippedCount}[/], custom: [bold]{customCount}[/]");
             AnsiConsole.MarkupLine($"elapsed: [bold]{runSw.ElapsedMilliseconds}[/] ms");
+            if (pruned is not null)
+                AnsiConsole.MarkupLine(pruned.Count == 0
+                    ? "pruned: [bold]0[/] (no indexed model has left the configured roots)"
+                    : $"pruned: [bold]{pruned.Count}[/] ({Markup.Escape(string.Join(", ", pruned))})");
 
             var table = new Table().Border(TableBorder.Rounded).Title("[bold]Index Totals[/]");
             table.AddColumn("Artifact");
@@ -418,25 +469,6 @@ public sealed class IndexExtractCommand : Command<IndexExtractCommand.Settings>
             table.AddRow("Labels", totals.Labels.ToString());
             AnsiConsole.Write(table);
         });
-    }
-
-    private static DateTime? NewestMtime(string dir)
-    {
-        DateTime? max = null;
-        try
-        {
-            foreach (var f in Directory.EnumerateFiles(dir, "*.xml", SearchOption.AllDirectories))
-            {
-                try
-                {
-                    var t = File.GetLastWriteTimeUtc(f);
-                    if (!max.HasValue || t > max.Value) max = t;
-                }
-                catch { }
-            }
-        }
-        catch { }
-        return max;
     }
 
     /// <summary>
@@ -486,11 +518,12 @@ public sealed class IndexExtractCommand : Command<IndexExtractCommand.Settings>
 }
 
 /// <summary>
-/// Incremental refresh: runs <see cref="IndexExtractCommand"/> but seeds
-/// <c>--since</c> from the index DB file's last-write timestamp (with a
-/// 5-minute safety lookback). Models whose XMLs haven't changed since the
-/// last extract are skipped — turning a full multi-minute rescan into a
-/// couple of seconds on a warm workspace.
+/// Incremental refresh: runs <see cref="IndexExtractCommand"/> but skips every
+/// model whose stored fingerprint (file count, newest mtime, hash of the file
+/// names) still matches the disk — turning a full multi-minute rescan into a
+/// couple of seconds on a warm workspace. When the index holds no fingerprints
+/// it falls back to seeding <c>--since</c> from the index DB file's last-write
+/// timestamp (with a 5-minute safety lookback).
 /// </summary>
 public sealed class IndexRefreshCommand : Command<IndexRefreshCommand.Settings>
 {
@@ -523,16 +556,23 @@ public sealed class IndexRefreshCommand : Command<IndexRefreshCommand.Settings>
         [CommandOption("--index-source")]
         [System.ComponentModel.Description("Also full-text index X++ method bodies into MethodSourceFts (opt-in; enlarges the DB). Speeds up `find refs` and enables source search.")]
         public bool IndexSource { get; init; }
+
+        [CommandOption("--prune")]
+        [System.ComponentModel.Description("Also delete the rows of models whose folder is no longer under any configured packages root (see `index status` departedModels). Models under a root that is missing right now are kept.")]
+        public bool Prune { get; init; }
     }
 
     public override int Execute(CommandContext ctx, Settings settings)
+        => RefreshCore(OutputMode.Resolve(settings.Output), settings);
+
+    internal static int RefreshCore(OutputMode.Kind kind, Settings settings)
     {
         var since = settings.Since;
         IReadOnlyDictionary<string, string?>? fingerprints = null;
         if (!settings.Force)
         {
             // Per-model fingerprint skip (§1.1). Cheap even for tens of models
-            // because the fingerprint is just (fileCount, newestMtimeTicks).
+            // because the fingerprint comes from one directory walk per model.
             try
             {
                 var repo = RepoFactory.Create(settings.DatabasePath);
@@ -543,7 +583,12 @@ public sealed class IndexRefreshCommand : Command<IndexRefreshCommand.Settings>
                 // Pre-v7 DB or opening failed — fall back to the --since path.
             }
 
-            if (string.IsNullOrWhiteSpace(since))
+            // The DB-mtime threshold is only a fallback for when there are no fingerprints to
+            // compare. Applied on top of them it overrode the fingerprint: a rename or a delete
+            // leaves every remaining file's mtime where it was, so the model looked older than the
+            // threshold and was skipped even though its fingerprint had changed. A --since the
+            // caller passed is still honoured as given.
+            if (string.IsNullOrWhiteSpace(since) && fingerprints is null)
             {
                 var cfg = D365FoSettings.FromEnvironment(settings.DatabasePath);
                 if (File.Exists(cfg.DatabasePath))
@@ -556,7 +601,7 @@ public sealed class IndexRefreshCommand : Command<IndexRefreshCommand.Settings>
         var cfg2 = D365FoSettings.FromEnvironment(settings.DatabasePath);
         var extraPaths = IndexExtractCommand.MergeExtraPaths(settings.ExtraPackagesPaths, cfg2.CustomPackagesPaths);
         return IndexExtractCommand.ExtractCore(
-            OutputMode.Resolve(settings.Output),
+            kind,
             settings.PackagesPath,
             settings.DatabasePath,
             settings.OnlyModel,
@@ -564,7 +609,8 @@ public sealed class IndexRefreshCommand : Command<IndexRefreshCommand.Settings>
             fingerprints,
             parallelism: settings.Parallelism,
             extraPackagesPaths: extraPaths,
-            indexSource: settings.IndexSource);
+            indexSource: settings.IndexSource,
+            prune: settings.Prune);
     }
 }
 

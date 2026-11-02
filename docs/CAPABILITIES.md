@@ -20,7 +20,8 @@ By default the index stores object/method *metadata* only — method bodies (the
 | `index extract --index-source` | Also full-text index X++ method bodies (opt-in; enlarges the DB, accelerates `find refs`). Also available on `index refresh`. |
 | `index refresh` | Re-extract only models whose content fingerprint changed |
 | `index refresh --force` | Re-extract all models regardless of fingerprint |
-| `index status` | Show per-model row counts and last-extracted timestamps |
+| `index refresh --prune` | Also delete the rows of models whose folder is no longer under any configured packages root |
+| `index status` | Show per-model row counts and last-extracted timestamps, and `departedModels`: models indexed from a folder no configured root holds any more |
 | `index history` | Show per-model extraction run history |
 | `index export` | Dump the index to a portable archive |
 | `index import` | Restore from an archive |
@@ -34,6 +35,15 @@ inside it and the model is read off the packages layout. It is the repair for an
 did not make (Visual Studio, a git pull, a colleague); writes through `generate` / `modify`
 already refresh the index themselves. A model is the unit because the writer replaces a model's
 rows atomically: a single-object write would delete the rest of that model.
+
+A model whose folder leaves every configured root (a repository moved to a new clone, a model
+deleted, a root dropped from `D365FO_CUSTOM_PACKAGES_PATH`) is never visited by a refresh again, so
+its rows would stay forever. `index status` and `doctor` report it under `departedModels`, and
+`index refresh --prune` (or `index sync --prune`, MCP `index_sync` with `prune: true`) deletes its
+rows. Pruning is never automatic, and a model whose root is missing right now (an unmounted drive)
+is kept. While any configured root is missing (perhaps mistyped), no model is judged to be outside
+the roots. A model found under a root but indexed from another folder is reported as relocated:
+`index sync <Model>` is the fix for that, not a delete.
 
 ### `index cross-check`
 

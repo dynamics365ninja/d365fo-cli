@@ -42,6 +42,105 @@ list too.
   and `LocalTools` and is hidden in read-only mode, and that no tool declared `Read` takes a writer's
   argument (`installTo`, `overwrite`, `dryRun`, `out`).
 
+### Fixed — `D365FO_BRIDGE_ENABLED=0` now switches the bridge off for writes too
+
+The write, delete, verify and model-folder helpers in `BridgeGate` only asked whether the bridge
+executable existed. With the flag set to `0`, `doctor` reported the bridge disabled while
+`generate --install-to` still created the object through the live metadata provider, which also
+writes its compiled copy under the runtime PackagesLocalDirectory. Found in a live test that
+pointed a throwaway profile at a scratch model store.
+
+- An explicit `0` / `false` is now honoured by every `BridgeGate` helper. An unset flag keeps the
+  old behaviour, so an installation that relies on finding the executable is not broken.
+- `modify` / `modify method` and `undo` of a bridge-made change, which spawned the bridge
+  directly rather than through `BridgeGate`, honour the switch-off too and say so; `--verify`
+  reports the bridge as switched off rather than missing.
+
+### Fixed — two writers on one index, and in-place edits that could lose the file
+
+Claude Desktop's MCP server and a shell often share one index. Nothing serialised their writes,
+connections had no busy timeout, and the daemon's pipe and pid file were the same for every
+profile.
+
+- **Index writers take a per-database lock.** `index extract`, `index refresh`, `index sync` and
+  the MCP `index_sync` hold a cross-process named mutex for the index file they write. A second
+  writer waits up to 30 s, then fails `INDEX_BUSY` with nothing written, instead of meeting the
+  first one's model transaction in SQLite and failing half way with "database is locked". The OS
+  releases the lock if the holder dies. The lock is per user; on Linux/macOS it is not limited to
+  one shell session, so an editor-launched MCP server and a terminal share it.
+- **Every connection sets `busy_timeout`.** A short collision (a checkpoint meeting a reader, a
+  journal write meeting a sync) now waits instead of failing on the first try.
+- **`wal_autocheckpoint = 0` is limited to the bulk extract writes.** It was set on every
+  connection and survived in the connection pool, so the WAL a small write left behind was never
+  checkpointed automatically. The extract pipeline keeps its own checkpoint schedule.
+- **The daemon's pipe, socket and pid file carry the profile name** (`d365fo-cli-<profile>`). A
+  daemon for one profile answered another profile's clients from the wrong index, and the second
+  profile's `daemon start` was refused. No profile keeps the old name.
+- **In-place edits write through the shared atomic writer.** `generate datasource-method` /
+  `control-method`, `generate role --add-to` and `generate duty` / `privilege --into-role`
+  staged through a fixed `<file>.tmp` and moved twice with no rollback, the pattern #158 fixed in
+  the scaffolder. `ScaffoldFileWriter.SaveInPlace` gives them the per-call staging name and the
+  restore-on-failure.
+
+### Added — `index refresh --prune` for models that left the configured roots
+
+Refresh only re-reads models it finds under a configured root, so a model whose folder moved away
+kept its rows forever. After a repository move, 80 classes of a test model still pointed at the old
+clone: `search` returned them, and `find references --model` scanned zero files and answered zero.
+
+- **`index status` and `doctor` report departed models.** A model is departed when no configured
+  root holds a folder of that name and the folder it was indexed from is outside every root or gone.
+  `index status` lists them under `departedModels` with a `departed-models` warning, `doctor` adds
+  an `index departed models` warning. Both name the fix.
+- **`index refresh --prune` deletes their rows**, and so does `index sync --prune` (which needs no
+  model) and the MCP `index_sync` tool with `prune: true`. A model's rows go through the same
+  model-scoped replace a re-extract uses, plus its method-body FTS rows, its label files and the
+  `Models` row.
+- **Never by default, and never under a missing root.** A default refresh only reports. A model
+  whose indexed folder sits under a configured root that does not exist right now (an unmounted
+  drive) is kept, so a standard model cannot be pruned because a disk was briefly away. While any
+  configured root is missing (it may be a mistyped spelling of a model's real root), no model is
+  judged outside the roots at all. A prune with no reachable root, or with no packages root
+  configured, is refused, and each model's rows go in one transaction. A model present under
+  another root is reported as
+  relocated, for `index sync`, not deleted.
+
+### Changed — `index refresh` walks each model once, and staleness is judged per model
+
+A refresh that changed nothing took 45 s on a 178-model UDE, and `doctor` could call the index
+fresh while a model was behind.
+
+- **One directory walk per model.** The fingerprint and the `--since` mtime came from two separate
+  recursive walks, each asking the file system for every file's mtime again. Both now come from a
+  single `DirectoryInfo.EnumerateFiles` pass, whose `FileInfo` already carries the mtime.
+- **A rename re-extracts the model.** The fingerprint was `count:newestMtime:langs`, and a rename
+  moves neither, so the index kept the old object name until a `--force`. It now carries an
+  order-independent hash of the relative file names. Fingerprints stored by an older build simply
+  differ, so each model re-extracts once on the first refresh and is skipped after that.
+- **The DB-mtime threshold no longer overrides the fingerprint.** `index refresh` seeded `--since`
+  from the index file's mtime even when it had fingerprints to compare, so a model whose only
+  change was a rename or a delete looked older than the threshold and was skipped. The threshold is
+  now only the fallback for an index without fingerprints. An explicit `--since` is honoured as before.
+- **Staleness per model.** `index status` and `doctor` compared the newest custom file with the
+  newest extract of ANY model, so syncing one model marked every other model fresh. Each custom
+  model is now held to its own `LastExtractedUtc`, and `staleness.staleModels` names the ones behind.
+- `index sync` takes the fingerprint before reading the model rather than after, so a file saved
+  during the extract is picked up by the next refresh instead of being stamped as indexed.
+
+### Performance — model folders found with one listing each, not a probe per marker
+
+Every walk of a packages root asked each package subfolder about every marker folder (`AxClass`,
+`AxTable`, … about 70 of them) with its own `Directory.Exists`. Most subfolders of a real
+PackagesLocalDirectory are not models (`bin`, `Descriptor`, `Resources`), so each one failed every
+probe: about 100,000 file-system calls and 14 s per walk on a UDE. `index refresh`, `index sync`, and
+anything that locates a model folder paid it.
+
+- `ObjectTypeRegistry.IsModelDirectory` lists the folder once and checks the names against the
+  marker set. `IndexSync.EnumerateModelDirs` and the extractor both use it, so they still agree on
+  what a model is.
+- `EnumerateModelDirs(root, model)` compares the name before it lists anything, so a one-model
+  lookup touches one folder per package.
+
 ### Fixed — lookups that answered nothing, or a different question, without saying so
 
 Found by an outside benchmark of CLI vs the XRef DB vs grep for D365 lookups, where 3 of 24 runs
