@@ -73,33 +73,34 @@ public sealed partial class MetadataRepository
             isCustom = flag.Value != 0;
         }
 
-        ApplyExtract(ExtractBatch.Empty(model) with { IsCustom = isCustom });
-
-        using var conn = Open();
-        using var tx = conn.BeginTransaction();
-        try { conn.Execute("DELETE FROM MethodSourceFts WHERE Model=@n", new { n = model }, tx); }
-        catch (Microsoft.Data.Sqlite.SqliteException) { /* no FTS5 in this SQLite build: nothing to clear */ }
-
-        if (!string.IsNullOrWhiteSpace(modelFolder))
+        // One transaction: a prune interrupted half-way must not leave a Models row whose object
+        // rows are gone, because with no SourcePath left nothing would ever report it again.
+        ApplyExtract(ExtractBatch.Empty(model) with { IsCustom = isCustom }, sourceFingerprint: null,
+            indexMethodSource: false, beforeCommit: (conn, tx) =>
         {
-            var prefix = Path.TrimEndingDirectorySeparator(modelFolder) + Path.DirectorySeparatorChar;
-            var files = conn.Query<(long Id, string LabelFile, string SourcePath)>(
-                    "SELECT LabelFileId, LabelFile, SourcePath FROM LabelFiles", transaction: tx)
-                .Where(f => f.SourcePath.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
-                .ToList();
-            foreach (var f in files)
-                conn.Execute("DELETE FROM LabelFiles WHERE LabelFileId=@id", new { id = f.Id }, tx);
-            foreach (var labelFile in files.Select(f => f.LabelFile).Distinct(StringComparer.OrdinalIgnoreCase))
-            {
-                var stillShipped = conn.ExecuteScalar<long>(
-                    "SELECT COUNT(1) FROM LabelFiles WHERE LabelFile=@f", new { f = labelFile }, tx) > 0;
-                if (!stillShipped)
-                    conn.Execute("DELETE FROM Labels WHERE LabelFile=@f", new { f = labelFile }, tx);
-            }
-        }
+            try { conn.Execute("DELETE FROM MethodSourceFts WHERE Model=@n", new { n = model }, tx); }
+            catch (Microsoft.Data.Sqlite.SqliteException) { /* no FTS5 in this SQLite build: nothing to clear */ }
 
-        conn.Execute("DELETE FROM Models WHERE Name=@n", new { n = model }, tx);
-        tx.Commit();
+            if (!string.IsNullOrWhiteSpace(modelFolder))
+            {
+                var prefix = Path.TrimEndingDirectorySeparator(modelFolder) + Path.DirectorySeparatorChar;
+                var files = conn.Query<(long Id, string LabelFile, string SourcePath)>(
+                        "SELECT LabelFileId, LabelFile, SourcePath FROM LabelFiles", transaction: tx)
+                    .Where(f => f.SourcePath.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+                    .ToList();
+                foreach (var f in files)
+                    conn.Execute("DELETE FROM LabelFiles WHERE LabelFileId=@id", new { id = f.Id }, tx);
+                foreach (var labelFile in files.Select(f => f.LabelFile).Distinct(StringComparer.OrdinalIgnoreCase))
+                {
+                    var stillShipped = conn.ExecuteScalar<long>(
+                        "SELECT COUNT(1) FROM LabelFiles WHERE LabelFile=@f", new { f = labelFile }, tx) > 0;
+                    if (!stillShipped)
+                        conn.Execute("DELETE FROM Labels WHERE LabelFile=@f", new { f = labelFile }, tx);
+                }
+            }
+
+            conn.Execute("DELETE FROM Models WHERE Name=@n", new { n = model }, tx);
+        });
         return true;
     }
 }

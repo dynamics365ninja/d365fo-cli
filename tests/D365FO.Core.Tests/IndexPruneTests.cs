@@ -106,6 +106,45 @@ public class IndexPruneTests : IDisposable
     }
 
     [Fact]
+    public void A_missing_root_suspends_outside_root_verdicts_because_it_may_be_a_mistyped_root()
+    {
+        // The model is intact on disk under _oldClone; the configured spelling of that root is wrong.
+        IndexModel(_oldClone, "Mistyped", "MistypedClass");
+
+        var report = IndexPrune.Find(_repo, new[] { _rootA, _oldClone + "-typo" });
+
+        Assert.Empty(report.Departed);
+        Assert.Single(report.MissingRoots);
+        Assert.Empty(IndexPrune.Prune(_repo, report));
+        Assert.Contains(_repo.ListModels(), m => m.Name == "Mistyped");
+    }
+
+    [Fact]
+    public void A_prune_with_no_packages_root_configured_is_refused()
+    {
+        // An MCP server started without D365FO_PACKAGES_PATH would otherwise see every standard model as departed.
+        var old = Environment.GetEnvironmentVariable("D365FO_PACKAGES_PATH");
+        Environment.SetEnvironmentVariable("D365FO_PACKAGES_PATH", null);
+        try
+        {
+            IndexModel(_rootA, "Keep", "KeepClass");
+            // A settings.json/profile on a developer box can still supply one; nothing to test then.
+            if (D365FoSettings.FromEnvironment(_dbPath).PackagesPath is not null) return;
+
+            var result = IndexPrune.SyncThenPrune(null, null, packagesOverride: null, databasePath: _dbPath,
+                indexSource: false, prune: true);
+
+            Assert.False(result.Ok);
+            Assert.Equal("PACKAGES_PATH_NOT_FOUND", result.Error!.Code);
+            Assert.Contains(_repo.ListModels(), m => m.Name == "Keep");
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("D365FO_PACKAGES_PATH", old);
+        }
+    }
+
+    [Fact]
     public void Deleting_a_model_removes_its_labels_but_not_a_label_file_another_model_still_ships()
     {
         var goneFolder = WriteModelFolder(_oldClone, "GoneTests", "GoneTestClass");

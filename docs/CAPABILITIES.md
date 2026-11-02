@@ -41,7 +41,8 @@ deleted, a root dropped from `D365FO_CUSTOM_PACKAGES_PATH`) is never visited by 
 its rows would stay forever. `index status` and `doctor` report it under `departedModels`, and
 `index refresh --prune` (or `index sync --prune`, MCP `index_sync` with `prune: true`) deletes its
 rows. Pruning is never automatic, and a model whose root is missing right now (an unmounted drive)
-is kept. A model found under a root but indexed from another folder is reported as relocated:
+is kept. While any configured root is missing (perhaps mistyped), no model is judged to be outside
+the roots. A model found under a root but indexed from another folder is reported as relocated:
 `index sync <Model>` is the fix for that, not a delete.
 
 ### `index cross-check`

@@ -18,6 +18,8 @@ namespace D365FO.Core.Index;
 /// A model whose indexed folder sits under a configured root that is itself missing is never
 /// departed: that is an unmounted drive or a typo in a setting, and pruning it would delete a
 /// perfectly good model (including a standard one) because the disk was briefly not there.
+/// For the same reason, while any configured root is missing no model is judged "outside every
+/// root": the missing one may be a misspelling of the root that model lives under.
 /// A model found under a root but indexed from somewhere else is <em>relocated</em> instead —
 /// <c>index sync</c> fixes it, and deleting it would be wrong.
 /// </para>
@@ -106,7 +108,13 @@ public static class IndexPrune
 
             if (missing.Any(r => IsUnder(indexedFolder, r))) continue;     // its root is not there right now
             if (!existing.Any(r => IsUnder(indexedFolder, r)))
-                departed.Add(new DepartedModel(loc.Model, loc.IsCustom, indexedFolder, Reasons.OutsideRoots));
+            {
+                // A configured root that is missing may be a typo or a changed drive letter for the
+                // very root this model lives under, so "outside every root" cannot be told apart
+                // from "under a root spelled differently". Only judge it once every root resolves.
+                if (missing.Count == 0)
+                    departed.Add(new DepartedModel(loc.Model, loc.IsCustom, indexedFolder, Reasons.OutsideRoots));
+            }
             else if (!Directory.Exists(indexedFolder))
                 departed.Add(new DepartedModel(loc.Model, loc.IsCustom, indexedFolder, Reasons.FolderMissing));
         }
@@ -150,6 +158,10 @@ public static class IndexPrune
         }
 
         var cfg = D365FoSettings.FromEnvironment(databasePath);
+        if (string.IsNullOrWhiteSpace(packagesOverride) && string.IsNullOrWhiteSpace(cfg.PackagesPath))
+            return ToolResult<object>.Fail("PACKAGES_PATH_NOT_FOUND",
+                "No packages root is configured, so every standard model would look departed.",
+                "Set D365FO_PACKAGES_PATH (or pass packagesPath) before pruning.");
         var roots = new List<string?> { packagesOverride, cfg.PackagesPath };
         roots.AddRange(cfg.CustomPackagesPaths);
 
@@ -174,7 +186,8 @@ public static class IndexPrune
                 : null,
             missingRoots = report.MissingRoots.Count > 0 ? report.MissingRoots : null,
             note = report.MissingRoots.Count > 0
-                ? "Models under a missing root were kept: a root that is briefly unmounted is not a reason to delete."
+                ? "Some configured roots are missing, so only models whose folder vanished under an existing root were pruned: "
+                  + "a root that is briefly unmounted or mistyped is not a reason to delete."
                 : null,
         });
     }

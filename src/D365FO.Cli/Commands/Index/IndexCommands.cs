@@ -402,7 +402,7 @@ public sealed class IndexExtractCommand : Command<IndexExtractCommand.Settings>
         IReadOnlyList<string>? pruned = null;
         if (prune)
         {
-            var pruneRoots = new List<string?> { root };
+            var pruneRoots = new List<string?> { root, cfg.PackagesPath };
             pruneRoots.AddRange(extraPackagesPaths ?? Array.Empty<string>());
             pruneRoots.AddRange(cfg.CustomPackagesPaths);
             pruneReport = IndexPrune.Find(repo, pruneRoots);
@@ -430,6 +430,7 @@ public sealed class IndexExtractCommand : Command<IndexExtractCommand.Settings>
             relocatedModels = pruneReport is { Relocated.Count: > 0 }
                 ? pruneReport.Relocated.Select(r => new { model = r.Model, indexedFolder = r.IndexedFolder, currentFolder = r.CurrentFolder })
                 : null,
+            missingRoots = pruneReport is { MissingRoots.Count: > 0 } ? pruneReport.MissingRoots : null,
             totals,
         });
 

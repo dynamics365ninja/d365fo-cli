@@ -35,8 +35,11 @@ clone: `search` returned them, and `find references --model` scanned zero files 
   `Models` row.
 - **Never by default, and never under a missing root.** A default refresh only reports. A model
   whose indexed folder sits under a configured root that does not exist right now (an unmounted
-  drive) is kept, so a standard model cannot be pruned because a disk was briefly away, and a
-  prune with no reachable root is refused. A model present under another root is reported as
+  drive) is kept, so a standard model cannot be pruned because a disk was briefly away. While any
+  configured root is missing (it may be a mistyped spelling of a model's real root), no model is
+  judged outside the roots at all. A prune with no reachable root, or with no packages root
+  configured, is refused, and each model's rows go in one transaction. A model present under
+  another root is reported as
   relocated, for `index sync`, not deleted.
 
 ### Fixed — lookups that answered nothing, or a different question, without saying so
