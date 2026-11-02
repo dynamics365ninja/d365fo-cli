@@ -25,12 +25,25 @@ public static class ConsoleSetup
         || string.Equals(term, "dumb", StringComparison.OrdinalIgnoreCase);
 
     /// <summary>A console that writes to <paramref name="writer"/> without any ANSI escape.</summary>
-    public static IAnsiConsole Plain(TextWriter writer) => AnsiConsole.Create(new AnsiConsoleSettings
+    /// <remarks>
+    /// Spectre's default profile enrichers run after <c>Ansi = No</c> is applied and turn ANSI
+    /// back on under CI hosts (<c>GITHUB_ACTIONS</c>, <c>TF_BUILD</c>, …), which is exactly
+    /// where output is captured. They are switched off, and the capabilities pinned, so the
+    /// answer does not depend on the host environment.
+    /// </remarks>
+    public static IAnsiConsole Plain(TextWriter writer)
     {
-        Ansi = AnsiSupport.No,
-        ColorSystem = ColorSystemSupport.NoColors,
-        Out = new AnsiConsoleOutput(writer),
-    });
+        var console = AnsiConsole.Create(new AnsiConsoleSettings
+        {
+            Ansi = AnsiSupport.No,
+            ColorSystem = ColorSystemSupport.NoColors,
+            Out = new AnsiConsoleOutput(writer),
+            Enrichment = new ProfileEnrichment { UseDefaultEnrichers = false },
+        });
+        console.Profile.Capabilities.Ansi = false;
+        console.Profile.Capabilities.Links = false;
+        return console;
+    }
 
     /// <summary>
     /// The plain console for this process when <see cref="PlainOutputWanted"/> says so,

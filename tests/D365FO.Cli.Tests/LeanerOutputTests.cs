@@ -93,8 +93,22 @@ public sealed class LeanerOutputTests : IDisposable
     [Fact]
     public void Help_rendered_through_the_plain_console_carries_no_ansi_escapes()
     {
+        // Pin the CI markers Spectre's profile enrichers react to (they force ANSI on), so the
+        // answer is the same on a developer terminal and on a GitHub Actions / Azure DevOps runner.
+        var oldGitHub = Environment.GetEnvironmentVariable("GITHUB_ACTIONS");
+        var oldTfBuild = Environment.GetEnvironmentVariable("TF_BUILD");
         var plain = new StringWriter();
-        Assert.Equal(0, CliApp.Build(ConsoleSetup.Plain(plain)).Run(["search", "--help"]));
+        try
+        {
+            Environment.SetEnvironmentVariable("GITHUB_ACTIONS", "true");
+            Environment.SetEnvironmentVariable("TF_BUILD", "True");
+            Assert.Equal(0, CliApp.Build(ConsoleSetup.Plain(plain)).Run(["search", "--help"]));
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("GITHUB_ACTIONS", oldGitHub);
+            Environment.SetEnvironmentVariable("TF_BUILD", oldTfBuild);
+        }
         Assert.Contains("USAGE", plain.ToString());
         Assert.DoesNotContain('\u001b', plain.ToString());
 
