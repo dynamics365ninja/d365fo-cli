@@ -44,6 +44,10 @@ public sealed class IndexSyncCommand : Command<IndexSyncCommand.Settings>
         [CommandOption("--no-index-source")]
         [System.ComponentModel.Description("Drop the model's method bodies from MethodSourceFts and stop re-indexing them.")]
         public bool NoIndexSource { get; init; }
+
+        [CommandOption("--prune")]
+        [System.ComponentModel.Description("Also delete the rows of models whose folder is no longer under any configured packages root. Needs no TARGET: `index sync --prune` only prunes.")]
+        public bool Prune { get; init; }
     }
 
     public override int Execute(CommandContext ctx, Settings settings)
@@ -60,11 +64,12 @@ public sealed class IndexSyncCommand : Command<IndexSyncCommand.Settings>
                 || File.Exists(target)
                 || Directory.Exists(target));
 
-        return RenderHelpers.Render(OutputMode.Resolve(settings.Output), IndexSync.Sync(
+        return RenderHelpers.Render(OutputMode.Resolve(settings.Output), IndexPrune.SyncThenPrune(
             model: settings.Model ?? (looksLikePath ? null : target),
             path: looksLikePath ? target : null,
             packagesOverride: settings.PackagesPath,
             databasePath: settings.DatabasePath,
-            indexSource: IndexSync.SourceChoice(settings.IndexSource, settings.NoIndexSource)));
+            indexSource: IndexSync.SourceChoice(settings.IndexSource, settings.NoIndexSource),
+            prune: settings.Prune));
     }
 }

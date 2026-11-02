@@ -151,7 +151,7 @@ d365fo index history --limit 20       # last 20 per-model extract runs
 d365fo index history --model Contoso  # filter to one model
 ```
 
-`index refresh` compares each model's content fingerprint against the DB row and re-extracts only changed models. `--force` ignores all thresholds.
+`index refresh` compares each model's content fingerprint (file count, newest mtime and a hash of the file names, so a rename counts) against the DB row and re-extracts only changed models. `--force` ignores all thresholds. `index status` and `doctor` judge staleness per custom model against that model's own last extract and name the models that are behind in `staleness.staleModels`.
 
 ### `lint` — in-process Best-Practice heuristics
 
@@ -967,7 +967,7 @@ d365fo daemon status
 d365fo daemon stop
 ```
 
-Transport: Windows named pipe `\\\\.\\ pipe\\d365fo-cli`; Unix socket at `$XDG_RUNTIME_DIR/d365fo-cli.sock` (fallback `$TMPDIR`). The frame format matches `d365fo-mcp`: one newline-terminated JSON-RPC request per connection, one response, close.
+Transport: Windows named pipe `\\\\.\\ pipe\\d365fo-cli`; Unix socket at `$XDG_RUNTIME_DIR/d365fo-cli.sock` (fallback `$TMPDIR`). With a profile active (`--profile` / `D365FO_PROFILE`) the pipe, socket and pid file are named `d365fo-cli-<profile>`, so each profile runs its own daemon. The frame format matches `d365fo-mcp`: one newline-terminated JSON-RPC request per connection, one response, close.
 
 The daemon also starts a `FileSystemWatcher` over `D365FO_PACKAGES_PATH` (or `--packages`). When `*.xml` files change, it debounces (default 3 s) and automatically triggers an incremental `index refresh` for the affected model, emitting a JSON notification to stderr:
 

@@ -2375,7 +2375,9 @@ public sealed partial class MetadataRepository
     public void RecordExtractionRun(string model, DateTime startedUtc, long elapsedMs,
         int tables, int classes, int edts, int enums, int labels, bool isCustom)
     {
-        using var conn = Open();
+        // Bulk: it commits once per model during an extract, and an automatic checkpoint here
+        // would undo the batching ApplyExtract's own connection was set up for.
+        using var conn = Open(bulk: true);
         conn.Execute(@"INSERT INTO ExtractionRuns(StartedUtc, Model, ElapsedMs, Tables, Classes, Edts, Enums, Labels, IsCustom)
                        VALUES(@s, @m, @el, @t, @c, @ed, @en, @lb, @ic)",
             new
@@ -2453,9 +2455,15 @@ public sealed partial class MetadataRepository
     /// names no preference keeps the previous one.
     /// </summary>
     public void ApplyExtract(ExtractBatch batch, string? sourceFingerprint, bool indexMethodSource = false)
+        => ApplyExtract(batch, sourceFingerprint, indexMethodSource, beforeCommit: null);
+
+    // beforeCommit runs inside the extract's transaction just before it commits, so extra writes
+    // (DeleteModel's cleanup) land atomically with the replace.
+    private void ApplyExtract(ExtractBatch batch, string? sourceFingerprint, bool indexMethodSource,
+        Action<SqliteConnection, SqliteTransaction>? beforeCommit)
     {
         ArgumentNullException.ThrowIfNull(batch);
-        using var conn = Open();
+        using var conn = Open(bulk: true);
         using var tx = conn.BeginTransaction();
 
         var modelId = UpsertModelInternal(conn, tx, batch.Model, batch.Publisher, batch.Layer, batch.IsCustom);
@@ -3033,6 +3041,7 @@ public sealed partial class MetadataRepository
 
         ftsCmd?.Dispose();
 
+        beforeCommit?.Invoke(conn, tx);
         tx.Commit();
 
         // Keep the WAL bounded across models without paying a checkpoint per model.
@@ -3214,14 +3223,40 @@ public sealed partial class MetadataRepository
         conn.Execute("PRAGMA wal_checkpoint(TRUNCATE)");
     }
 
-    internal SqliteConnection Open()
+    /// <summary>
+    /// How long a connection waits on a lock another connection or process holds before SQLite
+    /// reports "database is locked". Without it SQLite's busy handler is off, so a CLI write
+    /// that met an MCP <c>index_sync</c> mid-commit, or a <c>wal_checkpoint(TRUNCATE)</c> that
+    /// met a reader, failed on the first collision instead of waiting it out. Long index writes
+    /// are serialised by <see cref="IndexWriteLock"/>, so what is left to wait for is short.
+    /// </summary>
+    internal const int BusyTimeoutMs = 30_000;
+
+    /// <summary>
+    /// SQLite's own default, restored explicitly: connections are pooled and a pragma outlives
+    /// the <c>using</c> that set it, so a connection that ran a bulk extract would otherwise
+    /// carry <c>wal_autocheckpoint = 0</c> into its next, unrelated use.
+    /// </summary>
+    private const int DefaultWalAutocheckpointPages = 1000;
+
+    /// <summary>
+    /// A read-write connection. <paramref name="bulk"/> is for the extract pipeline's writes
+    /// (<see cref="ApplyExtract(ExtractBatch, string?, bool)"/> and <see cref="RecordExtractionRun"/>):
+    /// it turns the automatic checkpoint off, because that pipeline checkpoints on its own
+    /// schedule (<see cref="MaybeCheckpointWal"/>, <see cref="CheckpointWal"/>) and a per-commit
+    /// checkpoint is what made a model write cost seconds. Every other connection keeps the
+    /// automatic checkpoint, so the WAL a small write leaves behind does not grow unchecked.
+    /// </summary>
+    internal SqliteConnection Open(bool bulk = false)
     {
         var conn = new SqliteConnection(_connectionString);
         conn.Open();
-        // Per-connection pragmas: foreign_keys is a per-connection setting,
-        // journal_mode WAL survives across connections but is cheap to re-assert.
+        // Per-connection pragmas: foreign_keys, busy_timeout and wal_autocheckpoint are
+        // per-connection settings, journal_mode WAL survives across connections but is cheap
+        // to re-assert.
         using var cmd = conn.CreateCommand();
-        cmd.CommandText = "PRAGMA foreign_keys = ON; PRAGMA journal_mode = WAL; PRAGMA synchronous = NORMAL; PRAGMA temp_store = MEMORY; PRAGMA cache_size = -65536; PRAGMA wal_autocheckpoint = 0;";
+        cmd.CommandText = "PRAGMA foreign_keys = ON; PRAGMA journal_mode = WAL; PRAGMA synchronous = NORMAL; PRAGMA temp_store = MEMORY; PRAGMA cache_size = -65536; "
+            + $"PRAGMA busy_timeout = {BusyTimeoutMs}; PRAGMA wal_autocheckpoint = {(bulk ? 0 : DefaultWalAutocheckpointPages)};";
         cmd.ExecuteNonQuery();
         return conn;
     }
@@ -3296,7 +3331,7 @@ public sealed partial class MetadataRepository
         var conn = new SqliteConnection(_readOnlyConnectionString);
         conn.Open();
         using var cmd = conn.CreateCommand();
-        cmd.CommandText = "PRAGMA foreign_keys = ON;";
+        cmd.CommandText = $"PRAGMA foreign_keys = ON; PRAGMA busy_timeout = {BusyTimeoutMs};";
         cmd.ExecuteNonQuery();
         return conn;
     }

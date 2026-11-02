@@ -2376,24 +2376,10 @@ public static class ScaffoldFileWriter
         string? preImage = File.Exists(full) ? SafeReadAllText(full) : null;
         bool? preImageHadBom = File.Exists(full) ? DetectUtf8Bom(full) : null;
 
-        string? backup = null;
-        if (File.Exists(full))
-        {
-            if (!overwrite)
-                throw new IOException($"Target exists; pass --overwrite to replace: {full}");
-            backup = full + ".bak";
-            if (File.Exists(backup)) File.Delete(backup);
-            File.Move(full, backup);
-        }
+        if (File.Exists(full) && !overwrite)
+            throw new IOException($"Target exists; pass --overwrite to replace: {full}");
 
-        // The staging name is unique per call, not the deterministic "<target>.tmp" it used to
-        // be (issue #158). Two writers aiming at the same path shared that sibling: the second
-        // File.Create truncated the first one's staged bytes, so whichever move landed first
-        // published the *other* writer's content, and the loser threw a FileNotFoundException
-        // from a path that looks like a successful atomic write. A per-call name makes the
-        // stage-then-rename genuinely private to the call, which is what "atomic" claimed.
-        var tmp = full + "." + Guid.NewGuid().ToString("N") + ".tmp";
-        try
+        var backup = ReplaceAtomically(full, tmp =>
         {
             if (declarationOnSaveFromXDoc && doc is not null)
             {
@@ -2403,6 +2389,79 @@ public static class ScaffoldFileWriter
             else
             {
                 File.WriteAllText(tmp, xml);
+            }
+        });
+
+        var bytes = new FileInfo(full).Length;
+        RecordJournalEntry(full, preImage, preImageHadBom);
+        return new WriteResult(full, bytes, backup);
+    }
+
+    /// <summary>
+    /// Replace (or create) <paramref name="path"/> with <paramref name="doc"/> through the same
+    /// stage-then-rename as <see cref="Write(XDocument, string, bool)"/>, keeping a <c>.bak</c>
+    /// of any prior file — without the scaffold checks, the boundary guard or the journal entry.
+    /// </summary>
+    /// <remarks>
+    /// For commands that edit an existing object in place (<c>generate datasource-method</c> / <c>control-method</c>,
+    /// <c>generate role --add-to</c>, <c>--into-role</c>) and journal the edit themselves. They had their
+    /// own copies of the pre-#158 write: a fixed <c>&lt;target&gt;.tmp</c> shared by every
+    /// concurrent writer, and a move pair that left the target missing if the second move
+    /// failed.
+    /// </remarks>
+    /// <returns>The <c>.bak</c> path when a prior file was kept, otherwise null.</returns>
+    public static string? SaveInPlace(XDocument doc, string path)
+    {
+        ArgumentNullException.ThrowIfNull(doc);
+        ArgumentException.ThrowIfNullOrWhiteSpace(path);
+
+        var full = Path.GetFullPath(path);
+        var dir = Path.GetDirectoryName(full);
+        if (!string.IsNullOrEmpty(dir)) Directory.CreateDirectory(dir);
+
+        return ReplaceAtomically(full, tmp =>
+        {
+            using var fs = File.Create(tmp);
+            doc.Save(fs);
+        });
+    }
+
+    /// <summary>
+    /// Stage the new content under a per-call name, move any existing target to <c>.bak</c>,
+    /// publish the staged file, and put the original back if publishing fails.
+    /// </summary>
+    /// <returns>The <c>.bak</c> path when a prior file was kept, otherwise null.</returns>
+    private static string? ReplaceAtomically(string full, Action<string> stage)
+    {
+        // The staging name is unique per call, not the deterministic "<target>.tmp" it used to
+        // be (issue #158). Two writers aiming at the same path shared that sibling: the second
+        // File.Create truncated the first one's staged bytes, so whichever move landed first
+        // published the *other* writer's content, and the loser threw a FileNotFoundException
+        // from a path that looks like a successful atomic write. A per-call name makes the
+        // stage-then-rename genuinely private to the call, which is what "atomic" claimed.
+        var tmp = full + "." + Guid.NewGuid().ToString("N") + ".tmp";
+
+        // Staged before the target is moved aside, so a failed or interrupted serialisation
+        // leaves the original untouched rather than parked under .bak.
+        try
+        {
+            stage(tmp);
+        }
+        catch
+        {
+            try { if (File.Exists(tmp)) File.Delete(tmp); }
+            catch { /* best-effort cleanup */ }
+            throw;
+        }
+
+        string? backup = null;
+        try
+        {
+            if (File.Exists(full))
+            {
+                backup = full + ".bak";
+                if (File.Exists(backup)) File.Delete(backup);
+                File.Move(full, backup);
             }
 
             MoveOntoTarget(tmp, full);
@@ -2423,9 +2482,7 @@ public static class ScaffoldFileWriter
             throw;
         }
 
-        var bytes = new FileInfo(full).Length;
-        RecordJournalEntry(full, preImage, preImageHadBom);
-        return new WriteResult(full, bytes, backup);
+        return backup;
     }
 
     /// <summary>
