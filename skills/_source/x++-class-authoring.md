@@ -64,6 +64,12 @@ out where inheritance is actually intended. Add methods with
 `generate event-handler`, `generate coc` or by editing the `<Methods>` block —
 never by rewriting the file wholesale.
 
+`d365fo modify method` only **replaces the body of a method that already
+exists**; it cannot add one, and a new name fails with `MethodNotFound`. When
+you plan the change, sort the methods into ones that already exist (edit with
+`modify method`) and new ones (add through the routes above), instead of
+finding out from the error halfway through the edit.
+
 ## Hard rules
 
 - **Never** emit X++ that references a field you have not verified with
