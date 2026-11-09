@@ -44,6 +44,46 @@ public class IndexSyncTests
         => Assert.Equal(expected, IndexSync.ModelFromPath(path));
 
     [Fact]
+    public void A_bare_name_is_the_model_even_when_a_folder_of_that_name_is_in_the_current_folder()
+    {
+        // The repository keeps the model in a folder of the same name, and the caller runs
+        // `index sync <Model>` from the repository root, as doctor tells them to. The folder goes
+        // in the current folder as it is: changing it would race the tests that run in parallel.
+        var model = "ConFleetSync" + Guid.NewGuid().ToString("N");
+        var folder = Directory.CreateDirectory(model);
+        try
+        {
+            Assert.Equal((model, (string?)null), IndexSync.SplitTarget(model));
+        }
+        finally
+        {
+            folder.Delete();
+        }
+    }
+
+    [Theory]
+    [InlineData("ConFleet", "ConFleet", null)]
+    [InlineData("  ConFleet  ", "ConFleet", null)]
+    [InlineData("work/ConFleet/ConFleet/AxClass/ConFleetPosting.xml", null, "work/ConFleet/ConFleet/AxClass/ConFleetPosting.xml")]
+    [InlineData("", null, null)]
+    [InlineData(null, null, null)]
+    public void A_target_is_a_path_only_when_it_has_a_separator_or_is_a_file(
+        string? target, string? model, string? path)
+        => Assert.Equal((model, path), IndexSync.SplitTarget(target, _ => false));
+
+    [Fact]
+    public void A_bare_file_name_from_inside_an_aot_folder_stays_a_path()
+        => Assert.Equal(((string?)null, "ConFleetPosting.xml"),
+            IndexSync.SplitTarget("ConFleetPosting.xml", f => f == "ConFleetPosting.xml"));
+
+    [Fact]
+    public void A_target_with_the_platform_separator_is_a_path()
+    {
+        var target = Path.Combine("ConFleet", "ConFleet");
+        Assert.Equal(((string?)null, target), IndexSync.SplitTarget(target, _ => false));
+    }
+
+    [Fact]
     public void Naming_neither_a_model_nor_a_path_is_refused_rather_than_re_indexing_everything()
     {
         var result = IndexSync.Sync(model: null, path: null);
