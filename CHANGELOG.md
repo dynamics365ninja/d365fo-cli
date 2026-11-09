@@ -19,6 +19,21 @@ was ported from.
 
 ## [Unreleased]
 
+### Fixed — the grounding gate no longer flags objects the same command writes
+
+The gate proves the generated X++ against the index, and a command that writes several objects
+writes its companions in the same run, so they are not in the index yet. `generate workflow`
+warned on every scaffold that the query its WorkflowDocument returns (`queryStr(XQuery)`) was
+unknown, although the command writes `XQuery` itself. `sysoperation` did the same with its
+contract class, `business-event` with its contract, and `number-sequence` with the EDT it
+creates. Under `D365FO_GROUNDING_ENFORCE=true` the same finding refused the write, so these four
+commands could not run at all with enforcement on.
+
+`GroundingGate.Check` takes the names the command writes (`generatedObjects`). An unknown-type or
+unknown-intrinsic-target finding about one of those names, or a required symbol that is one of
+them, counts as verified. Every other finding stays: a misspelt name the command does not write
+is still reported. The four commands pass their companions.
+
 ### Fixed — EDT base types are in the index, so generated fields get their real type (#233)
 
 Every EDT in the index had an empty `BaseType`: the extractor read it off the root element
