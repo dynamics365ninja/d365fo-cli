@@ -175,10 +175,13 @@ public sealed class GenerateWorkflowCommand : Command<GenerateWorkflowCommand.Se
         var documentDoc = WorkflowScaffolder.WorkflowDocument(docClassName, queryName);
 
         // Grounding gate (issue #161). The document class is the X++ here, and the driving
-        // table is the claim about the existing AOT.
+        // table is the claim about the existing AOT. The query it names is written by this
+        // command, so it is not a reference the index has to prove.
         var gate = GenerateInstaller.Gate(
             settings, settings.Name, documentDoc,
-            requiredSymbols: string.IsNullOrWhiteSpace(settings.TableName) ? null : new[] { settings.TableName! });
+            requiredSymbols: string.IsNullOrWhiteSpace(settings.TableName) ? null : new[] { settings.TableName! },
+            generatedObjects: new[] { settings.Name, docClassName, generateQuery ? queryName : null, approvalName, taskName,
+                                      generateSubmit ? submitExtName : null }.OfType<string>());
         if (gate.Failure is not null) return RenderHelpers.Render(kind, gate.Failure);
 
         try

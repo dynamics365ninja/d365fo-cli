@@ -135,6 +135,13 @@ public static class GroundingGate
     /// Index to prove identifiers against. Null degrades every index-backed check to a warning:
     /// a gate failure must never be caused by gate infrastructure.
     /// </param>
+    /// <param name="generatedObjects">
+    /// Names of the other objects the same command writes. They are not in the index yet, so a
+    /// reference to one of them (<c>queryStr(XQuery)</c> in a workflow document, the contract
+    /// type in a SysOperation service) is resolved by the command itself, not a hallucination.
+    /// Without this, every multi-object scaffold warned about its own companions, and under
+    /// <c>D365FO_GROUNDING_ENFORCE=true</c> it was refused outright.
+    /// </param>
     public static GateResult Check(
         string? token,
         string targetObject,
@@ -142,11 +149,14 @@ public static class GroundingGate
         IEnumerable<(string Owner, string Method)>? requiredMethods = null,
         IEnumerable<string>? requiredSymbols = null,
         IReadOnlyList<(string Option, string Value)>? requested = null,
-        MetadataRepository? repository = null)
+        MetadataRepository? repository = null,
+        IEnumerable<string>? generatedObjects = null)
     {
         var enforce = ProvenanceStore.EnforcementEnabled;
         var warnings = new List<string>();
         var asked = requested ?? [];
+        var generated = new HashSet<string>(
+            (generatedObjects ?? []).Where(n => !string.IsNullOrWhiteSpace(n)), StringComparer.OrdinalIgnoreCase);
 
         // ── 1. Grounding token ───────────────────────────────────────────────
         bool tokenValid = false;
@@ -184,6 +194,7 @@ public static class GroundingGate
                     verified = resolved.VerifiedCount;
                     foreach (var v in resolved.Violations)
                     {
+                        if (NamesGeneratedObject(v, generated)) { verified++; continue; }
                         if (v.Severity == "error") refErrors++; else refWarnings++;
                         violationDetails.Add($"[{v.Kind}] line {v.Line}: {v.Identifier} — {v.Detail}");
                     }
@@ -229,7 +240,7 @@ public static class GroundingGate
                     // --extends NoYesId` derived NoYes itself and then refused it as a
                     // hallucination, and the advised search offered NoYesBlank/NoYesCombo —
                     // different types.
-                    if (D365FO.Core.Validation.ReferenceResolver.IsKernelType(symbol))
+                    if (D365FO.Core.Validation.ReferenceResolver.IsKernelType(symbol) || generated.Contains(symbol))
                     {
                         verified++;
                     }
@@ -281,6 +292,31 @@ public static class GroundingGate
             warnings.Add($"grounding: {detail}");
 
         return new GateResult(grounding, warnings, null) { Requested = asked };
+    }
+
+    /// <summary>
+    /// True when <paramref name="violation"/> only says that an object the same command writes is
+    /// not in the index: an unknown type named <c>X</c>, or an intrinsic such as
+    /// <c>queryStr(X)</c> / <c>fieldStr(X, F)</c> whose target is <c>X</c>.
+    /// </summary>
+    internal static bool NamesGeneratedObject(ReferenceViolation violation, IReadOnlySet<string> generated)
+    {
+        if (generated.Count == 0) return false;
+        var id = violation.Identifier;
+        switch (violation.Kind)
+        {
+            case "unknown-type":
+                return generated.Contains(id);
+            case "unknown-intrinsic-target":
+                var open = id.IndexOf('(');
+                if (open < 0) return false;
+                var rest = id[(open + 1)..];
+                var end = rest.IndexOfAny([',', ')']);
+                var target = (end < 0 ? rest : rest[..end]).Trim();
+                return generated.Contains(target);
+            default:
+                return false;
+        }
     }
 
     /// <summary>Concatenate X++ from Declaration/Source elements of a scaffolded AOT XML.</summary>
