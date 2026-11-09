@@ -63,6 +63,24 @@ public sealed partial class ToolHandlers
             : ToolResult<object>.Success(D365FO.Core.Analysis.TableBrief.FromIndex(t, _repo.GetEdtBaseType));
     }
 
+    /// <summary><c>get_object_info(objectType=class, detail=brief)</c> — see <see cref="D365FO.Core.Analysis.ClassBrief"/>.</summary>
+    public ToolResult<object> GetClassBrief(string name)
+    {
+        var c = _repo.GetClassDetails(name);
+        return c is null
+            ? ToolResult<object>.Fail("CLASS_NOT_FOUND", $"Class '{name}' not found.")
+            : ToolResult<object>.Success(D365FO.Core.Analysis.ClassBrief.FromIndex(c));
+    }
+
+    /// <summary><c>get_object_info(objectType=form, detail=brief)</c> — see <see cref="D365FO.Core.Analysis.FormBrief"/>.</summary>
+    public ToolResult<object> GetFormBrief(string name)
+    {
+        var f = _repo.GetForm(name);
+        return f is null
+            ? ToolResult<object>.Fail("FORM_NOT_FOUND", $"Form '{name}' not found.")
+            : ToolResult<object>.Success(D365FO.Core.Analysis.FormBrief.FromIndex(f));
+    }
+
     public ToolResult<object> GetEdt(string name)
     {
         var resolved = _repo.GetEdtResolved(name);
