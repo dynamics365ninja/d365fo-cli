@@ -57,16 +57,12 @@ public sealed class IndexSyncCommand : Command<IndexSyncCommand.Settings>
 
         // A bare TARGET is a model name when it is not a path, and a path when it is — the
         // caller should not have to say which, since one of the two always parses.
-        var target = settings.Target?.Trim();
-        var looksLikePath = !string.IsNullOrEmpty(target)
-            && (target.Contains(System.IO.Path.DirectorySeparatorChar)
-                || target.Contains('/')
-                || File.Exists(target)
-                || Directory.Exists(target));
+        // A folder that happens to share the model's name is not one of them (see SplitTarget).
+        var (targetModel, targetPath) = IndexSync.SplitTarget(settings.Target);
 
         return RenderHelpers.Render(OutputMode.Resolve(settings.Output), IndexPrune.SyncThenPrune(
-            model: settings.Model ?? (looksLikePath ? null : target),
-            path: looksLikePath ? target : null,
+            model: settings.Model ?? targetModel,
+            path: targetPath,
             packagesOverride: settings.PackagesPath,
             databasePath: settings.DatabasePath,
             indexSource: IndexSync.SourceChoice(settings.IndexSource, settings.NoIndexSource),

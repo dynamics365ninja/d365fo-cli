@@ -158,6 +158,30 @@ public static class IndexSync
                 + "or neither to keep what each model's last extract did.")
             : null;
 
+    /// <summary>
+    /// Split a bare <c>index sync</c> TARGET into the model name or the path it stands for.
+    /// </summary>
+    /// <remarks>
+    /// A target with a path separator is a path. Without one it is a path only when it is an
+    /// existing file in the current folder: the <c>Foo.xml</c> typed from inside an <c>Ax*</c>
+    /// folder. A bare folder name is a model name. Read as a path, it resolved only from the
+    /// packages root's <c>&lt;Model&gt;</c> folder, where it named that same model, and failed
+    /// everywhere else. The common failure was <c>index sync MyModel</c>, the command
+    /// <c>doctor</c> recommends, run from a repository that keeps the model in a folder of the
+    /// same name.
+    /// </remarks>
+    /// <param name="target">The TARGET argument as typed.</param>
+    /// <param name="fileExists">File probe. <see cref="File.Exists(string)"/> unless a test passes one.</param>
+    public static (string? Model, string? Path) SplitTarget(string? target, Func<string, bool>? fileExists = null)
+    {
+        var t = target?.Trim();
+        if (string.IsNullOrEmpty(t)) return (null, null);
+        var isPath = t.Contains(System.IO.Path.DirectorySeparatorChar)
+            || t.Contains('/')
+            || (fileExists ?? File.Exists)(t);
+        return isPath ? (null, t) : (t, null);
+    }
+
     /// <summary>The model a path belongs to, or null when the path is not in the packages layout.</summary>
     /// <remarks>
     /// Anchored, not searched. The layout puts the doubled segment at a fixed depth —
