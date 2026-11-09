@@ -19,6 +19,27 @@ was ported from.
 
 ## [Unreleased]
 
+### Added — `get class --brief` and `get form --brief`
+
+Through the bridge, `get class` returns every method's full source and `get form` returns the
+whole AxForm. Measured on a real installation: a 15-method custom class came back as 23.7k
+characters (20.6k of them method bodies), a 300-method standard class as 238k, a custom
+details-transaction form as 200k and `SalesTable` as 760k. That is the right answer before an edit
+and far too much for "what does this class offer" or "which tables does this form show".
+
+`--brief` returns a summary, from the bridge when it answers, else from the index:
+
+- class: properties, and each method's name and signature (from the index) without its body.
+  Without a signature, the return type and the flags that are set. From the index, inherited
+  methods are counted, not listed.
+- form: properties, the design's pattern, style and caption, each data source with its table,
+  join source, link type, field count and method names, the top-level controls with how many
+  controls each holds, and the form's method names.
+
+On the same objects: 2.1k, 23k, 5.8k and 20k characters. The default output is unchanged. MCP:
+`get_object_info(objectType=class|form, detail=brief)`, from the index. The router skills now
+point at `--brief` first for classes and forms, as they already did for tables.
+
 ### Fixed — EDT base types are in the index, so generated fields get their real type (#233)
 
 Every EDT in the index had an empty `BaseType`: the extractor read it off the root element
