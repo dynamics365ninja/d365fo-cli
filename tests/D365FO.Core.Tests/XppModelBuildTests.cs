@@ -120,7 +120,9 @@ public class XppModelBuildTests : IDisposable
         var args = XppModelBuild.XppcArgs(target, framework, incremental: true);
 
         Assert.Contains($"-metadata={custom}", args);
-        Assert.Contains($"-compilermetadata={framework}", args);
+        // Compiled metadata lands next to the source, as Visual Studio writes it, never in the platform.
+        Assert.Contains($"-compilermetadata={custom}", args);
+        Assert.DoesNotContain($"-compilermetadata={framework}", args);
         Assert.Contains($"-referencefolder={framework}", args);
         Assert.Contains($"-referencefolder={custom}", args);
         Assert.Contains($"-output={Path.Combine(custom, "Pkg", "bin")}", args);
