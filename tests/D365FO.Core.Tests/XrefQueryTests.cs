@@ -94,10 +94,57 @@ public class XrefQueryTests
 
         // Filtering the returned rows instead answered "the Calls among the first N references".
         Assert.Contains("AND r.Kind = @kind", cmd.CommandText);
-        Assert.Equal(3, cmd.Parameters["@kind"].Value);
+        Assert.Equal(1, cmd.Parameters["@kind"].Value);   // CrossReferenceKind.MethodCall
         Assert.Equal(50, cmd.Parameters["@limit"].Value);
         // The OR'ed path terms are grouped, so the kind filter applies to all of them.
         Assert.Contains("WHERE (tgtName.Path IN (@P0) OR tgtName.Path LIKE @L0", cmd.CommandText);
+    }
+
+    // ---- reference kinds: the compiler's CrossReferenceKind enum ----
+
+    [Theory]
+    [InlineData(0, "Any")]
+    [InlineData(1, "Call")]
+    [InlineData(2, "Type")]
+    [InlineData(3, "Implements")]
+    [InlineData(4, "Extends")]
+    [InlineData(5, "TestCall")]
+    [InlineData(6, "Property")]
+    [InlineData(7, "Attribute")]
+    [InlineData(8, "TestHelperCall")]
+    [InlineData(9, "Tag")]
+    [InlineData(10, "Override")]
+    public void A_kind_id_reads_as_its_crossreferencekind_label(int id, string label)
+    {
+        Assert.Equal(label, XrefQuery.KindLabel(id));
+        Assert.Equal(id, XrefQuery.KindId(label));
+    }
+
+    [Theory]
+    [InlineData("MethodCall", 1)]
+    [InlineData("TypeReference", 2)]
+    [InlineData("InterfaceImplementation", 3)]
+    [InlineData("ClassExtended", 4)]
+    [InlineData("methodoverride", 10)]
+    public void A_kind_filter_also_takes_the_enum_name(string name, int id)
+    {
+        Assert.Equal(id, XrefQuery.KindId(name));
+    }
+
+    [Theory]
+    [InlineData("Declaration")]
+    [InlineData("Set")]
+    [InlineData("Read")]
+    [InlineData("Reference")]
+    public void The_old_labels_name_no_stored_kind(string label)
+    {
+        Assert.Equal(-1, XrefQuery.KindId(label));
+    }
+
+    [Fact]
+    public void An_id_outside_the_enum_keeps_a_readable_label()
+    {
+        Assert.Equal("Kind11", XrefQuery.KindLabel(11));
     }
 
     [Fact]
@@ -129,7 +176,7 @@ public class XrefQueryTests
     [Fact]
     public void Aggregated_rows_sum_into_the_object_reference_count()
     {
-        var raw = Rows(false, ("/Classes/Bulk/Methods/run", "Read", "ApplicationSuite"),
+        var raw = Rows(false, ("/Classes/Bulk/Methods/run", "Property", "ApplicationSuite"),
                               ("/Classes/Bulk/Methods/run", "Call", "ApplicationSuite"));
         raw["items"]![0]!["refs"] = 300;
         raw["items"]![1]!["refs"] = 2;
@@ -223,8 +270,8 @@ public class XrefQueryTests
     private static readonly (string, string, string)[] Sample =
     [
         ("/Classes/SalesLineType/Methods/insert", "Type", "ApplicationSuite"),
-        ("/Classes/SalesLineType/Methods/insert", "Read", "ApplicationSuite"),
-        ("/Classes/SalesLineType/Methods/validateWrite", "Read", "ApplicationSuite"),
+        ("/Classes/SalesLineType/Methods/insert", "Property", "ApplicationSuite"),
+        ("/Classes/SalesLineType/Methods/validateWrite", "Property", "ApplicationSuite"),
         ("/Forms/SalesTable/DataSources/SalesLine/Methods/active", "Call", "ApplicationSuite"),
         ("/Classes/MyExt_SalesLine_Extension", "Extends", "MyModule"),
     ];
@@ -246,7 +293,7 @@ public class XrefQueryTests
 
         var first = data["items"]![0]!.AsObject();
         Assert.Equal("/Classes/SalesLineType", (string?)first["source"]);
-        Assert.Equal(new[] { "Type", "Read" }, first["kinds"]!.AsArray().Select(k => (string)k!));
+        Assert.Equal(new[] { "Type", "Property" }, first["kinds"]!.AsArray().Select(k => (string)k!));
         Assert.Equal(new[] { "insert", "validateWrite" }, first["members"]!.AsArray().Select(k => (string)k!));
         Assert.Equal(3, (int)first["refs"]!);
         // Line, column and target are what --lines is for.
