@@ -19,6 +19,22 @@ was ported from.
 
 ## [Unreleased]
 
+### Fixed — `find refs --xref` labels and filters reference kinds by the compiler's enum
+
+The cross-reference database stores `[References].Kind` as the compiler's
+`Microsoft.Dynamics.AX.Framework.Xlnt.XReference.CrossReferenceKind` (XReferenceProviders.dll):
+0 Any, 1 MethodCall, 2 TypeReference, 3 InterfaceImplementation, 4 ClassExtended, 5 TestCall,
+6 Property, 7 Attribute, 8 TestHelperCall, 9 Tag, 10 MethodOverride. The CLI read the ids as
+Declaration, Set, Read, Call, Reference, Type, Extends, Implements, so a method call was reported as
+`Set`, and `--kind Call` filtered on id 3, interface implementations, and found no callers.
+
+- **Labels follow the enum:** `Any`, `Call`, `Type`, `Implements`, `Extends`, `TestCall`,
+  `Property`, `Attribute`, `TestHelperCall`, `Tag`, `Override`.
+- **`--kind` (MCP `kind`) also takes the enum's own names**, such as `MethodCall` or
+  `ClassExtended`. The old labels `Declaration`, `Set`, `Read` and `Reference` named no kind the
+  database stores; they are now refused with `BAD_INPUT` and the list of kinds.
+- Help texts, the MCP tool description and the tests use the new labels.
+
 ### Fixed — EDT base types are in the index, so generated fields get their real type (#233)
 
 Every EDT in the index had an empty `BaseType`: the extractor read it off the root element
