@@ -164,6 +164,15 @@ public static class XppModelBuild
     /// is the platform (FrameworkDirectory on UDE); when the model lives elsewhere, both roots are
     /// reference folders.
     /// </summary>
+    /// <remarks>
+    /// <c>-compilermetadata</c> is where xppc writes the package's compiled metadata
+    /// (<c>&lt;Package&gt;\XppMetadata</c>), so it is the model's own root, as in Visual Studio:
+    /// on a UDE, "Build models" writes it next to the source in the ModelStoreFolder and leaves the
+    /// FrameworkDirectory alone. Pointing it at the platform wrote a copy of every custom package
+    /// built into the FrameworkDirectory. That copy can shadow the source, and an object it lacks
+    /// then fails with <c>CompilerMetadataWriteBackFailure</c>. On a VM both are usually the same
+    /// folder.
+    /// </remarks>
     /// <param name="target">The model to compile.</param>
     /// <param name="packagesRoot">The platform packages root.</param>
     /// <param name="incremental">Compile only what changed since the last full build.</param>
@@ -181,7 +190,7 @@ public static class XppModelBuild
         var args = new List<string>
         {
             $"-metadata={target.MetadataRoot}",
-            $"-compilermetadata={packagesRoot}",
+            $"-compilermetadata={target.MetadataRoot}",
             $"-modelmodule={target.Module}",
             $"-output={output}",
             $"-referencefolder={packagesRoot}",
