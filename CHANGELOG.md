@@ -19,6 +19,36 @@ was ported from.
 
 ## [Unreleased]
 
+### Added — the commands agents guess now run, and an unknown sub-command names the real ones
+
+In a sample of real agent sessions, 15 of 43 failed CLI calls were commands the agent guessed
+and the CLI did not have. The error said only "Run the command with --help", so the next call
+was a retry, a `--help` lookup or a fall-back to grep. The guesses came from the MCP tool
+names (`get_method`, `find_tables_by_field`) and from the shapes of neighbouring commands.
+
+- **`get method <Owner> <method>` and `get method <Owner>.<method>`** read one method's source
+  without naming the owner's kind. The kind (class, table or form) comes from the index, and the
+  answer is the one `read <kind> <Owner> --method <method>` gives, `--lines` and `--around`
+  included. A name that is both a table and a form resolves to the kind that declares the
+  method. When both declare it the call is refused with the `--kind` choices in the hint.
+- **`find tables-by-field <Field>`** is an alias of `find fields`, named like the MCP tool.
+- **`search form|menu-item|map <Name>`** runs `search any <Name> --kind form|menuitem|map`.
+  It used to become `search any form <Name>` and fail on the stray second word.
+- **`get class|table|form <Name> --source`** runs `read class|table|form <Name>`. Every other
+  option is passed on, so one `read` does not take fails instead of being dropped.
+- **An unknown sub-command lists the valid ones inline in `error.hint`**, with "Did you mean"
+  for the closest one by edit distance (`find field` → `find fields`). An unknown top-level
+  command lists the commands the same way.
+- **`labels resolve` (and `resolve label`) take several tokens** and answer one result per
+  token, in order, with `found`, `items` and a `notResolved` list. One token answers exactly
+  as before. The call fails only when none of the tokens resolves.
+
+### Fixed — `modify batch --help` no longer crashes
+
+`--help` died with `UNHANDLED … Encountered malformed markup tag`: the `--operations`
+description holds a JSON example, and Spectre.Console reads `[…]` in a description as markup.
+The brackets are escaped. A new test renders `--help` of every registered command and branch,
+where before only the `generate` sub-commands had one.
 ### Fixed — `find references @Label` finds the label, in code and in metadata
 
 `find references "@SYS340678"` turned the needle into `\b@SYS340678\b`. `@` is not a word

@@ -3,7 +3,7 @@
 
 Every tool the bundled `d365fo-mcp` adapter advertises, and the `d365fo` commands that reach the same handler. Both columns are read from the running code — the command manifest (`d365fo schema --full`) and the adapter's own `tools/list` — so a tool that stops matching a command fails the generator rather than quietly outliving the mapping.
 
-**32 tools · 193 command routes · 15 commands with no MCP route.**
+**32 tools · 195 command routes · 15 commands with no MCP route.**
 
 The adapter is consolidated on purpose: one tool dispatches on a `type` / `objectType` / `mode` / `action` discriminator instead of shipping one tool per object kind. That keeps the schema payload a host injects every turn from growing with the object model — see [TOKEN_ECONOMICS.md](TOKEN_ECONOMICS.md) for what that payload actually measures.
 
@@ -76,6 +76,7 @@ Which tables declare a field named `name` (or whose field uses an EDT named `nam
 | CLI command | Discriminator |
 |---|---|
 | `d365fo find fields` | — |
+| `d365fo find tables-by-field` | — |
 
 ### `generate_object`
 
@@ -145,6 +146,7 @@ Read X++ source from the index. `objectType` (class | table | form, default clas
 
 | CLI command | Discriminator |
 |---|---|
+| `d365fo get method` | — |
 | `d365fo read class` | `objectType=class` |
 | `d365fo read form` | `objectType=form` |
 | `d365fo read table` | `objectType=table` |

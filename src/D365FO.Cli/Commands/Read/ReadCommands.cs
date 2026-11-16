@@ -67,34 +67,7 @@ public abstract class ReadBaseCommand<TSettings> : Command<TSettings>
                         $"Available methods: {string.Join(", ", src.Methods.Select(x => x.Name).Take(20))}"));
             }
 
-            var body = m.Body;
-            string? sliced = null;
-            if (!string.IsNullOrWhiteSpace(settings.Lines))
-            {
-                var parts = settings.Lines.Split('-', 2);
-                if (parts.Length == 2
-                    && int.TryParse(parts[0], out var from)
-                    && int.TryParse(parts[1], out var to))
-                {
-                    sliced = XppSourceReader.Slice(body, from, to);
-                }
-                else
-                {
-                    return RenderHelpers.Render(kind,
-                        ToolResult<object>.Fail("INVALID_RANGE",
-                            $"--lines expects FROM-TO (e.g. 10-40); got '{settings.Lines}'."));
-                }
-            }
-            else if (!string.IsNullOrWhiteSpace(settings.Around))
-            {
-                sliced = XppSourceReader.AroundPattern(body, settings.Around!, 3);
-            }
-
-            return RenderHelpers.Render(kind, ToolResult<object>.Success(new
-            {
-                kind = objKind, name = settings.Name, path = src.Path,
-                method = m.Name, source = sliced ?? body
-            }));
+            return RenderMethod(kind, objKind, settings.Name, src, m, settings.Lines, settings.Around);
         }
 
         if ((settings.Lines ?? settings.Around) is not null)
@@ -120,6 +93,43 @@ public abstract class ReadBaseCommand<TSettings> : Command<TSettings>
             declaration = src.Declaration,
             methodCount = src.Methods.Count,
             methods = src.Methods
+        }));
+    }
+
+    /// <summary>
+    /// One method's source, optionally sliced by <paramref name="lines"/> or <paramref name="around"/>.
+    /// Shared with <c>get method</c>, so the alias and the command it stands for answer alike.
+    /// </summary>
+    internal static int RenderMethod(OutputMode.Kind kind, string objKind, string name,
+        XppSourceReader.SourceResult src, XppSourceReader.SourceBlock m, string? lines, string? around)
+    {
+        var body = m.Body;
+        string? sliced = null;
+        if (!string.IsNullOrWhiteSpace(lines))
+        {
+            var parts = lines.Split('-', 2);
+            if (parts.Length == 2
+                && int.TryParse(parts[0], out var from)
+                && int.TryParse(parts[1], out var to))
+            {
+                sliced = XppSourceReader.Slice(body, from, to);
+            }
+            else
+            {
+                return RenderHelpers.Render(kind,
+                    ToolResult<object>.Fail("INVALID_RANGE",
+                        $"--lines expects FROM-TO (e.g. 10-40); got '{lines}'."));
+            }
+        }
+        else if (!string.IsNullOrWhiteSpace(around))
+        {
+            sliced = XppSourceReader.AroundPattern(body, around!, 3);
+        }
+
+        return RenderHelpers.Render(kind, ToolResult<object>.Success(new
+        {
+            kind = objKind, name, path = src.Path,
+            method = m.Name, source = sliced ?? body
         }));
     }
 }

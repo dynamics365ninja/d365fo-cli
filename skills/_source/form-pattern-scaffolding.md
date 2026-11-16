@@ -37,7 +37,7 @@ CORRECT — always:
 ## Pre-flight
 
 ```sh
-d365fo search any <Name> --kind form --output json   # collision check (no dedicated `search form`)
+d365fo search form <Name> --output json          # collision check (runs `search any <Name> --kind form`)
 d365fo get table <PrimaryTable> --output json    # field list for the grid
 
 # Pattern spec — required structure, versions, when-to-use, reference forms
@@ -164,7 +164,7 @@ out to want SimpleListDetails or ListPage.
   `d365fo index refresh --model <Model>`, and re-read with
   `d365fo get form <Form> --output json`.
 - Never use `Dialog` or `TableOfContents` patterns for transactional grids.
-- Pre-flight `search any <Name> --kind form` before scaffolding to avoid collisions (there is no dedicated `search form` subcommand).
+- Pre-flight `search form <Name>` (the same as `search any <Name> --kind form`) before scaffolding to avoid collisions.
 - Caption strings must be labels (BP `BPErrorLabelIsText`) — never raw text.
 - After scaffolding, run `d365fo build` only on user request.
 
