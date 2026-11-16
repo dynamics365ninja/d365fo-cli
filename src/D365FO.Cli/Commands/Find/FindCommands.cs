@@ -203,7 +203,7 @@ public sealed class FindRefsCommand : Command<FindRefsCommand.Settings>
     public sealed class Settings : D365OutputSettings
     {
         [CommandArgument(0, "<NAME>")]
-        [System.ComponentModel.Description("Symbol to search for (class / table / EDT / enum / label). With --xref, qualify a method/field as \"Owner.member\" (e.g. SalesTable.initFromSalesQuotationTable) or pass an AOT path to scope the where-used to its declaring type; a bare member name matches that name on every type. A label reference (\"@WAX2194\" or \"@LabelFile:LabelId\") returns that label's where-used.")]
+        [System.ComponentModel.Description("Symbol to search for (class / table / EDT / enum / label). With --xref, qualify a method/field as \"Owner.member\" (e.g. SalesTable.initFromSalesQuotationTable) or pass an AOT path to scope the where-used to its declaring type; a bare member name matches that name on every type. A label reference (\"@WAX2194\" or \"@LabelFile:LabelId\") returns that label's where-used: X++ code in `items`, and the metadata properties that hold it (Label, HelpText, a control's Text, …) in `properties`.")]
         public string Name { get; init; } = "";
 
         [CommandOption("--kind <KIND>")]

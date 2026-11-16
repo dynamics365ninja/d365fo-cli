@@ -346,6 +346,8 @@ public static class ToolCatalog
             "models; `allModels: true` also scans every other model from disk (minutes on a full installation). " +
             "`coverage` names what was answered from the index, from disk, and not searched. `Owner.member` " +
             "searches the member and keeps methods that also mention Owner (text-based, flagged in `match`). " +
+            "A label (`@SYS12345`, `@File:Key`) also returns `properties`: the metadata properties that hold it " +
+            "(Label, HelpText, a control's Text …) with object, element and model. " +
             "`xref: true`: the compiler's cross-reference (DYNAMICSXREFDB) — complete and compiler-resolved, " +
             "`kind` is a reference kind (Call/Type/Extends/Implements/Property/Attribute/…), no `model`/`allModels`. Returns one row per " +
             "referencing object (`limit` caps objects, default 200); `lines: N` returns one row per method with " +

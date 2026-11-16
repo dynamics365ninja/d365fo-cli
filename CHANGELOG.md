@@ -19,6 +19,33 @@ was ported from.
 
 ## [Unreleased]
 
+### Fixed — `find references @Label` finds the label, in code and in metadata
+
+`find references "@SYS340678"` turned the needle into `\b@SYS340678\b`. `@` is not a word
+character, so the `\b` before it matched only after a letter or digit, never after the quote or
+space a label follows, and every disk scan for a label answered zero. And labels are mostly used
+in metadata properties (a field's Label, a control's Text), which the search never read. With
+`--all-models` it scanned method bodies of every standard model for five minutes, timed out, and
+could not have found anything.
+
+- **A label token is matched as a whole token**, on the disk scan and in the source index:
+  `@SYS12` does not match `@SYS123`, nor `@File:Key` match `@File:Key2`. A source-index hit is
+  checked against the method body, because the FTS tokenizer reads `@File:Key` as the words
+  `File Key`.
+- **The answer has a `properties` list**: each metadata property that holds the label, with
+  `kind`, `name`, `model`, `element` (`Fields/AccountNum`, `Design/TabGeneral/OkButton`) and
+  `property` (`Label`, `HelpText`, `Text`, `Caption`, …). The index's `Label` columns answer
+  every model in well under a second (`via: index`). The XML is read, for every property, for
+  the default scope (custom and source-indexed models) or the model `--model` names
+  (`via: disk`). `coverage.properties` says which models were answered which way.
+- **`--all-models` widens only the X++ code scan.** The XML of standard models is not read
+  for properties, since the index answers their Label properties: reading tens of thousands of
+  files for the rest would turn a one-second answer into minutes. Name the model with `--model`
+  to read its XML.
+- **The disk scan of method bodies reads each file as text first** and parses it only when the
+  needle occurs in it. On a test set of 8,000 files this halved the scan (1.7 s to 0.9 s). Every
+  needle benefits, not only labels.
+- An unknown label gets a `hint`, as an unknown symbol does.
 ### Added — `get entity` takes the OData entity set, and `find menu-items` says which menu items open a form
 
 Two lookups agents needed and did not find in the index, so they asked a live environment
