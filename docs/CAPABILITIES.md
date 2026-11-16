@@ -109,6 +109,10 @@ get business-event|security-policy
 
 `get table <T> --brief` returns a summary: the table's properties, each field's name, type and EDT, index names with their fields, and the relations the table declares with their related table. It is a fraction of the full answer (no field labels or property bags, no field groups, relation constraints or method signatures, just `methodCount`), so read it first and ask for parts with `--include` when you need them. It does not combine with `--include` or `--merged`. MCP: `get_object_info(objectType=table, detail=brief)`.
 
+`get class <C> --brief` returns the class's properties and each method's name and signature, without bodies. Through the bridge the full answer carries every method's source, so the brief is a small fraction of it. Read one body with `get method`. From the index, inherited methods are counted (`inheritedMethodCount`), not listed. MCP: `get_object_info(objectType=class, detail=brief)`.
+
+`get form <F> --brief` returns the form's properties, the design's pattern, style and caption, each data source with its table, join source, link type, field count and method names, the top-level controls with how many controls each holds, and the form's method names. The full answer carries every data source field's and every control's property bag and every method body. Without the bridge the index has the data sources and their tables only. MCP: `get_object_info(objectType=form, detail=brief)` (index shape).
+
 `get table <T> --odata-metadata` emits an OData `<EntityType>` + `<EntitySet>` XML fragment for the table.
 
 ### `security`

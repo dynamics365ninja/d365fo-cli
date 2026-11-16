@@ -128,7 +128,7 @@ public class TableBriefTests : IDisposable
     }
 
     [Theory]
-    [InlineData("""{"objectType":"class","name":"X","detail":"brief"}""", "table only")]
+    [InlineData("""{"objectType":"enum","name":"X","detail":"brief"}""", "table, class and form only")]
     [InlineData("""{"objectType":"table","name":"ContosoDealTable","detail":"tiny"}""", "Unknown detail")]
     [InlineData("""{"objectType":"table","name":"ContosoDealTable","detail":"brief","relations":true}""", "slice")]
     public void Mcp_detail_it_cannot_honour_is_refused_not_ignored(string json, string message)
