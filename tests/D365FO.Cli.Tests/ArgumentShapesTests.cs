@@ -82,6 +82,28 @@ public sealed class ArgumentShapesTests : IDisposable
         return (exit, JsonDocument.Parse(writer.ToString()).RootElement.Clone());
     }
 
+    // ---- stdin ----
+
+    [Fact]
+    public void A_lone_dash_after_an_option_is_joined_to_it()
+    {
+        Assert.Equal(new[] { "modify", "batch", "--operations-file=-", "--dry-run" },
+            ArgumentShapes.Normalize(["modify", "batch", "--operations-file", "-", "--dry-run"]));
+        // Already joined, or not after an option: left alone.
+        Assert.Equal(new[] { "modify", "batch", "--operations-file=-" },
+            ArgumentShapes.Normalize(["modify", "batch", "--operations-file=-"]));
+        Assert.Equal(new[] { "modify", "-" }, ArgumentShapes.Normalize(["modify", "-"]));
+    }
+
+    [Fact]
+    public void Without_the_join_a_lone_dash_is_a_parse_error()
+    {
+        // Documents why the join exists: Spectre reads `-` as an option with no name.
+        var ex = Assert.ThrowsAny<CommandParseException>(
+            () => BuildApp().Run(["modify", "batch", "--operations-file", "-"]));
+        Assert.Contains("does not have a name", ex.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
     // ---- search ----
 
     [Fact]

@@ -77,6 +77,7 @@ public static class ArgumentShapes
     /// </summary>
     public static string[] Normalize(string[] args)
     {
+        args = JoinStdinDash(args);
         if (args.Length < 2) return args;
 
         if (SourceRead(args) is { } read) return read;
@@ -89,6 +90,28 @@ public static class ArgumentShapes
         if (branch.SubCommands.Contains(next)) return args;
 
         return [args[0], branch.Default, .. args[1..]];
+    }
+
+    /// <summary>
+    /// <c>--operations-file -</c> → <c>--operations-file=-</c>. Spectre reads a lone <c>-</c> as an
+    /// option without a name and fails "Option does not have a name", so the usual spelling of
+    /// "read it from stdin" only worked with the equals sign. A lone <c>-</c> is never a valid token
+    /// of its own, so joining it to the option before it changes no other command line.
+    /// </summary>
+    internal static string[] JoinStdinDash(string[] args)
+    {
+        if (Array.IndexOf(args, "-") < 0) return args;
+
+        var joined = new List<string>(args.Length);
+        foreach (var arg in args)
+        {
+            if (arg == "-" && joined.Count > 0
+                && joined[^1].StartsWith("--", StringComparison.Ordinal) && !joined[^1].Contains('='))
+                joined[^1] += "=-";
+            else
+                joined.Add(arg);
+        }
+        return joined.ToArray();
     }
 
     /// <summary>

@@ -311,7 +311,7 @@ public static class CliApp
                 b.AddCommand<ModifyRemoveQueryRangeCommand>("remove-query-range").WithDescription("Remove a range from an AOT query's datasource.");
                 b.AddCommand<ModifyAddEntryPointCommand>("add-entry-point").WithDescription("Grant an entry point on a security privilege.");
                 b.AddCommand<ModifyRemoveEntryPointCommand>("remove-entry-point").WithDescription("Revoke an entry point from a security privilege.");
-                b.AddCommand<ModifyBatchCommand>("batch").WithDescription("Apply several changes to one object in a single read-edit-write; a refused step discards the batch.");
+                b.AddCommand<ModifyBatchCommand>("batch").WithDescription("Apply several changes to one object in one read-edit-write, or to many objects when each step names its object; --dry-run reports without writing.");
             });
 
             cfg.AddBranch("analyze", b =>
