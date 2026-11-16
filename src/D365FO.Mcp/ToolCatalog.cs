@@ -354,14 +354,19 @@ public static class ToolCatalog
             "searches the member and keeps methods that also mention Owner (text-based, flagged in `match`). " +
             "A label (`@SYS12345`, `@File:Key`) also returns `properties`: the metadata properties that hold it " +
             "(Label, HelpText, a control's Text …) with object, element and model. " +
+            "`structural: true`: where the object is referenced in metadata, from the index with no build — form/query " +
+            "data sources, relations, field EDTs, EDT/class extends, menu item objects, privilege entry points and grants, " +
+            "extensions, CoC, event handlers, services, reports; `kind` filters the referencing kind (Form, Query, " +
+            "MenuItem, Security…), `model` the referencing model; complete `byVia`/`byKind` counts come first. " +
             "`xref: true`: the compiler's cross-reference (DYNAMICSXREFDB) — complete and compiler-resolved, " +
             "`kind` is a reference kind (Call/Type/Extends/Implements/Property/Attribute/…), no `model`/`allModels`. Returns one row per " +
             "referencing object (`limit` caps objects, default 200); `lines: N` returns one row per method with " +
             "up to N sample lines (xref: one row per reference with line/column).",
             Schema(("name", "string", true), ("kind", "string", false), ("model", "string", false), ("limit", "integer", false),
-                   ("lines", "integer", false), ("allModels", "boolean", false), ("xref", "boolean", false)),
+                   ("lines", "integer", false), ("allModels", "boolean", false), ("xref", "boolean", false),
+                   ("structural", "boolean", false)),
             (h, p) => h.FindReferences(Str(p, "name"), StrOrNull(p, "kind"), StrOrNull(p, "model"), Int(p, "limit", 200),
-                                       Int(p, "lines", 0), Bool(p, "xref"), Bool(p, "allModels"))),
+                                       Int(p, "lines", 0), Bool(p, "xref"), Bool(p, "allModels"), Bool(p, "structural"))),
 
         new Descriptor("find_tables_by_field", ToolEffect.Read,
             "Which tables declare a field named `name` (or whose field uses an EDT named `name`) — exact match. " +

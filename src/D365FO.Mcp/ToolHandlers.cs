@@ -2824,10 +2824,21 @@ public sealed partial class ToolHandlers
     /// </param>
     public ToolResult<object> FindReferences(
         string name, string? kind, string? model, int limit = 200, int lines = 0, bool xref = false,
-        bool allModels = false)
+        bool allModels = false, bool structural = false)
     {
         if (string.IsNullOrWhiteSpace(name))
             return ToolResult<object>.Fail("BAD_INPUT", "name is required.");
+        if (structural)
+        {
+            // Metadata references from the index (#249 item 8): a different question from the
+            // code scan and the xref, so the options that shape those are refused, not ignored.
+            if (xref || allModels || lines > 0)
+                return ToolResult<object>.Fail(D365FoErrorCodes.BadInput,
+                    "structural cannot be combined with xref, allModels or lines.",
+                    "structural answers from the index's metadata (data sources, relations, EDTs, menu items, security, "
+                    + "extensions); drop it for the X++ text scan or the compiler's xref.");
+            return StructuralWhereUsed.Run(_repo, name, kind, model, limit);
+        }
         if (allModels && xref)
             return ToolResult<object>.Fail(D365FoErrorCodes.BadInput,
                 "allModels cannot be combined with xref: the xref query is not scoped by model.",

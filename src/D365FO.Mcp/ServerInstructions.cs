@@ -47,7 +47,7 @@ public static class ServerInstructions
         - Before a change or a new object: `prepare` returns signature, existing CoC, naming and a grounding token in one call.
         - Write with `generate_object` / `modify_method`, passing that token; structural edits: `modify_object`. Never write AOT XML by hand.
         - Check hand-written X++ with `validate` (mode=references, then mode=xpp) before writing it.
-        - Where-used and extensions: `find_references`, `extension_info`. Security: `security_info`.
+        - Where-used: `find_references` (structural=true: data sources, relations, EDTs, menu items, security, from the index). Extensions: `extension_info`. Security: `security_info`.
         - Rules and patterns: `get_knowledge` (action=search, then action=get with a section).
 
         Build, sync, BP check and tests run only when the user asks.
