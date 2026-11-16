@@ -165,7 +165,7 @@ public sealed class ModifyBatchCommand : Command<ModifyBatchCommand.Settings>
         public string ObjectName { get; init; } = "";
 
         [CommandOption("--operations <JSON>")]
-        [System.ComponentModel.Description("JSON array of steps, e.g. [{\"operation\":\"add-field\",\"member\":\"Note\",\"type\":\"Notes\"},{\"operation\":\"add-index\",\"member\":\"NoteIdx\",\"fields\":[\"Note\"]}]. Use --operations-file for anything long.")]
+        [System.ComponentModel.Description("JSON array of steps, e.g. [[{\"operation\":\"add-field\",\"member\":\"Note\",\"type\":\"Notes\"},{\"operation\":\"add-index\",\"member\":\"NoteIdx\",\"fields\":[[\"Note\"]]}]]. Use --operations-file for anything long.")]
         public string? Operations { get; init; }
 
         [CommandOption("--operations-file <PATH>")]
