@@ -67,8 +67,12 @@ public sealed class WorkspaceReviewGitTests : IDisposable
         var data = Data(r);
         Assert.Equal(1, data.GetProperty("changedFiles").GetInt32());
         Assert.Contains(Rules(data), rule => rule == "FIELD_WITHOUT_EDT");
-        Assert.Equal(Path.GetFullPath(worktree).TrimEnd('\\', '/'),
-            data.GetProperty("repo").GetString()!.TrimEnd('\\', '/'), ignoreCase: OperatingSystem.IsWindows());
+        // The reported root is what git resolved, symlinks included (/var is /private/var on
+        // macOS), so identify the directory by a marker file rather than by its spelling.
+        var marker = "worktree-marker-" + Guid.NewGuid().ToString("N");
+        File.WriteAllText(Path.Combine(worktree, marker), "");
+        Assert.True(File.Exists(Path.Combine(data.GetProperty("repo").GetString()!, marker)),
+            "repo should name the linked worktree, not the main repository");
     }
 
     [GitFact]
