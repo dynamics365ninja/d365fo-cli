@@ -239,21 +239,27 @@ public static class RnrProjRegistry
         // registration would otherwise show up in git as a change to every folder line.
         var groupSpans = System.Text.RegularExpressions.Regex.Matches(
             text, @"<ItemGroup\b[^>]*?(/>|>.*?</ItemGroup>)", System.Text.RegularExpressions.RegexOptions.Singleline);
+        var spansMatch = groupSpans.Count == allGroups.Count;
+
+        // Where to add lines to an existing group: the start of its closing tag's line. A group
+        // written on one line ("<ItemGroup><Content …/></ItemGroup>") has that line start outside
+        // the group, so the lines go right before the tag instead, after a line break.
+        (int At, string Prefix)? BeforeClose(XElement? g)
+        {
+            if (g is null || !spansMatch) return null;
+            var span = groupSpans[allGroups.IndexOf(g)];
+            if (!span.Value.EndsWith("</ItemGroup>", StringComparison.Ordinal)) return null;
+            var close = span.Index + span.Length - "</ItemGroup>".Length;
+            var lineStart = text.LastIndexOf('\n', close - 1) + 1;
+            return lineStart <= span.Index ? (close, newline) : (lineStart, string.Empty);
+        }
+
         int at;
         string insert;
-        if (group is not null && groupSpans.Count == allGroups.Count
-            && groupSpans[allGroups.IndexOf(group)] is { } span && span.Value.EndsWith("</ItemGroup>", StringComparison.Ordinal))
+        if (BeforeClose(group) is { } inGroup)
         {
-            var close = span.Index + span.Length - "</ItemGroup>".Length;
-            at = text.LastIndexOf('\n', close - 1) + 1;
-            insert = item.ToString();
-            // A group written on one line ("<ItemGroup><Content …/></ItemGroup>"): the start of
-            // the closing tag's line is outside the group, so insert right before the tag instead.
-            if (at <= span.Index)
-            {
-                at = close;
-                insert = newline + insert;
-            }
+            at = inGroup.At;
+            insert = inGroup.Prefix + item;
         }
         else
         {
@@ -266,7 +272,41 @@ public static class RnrProjRegistry
             insert = $"  <ItemGroup>{newline}{item}  </ItemGroup>{newline}";
         }
 
-        text = text.Insert(at, insert);
+        // Visual Studio will not load a project whose <Link> points into a folder that has no
+        // <Folder Include="X\"/> entry, so add every one missing — the new item's and any an
+        // earlier registration (before this fix) left out. Undo removes only the item; an empty
+        // folder entry left behind is harmless.
+        var missingFolders = MissingFolders(root, ns,
+            !compileShape && DisplayFolders.TryGetValue(axSubfolder, out var newDisplay) ? newDisplay : null);
+        if (missingFolders.Count > 0)
+        {
+            var folderLines = string.Concat(missingFolders.Select(f =>
+                $"    <Folder Include=\"{System.Security.SecurityElement.Escape(f)}\\\" />{newline}"));
+            var folderGroup = itemGroups.FirstOrDefault(g => g.Elements(ns + "Folder").Any());
+            int folderAt;
+            string folderInsert;
+            if (BeforeClose(folderGroup) is { } inFolders)
+            {
+                folderAt = inFolders.At;
+                folderInsert = inFolders.Prefix + folderLines;
+            }
+            else
+            {
+                // A group of its own, before the one listing the objects, as Visual Studio writes it.
+                var groupStart = group is not null && spansMatch ? groupSpans[allGroups.IndexOf(group)].Index : -1;
+                folderAt = groupStart >= 0 ? text.LastIndexOf('\n', Math.Max(groupStart - 1, 0)) + 1 : at;
+                folderInsert = $"  <ItemGroup>{newline}{folderLines}  </ItemGroup>{newline}";
+            }
+
+            // Later position first, so the earlier one stays valid; at the same spot, folders go first.
+            if (folderAt > at) text = text.Insert(folderAt, folderInsert).Insert(at, insert);
+            else if (folderAt < at) text = text.Insert(at, insert).Insert(folderAt, folderInsert);
+            else text = text.Insert(at, folderInsert + insert);
+        }
+        else
+        {
+            text = text.Insert(at, insert);
+        }
         File.WriteAllBytes(rnrprojPath, (hasBom ? new byte[] { 0xEF, 0xBB, 0xBF } : [])
             .Concat(new System.Text.UTF8Encoding(false).GetBytes(text)).ToArray());
 
@@ -347,6 +387,29 @@ public static class RnrProjRegistry
         ["AxWorkflowApproval"] = "Workflow Approvals",
         ["AxWorkflowTask"] = "Workflow Tasks",
     };
+
+    /// <summary>
+    /// Display folders a <c>Link</c> in <paramref name="root"/> (plus <paramref name="extra"/>)
+    /// files an item under, parents included, that have no <c>&lt;Folder&gt;</c> entry yet.
+    /// </summary>
+    private static List<string> MissingFolders(XElement root, XNamespace ns, string? extra)
+    {
+        var existing = new HashSet<string>(
+            root.Descendants(ns + "Folder").Select(f => ((string?)f.Attribute("Include") ?? "").Replace('/', '\\').TrimEnd('\\')),
+            StringComparer.OrdinalIgnoreCase);
+        var wanted = root.Descendants(ns + "Link")
+            .Select(l => l.Value.Trim().Replace('/', '\\'))
+            .Select(l => l.Contains('\\') ? l[..l.LastIndexOf('\\')] : null)
+            .Append(extra);
+        var missing = new List<string>();
+        foreach (var folder in wanted)
+        {
+            // "A\B" needs "A" listed as well.
+            for (var f = folder; !string.IsNullOrEmpty(f); f = f.Contains('\\') ? f[..f.LastIndexOf('\\')] : null)
+                if (existing.Add(f)) missing.Add(f);
+        }
+        return missing.OrderBy(f => f, StringComparer.OrdinalIgnoreCase).ToList();
+    }
 
     private static bool HasInclude(IEnumerable<XElement> itemGroups, string include)
         => FindInclude(itemGroups, include) is not null;

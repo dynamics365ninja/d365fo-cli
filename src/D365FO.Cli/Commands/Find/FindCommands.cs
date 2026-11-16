@@ -84,6 +84,27 @@ public sealed class FindUsagesCommand : Command<FindUsagesCommand.Settings>
 }
 
 /// <summary>
+/// "Which menu items open form X": Display, Action and Output menu items whose Object is
+/// exactly the given name, with kind, object type, label and model. The inverse of
+/// <c>get menu-item</c>.
+/// </summary>
+public sealed class FindMenuItemsCommand : Command<FindMenuItemsCommand.Settings>
+{
+    public sealed class Settings : D365OutputSettings
+    {
+        [CommandArgument(0, "<OBJECT>")]
+        [System.ComponentModel.Description("The form, class or report the menu items open (exact name, case-insensitive), e.g. CustTable.")]
+        public string Object { get; init; } = "";
+    }
+
+    public override int Execute(CommandContext ctx, Settings settings)
+    {
+        var kind = OutputMode.Resolve(settings.Output);
+        return RenderHelpers.Render(kind, MenuItemLookup.ForObject(RepoFactory.Create(), settings.Object));
+    }
+}
+
+/// <summary>
 /// Field-level lookup: "which tables contain field/EDT X". Exact match against
 /// TableFields.Name / TableFields.EdtName — NOT a relation or FK lookup, and
 /// NOT a source-code grep. Use this instead of `find refs --kind table` or
@@ -186,7 +207,7 @@ public sealed class FindRefsCommand : Command<FindRefsCommand.Settings>
         public string Name { get; init; } = "";
 
         [CommandOption("--kind <KIND>")]
-        [System.ComponentModel.Description("Text scan: restrict to one artifact kind — class | table | form. With --xref: restrict to one reference kind — Declaration | Set | Read | Call | Reference | Type | Extends | Implements.")]
+        [System.ComponentModel.Description("Text scan: restrict to one artifact kind — class | table | form. With --xref: restrict to one reference kind — Call | Type | Implements | Extends | TestCall | Property | Attribute | TestHelperCall | Tag | Override (the CrossReferenceKind names MethodCall, TypeReference, … also work).")]
         public string? Kind { get; init; }
 
         [CommandOption("--model <NAME>")]

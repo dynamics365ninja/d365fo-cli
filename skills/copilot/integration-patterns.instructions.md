@@ -41,8 +41,11 @@ applyTo: '**/AxDataEntityView/**,**/AxService/**,**/AxServiceGroup/**,**/*Entity
 # 1. Find the entity
 d365fo search entity <Name> --output json
 
-# 2. Inspect fields, OData names, key configuration
+# 2. Inspect fields, OData names, key configuration. <Name> may be the AOT name,
+#    the PublicEntityName, or the PublicCollectionName an OData URL or an
+#    integration error names (/data/CustomersV3); data.matchedOn says which.
 d365fo get entity <Name> --output json
+d365fo get entity CustomersV3 --output json   # → CustCustomerV3Entity, matchedOn: publicCollectionName
 
 # 3. Check that key fields have AlternateKey index
 d365fo get table <SourceTable> --output json | jq '.data.indexes[] | select(.alternateKey == true)'

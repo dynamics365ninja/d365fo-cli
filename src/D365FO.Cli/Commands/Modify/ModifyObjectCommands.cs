@@ -64,7 +64,7 @@ public sealed class ModifyPropertyCommand : Command<ModifyPropertyCommand.Settin
         public string ObjectName { get; init; } = "";
 
         [CommandArgument(2, "<PROPERTY>")]
-        [System.ComponentModel.Description("Property element name, e.g. Label, ConfigurationKey, TableGroup.")]
+        [System.ComponentModel.Description("Property element name, e.g. Label, ConfigurationKey, TableGroup. A property with child elements takes one child at a time: SubscriberAccessLevel.Read.")]
         public string Property { get; init; } = "";
 
         [CommandOption("--value <VALUE>")]

@@ -932,6 +932,109 @@ public sealed class ObjectModifyEngineTests : IDisposable
         Assert.Equal("Main", written.Root!.Element("TableGroup")!.Value);
     }
 
+    // ---- properties with child elements (SubscriberAccessLevel) ------------------
+
+    private ToolResult<object> SetTableProperty(BridgeCapture capture, string member, string value)
+    {
+        using var harness = FakeBridge.Create(capture.Respond);
+        return ObjectModifyEngine.ModifyCore(new ObjectModifyEngine.ModifyRequest
+        {
+            Operation = ObjectModifyEngine.Operation.SetProperty,
+            Kind = "table",
+            ObjectName = "FmVehicle",
+            Member = member,
+            Value = value,
+            Model = "FleetCustom",
+        }, _repo, harness.Client, _journalDb);
+    }
+
+    [Fact]
+    public void A_dotted_property_creates_the_missing_parent_and_child_in_contract_order()
+    {
+        var capture = new BridgeCapture(
+            "<AxTable><Name>FmVehicle</Name><Label>@SYS1</Label><TableGroup>Main</TableGroup></AxTable>");
+
+        var result = SetTableProperty(capture, "SubscriberAccessLevel.Read", "allow");
+
+        Assert.True(result.Ok, result.Error?.Message);
+        var written = XDocument.Parse((string)capture.WriteArgs!["xml"]!);
+        // SubscriberAccessLevel sorts between Label and TableGroup in the AxTable contract.
+        Assert.Equal(new[] { "Name", "Label", "SubscriberAccessLevel", "TableGroup" },
+            written.Root!.Elements().Select(e => e.Name.LocalName).ToArray());
+        // The enum value is written in the contract's spelling.
+        Assert.Equal("Allow", written.Root.Element("SubscriberAccessLevel")!.Element("Read")!.Value);
+    }
+
+    [Fact]
+    public void A_dotted_property_updates_an_existing_child_and_keeps_its_siblings()
+    {
+        var capture = new BridgeCapture(
+            "<AxTable><Name>FmVehicle</Name><SubscriberAccessLevel><Read>Deny</Read></SubscriberAccessLevel></AxTable>");
+
+        var result = SetTableProperty(capture, "subscriberaccesslevel.create", "Allow");
+        Assert.True(result.Ok, result.Error?.Message);
+        var grant = XDocument.Parse((string)capture.WriteArgs!["xml"]!).Root!.Element("SubscriberAccessLevel")!;
+        // Create precedes Read in AccessGrant, and the name is written in the contract's case.
+        Assert.Equal(new[] { "Create", "Read" }, grant.Elements().Select(e => e.Name.LocalName).ToArray());
+        Assert.Equal("Deny", grant.Element("Read")!.Value);
+
+        var update = new BridgeCapture(
+            "<AxTable><Name>FmVehicle</Name><SubscriberAccessLevel><Read>Deny</Read></SubscriberAccessLevel></AxTable>");
+        var second = SetTableProperty(update, "SubscriberAccessLevel.Read", "Allow");
+        Assert.True(second.Ok, second.Error?.Message);
+        Assert.Contains("oldValue = Deny", second.Data!.ToString());
+        Assert.Equal("Allow", XDocument.Parse((string)update.WriteArgs!["xml"]!)
+            .Root!.Element("SubscriberAccessLevel")!.Element("Read")!.Value);
+    }
+
+    [Fact]
+    public void A_plain_value_for_a_property_with_child_elements_is_refused_before_any_write()
+    {
+        // The real failure: the text replaced AccessGrant's children and the bridge could not
+        // deserialize the result ("Expecting state 'Element'.. Encountered 'Text'").
+        var capture = new BridgeCapture(
+            "<AxTable><Name>FmVehicle</Name><SubscriberAccessLevel><Read>Allow</Read></SubscriberAccessLevel></AxTable>");
+
+        var result = SetTableProperty(capture, "SubscriberAccessLevel", "Allow");
+
+        Assert.False(result.Ok);
+        Assert.Equal(D365FoErrorCodes.BadInput, result.Error!.Code);
+        Assert.Contains("SubscriberAccessLevel.<CHILD>", result.Error.Hint);
+        Assert.Contains("Correct, Create, Delete, Invoke, Read, Update", result.Error.Hint);
+        Assert.Contains("Allow, Deny, Unset", result.Error.Hint);
+        Assert.Null(capture.WriteVerb);
+    }
+
+    [Theory]
+    [InlineData("SubscriberAcessLevel")]          // misspelled property
+    [InlineData("SubscriberAccessLevel.Reed")]    // misspelled child
+    [InlineData("Fields.Name")]                   // a collection, not a property with children
+    [InlineData("Label.Text")]                    // a value, not a property with children
+    public void A_property_path_the_contract_does_not_declare_is_refused_and_nothing_is_written(string member)
+    {
+        var capture = new BridgeCapture("<AxTable><Name>FmVehicle</Name></AxTable>");
+
+        var result = SetTableProperty(capture, member, "Allow");
+
+        Assert.False(result.Ok);
+        Assert.Equal(D365FoErrorCodes.BadInput, result.Error!.Code);
+        Assert.False(string.IsNullOrWhiteSpace(result.Error.Hint));
+        Assert.Null(capture.WriteVerb);
+    }
+
+    [Fact]
+    public void A_child_value_outside_its_enum_is_refused_with_the_allowed_values()
+    {
+        var capture = new BridgeCapture("<AxTable><Name>FmVehicle</Name></AxTable>");
+
+        var result = SetTableProperty(capture, "SubscriberAccessLevel.Read", "Maybe");
+
+        Assert.False(result.Ok);
+        Assert.Contains("AccessGrantPermission", result.Error!.Message);
+        Assert.Contains("Allow, Deny, Unset", result.Error.Hint);
+        Assert.Null(capture.WriteVerb);
+    }
+
     [Fact]
     public void Add_control_appends_a_bound_control_to_the_named_container()
     {
@@ -981,6 +1084,89 @@ public sealed class ObjectModifyEngineTests : IDisposable
         Assert.False(result.Ok);
         Assert.Equal(D365FoErrorCodes.ControlNotFound, result.Error!.Code);
         Assert.Null(capture.WriteVerb);
+    }
+
+    [Theory]
+    [InlineData(false, "createObject")]
+    [InlineData(true, "updateObject")]
+    public void Add_control_places_a_bound_checkbox_under_an_inherited_group(bool extensionExists, string writeVerb)
+    {
+        const string ns = "Microsoft.Dynamics.AX.Metadata.V6";
+        const string extensionXml = "<AxFormExtension xmlns=\"" + ns + "\" xmlns:i=\"http://www.w3.org/2001/XMLSchema-instance\">" +
+            "<Name>FmVehicleList.Fleet</Name><Controls i:nil=\"true\" /><PropertyModifications /></AxFormExtension>";
+        if (extensionExists)
+        {
+            _repo.ApplyExtract(ExtractBatch.Empty("FleetCustom") with
+            {
+                Extensions = [new ExtractedObjectExtension("Form", "FmVehicleList", "FmVehicleList.Fleet", null)],
+            });
+        }
+
+        var capture = new BridgeCapture(extensionExists ? extensionXml : null) { BaseFormXml = FormXml };
+        using var harness = FakeBridge.Create(capture.Respond);
+
+        var result = ObjectModifyEngine.ModifyCore(new ObjectModifyEngine.ModifyRequest
+        {
+            Operation = ObjectModifyEngine.Operation.AddControl,
+            Kind = "form",
+            ObjectName = "FmVehicleList",
+            Member = "Grid_Validated",
+            Type = "CheckBox",
+            Parent = "grid",
+            DataSource = "FmVehicle",
+            DataField = "Validated",
+            ExtensionSuffix = "Fleet",
+            ExtensionModel = "FleetCustom",
+        }, _repo, harness.Client, _journalDb);
+
+        Assert.True(result.Ok, result.Error?.Message);
+        Assert.Equal(1, capture.WriteCount);
+        Assert.Equal(writeVerb, capture.WriteVerb);
+        Assert.Equal("formextension", (string?)capture.WriteArgs!["kind"]);
+        Assert.Equal("FmVehicleList.Fleet", (string?)capture.WriteArgs!["name"]);
+        Assert.Equal("FleetCustom", (string?)capture.WriteArgs!["model"]);
+
+        XNamespace formNamespace = ns;
+        XNamespace xsi = "http://www.w3.org/2001/XMLSchema-instance";
+        var root = XDocument.Parse((string)capture.WriteArgs!["xml"]!).Root!;
+        Assert.Equal(formNamespace + "AxFormExtension", root.Name);
+        Assert.Equal("FmVehicleList.Fleet", root.Element(formNamespace + "Name")!.Value);
+        var controls = root.Element(formNamespace + "Controls")!;
+        Assert.Null(controls.Attribute(xsi + "nil"));
+        var addition = Assert.Single(controls.Elements());
+        Assert.Equal("AxFormExtensionControl", addition.Name);
+        Assert.False(string.IsNullOrWhiteSpace((string?)addition.Element("Name")));
+        Assert.Equal("Grid", (string?)addition.Element("Parent"));
+        var control = addition.Element("FormControl")!;
+        Assert.Equal("AxFormCheckBoxControl", (string?)control.Attribute(xsi + "type"));
+        Assert.Equal("Grid_Validated", (string?)control.Element("Name"));
+        Assert.Equal("CheckBox", (string?)control.Element("Type"));
+        Assert.Equal("Validated", (string?)control.Element("DataField"));
+        Assert.Equal("FmVehicle", (string?)control.Element("DataSource"));
+        if (extensionExists)
+            Assert.Equal(formNamespace + "PropertyModifications", root.Elements().Last().Name);
+    }
+
+    [Fact]
+    public void Add_control_refuses_an_unknown_inherited_parent_without_creating_the_extension()
+    {
+        var capture = new BridgeCapture(readXml: null) { BaseFormXml = FormXml };
+        using var harness = FakeBridge.Create(capture.Respond);
+
+        var result = ObjectModifyEngine.ModifyCore(new ObjectModifyEngine.ModifyRequest
+        {
+            Operation = ObjectModifyEngine.Operation.AddControl,
+            Kind = "form",
+            ObjectName = "FmVehicleList",
+            Member = "Foo",
+            Type = "CheckBox",
+            Parent = "NotOnBaseForm",
+            ExtensionModel = "FleetCustom",
+        }, _repo, harness.Client, _journalDb);
+
+        Assert.False(result.Ok);
+        Assert.Equal(D365FoErrorCodes.ControlNotFound, result.Error!.Code);
+        Assert.Equal(0, capture.WriteCount);
     }
 
     // ---- extension fallback --------------------------------------------------
@@ -1275,6 +1461,8 @@ public sealed class ObjectModifyEngineTests : IDisposable
 
         public BridgeCapture(string? readXml) => _readXml = readXml;
 
+        public string? BaseFormXml { get; init; }
+
         public string? WriteVerb { get; private set; }
 
         public JsonObject? WriteArgs { get; private set; }
@@ -1289,9 +1477,11 @@ public sealed class ObjectModifyEngineTests : IDisposable
             switch (method)
             {
                 case "readObjectXml":
-                    result = _readXml is null
+                    var xml = BaseFormXml is not null && (string?)request["params"]?["kind"] == "form"
+                        ? BaseFormXml : _readXml;
+                    result = xml is null
                         ? new JsonObject { ["ok"] = false, ["error"] = "NOT_FOUND", ["message"] = "not found" }
-                        : new JsonObject { ["ok"] = true, ["xml"] = _readXml };
+                        : new JsonObject { ["ok"] = true, ["xml"] = xml };
                     break;
                 case "createObject":
                 case "updateObject":

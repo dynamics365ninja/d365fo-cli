@@ -298,11 +298,38 @@ public sealed class GetClassCommand : Command<GetClassCommand.Settings>
     {
         [CommandArgument(0, "<NAME>")]
         public string Name { get; init; } = "";
+
+        [CommandOption("--brief")]
+        [System.ComponentModel.Description("Summary only: properties, and each method's name and signature without its body. A fraction of the full answer — read it first, then `get method` for the body you need.")]
+        public bool Brief { get; init; }
+    }
+
+    /// <summary>
+    /// <c>--brief</c>: the summary shape (<see cref="D365FO.Core.Analysis.ClassBrief"/>), from
+    /// the bridge when it answers, else from the index.
+    /// </summary>
+    internal static ToolResult<object> Brief(string name)
+    {
+        var repo = RepoFactory.Create();
+        if (BridgeGate.ShouldTry()
+            && BridgeGate.TryReadClass(name) is System.Text.Json.Nodes.JsonObject bridged)
+        {
+            return ToolResult<object>.Success(
+                D365FO.Core.Analysis.ClassBrief.FromBridge(bridged, repo.GetClassDetails(name)));
+        }
+
+        var details = repo.GetClassDetails(name);
+        return details is null
+            ? ToolResult<object>.Fail("CLASS_NOT_FOUND", $"Class '{name}' not found.",
+                NameSuggester.HintFor(repo, NameSuggester.Kind.Class, name))
+            : ToolResult<object>.Success(D365FO.Core.Analysis.ClassBrief.FromIndex(details));
     }
 
     public override int Execute(CommandContext ctx, Settings settings)
     {
         var kind = OutputMode.Resolve(settings.Output);
+        if (settings.Brief)
+            return RenderHelpers.Render(kind, Brief(settings.Name));
 
         // Bridge-primary path (opt-in via D365FO_BRIDGE_ENABLED=1).
         // Silently falls back to the SQLite index when the bridge is missing,
@@ -333,6 +360,7 @@ public sealed class GetMenuItemCommand : Command<GetMenuItemCommand.Settings>
     public sealed class Settings : D365OutputSettings
     {
         [CommandArgument(0, "<NAME>")]
+        [System.ComponentModel.Description("Menu item name. The answer names its kind (Display/Action/Output) and the object it opens (object, objectType).")]
         public string Name { get; init; } = "";
     }
 
@@ -342,7 +370,8 @@ public sealed class GetMenuItemCommand : Command<GetMenuItemCommand.Settings>
         var repo = RepoFactory.Create();
         var mi = repo.GetMenuItem(settings.Name);
         var result = mi is null
-            ? ToolResult<object>.Fail("MENU_ITEM_NOT_FOUND", $"Menu item '{settings.Name}' not found.")
+            ? ToolResult<object>.Fail("MENU_ITEM_NOT_FOUND", $"Menu item '{settings.Name}' not found.",
+                $"To find the menu items that open an object named '{settings.Name}', run `d365fo find menu-items {settings.Name}`.")
             : ToolResult<object>.Success(mi);
         return RenderHelpers.Render(kind, result);
     }
@@ -482,11 +511,37 @@ public sealed class GetFormCommand : Command<GetFormCommand.Settings>
     {
         [CommandArgument(0, "<NAME>")]
         public string Name { get; init; } = "";
+
+        [CommandOption("--brief")]
+        [System.ComponentModel.Description("Summary only: properties, design pattern and caption, data sources with table and join, top-level controls with how many each holds, method names. A fraction of the full answer.")]
+        public bool Brief { get; init; }
+    }
+
+    /// <summary>
+    /// <c>--brief</c>: the summary shape (<see cref="D365FO.Core.Analysis.FormBrief"/>), from
+    /// the bridge when it answers, else from the index (form and data sources only).
+    /// </summary>
+    internal static ToolResult<object> Brief(string name)
+    {
+        if (BridgeGate.ShouldTry()
+            && BridgeGate.TryReadForm(name) is System.Text.Json.Nodes.JsonObject bridged)
+        {
+            return ToolResult<object>.Success(D365FO.Core.Analysis.FormBrief.FromBridge(bridged));
+        }
+
+        var repo = RepoFactory.Create();
+        var f = repo.GetForm(name);
+        return f is null
+            ? ToolResult<object>.Fail("FORM_NOT_FOUND", $"Form '{name}' not found.",
+                NameSuggester.HintFor(repo, NameSuggester.Kind.Form, name))
+            : ToolResult<object>.Success(D365FO.Core.Analysis.FormBrief.FromIndex(f));
     }
 
     public override int Execute(CommandContext ctx, Settings settings)
     {
         var kind = OutputMode.Resolve(settings.Output);
+        if (settings.Brief)
+            return RenderHelpers.Render(kind, Brief(settings.Name));
         if (BridgeGate.ShouldTry())
         {
             var bridged = BridgeGate.TryReadForm(settings.Name);
@@ -632,7 +687,8 @@ public sealed class GetEntityCommand : Command<GetEntityCommand.Settings>
         var kind = OutputMode.Resolve(settings.Output);
         var e = RepoFactory.Create().GetDataEntity(settings.Name);
         if (e is null)
-            return RenderHelpers.Render(kind, ToolResult<object>.Fail("ENTITY_NOT_FOUND", $"Data entity '{settings.Name}' not found."));
+            return RenderHelpers.Render(kind, ToolResult<object>.Fail("ENTITY_NOT_FOUND", $"Data entity '{settings.Name}' not found.",
+                $"Looked for an AOT name, PublicEntityName or PublicCollectionName equal to '{settings.Name}'. For a partial name run `d365fo search entity {settings.Name}`."));
 
         if (settings.ODataMetadata)
         {
