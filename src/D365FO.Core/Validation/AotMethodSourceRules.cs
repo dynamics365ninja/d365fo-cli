@@ -133,6 +133,31 @@ public static class AotMethodSourceRules
     }
 
     /// <summary>
+    /// True when the first method declared in <paramref name="source"/> has the <c>static</c>
+    /// modifier, which makes it a class method called on the type rather than on an instance.
+    /// Only the header (up to the parameter list) is read, so a <c>static</c> in a comment,
+    /// an attribute or the body does not count.
+    /// </summary>
+    internal static bool DeclaresStatic(string source)
+    {
+        var masked = BlankComments(source);
+        var i = SkipTrivia(masked, 0);
+        if (i >= masked.Length)
+        {
+            return false;
+        }
+
+        var end = masked.IndexOfAny(['(', '{'], i);
+        var header = end < 0 ? masked[i..] : masked[i..end];
+        return StaticModifier.IsMatch(header);
+    }
+
+    /// <summary><c>static</c> as a whole word. X++ keywords are case-insensitive.</summary>
+    internal static readonly System.Text.RegularExpressions.Regex StaticModifier = new(
+        @"\bstatic\b",
+        System.Text.RegularExpressions.RegexOptions.IgnoreCase | System.Text.RegularExpressions.RegexOptions.CultureInvariant);
+
+    /// <summary>
     /// <see cref="XppLexer.Mask"/> keeps comment delimiters; a header walk needs the whole
     /// comment gone so a leading <c>/// &lt;summary&gt;</c> block reads as whitespace.
     /// </summary>

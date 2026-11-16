@@ -15,7 +15,10 @@ public sealed partial class MetadataRepository
 {
     /// <summary>Current schema version tracked in PRAGMA user_version.</summary>
     /// <remarks>
-    /// v21: no new column — Edts.BaseType was empty for every EDT before it (issue #233), so the
+    /// v22: no new column — a method whose trimmed signature starts with <c>static</c>
+    /// (<c>static void main(Args _args)</c>) was indexed with IsStatic = 0. The migration sets it
+    /// in place from the stored signature, so no re-extract is needed.
+    /// &lt;para&gt;v21: no new column — Edts.BaseType was empty for every EDT before it (issue #233), so the
     /// migration clears every model's SourceFingerprint and the next refresh re-extracts them all.
     /// &lt;para&gt;v20: Models.SourceIndexed — whether the model's method bodies are in MethodSourceFts, so a
     /// re-extract that names neither --index-source nor --no-index-source keeps them. Backfilled
@@ -27,7 +30,7 @@ public sealed partial class MetadataRepository
     /// EnsureSchema, with no re-extract.&lt;/para&gt;
     /// &lt;para&gt;v17: LabelFiles table (per-label-file source paths for the disk check).&lt;/para&gt;
     /// </remarks>
-    public const int CurrentSchemaVersion = 21;
+    public const int CurrentSchemaVersion = 22;
 
     private static readonly Lazy<string> SchemaSql = new(LoadEmbeddedSchema);
 
@@ -296,6 +299,17 @@ public sealed partial class MetadataRepository
             // every model instead of skipping the unchanged ones. SourceIndexed is kept, so the
             // re-extract indexes method bodies exactly as the last one did.
             conn.Execute("UPDATE Models SET SourceFingerprint = NULL", transaction: tx);
+        }
+
+        if (current > 0 && current < 22)
+        {
+            // v22: the extractor looked for " static " in the trimmed signature line, so a
+            // declaration that starts with the modifier was stored as an instance method. The
+            // signature is in the row, so the flag is fixed here; LIKE ignores ASCII case, as X++ does.
+            const string fix = "UPDATE {0} SET IsStatic = 1 WHERE IsStatic = 0 " +
+                               "AND (Signature LIKE 'static %' OR Signature LIKE 'static' || char(9) || '%')";
+            conn.Execute(string.Format(fix, "Methods"), transaction: tx);
+            conn.Execute(string.Format(fix, "TableMethods"), transaction: tx);
         }
 
         conn.Execute($"PRAGMA user_version = {CurrentSchemaVersion}", transaction: tx);

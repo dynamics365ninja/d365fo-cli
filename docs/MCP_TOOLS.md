@@ -259,10 +259,11 @@ Model inspection via `action`: list (every indexed model — name/publisher/laye
 
 ### `modify_method`
 
-Replace the body of an EXISTING method on a live class/table/edt/form via D365FO.Bridge (Windows VM, requires D365FO_BRIDGE_ENABLED=1). Reads the object through IMetadataProvider, structurally replaces one <Method>'s source (never raw XM…
+Replace the body of an EXISTING method on a live class/table/edt/form, or add a new one, via D365FO.Bridge (Windows VM, requires D365FO_BRIDGE_ENABLED=1). Reads the object through IMetadataProvider, structurally replaces one <Method>'s s…
 
 | CLI command | Discriminator |
 |---|---|
+| `d365fo modify add-method` | `add=true` |
 | `d365fo modify method` | — |
 
 ### `modify_object`

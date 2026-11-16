@@ -84,19 +84,20 @@ public static class MethodModifyEngine
         var options = bridgeOptions ?? DefaultBridgeOptions();
         var switchedOff = BridgeGate.ExplicitlyDisabled();
         if (switchedOff || !BridgeClient.IsAvailable(options))
-        {
-            return ToolResult<object>.Fail(D365FoErrorCodes.BridgeRequired,
-                "d365fo modify method requires D365FO.Bridge (.NET Framework 4.8, Windows-only, IMetadataProvider-backed) — " +
+            return BridgeUnavailable("modify method", switchedOff);
+
+        using var client = new BridgeClient(options);
+        return ModifyCore(request, repo, client);
+    }
+
+    private static ToolResult<object> BridgeUnavailable(string command, bool switchedOff)
+        => ToolResult<object>.Fail(D365FoErrorCodes.BridgeRequired,
+                $"d365fo {command} requires D365FO.Bridge (.NET Framework 4.8, Windows-only, IMetadataProvider-backed) — " +
                 (switchedOff
                     ? "it is switched off here (D365FO_BRIDGE_ENABLED is set to something other than 1/true)."
                     : "it is not available in this environment (non-Windows OS, or the bridge executable could not be resolved)."),
                 "Run on a D365FO VM with D365FO_BRIDGE_ENABLED=1 and D365FO_BRIDGE_PATH / D365FO_PACKAGES_PATH set. " +
                 "This command intentionally has no raw-XML fallback (see docs/MIGRATION_FROM_MCP.md, issue #112).");
-        }
-
-        using var client = new BridgeClient(options);
-        return ModifyCore(request, repo, client);
-    }
 
     /// <summary>
     /// The bridge round-trip itself, decoupled from process spawning so tests can pass
@@ -123,61 +124,15 @@ public static class MethodModifyEngine
         var hasBody = !string.IsNullOrWhiteSpace(request.NewBody);
 
         // ---- 1. Resolve the owning model (index lookup; --model overrides) ----
-        var model = request.Model;
-        if (string.IsNullOrWhiteSpace(model) && repo is not null)
-        {
-            model = kind switch
-            {
-                "class" => repo.GetClassDetails(request.ObjectName)?.Class.Model,
-                "table" => repo.GetTableDetails(request.ObjectName)?.Table.Model,
-                "edt" => repo.GetEdt(request.ObjectName)?.Model,
-                "form" => repo.GetForm(request.ObjectName)?.Form.Model,
-                _ => null,
-            };
-        }
+        var model = ResolveModel(kind, request.ObjectName, request.Model, repo);
         if (string.IsNullOrWhiteSpace(model))
-        {
-            return ToolResult<object>.Fail(NotFoundCodeFor(kind),
-                $"{kind} '{request.ObjectName}' was not found in the SQLite index and no --model override was supplied.",
-                "Run `d365fo index build` + `d365fo index extract`, or pass --model <MODEL> explicitly.");
-        }
+            return ModelNotResolved(kind, request.ObjectName);
 
-        // ---- 2. Read the live object via the bridge ----
-        JsonObject? readResult;
-        try
-        {
-            readResult = client.SendAsync("readObjectXml", new JsonObject { ["kind"] = kind, ["name"] = request.ObjectName })
-                .GetAwaiter().GetResult();
-        }
-        catch (BridgeException ex)
-        {
-            return ToolResult<object>.Fail(D365FoErrorCodes.BridgeRequired, "Bridge error while reading the object: " + ex.Message);
-        }
-        if (readResult is null)
-            return ToolResult<object>.Fail(D365FoErrorCodes.BridgeRequired, "Bridge returned no result for readObjectXml.");
-        if ((bool?)readResult["ok"] != true)
-        {
-            var code = (string?)readResult["error"] ?? "READ_FAILED";
-            var msg = (string?)readResult["message"] ?? "unknown error";
-            return ToolResult<object>.Fail(code == "NOT_FOUND" ? NotFoundCodeFor(kind) : code,
-                $"Bridge could not read {kind} '{request.ObjectName}': {msg}");
-        }
-        var xml = (string?)readResult["xml"];
-        if (string.IsNullOrWhiteSpace(xml))
-            return ToolResult<object>.Fail("READ_FAILED", "Bridge returned an empty xml payload for " + request.ObjectName + ".");
+        // ---- 2-3. Read the live object via the bridge, then locate the target method ----
+        var (xml, doc, readFailure) = ReadLive(client, kind, request.ObjectName);
+        if (readFailure is not null) return readFailure;
 
-        // ---- 3. Locate the target method (structured XDocument navigation) ----
-        XDocument doc;
-        try
-        {
-            doc = XDocument.Parse(xml);
-        }
-        catch (Exception ex)
-        {
-            return ToolResult<object>.Fail("READ_FAILED", "Could not parse XML returned by the bridge: " + ex.Message);
-        }
-
-        var methodsContainer = LocateMethodsContainer(doc.Root);
+        var methodsContainer = LocateMethodsContainer(doc!.Root);
         if (methodsContainer is null)
         {
             return ToolResult<object>.Fail(D365FoErrorCodes.MethodNotFound,
@@ -249,33 +204,12 @@ public static class MethodModifyEngine
         // first so a crash mid-write still leaves an undo record.
         ObjectModifyEngine.RecordJournalEntry(
             new ObjectModifyEngine.WriteTarget(kind, request.ObjectName, model!, IsExtension: false, Exists: true),
-            xml,
+            xml!,
             $"modify method {kind} {request.ObjectName} {request.MethodName}",
             journalDbOverride);
 
-        JsonObject? updateResult;
-        try
-        {
-            updateResult = client.SendAsync("updateObject", new JsonObject
-            {
-                ["kind"] = kind,
-                ["name"] = request.ObjectName,
-                ["model"] = model,
-                ["xml"] = newXml,
-            }).GetAwaiter().GetResult();
-        }
-        catch (BridgeException ex)
-        {
-            return ToolResult<object>.Fail(D365FoErrorCodes.WriteFailed, "Bridge error while writing the object: " + ex.Message);
-        }
-        if (updateResult is null)
-            return ToolResult<object>.Fail(D365FoErrorCodes.WriteFailed, "Bridge returned no result for updateObject.");
-        if ((bool?)updateResult["ok"] != true)
-        {
-            var code = (string?)updateResult["error"] ?? D365FoErrorCodes.WriteFailed;
-            var msg = (string?)updateResult["message"] ?? "unknown error";
-            return ToolResult<object>.Fail(code, $"Bridge could not update {kind} '{request.ObjectName}': {msg}");
-        }
+        if (WriteBack(client, kind, request.ObjectName, model!, newXml) is { } writeFailure)
+            return writeFailure;
 
         // Incremental refresh: the touched model's index rows are now stale. No
         // single-object refresh primitive exists yet (index refresh is model-scoped),
@@ -295,6 +229,297 @@ public static class MethodModifyEngine
             newBody = newSource,
             grounding,
         }, warnings);
+    }
+
+    // ------------------------------------------------------------------ add a method (#256)
+
+    /// <summary>Kinds a method can be added to.</summary>
+    private static readonly IReadOnlySet<string> AddableKinds =
+        new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "class", "table", "form" };
+
+    /// <summary>Inputs for adding one new method to an existing object (issue #256).</summary>
+    /// <remarks>
+    /// <c>Source</c> is the whole method: doc comment, attributes, signature and body. It is stored
+    /// as given, so <c>static</c> in the signature is what makes the method a class (static) method.
+    /// </remarks>
+    public sealed record AddRequest(
+        string Kind,
+        string ObjectName,
+        string MethodName,
+        string Source,
+        string? Model = null,
+        string? GroundingToken = null);
+
+    /// <summary>
+    /// Entry point for <c>d365fo modify add-method</c> and MCP <c>modify_method</c> with
+    /// <c>add=true</c>. Fails <see cref="D365FoErrorCodes.BridgeRequired"/> when the bridge is absent.
+    /// </summary>
+    public static ToolResult<object> Add(AddRequest request, MetadataRepository? repo, BridgeOptions? bridgeOptions = null)
+    {
+        if (CheckAddInput(request) is { } inputFailure)
+            return inputFailure;
+
+        var options = bridgeOptions ?? DefaultBridgeOptions();
+        var switchedOff = BridgeGate.ExplicitlyDisabled();
+        if (switchedOff || !BridgeClient.IsAvailable(options))
+            return BridgeUnavailable("modify add-method", switchedOff);
+
+        using var client = new BridgeClient(options);
+        return AddCore(request, repo, client);
+    }
+
+    /// <summary>
+    /// The add round-trip: read the live object, refuse a name it already has, validate the
+    /// source, append one <c>&lt;Method&gt;</c>, journal the pre-image and write back. The class
+    /// declaration and every other member stay as the bridge returned them.
+    /// </summary>
+    internal static ToolResult<object> AddCore(
+        AddRequest request, MetadataRepository? repo, BridgeClient client, string? journalDbOverride = null)
+    {
+        if (CheckAddInput(request) is { } inputFailure)
+            return inputFailure;
+        var kind = request.Kind.Trim().ToLowerInvariant();
+
+        // ---- 1. Owning model, and whether this installation may write into it ----
+        var model = ResolveModel(kind, request.ObjectName, request.Model, repo);
+        if (string.IsNullOrWhiteSpace(model))
+            return ModelNotResolved(kind, request.ObjectName);
+
+        // A new method on an object of a Microsoft or ISV model is an overlayering change. The
+        // modify family redirects such writes to an extension, but a method added there is a
+        // member of the extension class, written in a different way: refuse rather than guess.
+        if (!ObjectModifyEngine.IsCustomModel(model!, repo))
+        {
+            return ToolResult<object>.Fail(D365FoErrorCodes.BadInput,
+                $"{kind} '{request.ObjectName}' belongs to model '{model}', which is not a configured custom model, " +
+                "so a method cannot be added to it.",
+                kind == "class"
+                    ? $"Add the method to an extension class in your model instead (`d365fo generate coc {request.ObjectName}` " +
+                      "creates one), or add the model to D365FO_CUSTOM_MODELS if you own it."
+                    : $"Add the method to an extension class of the {kind} in your model instead, " +
+                      "or add the model to D365FO_CUSTOM_MODELS if you own it.");
+        }
+
+        // ---- 2. Read the live object ----
+        var (xml, doc, readFailure) = ReadLive(client, kind, request.ObjectName);
+        if (readFailure is not null) return readFailure;
+
+        var root = doc!.Root!;
+        var container = LocateMethodsContainer(root);
+        var existing = container?.Elements()
+            .Where(e => e.Name.LocalName == "Method")
+            .Select(e => Local(e, "Name"))
+            .FirstOrDefault(n => string.Equals(n, request.MethodName, StringComparison.OrdinalIgnoreCase));
+        if (existing is not null)
+        {
+            return ToolResult<object>.Fail(D365FoErrorCodes.AlreadyExists,
+                $"{kind} '{request.ObjectName}' already has a method '{existing}'.",
+                $"To change it, use `d365fo modify method {kind} {request.ObjectName} {existing} --source ...` (or --body).");
+        }
+
+        // ---- 3. Grounding + fail-closed validation gate (the same one `modify method` runs) ----
+        var warnings = new List<string>();
+        var (grounding, gateFailure) = CheckGrounding(
+            new ModifyRequest(kind, request.ObjectName, request.MethodName, null, model, request.GroundingToken, request.Source),
+            repo, warnings);
+        if (gateFailure is not null) return gateFailure;
+
+        // ---- 4. Append one <Method>; create <Methods> only when the object has none ----
+        var createdContainer = false;
+        if (container is null)
+        {
+            var parent = kind == "table"
+                ? root
+                : root.Elements().FirstOrDefault(e => e.Name.LocalName == "SourceCode")
+                  ?? AddChild(root, "SourceCode");
+            container = AddChild(parent, "Methods");
+            createdContainer = true;
+        }
+        var ns = container.Name.Namespace;
+        container.Add(new XElement(ns + "Method",
+            new XElement(ns + "Name", request.MethodName),
+            new XElement(ns + "Source", new XCData(request.Source))));
+
+        // A container appended after a later-ordered sibling is dropped by the AOT reader;
+        // ObjectModifyEngine canonicalises for the same reason.
+        if (createdContainer) D365FO.Core.Scaffolding.ContractOrderCanonicalizer.Apply(doc);
+
+        // ---- 5. Journal the pre-image, then write back through the bridge ----
+        var newXml = doc.ToString(SaveOptions.DisableFormatting);
+        ObjectModifyEngine.RecordJournalEntry(
+            new ObjectModifyEngine.WriteTarget(kind, request.ObjectName, model!, IsExtension: false, Exists: true),
+            xml!,
+            $"modify add-method {kind} {request.ObjectName} {request.MethodName}",
+            journalDbOverride);
+
+        if (WriteBack(client, kind, request.ObjectName, model!, newXml) is { } writeFailure)
+            return writeFailure;
+
+        warnings.Add($"Index not auto-refreshed — run `d365fo index refresh --model {model}` so '{request.MethodName}' is searchable.");
+
+        return ToolResult<object>.Success(new
+        {
+            kind,
+            name = request.ObjectName,
+            method = request.MethodName,
+            model,
+            source = "bridge",
+            mode = "add",
+            isStatic = AotMethodSourceRules.DeclaresStatic(request.Source),
+            newBody = request.Source,
+            grounding,
+        }, warnings);
+    }
+
+    /// <summary>
+    /// Checks that need no bridge: a kind that holds methods, the names, and a source that
+    /// declares exactly this one method. Run before the bridge gate, so a malformed call is
+    /// answered the same way on any machine.
+    /// </summary>
+    internal static ToolResult<object>? CheckAddInput(AddRequest request)
+    {
+        var kind = (request.Kind ?? string.Empty).Trim();
+        if (!AddableKinds.Contains(kind))
+        {
+            return ToolResult<object>.Fail(D365FoErrorCodes.BadInput,
+                $"A method cannot be added to kind '{request.Kind}'. Supported: {string.Join(", ", AddableKinds)}.",
+                "Form data source and control methods: `d365fo generate datasource-method` / `generate control-method`.");
+        }
+        if (string.IsNullOrWhiteSpace(request.ObjectName))
+            return ToolResult<object>.Fail(D365FoErrorCodes.BadInput, "Object name is required.");
+        if (string.IsNullOrWhiteSpace(request.MethodName))
+            return ToolResult<object>.Fail(D365FoErrorCodes.BadInput, "Method name is required.");
+        if (string.IsNullOrWhiteSpace(request.Source))
+        {
+            return ToolResult<object>.Fail(D365FoErrorCodes.BadInput,
+                "The method source is required: the whole new method, signature and body.",
+                "CLI: --source <XPP> or --source-file <PATH>. MCP: `source`.");
+        }
+
+        // The header walk skips a body by brace matching and does not notice one left open, so
+        // count the braces outside strings and comments first.
+        var masked = XppLexer.Mask(request.Source);
+        var declared = masked.Count(c => c == '{') == masked.Count(c => c == '}')
+            ? MethodSourceSplicer.DeclaredMethodNames(request.Source)
+            : null;
+        if (declared is null)
+        {
+            return ToolResult<object>.Fail(D365FoErrorCodes.BadInput,
+                "The source cannot be checked statically (a macro-declared method, or unbalanced braces).",
+                "Pass one complete X++ method with balanced braces.");
+        }
+        if (declared.Count == 0)
+        {
+            return ToolResult<object>.Fail(D365FoErrorCodes.BadInput,
+                $"The source declares no method. It must be the whole method '{request.MethodName}': signature, braces and body.",
+                $"For example: public void {request.MethodName}() {{ ... }}, or public static ... for a class (static) method.");
+        }
+        if (declared.Count > 1)
+        {
+            return ToolResult<object>.Fail(D365FoErrorCodes.BadInput,
+                $"The source declares {declared.Count} methods ({string.Join(", ", declared)}). One call adds one method.",
+                "Run the command once per method.");
+        }
+        if (!string.Equals(declared[0], request.MethodName, StringComparison.OrdinalIgnoreCase))
+        {
+            return ToolResult<object>.Fail(D365FoErrorCodes.BadInput,
+                $"The source declares '{declared[0]}', but the method being added is '{request.MethodName}'.",
+                "Use the same name in the command and in the signature.");
+        }
+        return null;
+    }
+
+    // ------------------------------------------------------------------ shared legs
+
+    private static string? ResolveModel(string kind, string objectName, string? model, MetadataRepository? repo)
+    {
+        if (!string.IsNullOrWhiteSpace(model) || repo is null) return model;
+        return kind switch
+        {
+            "class" => repo.GetClassDetails(objectName)?.Class.Model,
+            "table" => repo.GetTableDetails(objectName)?.Table.Model,
+            "edt" => repo.GetEdt(objectName)?.Model,
+            "form" => repo.GetForm(objectName)?.Form.Model,
+            _ => null,
+        };
+    }
+
+    private static ToolResult<object> ModelNotResolved(string kind, string objectName)
+        => ToolResult<object>.Fail(NotFoundCodeFor(kind),
+            $"{kind} '{objectName}' was not found in the SQLite index and no --model override was supplied.",
+            "Run `d365fo index build` + `d365fo index extract`, or pass --model <MODEL> explicitly.");
+
+    /// <summary>Read the live object as XML through the bridge and parse it.</summary>
+    private static (string? Xml, XDocument? Doc, ToolResult<object>? Failure) ReadLive(
+        BridgeClient client, string kind, string objectName)
+    {
+        JsonObject? readResult;
+        try
+        {
+            readResult = client.SendAsync("readObjectXml", new JsonObject { ["kind"] = kind, ["name"] = objectName })
+                .GetAwaiter().GetResult();
+        }
+        catch (BridgeException ex)
+        {
+            return (null, null, ToolResult<object>.Fail(D365FoErrorCodes.BridgeRequired, "Bridge error while reading the object: " + ex.Message));
+        }
+        if (readResult is null)
+            return (null, null, ToolResult<object>.Fail(D365FoErrorCodes.BridgeRequired, "Bridge returned no result for readObjectXml."));
+        if ((bool?)readResult["ok"] != true)
+        {
+            var code = (string?)readResult["error"] ?? "READ_FAILED";
+            var msg = (string?)readResult["message"] ?? "unknown error";
+            return (null, null, ToolResult<object>.Fail(code == "NOT_FOUND" ? NotFoundCodeFor(kind) : code,
+                $"Bridge could not read {kind} '{objectName}': {msg}"));
+        }
+        var xml = (string?)readResult["xml"];
+        if (string.IsNullOrWhiteSpace(xml))
+            return (null, null, ToolResult<object>.Fail("READ_FAILED", "Bridge returned an empty xml payload for " + objectName + "."));
+
+        try
+        {
+            return (xml, XDocument.Parse(xml), null);
+        }
+        catch (Exception ex)
+        {
+            return (null, null, ToolResult<object>.Fail("READ_FAILED", "Could not parse XML returned by the bridge: " + ex.Message));
+        }
+    }
+
+    /// <summary>Write the edited object back through the bridge's <c>updateObject</c>; null on success.</summary>
+    private static ToolResult<object>? WriteBack(BridgeClient client, string kind, string objectName, string model, string newXml)
+    {
+        JsonObject? updateResult;
+        try
+        {
+            updateResult = client.SendAsync("updateObject", new JsonObject
+            {
+                ["kind"] = kind,
+                ["name"] = objectName,
+                ["model"] = model,
+                ["xml"] = newXml,
+            }).GetAwaiter().GetResult();
+        }
+        catch (BridgeException ex)
+        {
+            return ToolResult<object>.Fail(D365FoErrorCodes.WriteFailed, "Bridge error while writing the object: " + ex.Message);
+        }
+        if (updateResult is null)
+            return ToolResult<object>.Fail(D365FoErrorCodes.WriteFailed, "Bridge returned no result for updateObject.");
+        if ((bool?)updateResult["ok"] != true)
+        {
+            var code = (string?)updateResult["error"] ?? D365FoErrorCodes.WriteFailed;
+            var msg = (string?)updateResult["message"] ?? "unknown error";
+            return ToolResult<object>.Fail(code, $"Bridge could not update {kind} '{objectName}': {msg}");
+        }
+        return null;
+    }
+
+    private static XElement AddChild(XElement parent, string localName)
+    {
+        var child = new XElement(parent.Name.Namespace + localName);
+        parent.Add(child);
+        return child;
     }
 
     /// <summary>

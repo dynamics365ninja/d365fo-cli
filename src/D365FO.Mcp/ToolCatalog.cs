@@ -718,7 +718,7 @@ public static class ToolCatalog
             }),
 
         new Descriptor("modify_method", ToolEffect.Destructive,
-            "Replace the body of an EXISTING method on a live class/table/edt/form via D365FO.Bridge " +
+            "Replace the body of an EXISTING method on a live class/table/edt/form, or add a new one, via D365FO.Bridge " +
             "(Windows VM, requires D365FO_BRIDGE_ENABLED=1). Reads the object through IMetadataProvider, " +
             "structurally replaces one <Method>'s source (never raw XML/CDATA string surgery), runs the same " +
             "reference/BP validation gate as generate_object and blocks the write on any error-severity finding " +
@@ -726,13 +726,15 @@ public static class ToolCatalog
             "No on-disk fallback: fails BRIDGE_REQUIRED when the bridge is unavailable. Pass exactly one of: " +
             "`body` — statements only, they replace what sits between the method's outer braces and the doc comment, " +
             "attributes and signature are kept (a full declaration is refused); `source` — the whole method, " +
-            "signature included, which must declare exactly one method named `method`. Use generate_object to " +
-            "create new objects/methods; use this only to change an existing method.",
+            "signature included, which must declare exactly one method named `method`. " +
+            "`add=true` instead ADDS a new method (`d365fo modify add-method`) to a class/table/form in a configured " +
+            "custom model: `source` is the whole method, `static` in its signature makes a class method, and a name " +
+            "the object already has is refused (ALREADY_EXISTS). Use generate_object to create new objects.",
             Schema(("kind", "string", true), ("name", "string", true), ("method", "string", true),
                    ("body", "string", false), ("source", "string", false), ("model", "string", false),
-                   ("groundingToken", "string", false)),
+                   ("groundingToken", "string", false), ("add", "boolean", false)),
             (h, p) => h.ModifyMethod(Str(p, "kind"), Str(p, "name"), Str(p, "method"), StrOrNull(p, "body"),
-                        StrOrNull(p, "model"), StrOrNull(p, "groundingToken"), StrOrNull(p, "source"))),
+                        StrOrNull(p, "model"), StrOrNull(p, "groundingToken"), StrOrNull(p, "source"), Bool(p, "add"))),
 
         new Descriptor("modify_object", ToolEffect.Destructive,
             "Structured edits to an EXISTING object beyond its method bodies, via D365FO.Bridge (Windows VM, " +
@@ -766,13 +768,17 @@ public static class ToolCatalog
             "BATCHING: `operations: [{operation, member, …}]` applies several edits to the SAME object in one " +
             "read-edit-write — one bridge round trip, one journal entry, and no intermediate state published " +
             "(a table is never briefly on disk carrying a field no index covers). Steps inherit `kind`, `name` " +
-            "and `model`; a step that refuses discards the whole batch with nothing written.\n" +
+            "and `model`; a step that refuses discards the whole batch with nothing written. Steps that name their " +
+            "own object (`{kind, object, model?, operation, …}`) make it a batch over MANY objects in one call " +
+            "(`kind`/`name` are then optional defaults): each object is all-or-nothing, the others still run, and " +
+            "`data.results` has one entry per object (BATCH_PARTIAL when some were written and some refused). " +
+            "`dryRun: true` applies every step in memory and reports it without writing.\n" +
             "EXTENSION FALLBACK: when the object's model is not in D365FO_CUSTOM_MODELS the edit is written to " +
             "the <Target>.<Suffix> extension in a custom model instead of the object itself, creating that " +
             "extension if needed, and says so in `warnings`. Force it with `extensionSuffix`, or refuse the " +
             "in-place path entirely with `requireExtension`. Every write is journaled — revert with " +
             "undo_last_modification. No on-disk fallback: fails BRIDGE_REQUIRED when the bridge is unavailable.",
-            Schema(("action", "string", false), ("kind", "string", true), ("name", "string", true),
+            Schema(("action", "string", false), ("kind", "string", false), ("name", "string", false),
                    ("member", "string", false), ("value", "string", false), ("type", "string", false),
                    ("label", "string", false), ("mandatory", "boolean", false), ("noEdit", "boolean", false),
                    ("noEditOnCreate", "boolean", false), ("property", "string", false), ("parent", "string", false),
@@ -784,7 +790,7 @@ public static class ToolCatalog
                    ("entryPointType", "string", false), ("access", "string", false),
                    ("operations", "object-array", false),
                    ("extensionSuffix", "string", false), ("extensionModel", "string", false),
-                   ("requireExtension", "boolean", false)),
+                   ("requireExtension", "boolean", false), ("dryRun", "boolean", false)),
             ModifyObjectCall),
 
         new Descriptor("suggest_edt", ToolEffect.Read,
@@ -1091,11 +1097,18 @@ public static class ToolCatalog
             if (steps.Count == 0)
                 return D365FO.Core.ToolResult<object>.Fail(D365FoErrorCodes.BadInput, "`operations` is empty.");
 
-            return h.ModifyObject(Request(p, ObjectModifyEngine.Operation.SetProperty, kind, name, model) with
+            var header = Request(p, ObjectModifyEngine.Operation.SetProperty, kind, name, model) with
             {
                 Member = "batch",
                 Batch = steps,
-            });
+            };
+
+            // Steps that name their own object: a batch over many objects (#268).
+            if (BatchStepParser.NamesObjects(operations)
+                || string.IsNullOrWhiteSpace(kind) || string.IsNullOrWhiteSpace(name))
+                return h.ModifyMany(steps, header);
+
+            return h.ModifyObject(header);
         }
 
         if (!ObjectModifyEngine.TryParseOperation(Str(p, "action"), out var operation))
@@ -1141,6 +1154,7 @@ public static class ToolCatalog
             ExtensionSuffix = StrOrNull(p, "extensionSuffix"),
             ExtensionModel = StrOrNull(p, "extensionModel"),
             RequireExtension = Bool(p, "requireExtension"),
+            DryRun = Bool(p, "dryRun"),
         };
 
     private static JsonObject Schema(params (string name, string type, bool required)[] props)

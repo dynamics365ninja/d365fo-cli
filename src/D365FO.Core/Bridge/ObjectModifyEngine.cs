@@ -247,6 +247,12 @@ public static class ObjectModifyEngine
         /// batch that could retarget mid-flight is not a batch.
         /// </remarks>
         public IReadOnlyList<ModifyRequest>? Batch { get; init; }
+
+        /// <summary>
+        /// Read the object and apply every step in memory, then report what would change without
+        /// journaling or writing anything (issue #268). On a batch header it covers the whole batch.
+        /// </summary>
+        public bool DryRun { get; init; }
     }
 
     /// <summary>
@@ -379,48 +385,53 @@ public static class ObjectModifyEngine
             applied.Add(stepApplied);
         }
 
-        // ---- 4. Write back, journaling the pre-image first ----
-        // An element that arrives out of contract order is not rejected by the AOT reader, it is
-        // DROPPED: DataContractSerializer matches children in order and skips anything early or
-        // late. The disk write path has always canonicalised (ScaffoldFileWriter.Finalize) but
-        // this one did not, so an edit that created a missing collection — `<Fields>` on a table
-        // that had none, `<EnumValues>`, `<Controls>` — appended it at the end of the root and
-        // the write came back "ok" with the change silently absent. Canonicalise the same way
-        // before serialising; it is idempotent and leaves collection item order alone.
-        if (target!.Kind == "formextension") ContractNamespaceApplier.Apply(doc!);
-        ContractOrderCanonicalizer.Apply(doc!);
-        var newXml = doc!.ToString(SaveOptions.DisableFormatting);
-        var verb = target!.Exists ? "updateObject" : "createObject";
-
-        RecordJournalEntry(target, preImage, DescribeCommand(request, kind), journalDbOverride);
-
-        JsonObject? writeResult;
-        try
+        // A dry run stops here: every step has been applied to the in-memory document and
+        // validated, and nothing is journaled or written.
+        if (!request.DryRun)
         {
-            writeResult = client.SendAsync(verb, new JsonObject
+            // ---- 4. Write back, journaling the pre-image first ----
+            // An element that arrives out of contract order is not rejected by the AOT reader, it is
+            // DROPPED: DataContractSerializer matches children in order and skips anything early or
+            // late. The disk write path has always canonicalised (ScaffoldFileWriter.Finalize) but
+            // this one did not, so an edit that created a missing collection — `<Fields>` on a table
+            // that had none, `<EnumValues>`, `<Controls>` — appended it at the end of the root and
+            // the write came back "ok" with the change silently absent. Canonicalise the same way
+            // before serialising; it is idempotent and leaves collection item order alone.
+            if (target!.Kind == "formextension") ContractNamespaceApplier.Apply(doc!);
+            ContractOrderCanonicalizer.Apply(doc!);
+            var newXml = doc!.ToString(SaveOptions.DisableFormatting);
+            var verb = target!.Exists ? "updateObject" : "createObject";
+
+            RecordJournalEntry(target, preImage, DescribeCommand(request, kind), journalDbOverride);
+
+            JsonObject? writeResult;
+            try
             {
-                ["kind"] = target.Kind,
-                ["name"] = target.Name,
-                ["model"] = target.Model,
-                ["xml"] = newXml,
-            }).GetAwaiter().GetResult();
-        }
-        catch (BridgeException ex)
-        {
-            return ToolResult<object>.Fail(D365FoErrorCodes.WriteFailed, "Bridge error while writing the object: " + ex.Message);
-        }
-        if (writeResult is null)
-            return ToolResult<object>.Fail(D365FoErrorCodes.WriteFailed, $"Bridge returned no result for {verb}.");
-        if ((bool?)writeResult["ok"] != true)
-        {
-            var code = (string?)writeResult["error"] ?? D365FoErrorCodes.WriteFailed;
-            var msg = (string?)writeResult["message"] ?? "unknown error";
-            return ToolResult<object>.Fail(code,
-                $"Bridge could not write {target.Kind} '{target.Name}': {msg}",
-                BridgeFailureHint(code, target.Kind, target.Name, target.IsExtension));
-        }
+                writeResult = client.SendAsync(verb, new JsonObject
+                {
+                    ["kind"] = target.Kind,
+                    ["name"] = target.Name,
+                    ["model"] = target.Model,
+                    ["xml"] = newXml,
+                }).GetAwaiter().GetResult();
+            }
+            catch (BridgeException ex)
+            {
+                return ToolResult<object>.Fail(D365FoErrorCodes.WriteFailed, "Bridge error while writing the object: " + ex.Message);
+            }
+            if (writeResult is null)
+                return ToolResult<object>.Fail(D365FoErrorCodes.WriteFailed, $"Bridge returned no result for {verb}.");
+            if ((bool?)writeResult["ok"] != true)
+            {
+                var code = (string?)writeResult["error"] ?? D365FoErrorCodes.WriteFailed;
+                var msg = (string?)writeResult["message"] ?? "unknown error";
+                return ToolResult<object>.Fail(code,
+                    $"Bridge could not write {target.Kind} '{target.Name}': {msg}",
+                    BridgeFailureHint(code, target.Kind, target.Name, target.IsExtension));
+            }
 
-        warnings.Add($"Index not auto-refreshed — run `d365fo index refresh --model {target.Model}` so the change is searchable.");
+            warnings.Add($"Index not auto-refreshed — run `d365fo index refresh --model {target.Model}` so the change is searchable.");
+        }
 
         var isBatch = request.Batch is { Count: > 0 };
         return ToolResult<object>.Success(new
@@ -430,11 +441,164 @@ public static class ObjectModifyEngine
             kind,
             name = request.ObjectName,
             member = isBatch ? null : request.Member,
-            wroteTo = new { kind = target.Kind, name = target.Name, model = target.Model, extension = target.IsExtension },
+            wroteTo = new { kind = target!.Kind, name = target.Name, model = target.Model, extension = target.IsExtension },
             created = !target.Exists,
+            dryRun = request.DryRun ? true : (bool?)null,
             source = "bridge",
             applied = isBatch ? applied : applied.FirstOrDefault(),
         }, warnings);
+    }
+
+    /// <summary>
+    /// Apply steps that each name their own object (issue #268): one process, one bridge, one
+    /// index connection for the lot.
+    /// </summary>
+    /// <param name="steps">Steps carrying <c>Kind</c>, <c>ObjectName</c> and optionally <c>Model</c>.</param>
+    /// <param name="options">
+    /// Batch-wide settings: <c>DryRun</c> and the extension options (<c>ExtensionSuffix</c>,
+    /// <c>ExtensionModel</c>, <c>RequireExtension</c>). Its operation, kind and object are ignored.
+    /// </param>
+    /// <param name="repo">Index, for model resolution and validation.</param>
+    /// <param name="bridgeOptions">Bridge to start; the configured one when null.</param>
+    public static ToolResult<object> ModifyMany(
+        IReadOnlyList<ModifyRequest> steps, ModifyRequest? options, MetadataRepository? repo,
+        BridgeOptions? bridgeOptions = null)
+    {
+        var resolved = bridgeOptions ?? MethodModifyEngine.DefaultBridgeOptions();
+        var switchedOff = BridgeGate.ExplicitlyDisabled();
+        if (switchedOff || !BridgeClient.IsAvailable(resolved))
+        {
+            return ToolResult<object>.Fail(D365FoErrorCodes.BridgeRequired,
+                "d365fo modify batch requires D365FO.Bridge (.NET Framework 4.8, Windows-only, IMetadataProvider-backed) — " +
+                (switchedOff
+                    ? "it is switched off here (D365FO_BRIDGE_ENABLED is set to something other than 1/true)."
+                    : "it is not available in this environment (non-Windows OS, or the bridge executable could not be resolved)."),
+                "Run on a D365FO VM with D365FO_BRIDGE_ENABLED=1 and D365FO_BRIDGE_PATH / D365FO_PACKAGES_PATH set.");
+        }
+
+        using var client = new BridgeClient(resolved);
+        return ModifyManyCore(steps, options, repo, client);
+    }
+
+    /// <summary>
+    /// The many-object batch against a given bridge client.
+    /// </summary>
+    /// <remarks>
+    /// Steps are grouped by object, keeping the order in which each object first appears and the
+    /// order of the steps within it. Each object is one read-edit-write through
+    /// <see cref="ModifyCore"/>, so it is atomic on its own: a step that refuses discards that
+    /// object's steps and nothing of it is written. The other objects still run, because the
+    /// failure this answers is a loop that stopped halfway and left the rest to be sorted out by
+    /// hand. Every object's result is in the envelope, and <c>undo</c> names how many journal
+    /// entries the batch wrote, so the whole batch can be reverted in one command.
+    /// </remarks>
+    internal static ToolResult<object> ModifyManyCore(
+        IReadOnlyList<ModifyRequest> steps, ModifyRequest? options, MetadataRepository? repo,
+        BridgeClient client, string? journalDbOverride = null)
+    {
+        if (steps.Count == 0)
+            return ToolResult<object>.Fail(D365FoErrorCodes.BadInput, "The step array is empty.");
+
+        var unnamed = steps
+            .Select((s, i) => (s, i))
+            .Where(x => string.IsNullOrWhiteSpace(x.s.Kind) || string.IsNullOrWhiteSpace(x.s.ObjectName))
+            .Select(x => x.i + 1)
+            .ToList();
+        if (unnamed.Count > 0)
+        {
+            return ToolResult<object>.Fail(D365FoErrorCodes.BadInput,
+                $"Step(s) {string.Join(", ", unnamed)} name no object: each step needs \"kind\" and \"object\" " +
+                "when the command does not name one.",
+                "Either pass <KIND> <OBJECT> for a batch on one object, or give every step its own " +
+                "{\"kind\":\"table\",\"object\":\"MyTable\", …}.");
+        }
+
+        var groups = new List<(string Kind, string Name, string? Model, List<int> Indexes)>();
+        for (var i = 0; i < steps.Count; i++)
+        {
+            var s = steps[i];
+            var kind = s.Kind.Trim().ToLowerInvariant();
+            var name = s.ObjectName.Trim();
+            var model = string.IsNullOrWhiteSpace(s.Model) ? null : s.Model.Trim();
+            var at = groups.FindIndex(g => g.Kind == kind
+                                           && string.Equals(g.Name, name, StringComparison.OrdinalIgnoreCase)
+                                           && string.Equals(g.Model, model, StringComparison.OrdinalIgnoreCase));
+            if (at < 0) groups.Add((kind, name, model, new List<int> { i }));
+            else groups[at].Indexes.Add(i);
+        }
+
+        var dryRun = options?.DryRun == true;
+        var results = new List<object>(groups.Count);
+        var written = 0;
+        var failed = 0;
+        ToolError? firstError = null;
+        foreach (var (kind, name, model, indexes) in groups)
+        {
+            var header = new ModifyRequest
+            {
+                // Placeholders: the header names the object, the steps carry the operations.
+                Operation = Operation.SetProperty,
+                Kind = kind,
+                ObjectName = name,
+                Member = "batch",
+                Model = model,
+                Batch = indexes.Select(i => steps[i]).ToList(),
+                DryRun = dryRun,
+                ExtensionSuffix = options?.ExtensionSuffix,
+                ExtensionModel = options?.ExtensionModel,
+                RequireExtension = options?.RequireExtension == true,
+            };
+
+            ToolResult<object> result;
+            try
+            {
+                result = ModifyCore(header, repo, client, journalDbOverride);
+            }
+            catch (Exception ex)
+            {
+                result = ToolResult<object>.Fail(D365FoErrorCodes.Unhandled, $"{kind} '{name}': {ex.Message}");
+            }
+
+            if (result.Ok) { if (!dryRun) written++; }
+            else { failed++; firstError ??= result.Error; }
+
+            results.Add(new
+            {
+                kind,
+                @object = name,
+                steps = indexes.Select(i => i + 1).ToArray(),
+                ok = result.Ok,
+                data = result.Ok ? result.Data : null,
+                error = result.Error,
+                warnings = result.Warnings is { Count: > 0 } w ? w : null,
+            });
+        }
+
+        var data = new
+        {
+            objects = groups.Count,
+            steps = steps.Count,
+            written,
+            failed,
+            dryRun = dryRun ? true : (bool?)null,
+            undo = written > 0 ? $"d365fo undo --steps {written}" : null,
+            results,
+        };
+
+        if (failed == 0)
+            return ToolResult<object>.Success(data);
+
+        var message = dryRun
+            ? $"{failed} of {groups.Count} object(s) would be refused (dry run: nothing written)."
+            : written > 0
+                ? $"{failed} of {groups.Count} object(s) failed; the other {written} were written."
+                : $"All {groups.Count} object(s) failed; nothing was written.";
+        return new ToolResult<object>(false, data, new ToolError(
+            written > 0 ? D365FoErrorCodes.BatchPartial : firstError!.Code,
+            message + " First failure: " + firstError!.Message,
+            written > 0
+                ? $"Each object is all-or-nothing. See `results` for which failed; `d365fo undo --steps {written}` reverts the ones written."
+                : firstError.Hint));
     }
 
     /// <summary>
@@ -771,7 +935,7 @@ public static class ObjectModifyEngine
         catch { return false; }
     }
 
-    private static bool IsCustomModel(string model, MetadataRepository? repo)
+    internal static bool IsCustomModel(string model, MetadataRepository? repo)
     {
         // The index's IsCustom flag is authoritative when available (it is computed from
         // D365FO_CUSTOM_MODELS at extract time); otherwise fall back to matching the
