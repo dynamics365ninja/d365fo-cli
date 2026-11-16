@@ -19,6 +19,15 @@ was ported from.
 
 ## [Unreleased]
 
+### Fixed — `index sync <Model>` works from a folder that has a subfolder of that name
+
+`d365fo index sync MyModel` failed with `BAD_INPUT` ("Could not tell which model 'MyModel'
+belongs to") when the current folder had a subfolder named `MyModel`. That is the usual case
+in a repository that keeps the model's metadata in a folder of the same name, and
+`index sync <Model>` is the command `doctor` recommends for a stale model. The bare target was
+read as a path because a folder of that name existed. A bare target is now a model name unless
+it contains a path separator or is an existing file (`Foo.xml` typed from inside an `Ax*`
+folder). The decision moved to `IndexSync.SplitTarget`, with tests.
 ### Fixed — an unreachable cross-reference server is reported after one timeout, not three
 
 When the direct `--xref` query could not reach the server (not found, not started, connect timeout),
