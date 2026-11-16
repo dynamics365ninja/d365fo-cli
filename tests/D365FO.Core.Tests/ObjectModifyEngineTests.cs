@@ -1086,6 +1086,89 @@ public sealed class ObjectModifyEngineTests : IDisposable
         Assert.Null(capture.WriteVerb);
     }
 
+    [Theory]
+    [InlineData(false, "createObject")]
+    [InlineData(true, "updateObject")]
+    public void Add_control_places_a_bound_checkbox_under_an_inherited_group(bool extensionExists, string writeVerb)
+    {
+        const string ns = "Microsoft.Dynamics.AX.Metadata.V6";
+        const string extensionXml = "<AxFormExtension xmlns=\"" + ns + "\" xmlns:i=\"http://www.w3.org/2001/XMLSchema-instance\">" +
+            "<Name>FmVehicleList.Fleet</Name><Controls i:nil=\"true\" /><PropertyModifications /></AxFormExtension>";
+        if (extensionExists)
+        {
+            _repo.ApplyExtract(ExtractBatch.Empty("FleetCustom") with
+            {
+                Extensions = [new ExtractedObjectExtension("Form", "FmVehicleList", "FmVehicleList.Fleet", null)],
+            });
+        }
+
+        var capture = new BridgeCapture(extensionExists ? extensionXml : null) { BaseFormXml = FormXml };
+        using var harness = FakeBridge.Create(capture.Respond);
+
+        var result = ObjectModifyEngine.ModifyCore(new ObjectModifyEngine.ModifyRequest
+        {
+            Operation = ObjectModifyEngine.Operation.AddControl,
+            Kind = "form",
+            ObjectName = "FmVehicleList",
+            Member = "Grid_Validated",
+            Type = "CheckBox",
+            Parent = "grid",
+            DataSource = "FmVehicle",
+            DataField = "Validated",
+            ExtensionSuffix = "Fleet",
+            ExtensionModel = "FleetCustom",
+        }, _repo, harness.Client, _journalDb);
+
+        Assert.True(result.Ok, result.Error?.Message);
+        Assert.Equal(1, capture.WriteCount);
+        Assert.Equal(writeVerb, capture.WriteVerb);
+        Assert.Equal("formextension", (string?)capture.WriteArgs!["kind"]);
+        Assert.Equal("FmVehicleList.Fleet", (string?)capture.WriteArgs!["name"]);
+        Assert.Equal("FleetCustom", (string?)capture.WriteArgs!["model"]);
+
+        XNamespace formNamespace = ns;
+        XNamespace xsi = "http://www.w3.org/2001/XMLSchema-instance";
+        var root = XDocument.Parse((string)capture.WriteArgs!["xml"]!).Root!;
+        Assert.Equal(formNamespace + "AxFormExtension", root.Name);
+        Assert.Equal("FmVehicleList.Fleet", root.Element(formNamespace + "Name")!.Value);
+        var controls = root.Element(formNamespace + "Controls")!;
+        Assert.Null(controls.Attribute(xsi + "nil"));
+        var addition = Assert.Single(controls.Elements());
+        Assert.Equal("AxFormExtensionControl", addition.Name);
+        Assert.False(string.IsNullOrWhiteSpace((string?)addition.Element("Name")));
+        Assert.Equal("Grid", (string?)addition.Element("Parent"));
+        var control = addition.Element("FormControl")!;
+        Assert.Equal("AxFormCheckBoxControl", (string?)control.Attribute(xsi + "type"));
+        Assert.Equal("Grid_Validated", (string?)control.Element("Name"));
+        Assert.Equal("CheckBox", (string?)control.Element("Type"));
+        Assert.Equal("Validated", (string?)control.Element("DataField"));
+        Assert.Equal("FmVehicle", (string?)control.Element("DataSource"));
+        if (extensionExists)
+            Assert.Equal(formNamespace + "PropertyModifications", root.Elements().Last().Name);
+    }
+
+    [Fact]
+    public void Add_control_refuses_an_unknown_inherited_parent_without_creating_the_extension()
+    {
+        var capture = new BridgeCapture(readXml: null) { BaseFormXml = FormXml };
+        using var harness = FakeBridge.Create(capture.Respond);
+
+        var result = ObjectModifyEngine.ModifyCore(new ObjectModifyEngine.ModifyRequest
+        {
+            Operation = ObjectModifyEngine.Operation.AddControl,
+            Kind = "form",
+            ObjectName = "FmVehicleList",
+            Member = "Foo",
+            Type = "CheckBox",
+            Parent = "NotOnBaseForm",
+            ExtensionModel = "FleetCustom",
+        }, _repo, harness.Client, _journalDb);
+
+        Assert.False(result.Ok);
+        Assert.Equal(D365FoErrorCodes.ControlNotFound, result.Error!.Code);
+        Assert.Equal(0, capture.WriteCount);
+    }
+
     // ---- extension fallback --------------------------------------------------
 
     [Fact]
@@ -1378,6 +1461,8 @@ public sealed class ObjectModifyEngineTests : IDisposable
 
         public BridgeCapture(string? readXml) => _readXml = readXml;
 
+        public string? BaseFormXml { get; init; }
+
         public string? WriteVerb { get; private set; }
 
         public JsonObject? WriteArgs { get; private set; }
@@ -1392,9 +1477,11 @@ public sealed class ObjectModifyEngineTests : IDisposable
             switch (method)
             {
                 case "readObjectXml":
-                    result = _readXml is null
+                    var xml = BaseFormXml is not null && (string?)request["params"]?["kind"] == "form"
+                        ? BaseFormXml : _readXml;
+                    result = xml is null
                         ? new JsonObject { ["ok"] = false, ["error"] = "NOT_FOUND", ["message"] = "not found" }
-                        : new JsonObject { ["ok"] = true, ["xml"] = _readXml };
+                        : new JsonObject { ["ok"] = true, ["xml"] = xml };
                     break;
                 case "createObject":
                 case "updateObject":
