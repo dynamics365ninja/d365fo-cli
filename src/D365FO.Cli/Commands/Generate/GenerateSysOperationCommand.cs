@@ -100,7 +100,8 @@ public sealed class GenerateSysOperationCommand : Command<GenerateSysOperationCo
         var serviceDoc = SysOperationScaffolder.Service(serviceName, contractName, settings.ServiceMethod, parms);
 
         // Grounding gate (issue #161) — the service class is where this command's X++ lives.
-        var gate = GenerateInstaller.Gate(settings, settings.Name, serviceDoc);
+        var gate = GenerateInstaller.Gate(settings, settings.Name, serviceDoc,
+            generatedObjects: new[] { contractName, serviceName, controllerName });
         if (gate.Failure is not null) return RenderHelpers.Render(kind, gate.Failure);
 
         try

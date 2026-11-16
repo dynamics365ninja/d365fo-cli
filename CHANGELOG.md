@@ -39,6 +39,75 @@ and far too much for "what does this class offer" or "which tables does this for
 On the same objects: 2.1k, 23k, 5.8k and 20k characters. The default output is unchanged. MCP:
 `get_object_info(objectType=class|form, detail=brief)`, from the index. The router skills now
 point at `--brief` first for classes and forms, as they already did for tables.
+### Fixed — the grounding gate no longer flags objects the same command writes
+
+The gate proves the generated X++ against the index, and a command that writes several objects
+writes its companions in the same run, so they are not in the index yet. `generate workflow`
+warned on every scaffold that the query its WorkflowDocument returns (`queryStr(XQuery)`) was
+unknown, although the command writes `XQuery` itself. `sysoperation` did the same with its
+contract class, `business-event` with its contract, and `number-sequence` with the EDT it
+creates. Under `D365FO_GROUNDING_ENFORCE=true` the same finding refused the write, so these four
+commands could not run at all with enforcement on.
+
+`GroundingGate.Check` takes the names the command writes (`generatedObjects`). An unknown-type or
+unknown-intrinsic-target finding about one of those names, or a required symbol that is one of
+them, counts as verified. Every other finding stays: a misspelt name the command does not write
+is still reported. The four commands pass their companions.
+### Fixed — `find refs --xref` labels and filters reference kinds by the compiler's enum
+
+The cross-reference database stores `[References].Kind` as the compiler's
+`Microsoft.Dynamics.AX.Framework.Xlnt.XReference.CrossReferenceKind` (XReferenceProviders.dll):
+0 Any, 1 MethodCall, 2 TypeReference, 3 InterfaceImplementation, 4 ClassExtended, 5 TestCall,
+6 Property, 7 Attribute, 8 TestHelperCall, 9 Tag, 10 MethodOverride. The CLI read the ids as
+Declaration, Set, Read, Call, Reference, Type, Extends, Implements, so a method call was reported as
+`Set`, and `--kind Call` filtered on id 3, interface implementations, and found no callers.
+
+- **Labels follow the enum:** `Any`, `Call`, `Type`, `Implements`, `Extends`, `TestCall`,
+  `Property`, `Attribute`, `TestHelperCall`, `Tag`, `Override`.
+- **`--kind` (MCP `kind`) also takes the enum's own names**, such as `MethodCall` or
+  `ClassExtended`. The old labels `Declaration`, `Set`, `Read` and `Reference` named no kind the
+  database stores; they are now refused with `BAD_INPUT` and the list of kinds.
+- Help texts, the MCP tool description and the tests use the new labels.
+### Fixed — `d365fo build` on a UDE writes compiled metadata next to the model, not into the platform
+
+`d365fo build` passed xppc `-compilermetadata=<FrameworkDirectory>`. xppc writes a package's
+compiled metadata there, so every custom package built on a UDE left a copy of itself in the
+FrameworkDirectory (`<Package>\XppMetadata` only, no `Descriptor` or `bin`). Visual Studio's "Build
+models" writes it into the ModelStoreFolder, next to the source. The stale copy can shadow the
+source on the next build: an object that the copy lacks fails with
+`CompilerMetadataWriteBackFailure` ("Failed to write metadata back to the file … This is often due
+to the file being read-only"), although the file is writable and Visual Studio builds the model.
+
+- **`-compilermetadata` is the model's own root**, as in Visual Studio. On a VM, where the model
+  and the platform share `PackagesLocalDirectory`, the arguments are unchanged.
+- **Copies left by an earlier build stay** until removed by hand: in the FrameworkDirectory, delete
+  the folders of your own packages that hold nothing but `XppMetadata`. The platform's packages
+  all have `Descriptor` and `bin`.
+### Fixed — `index sync <Model>` works from a folder that has a subfolder of that name
+
+`d365fo index sync MyModel` failed with `BAD_INPUT` ("Could not tell which model 'MyModel'
+belongs to") when the current folder had a subfolder named `MyModel`. That is the usual case
+in a repository that keeps the model's metadata in a folder of the same name, and
+`index sync <Model>` is the command `doctor` recommends for a stale model. The bare target was
+read as a path because a folder of that name existed. A bare target is now a model name unless
+it contains a path separator or is an existing file (`Foo.xml` typed from inside an `Ax*`
+folder). The decision moved to `IndexSync.SplitTarget`, with tests.
+### Fixed — an unreachable cross-reference server is reported after one timeout, not three
+
+When the direct `--xref` query could not reach the server (not found, not started, connect timeout),
+the bridge fallback connected to the same server again, and so did the coverage probe. All of them
+read `D365FO_XREF_CONNECTIONSTRING`, so each waited out the same connect timeout: about 74 s before
+the error against a stopped or wedged LocalDB on a UDE.
+
+- **No fallback for an unreachable server.** The direct query opens the connection first and marks
+  a failure where no server answered (SQL error -2, -1, 2, 26, 40, 53, 258, or any severity-20 transport failure before the handshake, which is how LocalDB reports a missing or wedged instance). The bridge fallback
+  and the coverage probe are then skipped, and the message says so. A failure a server answered
+  (login, certificate, missing database) still falls back. The bridge's other SQL client can get
+  past a certificate check that Microsoft.Data.SqlClient refuses.
+- **A LocalDB hint.** For a `(LocalDB)\<instance>` connection string the hint names
+  `SqlLocalDB info`, and `SqlLocalDB stop` for an instance that stays `Stopped` while `start` fails.
+- The connect timeout is left as it is. LocalDB starts on the first connection, and on a UDE that
+  took 15 s or more. A shorter timeout would turn a slow start into a failure.
 
 ### Fixed — EDT base types are in the index, so generated fields get their real type (#233)
 
