@@ -725,7 +725,9 @@ public static class ToolCatalog
             "Structured edits to an EXISTING object beyond its method bodies, via D365FO.Bridge (Windows VM, " +
             "requires D365FO_BRIDGE_ENABLED=1). `action` names the edit — the same twenty-one the CLI's `d365fo " +
             "modify` sub-commands carry:\n" +
-            "• property — set `member` (Label, ConfigurationKey, TableGroup, …) to `value` on any kind\n" +
+            "• property — set `member` (Label, ConfigurationKey, TableGroup, …) to `value` on any kind; checked " +
+            "against the object's AOT contract. A property with child elements is set one child at a time with a " +
+            "dotted `member` (`SubscriberAccessLevel.Read` = Allow)\n" +
             "• add-field / remove-field / rename-field — a field on table `name`; on add, `type` is the EDT and " +
             "decides the concrete AxTableField subtype (`label`, `mandatory`, `noEdit`, `noEditOnCreate` optional); on rename, `newName`\n" +
             "• field-property — set `property` (AllowEdit, AllowEditOnCreate, Mandatory, Visible, HelpText, " +
