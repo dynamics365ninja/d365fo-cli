@@ -1539,8 +1539,22 @@ public sealed partial class ToolHandlers
     /// </summary>
     public ToolResult<object> ModifyMethod(
         string kind, string name, string method, string? body,
-        string? model = null, string? groundingToken = null, string? source = null)
+        string? model = null, string? groundingToken = null, string? source = null, bool add = false)
     {
+        // add=true is `d365fo modify add-method`: a new method from the whole source (#256).
+        if (add)
+        {
+            if (!string.IsNullOrWhiteSpace(body))
+            {
+                return ToolResult<object>.Fail(D365FO.Core.D365FoErrorCodes.BadInput,
+                    "add=true takes `source` (the whole new method), not `body`.",
+                    "Pass the signature, braces and body as `source`.");
+            }
+            return D365FO.Core.Bridge.MethodModifyEngine.Add(
+                new D365FO.Core.Bridge.MethodModifyEngine.AddRequest(kind, name, method, source ?? string.Empty, model, groundingToken),
+                _repo);
+        }
+
         var request = new D365FO.Core.Bridge.MethodModifyEngine.ModifyRequest(
             kind, name, method, body, model, groundingToken, source);
         return D365FO.Core.Bridge.MethodModifyEngine.Modify(request, _repo);

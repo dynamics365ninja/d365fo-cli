@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Text;
 using System.Text.Json.Nodes;
 using System.Threading.Tasks;
@@ -373,6 +374,191 @@ public sealed class MethodModifyEngineTests : IDisposable
 
         Assert.False(result.Ok);
         Assert.Equal(D365FoErrorCodes.BadInput, result.Error!.Code);
+    }
+
+    // ---- issue #256: add a new method to an existing object ----
+
+    private const string CustomClassXml =
+        "<AxClass xmlns:i=\"http://www.w3.org/2001/XMLSchema-instance\"><Name>ContosoHelper</Name><SourceCode>" +
+        "<Declaration><![CDATA[\n[SysObsolete('x', false)]\npublic class ContosoHelper\n{\n    int counter;\n}\n]]></Declaration>" +
+        "<Methods><Method><Name>calc</Name><Source><![CDATA[\n    public real calc()\n    {\n        return 1;\n    }\n]]></Source></Method></Methods>" +
+        "</SourceCode></AxClass>";
+
+    private void SeedCustomModel() =>
+        _repo.ApplyExtract(ExtractBatch.Empty("ContosoCustom") with
+        {
+            IsCustom = true,
+            Classes = new[] { new ExtractedClass("ContosoHelper", null, false, false, "x", Array.Empty<ExtractedMethod>()) },
+            Tables = new[] { new ExtractedTable("ContosoTable", null, "x", Array.Empty<ExtractedTableField>()) },
+        });
+
+    private (ToolResult<object> Result, string? WrittenXml, string Journal) RunAdd(
+        string objectXml, MethodModifyEngine.AddRequest request)
+    {
+        SeedCustomModel();
+        string? written = null;
+        using var harness = FakeBridge.Create(r =>
+        {
+            var method = (string?)r["method"];
+            if (method == "readObjectXml")
+                return Response(r, new JsonObject { ["ok"] = true, ["xml"] = objectXml });
+            if (method == "updateObject")
+            {
+                written = (string?)((JsonObject?)r["params"])!["xml"];
+                return Response(r, new JsonObject { ["ok"] = true });
+            }
+            throw new InvalidOperationException("unexpected method: " + method);
+        });
+
+        // The journal lives in a "journal" folder next to the index, so each run gets its own folder.
+        var journal = Path.Combine(Path.GetTempPath(), $"methodadd-{Guid.NewGuid():N}", "index.sqlite");
+        var result = MethodModifyEngine.AddCore(request, _repo, harness.Client, journal);
+        return (result, written, journal);
+    }
+
+    private static bool ResultIsStatic(ToolResult<object> result) =>
+        System.Text.Json.JsonSerializer.SerializeToElement(result.Data).GetProperty("isStatic").GetBoolean();
+
+    [Fact]
+    public void Add_instance_method_appends_it_and_keeps_the_declaration_and_the_other_methods()
+    {
+        const string source = "    /// <summary>Twice the balance.</summary>\n    public real twice()\n    {\n        return this.calc() * 2;\n    }\n";
+        var (result, xml, journal) = RunAdd(CustomClassXml,
+            new MethodModifyEngine.AddRequest("class", "ContosoHelper", "twice", source));
+
+        Assert.True(result.Ok, result.Error?.Message);
+        Assert.False(ResultIsStatic(result));
+
+        var doc = System.Xml.Linq.XDocument.Parse(xml!);
+        var original = System.Xml.Linq.XDocument.Parse(CustomClassXml);
+        Assert.Equal(original.Descendants("Declaration").Single().Value, doc.Descendants("Declaration").Single().Value);
+        Assert.Equal(new[] { "calc", "twice" }, doc.Descendants("Method").Select(m => (string?)m.Element("Name")).ToArray());
+        Assert.Equal("\n    public real calc()\n    {\n        return 1;\n    }\n", WrittenSource(xml!, "calc"));
+        Assert.Equal(source, WrittenSource(xml!, "twice"));
+
+        // Journaled with the exact pre-image, so `d365fo undo` takes the method out again.
+        var stored = Assert.Single(D365FO.Core.Journal.ModificationJournal.ForIndex(journal).List(10));
+        Assert.Equal(CustomClassXml, stored.PreImage);
+        Assert.Equal("ContosoCustom", stored.Model);
+    }
+
+    [Theory]
+    [InlineData("public static ContosoHelper construct()\n{\n    return new ContosoHelper();\n}\n")]
+    [InlineData("/// <summary>static in a comment is not the modifier</summary>\nstatic ContosoHelper construct()\n{\n    return new ContosoHelper();\n}\n")]
+    [InlineData("[Hookable(false)]\nSTATIC ContosoHelper construct()\n{\n    return new ContosoHelper();\n}\n")]
+    public void Add_static_method_is_written_as_given_and_reported_static(string source)
+    {
+        var (result, xml, _) = RunAdd(CustomClassXml,
+            new MethodModifyEngine.AddRequest("class", "ContosoHelper", "construct", source));
+
+        Assert.True(result.Ok, result.Error?.Message);
+        Assert.True(ResultIsStatic(result));
+        Assert.Equal(source, WrittenSource(xml!, "construct"));
+    }
+
+    [Fact]
+    public void Add_to_a_table_without_methods_creates_the_container()
+    {
+        const string tableXml = "<AxTable xmlns:i=\"http://www.w3.org/2001/XMLSchema-instance\"><Name>ContosoTable</Name>" +
+                                "<SourceCode><Declaration><![CDATA[\npublic class ContosoTable extends common\n{\n}\n]]></Declaration></SourceCode>" +
+                                "<Fields /></AxTable>";
+        const string source = "public static ContosoTable find(RecId _recId)\n{\n    ContosoTable t;\n    select firstonly t where t.RecId == _recId;\n    return t;\n}\n";
+
+        var (result, xml, _) = RunAdd(tableXml, new MethodModifyEngine.AddRequest("table", "ContosoTable", "find", source));
+
+        Assert.True(result.Ok, result.Error?.Message);
+        var methods = System.Xml.Linq.XDocument.Parse(xml!).Root!.Elements("Methods").Single();
+        Assert.Equal("find", (string?)methods.Element("Method")!.Element("Name"));
+    }
+
+    [Fact]
+    public void Add_of_a_name_the_object_already_has_is_refused_and_nothing_is_written()
+    {
+        var (result, xml, _) = RunAdd(CustomClassXml,
+            new MethodModifyEngine.AddRequest("class", "ContosoHelper", "CALC", "public real calc()\n{\n    return 2;\n}\n"));
+
+        Assert.False(result.Ok);
+        Assert.Equal(D365FoErrorCodes.AlreadyExists, result.Error!.Code);
+        Assert.Contains("modify method", result.Error.Hint);
+        Assert.Null(xml);
+    }
+
+    [Theory]
+    [InlineData("public real other()\n{\n    return 2;\n}\n", "declares 'other'")]
+    [InlineData("return 2;", "declares no method")]
+    [InlineData("void twice() { }\nvoid more() { }\n", "declares 2 methods")]
+    [InlineData("public real twice()\n{\n    return 2;\n", "cannot be checked")]
+    [InlineData("", "source is required")]
+    public void Add_with_a_source_that_is_not_exactly_this_method_is_refused_before_the_bridge(string source, string message)
+    {
+        SeedCustomModel();
+        using var harness = FakeBridge.Create(_ => throw new InvalidOperationException("bridge should not be called"));
+
+        var result = MethodModifyEngine.AddCore(
+            new MethodModifyEngine.AddRequest("class", "ContosoHelper", "twice", source), _repo, harness.Client);
+
+        Assert.False(result.Ok);
+        Assert.Equal(D365FoErrorCodes.BadInput, result.Error!.Code);
+        Assert.Contains(message, result.Error.Message);
+    }
+
+    [Fact]
+    public void Add_to_an_object_of_a_model_that_is_not_custom_is_refused_before_the_bridge()
+    {
+        using var harness = FakeBridge.Create(_ => throw new InvalidOperationException("bridge should not be called"));
+
+        var result = MethodModifyEngine.AddCore(
+            new MethodModifyEngine.AddRequest("class", "CustBalance", "twice", "public real twice()\n{\n    return 2;\n}\n"),
+            _repo, harness.Client);
+
+        Assert.False(result.Ok);
+        Assert.Equal(D365FoErrorCodes.BadInput, result.Error!.Code);
+        Assert.Contains("ApplicationSuite", result.Error.Message);
+        Assert.Contains("generate coc CustBalance", result.Error.Hint);
+    }
+
+    [Fact]
+    public void Add_to_a_class_the_index_does_not_know_fails_CLASS_NOT_FOUND()
+    {
+        using var harness = FakeBridge.Create(_ => throw new InvalidOperationException("bridge should not be called"));
+
+        var result = MethodModifyEngine.AddCore(
+            new MethodModifyEngine.AddRequest("class", "NoSuchClass", "twice", "public real twice()\n{\n    return 2;\n}\n"),
+            _repo, harness.Client);
+
+        Assert.Equal(D365FoErrorCodes.ClassNotFound, result.Error?.Code);
+    }
+
+    [Theory]
+    [InlineData("edt")]
+    [InlineData("enum")]
+    public void Add_to_a_kind_without_members_to_call_is_refused(string kind)
+    {
+        Assert.Equal(D365FoErrorCodes.BadInput,
+            MethodModifyEngine.CheckAddInput(new MethodModifyEngine.AddRequest(kind, "X", "m", "void m() { }"))?.Error?.Code);
+    }
+
+    [Fact]
+    public void Add_with_an_unresolved_reference_is_blocked_and_nothing_is_written()
+    {
+        var (result, xml, _) = RunAdd(CustomClassXml,
+            new MethodModifyEngine.AddRequest("class", "ContosoHelper", "q",
+                "public str q()\n{\n    return queryStr(NoSuchQueryAnywhere256);\n}\n"));
+
+        Assert.False(result.Ok);
+        Assert.Equal(D365FoErrorCodes.ValidationFailed, result.Error!.Code);
+        Assert.Null(xml);
+    }
+
+    [Theory]
+    [InlineData("public static void main(Args _args) { }", true)]
+    [InlineData("static void main(Args _args) { }", true)]
+    [InlineData("/// static\n[SysObsolete('static')]\npublic void run() { }", false)]
+    [InlineData("public void staticHelper() { }", false)]
+    [InlineData("private static server int count() { }", true)]
+    public void DeclaresStatic_reads_only_the_header(string source, bool expected)
+    {
+        Assert.Equal(expected, D365FO.Core.Validation.AotMethodSourceRules.DeclaresStatic(source));
     }
 
     private static JsonObject Response(JsonObject request, JsonObject result) => new()

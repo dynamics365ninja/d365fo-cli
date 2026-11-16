@@ -75,3 +75,75 @@ public sealed class ModifyMethodCommand : Command<ModifyMethodCommand.Settings>
         return RenderHelpers.Render(kind, result);
     }
 }
+
+/// <summary>
+/// Add a new method to an existing class, table or form via <c>D365FO.Bridge</c> (issue #256).
+/// The source is the whole method; <c>static</c> in its signature makes it a class method.
+/// </summary>
+public sealed class ModifyAddMethodCommand : Command<ModifyAddMethodCommand.Settings>
+{
+    public sealed class Settings : D365OutputSettings
+    {
+        [CommandArgument(0, "<KIND>")]
+        [System.ComponentModel.Description("Object kind: class, table, or form.")]
+        public string Kind { get; init; } = "";
+
+        [CommandArgument(1, "<OBJECT>")]
+        [System.ComponentModel.Description("Object name (resolved via the index; --model overrides). It must be in a configured custom model.")]
+        public string ObjectName { get; init; } = "";
+
+        [CommandArgument(2, "<METHOD>")]
+        [System.ComponentModel.Description("Name of the new method. The source must declare a method of this name, and the object must not have one yet.")]
+        public string Method { get; init; } = "";
+
+        [CommandOption("--source <XPP>")]
+        [System.ComponentModel.Description("The whole new method: optional doc comment and attributes, signature, body. Add `static` to the signature for a class (static) method. Exactly one of --source / --source-file.")]
+        public string? Source { get; init; }
+
+        [CommandOption("--source-file <PATH>")]
+        [System.ComponentModel.Description("File holding the same X++ method source. Avoids quoting a multi-line method on the command line.")]
+        public string? SourceFile { get; init; }
+
+        [CommandOption("--model <MODEL>")]
+        [System.ComponentModel.Description("Owning model. Resolved via the index when omitted.")]
+        public string? Model { get; init; }
+
+        [CommandOption("--grounding-token <TOKEN>")]
+        [System.ComponentModel.Description("Grounding token from `d365fo prepare change`. Required for the token check when D365FO_GROUNDING_ENFORCE=true; the reference/BP validation gate always blocks on error-severity findings.")]
+        public string? GroundingToken { get; init; }
+    }
+
+    public override int Execute(CommandContext ctx, Settings settings)
+    {
+        var kind = OutputMode.Resolve(settings.Output);
+
+        var hasSource = !string.IsNullOrWhiteSpace(settings.Source);
+        var hasFile = !string.IsNullOrWhiteSpace(settings.SourceFile);
+        if (hasSource == hasFile)
+        {
+            return RenderHelpers.Render(kind, ToolResult<object>.Fail(D365FoErrorCodes.BadInput,
+                hasSource ? "Pass --source or --source-file, not both." : "--source <XPP> or --source-file <PATH> is required.",
+                "The source is the whole new method: signature, braces and body."));
+        }
+
+        var source = settings.Source;
+        if (hasFile)
+        {
+            if (!File.Exists(settings.SourceFile))
+            {
+                return RenderHelpers.Render(kind, ToolResult<object>.Fail(D365FoErrorCodes.BadInput,
+                    $"No such file: {settings.SourceFile}"));
+            }
+            source = File.ReadAllText(settings.SourceFile!);
+        }
+
+        MetadataRepository? repo = null;
+        try { repo = RepoFactory.Create(); } catch { /* degrade to bridge-only; engine surfaces a warning */ }
+
+        var result = MethodModifyEngine.Add(
+            new MethodModifyEngine.AddRequest(settings.Kind, settings.ObjectName, settings.Method, source!,
+                settings.Model, settings.GroundingToken),
+            repo);
+        return RenderHelpers.Render(kind, result);
+    }
+}

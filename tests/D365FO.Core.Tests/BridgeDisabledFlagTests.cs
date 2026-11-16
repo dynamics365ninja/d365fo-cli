@@ -93,6 +93,11 @@ public sealed class BridgeDisabledFlagTests : IDisposable
         Assert.Contains("switched off", obj.Error?.Message);
         Assert.Equal(D365FoErrorCodes.BridgeRequired, method.Error?.Code);
         Assert.Contains("switched off", method.Error?.Message);
+
+        var added = MethodModifyEngine.Add(
+            new MethodModifyEngine.AddRequest("class", "Foo", "bar", "public void bar()\n{\n}\n", Model: "MyModel"), null, options);
+        Assert.Equal(D365FoErrorCodes.BridgeRequired, added.Error?.Code);
+        Assert.Contains("modify add-method", added.Error?.Message);
     }
 
     [Fact]
