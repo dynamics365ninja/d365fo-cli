@@ -56,11 +56,11 @@ public class RuleCanonTests
     }
 
     /// <summary>
-    /// All three routers: the Copilot skill lists <c>references/&lt;id&gt;.md</c> by name, the Claude
+    /// All three routers: the Copilot skill links its <c>references/&lt;id&gt;.md</c>, the Claude
     /// skill links each sibling topic skill, the legacy Copilot instructions link each sibling file.
     /// </summary>
     [Theory]
-    [InlineData("skills/d365fo-cli/SKILL.md", "| `{0}` |")]
+    [InlineData("skills/d365fo-cli/SKILL.md", "| [`{0}`](references/{0}.md) |")]
     [InlineData("skills/anthropic/d365fo-cli/SKILL.md", "| [`{0}`](../{0}/SKILL.md) |")]
     [InlineData("skills/copilot/d365fo-cli.instructions.md", "| [`{0}`]({0}.instructions.md) |")]
     public void Skill_md_carries_the_generated_canon_verbatim(string relativePath, string rowFormat)

@@ -37,6 +37,37 @@ to Python scripts that edited the AOT XML around every check.
 - `--operations-file -` reads the steps from stdin. `op` is accepted for `operation`.
 - **MCP:** `modify_object` takes the same steps in `operations`, and `dryRun`. `kind` and `name`
   are no longer required when the steps name their objects.
+### Added — `modify add-method` adds an instance or static method to an existing object (#256)
+
+`modify method` only changes a method that exists, and a new name failed `METHOD_NOT_FOUND`, so
+adding a method meant a trip to Visual Studio or rewriting the class.
+
+- **`d365fo modify add-method <class|table|form> <OBJECT> <METHOD> --source <XPP>`** (or
+  `--source-file <PATH>`) appends one `<Method>` through the bridge. The declaration and every other
+  member stay as they were. The source is the whole method and is stored as given, so `static` in
+  its signature makes a class method. The result reports `isStatic`.
+- **Refused, with nothing written:** a name the object already has (`ALREADY_EXISTS`, pointing at
+  `modify method`), a source that declares no method, several methods, another name or unbalanced
+  braces, a kind without callable members, an object the index does not know, and an object of a
+  model outside `D365FO_CUSTOM_MODELS`. A method added to an extension would be a member of the
+  extension class instead, so the command says to add it there rather than redirecting.
+- **Same gate as `modify method`:** reference and BP validation block on errors, the pre-image is
+  journaled for `undo`, and the model is re-indexed after the write.
+- **MCP:** `modify_method` takes `add=true` with `source`.
+
+### Fixed — a method declared `static void main(…)` is indexed as static
+
+The extractor looked for ` static ` in the trimmed signature line, so a declaration that starts with
+the modifier was stored with `IsStatic = 0`. It now matches the word in the part before the
+parameter list. Schema v22 fixes the flag of rows already in the index from their stored
+signature, with no re-extract.
+### Fixed — the Copilot skill names the path of each topic file (#264)
+
+The topic table of `skills/d365fo-cli/SKILL.md` listed bare ids (`table-scaffolding`), and
+Copilot in Visual Studio looked for `.github/table-scaffolding.md`, which does not exist. Each
+row now links `references/<id>.md`. The section also says where the folder sits in an installed
+repo, and that `d365fo knowledge get <id>` returns the same text when the file tool cannot open
+files outside the solution.
 
 ### Added — the commands agents guess now run, and an unknown sub-command names the real ones
 

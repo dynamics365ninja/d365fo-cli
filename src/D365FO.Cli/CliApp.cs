@@ -290,6 +290,7 @@ public static class CliApp
             {
                 b.SetDescription("Structured, live edits to existing AOT objects via D365FO.Bridge (Windows VM). No on-disk fallback. Writes outside D365FO_CUSTOM_MODELS are redirected to an extension. Every edit is journaled for `d365fo undo`.");
                 b.AddCommand<ModifyMethodCommand>("method").WithDescription("Replace the body of an existing method on a class/table/edt/form.");
+                b.AddCommand<ModifyAddMethodCommand>("add-method").WithDescription("Add a new instance or static method to a class/table/form in a custom model.");
                 b.AddCommand<ModifyPropertyCommand>("property").WithDescription("Set a property (Label, ConfigurationKey, TableGroup, …) on a live object.");
                 b.AddCommand<ModifyAddFieldCommand>("add-field").WithDescription("Add a field to a live table — concrete AxTableField subtype resolved from the EDT.");
                 b.AddCommand<ModifyAddEnumValueCommand>("add-enum-value").WithDescription("Add a value to a live base enum (positional, never a hard-coded ordinal).");

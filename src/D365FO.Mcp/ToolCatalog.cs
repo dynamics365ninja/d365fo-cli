@@ -712,7 +712,7 @@ public static class ToolCatalog
             }),
 
         new Descriptor("modify_method", ToolEffect.Destructive,
-            "Replace the body of an EXISTING method on a live class/table/edt/form via D365FO.Bridge " +
+            "Replace the body of an EXISTING method on a live class/table/edt/form, or add a new one, via D365FO.Bridge " +
             "(Windows VM, requires D365FO_BRIDGE_ENABLED=1). Reads the object through IMetadataProvider, " +
             "structurally replaces one <Method>'s source (never raw XML/CDATA string surgery), runs the same " +
             "reference/BP validation gate as generate_object and blocks the write on any error-severity finding " +
@@ -720,13 +720,15 @@ public static class ToolCatalog
             "No on-disk fallback: fails BRIDGE_REQUIRED when the bridge is unavailable. Pass exactly one of: " +
             "`body` — statements only, they replace what sits between the method's outer braces and the doc comment, " +
             "attributes and signature are kept (a full declaration is refused); `source` — the whole method, " +
-            "signature included, which must declare exactly one method named `method`. Use generate_object to " +
-            "create new objects/methods; use this only to change an existing method.",
+            "signature included, which must declare exactly one method named `method`. " +
+            "`add=true` instead ADDS a new method (`d365fo modify add-method`) to a class/table/form in a configured " +
+            "custom model: `source` is the whole method, `static` in its signature makes a class method, and a name " +
+            "the object already has is refused (ALREADY_EXISTS). Use generate_object to create new objects.",
             Schema(("kind", "string", true), ("name", "string", true), ("method", "string", true),
                    ("body", "string", false), ("source", "string", false), ("model", "string", false),
-                   ("groundingToken", "string", false)),
+                   ("groundingToken", "string", false), ("add", "boolean", false)),
             (h, p) => h.ModifyMethod(Str(p, "kind"), Str(p, "name"), Str(p, "method"), StrOrNull(p, "body"),
-                        StrOrNull(p, "model"), StrOrNull(p, "groundingToken"), StrOrNull(p, "source"))),
+                        StrOrNull(p, "model"), StrOrNull(p, "groundingToken"), StrOrNull(p, "source"), Bool(p, "add"))),
 
         new Descriptor("modify_object", ToolEffect.Destructive,
             "Structured edits to an EXISTING object beyond its method bodies, via D365FO.Bridge (Windows VM, " +

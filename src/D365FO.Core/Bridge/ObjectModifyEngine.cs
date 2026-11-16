@@ -935,7 +935,7 @@ public static class ObjectModifyEngine
         catch { return false; }
     }
 
-    private static bool IsCustomModel(string model, MetadataRepository? repo)
+    internal static bool IsCustomModel(string model, MetadataRepository? repo)
     {
         // The index's IsCustom flag is authoritative when available (it is computed from
         // D365FO_CUSTOM_MODELS at extract time); otherwise fall back to matching the

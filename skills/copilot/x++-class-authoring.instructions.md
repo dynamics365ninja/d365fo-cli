@@ -54,14 +54,24 @@ d365fo generate class FmVehicleImportJob --extends RunBaseBatch --non-final   --
 The scaffold is `final` by default, because a class nobody has a reason to
 inherit from is the safer default in a model others extend; `--non-final` opts
 out where inheritance is actually intended. Add methods with
-`generate event-handler`, `generate coc` or by editing the `<Methods>` block —
+`d365fo modify add-method`, `generate event-handler` or `generate coc` —
 never by rewriting the file wholesale.
 
-`d365fo modify method` only **replaces the body of a method that already
-exists**; it cannot add one, and a new name fails with `METHOD_NOT_FOUND`. When
-you plan the change, sort the methods into ones that already exist (edit with
-`modify method`) and new ones (add through the routes above), instead of
-finding out from the error halfway through the edit.
+Two commands, one per case. Sort the methods into ones that already exist and
+new ones before the edit starts:
+
+- `d365fo modify method <kind> <Name> <method> --body …` changes a method that
+  **already exists**. A new name fails with `METHOD_NOT_FOUND`.
+- `d365fo modify add-method <kind> <Name> <method> --source-file m.xpp` adds a
+  **new** method to a class, table or form of your own model. The source is the
+  whole method; `static` in the signature makes it a class method
+  (`Name::method()`), without it the method is called on an instance. A name
+  the object already has fails with `ALREADY_EXISTS`, and an object of a
+  Microsoft or ISV model is refused: put the method on your extension class.
+
+```sh
+d365fo modify add-method class FmVehicleLogHelper construct --source "public static FmVehicleLogHelper construct() { return new FmVehicleLogHelper(); }"
+```
 
 ## Hard rules
 
