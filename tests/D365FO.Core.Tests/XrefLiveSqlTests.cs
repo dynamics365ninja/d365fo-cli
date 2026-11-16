@@ -95,18 +95,19 @@ public sealed class XrefLiveSqlTests : IDisposable
                 @Prefix INT = (SELECT Id FROM @n WHERE Path = N'/Classes/PrefixOnly/Methods/run'),
                 @Bulk INT = (SELECT Id FROM @n WHERE Path = N'/Classes/Bulk/Methods/run');
 
-        -- Kind ids: 0 Declaration, 1 Set, 2 Read, 3 Call, 4 Reference, 5 Type, 6 Extends, 7 Implements.
+        -- Kind ids (CrossReferenceKind): 0 Any, 1 Call, 2 Type, 3 Implements, 4 Extends, 5 TestCall,
+        -- 6 Property, 7 Attribute, 8 TestHelperCall, 9 Tag, 10 Override.
         INSERT [References] VALUES
-          (@Insert, @SalesLine, 5, 10, 9), (@Insert, @Price, 2, 12, 20),
-          (@Validate, @Price, 2, 30, 14), (@Validate, @Label, 4, 31, 22),
-          (@Active, @Find, 3, 5, 18), (@Active, @Find, 3, 9, 18), (@Active, @Find, 3, 14, 18),
-          (@Ext, @SalesLine, 6, 1, 1),
-          (@Prefix, @TypeCls, 3, 3, 4), (@Prefix, @In, 2, 4, 4);
+          (@Insert, @SalesLine, 2, 10, 9), (@Insert, @Price, 6, 12, 20),
+          (@Validate, @Price, 6, 30, 14), (@Validate, @Label, 2, 31, 22),
+          (@Active, @Find, 1, 5, 18), (@Active, @Find, 1, 9, 18), (@Active, @Find, 1, 14, 18),
+          (@Ext, @SalesLine, 4, 1, 1),
+          (@Prefix, @TypeCls, 1, 3, 4), (@Prefix, @In, 6, 4, 4);
 
-        -- 300 Reads that sort before every Call: "the Calls among the first 200 references of any
+        -- 300 Properties that sort before every Call: "the Calls among the first 200 references of any
         -- kind" — the old filter-after-TOP — finds none of the three.
         INSERT [References] (SourceId, TargetId, Kind, Line, [Column])
-        SELECT TOP (300) @Bulk, @Price, 2, ROW_NUMBER() OVER (ORDER BY (SELECT NULL)), 1
+        SELECT TOP (300) @Bulk, @Price, 6, ROW_NUMBER() OVER (ORDER BY (SELECT NULL)), 1
         FROM sys.all_objects;
         """;
 
@@ -133,8 +134,8 @@ public sealed class XrefLiveSqlTests : IDisposable
         Assert.DoesNotContain("/Classes/PrefixOnly", Sources(data));
 
         var type = data["items"]!.AsArray().Single(i => (string)i!["source"]! == "/Classes/SalesLineType")!;
-        // Rows come back ordered by source path, then kind id: Read (2) before Type (5).
-        Assert.Equal(new[] { "Read", "Type" }, type["kinds"]!.AsArray().Select(k => (string)k!));
+        // Rows come back ordered by source path, then kind id: Type (2) before Property (6).
+        Assert.Equal(new[] { "Type", "Property" }, type["kinds"]!.AsArray().Select(k => (string)k!));
         Assert.Equal(new[] { "insert", "validateWrite" }, type["members"]!.AsArray().Select(m => (string)m!));
         Assert.Equal("ApplicationSuite", (string?)type["module"]);
         Assert.Equal(304 + 3, (int)data["references"]!);
