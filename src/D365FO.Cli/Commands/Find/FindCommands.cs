@@ -186,7 +186,7 @@ public sealed class FindRefsCommand : Command<FindRefsCommand.Settings>
         public string Name { get; init; } = "";
 
         [CommandOption("--kind <KIND>")]
-        [System.ComponentModel.Description("Text scan: restrict to one artifact kind — class | table | form. With --xref: restrict to one reference kind — Declaration | Set | Read | Call | Reference | Type | Extends | Implements.")]
+        [System.ComponentModel.Description("Text scan: restrict to one artifact kind — class | table | form. With --xref: restrict to one reference kind — Call | Type | Implements | Extends | TestCall | Property | Attribute | TestHelperCall | Tag | Override (the CrossReferenceKind names MethodCall, TypeReference, … also work).")]
         public string? Kind { get; init; }
 
         [CommandOption("--model <NAME>")]

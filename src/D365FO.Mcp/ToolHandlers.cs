@@ -2795,7 +2795,7 @@ public sealed partial class ToolHandlers
             && kind.Trim().ToLowerInvariant() is not ("class" or "table" or "form"))
             return ToolResult<object>.Fail(D365FoErrorCodes.BadInput,
                 $"Unknown kind '{kind}' for the text scan.",
-                "Use class | table | form. A reference kind (Call, Read, Set, …) needs the xref query.");
+                "Use class | table | form. A reference kind (Call, Type, Extends, …) needs the xref query.");
         if (allModels && !string.IsNullOrWhiteSpace(model))
             return ToolResult<object>.Fail(D365FoErrorCodes.BadInput,
                 "allModels and model contradict each other.",
