@@ -157,7 +157,7 @@ public static class ToolCatalog
                     "workspace"         => h.SearchWorkspaces(query, limit),
                     "batch-jobs"        => h.FindBatchJobs(model),
                     "menu-items"        => h.FindMenuItems(query),
-                    _                  => h.SearchAny(query, limit),
+                    _                   => h.SearchAny(query, limit),
                 };
             }),
 

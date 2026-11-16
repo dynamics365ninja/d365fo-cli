@@ -898,10 +898,13 @@ public sealed partial class MetadataRepository
     /// display menu items in ApplicationSuite carry no such element — so the column is null for
     /// most of them, and a null read as "unknown target" rather than "a form". Applied in C#
     /// rather than SQL: a computed column has no declared type, and on an empty result Dapper
-    /// then cannot match the record's constructor.
+    /// then cannot match the record's constructor. A menu item that names no object keeps a null
+    /// type: there is nothing for the default to describe.
     /// </summary>
     private static MenuItemInfo WithDefaultObjectType(MenuItemInfo mi)
-        => string.IsNullOrEmpty(mi.ObjectType) ? mi with { ObjectType = "Form", ObjectTypeIsDefault = true } : mi;
+        => string.IsNullOrEmpty(mi.ObjectType) && !string.IsNullOrEmpty(mi.Object)
+            ? mi with { ObjectType = "Form", ObjectTypeIsDefault = true }
+            : mi;
 
     public MenuItemInfo? GetMenuItem(string name)
     {

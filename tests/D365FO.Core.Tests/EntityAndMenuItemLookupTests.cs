@@ -38,6 +38,7 @@ public class EntityAndMenuItemLookupTests : IDisposable
                 new ExtractedMenuItem("CustTableListPage", "Display", "CustTableListPage", null, null),
                 new ExtractedMenuItem("CustTableEdit", "Action", "CustTableEditController", "Class", null),
                 new ExtractedMenuItem("CustTableReport", "Output", "custtable", "SSRSReport", "@SYS301"),
+                new ExtractedMenuItem("CustTableNoObject", "Action", null, null, null),
             },
             DataEntities = new[]
             {
@@ -140,6 +141,11 @@ public class EntityAndMenuItemLookupTests : IDisposable
         var explicitClass = repo.GetMenuItem("CustTableEdit")!;
         Assert.Equal("Class", explicitClass.ObjectType);
         Assert.False(explicitClass.ObjectTypeIsDefault);
+
+        // No object, nothing for the default to describe.
+        var noObject = repo.GetMenuItem("CustTableNoObject")!;
+        Assert.Null(noObject.ObjectType);
+        Assert.False(noObject.ObjectTypeIsDefault);
     }
 
     [Fact]
