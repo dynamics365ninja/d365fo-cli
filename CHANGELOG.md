@@ -19,6 +19,26 @@ was ported from.
 
 ## [Unreleased]
 
+### Fixed — `modify property` sets one child of a property such as `SubscriberAccessLevel`
+
+`SubscriberAccessLevel` is not a value but an `AccessGrant` with six children (Correct, Create,
+Delete, Invoke, Read, Update). `modify property table <T> SubscriberAccessLevel --value …` replaced
+those children with text, and the bridge refused the result with `XML_DESERIALIZE_FAILED …
+Expecting state 'Element'.. Encountered 'Text'`. Nothing was written, but there was no way to make
+the change with the CLI, so agents fell back to editing the XML by hand. The property name was not
+checked either, so a misspelled one was written as an element the AOT reader drops.
+
+- **A dotted name sets one child**: `modify property table <T> SubscriberAccessLevel.Read --value
+  Allow` (MCP `modify_object` `action=property`, `member=SubscriberAccessLevel.Read`). The parent
+  and the child are created when missing and land in contract order. Existing siblings are kept.
+- **A plain value for a property with child elements is refused before any write**, with
+  `error.hint` naming the dotted form, the child names and the values they take.
+- **Every name on the path is checked against the object's AOT contract**, the way
+  `field-property` already checks a field's, and an enum-typed value against its enum. A
+  misspelled property or child, a collection (`Fields.Name`) or a value (`Label.Text`) is refused
+  with `BAD_INPUT` and the object is untouched. Properties written to an extension are not checked,
+  as before, because an extension's root has members of its own.
+
 ### Fixed — EDT base types are in the index, so generated fields get their real type (#233)
 
 Every EDT in the index had an empty `BaseType`: the extractor read it off the root element
