@@ -76,6 +76,12 @@ public class IndexSyncTests
         => Assert.Equal(((string?)null, "ConFleetPosting.xml"),
             IndexSync.SplitTarget("ConFleetPosting.xml", f => f == "ConFleetPosting.xml"));
 
+    [Theory]
+    [InlineData(".")]
+    [InlineData("..")]
+    public void The_current_and_parent_folder_stay_paths(string target)
+        => Assert.Equal(((string?)null, target), IndexSync.SplitTarget(target, _ => false));
+
     [Fact]
     public void A_target_with_the_platform_separator_is_a_path()
     {

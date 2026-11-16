@@ -163,8 +163,8 @@ public static class IndexSync
     /// </summary>
     /// <remarks>
     /// A target with a path separator is a path. Without one it is a path only when it is an
-    /// existing file in the current folder: the <c>Foo.xml</c> typed from inside an <c>Ax*</c>
-    /// folder. A bare folder name is a model name. Read as a path, it resolved only from the
+    /// existing file in the current folder (the <c>Foo.xml</c> typed from inside an <c>Ax*</c>
+    /// folder), or <c>.</c> / <c>..</c>. Any other bare folder name is a model name. Read as a path, it resolved only from the
     /// packages root's <c>&lt;Model&gt;</c> folder, where it named that same model, and failed
     /// everywhere else. The common failure was <c>index sync MyModel</c>, the command
     /// <c>doctor</c> recommends, run from a repository that keeps the model in a folder of the
@@ -176,7 +176,9 @@ public static class IndexSync
     {
         var t = target?.Trim();
         if (string.IsNullOrEmpty(t)) return (null, null);
-        var isPath = t.Contains(System.IO.Path.DirectorySeparatorChar)
+        // "." and ".." name the current or parent folder, never a model.
+        var isPath = t is "." or ".."
+            || t.Contains(System.IO.Path.DirectorySeparatorChar)
             || t.Contains('/')
             || (fileExists ?? File.Exists)(t);
         return isPath ? (null, t) : (t, null);
