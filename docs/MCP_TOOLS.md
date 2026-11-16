@@ -3,7 +3,7 @@
 
 Every tool the bundled `d365fo-mcp` adapter advertises, and the `d365fo` commands that reach the same handler. Both columns are read from the running code — the command manifest (`d365fo schema --full`) and the adapter's own `tools/list` — so a tool that stops matching a command fails the generator rather than quietly outliving the mapping.
 
-**32 tools · 195 command routes · 15 commands with no MCP route.**
+**32 tools · 196 command routes · 15 commands with no MCP route.**
 
 The adapter is consolidated on purpose: one tool dispatches on a `type` / `objectType` / `mode` / `action` discriminator instead of shipping one tool per object kind. That keeps the schema payload a host injects every turn from growing with the object model — see [TOKEN_ECONOMICS.md](TOKEN_ECONOMICS.md) for what that payload actually measures.
 
@@ -258,10 +258,11 @@ Model inspection via `action`: list (every indexed model — name/publisher/laye
 
 ### `modify_method`
 
-Replace the body of an EXISTING method on a live class/table/edt/form via D365FO.Bridge (Windows VM, requires D365FO_BRIDGE_ENABLED=1). Reads the object through IMetadataProvider, structurally replaces one <Method>'s source (never raw XM…
+Replace the body of an EXISTING method on a live class/table/edt/form, or add a new one, via D365FO.Bridge (Windows VM, requires D365FO_BRIDGE_ENABLED=1). Reads the object through IMetadataProvider, structurally replaces one <Method>'s s…
 
 | CLI command | Discriminator |
 |---|---|
+| `d365fo modify add-method` | `add=true` |
 | `d365fo modify method` | — |
 
 ### `modify_object`

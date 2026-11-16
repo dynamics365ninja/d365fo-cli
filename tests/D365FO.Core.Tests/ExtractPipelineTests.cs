@@ -897,6 +897,45 @@ public void run()
     }
 
     [Fact]
+    public void MetadataExtractor_a_declaration_that_starts_with_static_is_static()
+    {
+        // The signature line is trimmed, so `static` has no space before it. A search for
+        // " static " indexed every such method, `static void main` included, as an instance one.
+        var model = Path.Combine(_workRoot, "PkgStatic", "PkgStatic");
+        Directory.CreateDirectory(Path.Combine(model, "AxClass"));
+        File.WriteAllText(Path.Combine(model, "AxClass", "Starter.xml"), """
+            <AxClass>
+              <Name>Starter</Name>
+              <SourceCode>
+                <Methods>
+                  <Method>
+                    <Name>main</Name>
+                    <Source>
+                static void main(Args _args)
+                {
+                }
+                    </Source>
+                  </Method>
+                  <Method>
+                    <Name>staticLike</Name>
+                    <Source>
+                public void staticLike()
+                {
+                }
+                    </Source>
+                  </Method>
+                </Methods>
+              </SourceCode>
+            </AxClass>
+            """);
+
+        var batch = new MetadataExtractor().ExtractAll(_workRoot).ToList().Single(b => b.Model == "PkgStatic");
+        var methods = Assert.Single(batch.Classes).Methods.ToDictionary(m => m.Name, m => m.IsStatic);
+        Assert.True(methods["main"]);
+        Assert.False(methods["staticLike"]);
+    }
+
+    [Fact]
     public void MetadataExtractor_comment_only_source_yields_no_signature()
     {
         var model = Path.Combine(_workRoot, "PkgSig4", "PkgSig4");

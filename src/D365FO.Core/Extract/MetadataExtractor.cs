@@ -589,7 +589,11 @@ public sealed class MetadataExtractor
             var source = Local(me, "Source") ?? string.Empty;
             var signature = ExtractSignatureLine(source);
             var returnType = InferReturnType(signature);
-            var isStatic = signature.Contains(" static ", StringComparison.Ordinal);
+            // The signature line is trimmed, so `static void main(Args _args)` has no space before
+            // `static`; a " static " search missed it and indexed every such method as an instance one.
+            var paren = signature.IndexOf('(');
+            var isStatic = D365FO.Core.Validation.AotMethodSourceRules.StaticModifier.IsMatch(
+                paren < 0 ? signature : signature[..paren]);
             var hasDocComment     = source.Contains("/// <summary>", StringComparison.OrdinalIgnoreCase);
             // Strip single-line comments and string literals before checking for
             // forbidden call patterns so that commented-out code (// today()) or

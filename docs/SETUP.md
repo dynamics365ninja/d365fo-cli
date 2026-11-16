@@ -331,6 +331,9 @@ d365fo generate control-method    FmVehicles --control VIN --method modified
 d365fo modify method class CustBalance calc --body "return 2;"
 # --source replaces the whole method, signature included
 d365fo modify method class CustBalance calc --source "public real calc(real _factor) { return 2 * _factor; }"
+# Add a new method to a class/table/form of your own model; `static` makes it a class method
+d365fo modify add-method class FmVehicleLogHelper construct --source "public static FmVehicleLogHelper construct() { return new FmVehicleLogHelper(); }"
+d365fo modify add-method table FmVehicle describe --source-file describe.xpp
 ```
 
 One example per `generate` sub-command (25 more object types, security, reports, workflows, …): **[EXAMPLES.md § Scaffold](EXAMPLES.md#scaffold)**.

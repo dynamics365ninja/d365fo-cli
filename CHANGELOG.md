@@ -19,6 +19,31 @@ was ported from.
 
 ## [Unreleased]
 
+### Added — `modify add-method` adds an instance or static method to an existing object (#256)
+
+`modify method` only changes a method that exists, and a new name failed `METHOD_NOT_FOUND`, so
+adding a method meant a trip to Visual Studio or rewriting the class.
+
+- **`d365fo modify add-method <class|table|form> <OBJECT> <METHOD> --source <XPP>`** (or
+  `--source-file <PATH>`) appends one `<Method>` through the bridge. The declaration and every other
+  member stay as they were. The source is the whole method and is stored as given, so `static` in
+  its signature makes a class method. The result reports `isStatic`.
+- **Refused, with nothing written:** a name the object already has (`ALREADY_EXISTS`, pointing at
+  `modify method`), a source that declares no method, several methods, another name or unbalanced
+  braces, a kind without callable members, an object the index does not know, and an object of a
+  model outside `D365FO_CUSTOM_MODELS`. A method added to an extension would be a member of the
+  extension class instead, so the command says to add it there rather than redirecting.
+- **Same gate as `modify method`:** reference and BP validation block on errors, the pre-image is
+  journaled for `undo`, and the model is re-indexed after the write.
+- **MCP:** `modify_method` takes `add=true` with `source`.
+
+### Fixed — a method declared `static void main(…)` is indexed as static
+
+The extractor looked for ` static ` in the trimmed signature line, so a declaration that starts with
+the modifier was stored with `IsStatic = 0`. It now matches the word in the part before the
+parameter list. Schema v22 fixes the flag of rows already in the index from their stored
+signature, with no re-extract.
+
 ### Added — the commands agents guess now run, and an unknown sub-command names the real ones
 
 In a sample of real agent sessions, 15 of 43 failed CLI calls were commands the agent guessed
