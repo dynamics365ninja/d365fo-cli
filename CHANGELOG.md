@@ -43,6 +43,13 @@ The extractor looked for ` static ` in the trimmed signature line, so a declarat
 the modifier was stored with `IsStatic = 0`. It now matches the word in the part before the
 parameter list. Schema v22 fixes the flag of rows already in the index from their stored
 signature, with no re-extract.
+### Fixed — the Copilot skill names the path of each topic file (#264)
+
+The topic table of `skills/d365fo-cli/SKILL.md` listed bare ids (`table-scaffolding`), and
+Copilot in Visual Studio looked for `.github/table-scaffolding.md`, which does not exist. Each
+row now links `references/<id>.md`. The section also says where the folder sits in an installed
+repo, and that `d365fo knowledge get <id>` returns the same text when the file tool cannot open
+files outside the solution.
 
 ### Added — the commands agents guess now run, and an unknown sub-command names the real ones
 

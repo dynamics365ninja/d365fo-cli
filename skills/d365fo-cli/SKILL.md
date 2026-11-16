@@ -247,52 +247,59 @@ method's defaults are already in effect when `next` runs.
 
 ## Full X++ rules — loaded on demand from references
 
-Detailed rules are in `references/` (lazily loaded when relevant):
+Detailed rules are in the `references/` folder next to this file, one file per topic:
+`references/<topic>.md`, which an installed skill has at `.github/skills/d365fo-cli/references/<topic>.md`
+in the X++ repo. Open a topic's file when the task touches it. Do not look for `.github/<topic>.md`:
+that file does not exist.
+
+If the file tool cannot open the file (in Visual Studio it may not see files outside the
+solution, and `.github/` usually is), run `d365fo knowledge get <topic>` in the
+terminal. Its `body` field holds the same text, and it works from any folder.
 
 <!-- BEGIN references -->
 | Resource file | Covers |
 |---|---|
-| `analytics-and-er` | Tiles/cues, KPIs, aggregate measurements, Electronic Reporting |
-| `barcode-scanning` | barcode printing vs scanning, GS1-128 parsing, item-barcode resolution |
-| `build-error-triage` | Compiler/BP/runtime message to the specific fix, via `explain-error` |
-| `business-events-authoring` | `BusinessEventsBase`, contract class, payload, catalog activation |
-| `coc-extension-authoring` | CoC wrapper rules, `next` placement, signature matching, `[Hookable]`/`[Wrappable]` |
-| `custom-service-authoring` | JSON/SOAP custom service scaffolding |
-| `data-entity-scaffolding` | Data entity (`AxDataEntityView`) patterns, OData exposure |
-| `document-attachments` | DocuRef, DocuValue, DocuType, DocumentManagement::attachFile, attachment retrieval |
-| `event-handler-authoring` | `[DataEventHandler]`, `[SubscribesTo]`, pre/post handlers |
-| `form-pattern-scaffolding` | FormRun lifecycle, 9 form patterns, Display/Action/Output menu items |
-| `forms-and-navigation` | Form lifecycle extension points, menus and submenu nesting |
-| `global-class-statics` | Global statics, bare vs qualified calls, overlap with predefined functions |
-| `integration-dmf-dualwrite` | DMF, dual-write, virtual entities, uploaded-file readers |
-| `integration-patterns` | OData, custom services, DMF, business events |
-| `inventory-and-warehouse` | InventTrans/InventDim/InventSum, on-hand, WHS work and waves |
-| `label-translation` | Label search, reuse, creation, multi-language |
-| `model-dependency-and-coupling` | Model reference chains, ISV/customer boundary rules |
-| `number-sequence-patterns` | `NumberSeqApplicationModule`, form handler, runtime fetch |
-| `object-extension-authoring` | Table / Form / EDT / Enum extensions; AOT XML safety |
-| `performance-and-caching` | Set-based work, `CacheLookup`, explicit caches, parallel batch |
-| `posting-and-financials` | Financial dimensions, voucher posting, currency, pricing |
-| `rdl-design-expressions` | RDL expression syntax, aggregate scope, formatting, where RDL lives |
-| `report-print-destinations` | SRSPrintDestinationSettings, SRSPrintMediumType, setting a destination on a controller |
-| `review-and-checkpoint-workflow` | Git checkpoint, `d365fo review diff`, accept/reject workflow |
-| `runtime-frameworks` | Feature Management, SysExtension, telemetry, Global Address Book |
-| `security-hierarchy-trace` | Role to duty to privilege to entry-point tracing |
-| `security-modeling` | Privilege/duty/role chain, XDS policies, configuration keys |
-| `ssrs-report-authoring` | TmpTable to Contract to DP to Controller to AxReport, Print management |
-| `sysoperation-batch-patterns` | SysOperation batch jobs, RunBase, migration scripts, retryable/async batch |
-| `system-objects` | kernel types, xRecord/Common members, system fields, why the index cannot carry them |
-| `table-scaffolding` | Table creation, EDTs, relations, indexes, `TableGroup` vs `TableType`, inheritance |
-| `testing-and-quality` | SysTestCase, ATL, and the offline validate/lint gates |
-| `transactions-and-concurrency` | tts scoping, OCC retry, `UnitOfWork`, error handling |
-| `warehouse-mobile-app` | warehouse-app screens, ProcessGuide flows, legacy WHSWorkExecuteDisplay, work execution |
-| `workflow-authoring` | `AxWorkflowTemplate`, document class, approvals and tasks |
-| `x++-class-authoring` | Class hierarchy, CoC, access modifiers, constructor patterns |
-| `xpp-best-practice-rules` | BP rules: `today()`, labels, nested loops, alternate keys, `[SysObsolete]` |
-| `xpp-class-and-method-rules` | Method modifiers, override visibility, optional params, `this` |
-| `xpp-data-access-apis` | `Query`/`QueryRun`, SysDa, direct SQL |
-| `xpp-database-queries` | `select` grammar, `crossCompany`, `in`, joins, aggregates |
-| `xpp-runtime-functions` | predefined function catalog, arities, gone/obsolete names |
-| `xpp-runtime-types` | Collections, date/time zones, .NET interop, `Dict*`, macros |
-| `xpp-statement-and-type-rules` | `switch`, ternary, null handling, `using`, casting, `is`/`as` |
+| [`analytics-and-er`](references/analytics-and-er.md) | Tiles/cues, KPIs, aggregate measurements, Electronic Reporting |
+| [`barcode-scanning`](references/barcode-scanning.md) | barcode printing vs scanning, GS1-128 parsing, item-barcode resolution |
+| [`build-error-triage`](references/build-error-triage.md) | Compiler/BP/runtime message to the specific fix, via `explain-error` |
+| [`business-events-authoring`](references/business-events-authoring.md) | `BusinessEventsBase`, contract class, payload, catalog activation |
+| [`coc-extension-authoring`](references/coc-extension-authoring.md) | CoC wrapper rules, `next` placement, signature matching, `[Hookable]`/`[Wrappable]` |
+| [`custom-service-authoring`](references/custom-service-authoring.md) | JSON/SOAP custom service scaffolding |
+| [`data-entity-scaffolding`](references/data-entity-scaffolding.md) | Data entity (`AxDataEntityView`) patterns, OData exposure |
+| [`document-attachments`](references/document-attachments.md) | DocuRef, DocuValue, DocuType, DocumentManagement::attachFile, attachment retrieval |
+| [`event-handler-authoring`](references/event-handler-authoring.md) | `[DataEventHandler]`, `[SubscribesTo]`, pre/post handlers |
+| [`form-pattern-scaffolding`](references/form-pattern-scaffolding.md) | FormRun lifecycle, 9 form patterns, Display/Action/Output menu items |
+| [`forms-and-navigation`](references/forms-and-navigation.md) | Form lifecycle extension points, menus and submenu nesting |
+| [`global-class-statics`](references/global-class-statics.md) | Global statics, bare vs qualified calls, overlap with predefined functions |
+| [`integration-dmf-dualwrite`](references/integration-dmf-dualwrite.md) | DMF, dual-write, virtual entities, uploaded-file readers |
+| [`integration-patterns`](references/integration-patterns.md) | OData, custom services, DMF, business events |
+| [`inventory-and-warehouse`](references/inventory-and-warehouse.md) | InventTrans/InventDim/InventSum, on-hand, WHS work and waves |
+| [`label-translation`](references/label-translation.md) | Label search, reuse, creation, multi-language |
+| [`model-dependency-and-coupling`](references/model-dependency-and-coupling.md) | Model reference chains, ISV/customer boundary rules |
+| [`number-sequence-patterns`](references/number-sequence-patterns.md) | `NumberSeqApplicationModule`, form handler, runtime fetch |
+| [`object-extension-authoring`](references/object-extension-authoring.md) | Table / Form / EDT / Enum extensions; AOT XML safety |
+| [`performance-and-caching`](references/performance-and-caching.md) | Set-based work, `CacheLookup`, explicit caches, parallel batch |
+| [`posting-and-financials`](references/posting-and-financials.md) | Financial dimensions, voucher posting, currency, pricing |
+| [`rdl-design-expressions`](references/rdl-design-expressions.md) | RDL expression syntax, aggregate scope, formatting, where RDL lives |
+| [`report-print-destinations`](references/report-print-destinations.md) | SRSPrintDestinationSettings, SRSPrintMediumType, setting a destination on a controller |
+| [`review-and-checkpoint-workflow`](references/review-and-checkpoint-workflow.md) | Git checkpoint, `d365fo review diff`, accept/reject workflow |
+| [`runtime-frameworks`](references/runtime-frameworks.md) | Feature Management, SysExtension, telemetry, Global Address Book |
+| [`security-hierarchy-trace`](references/security-hierarchy-trace.md) | Role to duty to privilege to entry-point tracing |
+| [`security-modeling`](references/security-modeling.md) | Privilege/duty/role chain, XDS policies, configuration keys |
+| [`ssrs-report-authoring`](references/ssrs-report-authoring.md) | TmpTable to Contract to DP to Controller to AxReport, Print management |
+| [`sysoperation-batch-patterns`](references/sysoperation-batch-patterns.md) | SysOperation batch jobs, RunBase, migration scripts, retryable/async batch |
+| [`system-objects`](references/system-objects.md) | kernel types, xRecord/Common members, system fields, why the index cannot carry them |
+| [`table-scaffolding`](references/table-scaffolding.md) | Table creation, EDTs, relations, indexes, `TableGroup` vs `TableType`, inheritance |
+| [`testing-and-quality`](references/testing-and-quality.md) | SysTestCase, ATL, and the offline validate/lint gates |
+| [`transactions-and-concurrency`](references/transactions-and-concurrency.md) | tts scoping, OCC retry, `UnitOfWork`, error handling |
+| [`warehouse-mobile-app`](references/warehouse-mobile-app.md) | warehouse-app screens, ProcessGuide flows, legacy WHSWorkExecuteDisplay, work execution |
+| [`workflow-authoring`](references/workflow-authoring.md) | `AxWorkflowTemplate`, document class, approvals and tasks |
+| [`x++-class-authoring`](references/x++-class-authoring.md) | Class hierarchy, CoC, access modifiers, constructor patterns |
+| [`xpp-best-practice-rules`](references/xpp-best-practice-rules.md) | BP rules: `today()`, labels, nested loops, alternate keys, `[SysObsolete]` |
+| [`xpp-class-and-method-rules`](references/xpp-class-and-method-rules.md) | Method modifiers, override visibility, optional params, `this` |
+| [`xpp-data-access-apis`](references/xpp-data-access-apis.md) | `Query`/`QueryRun`, SysDa, direct SQL |
+| [`xpp-database-queries`](references/xpp-database-queries.md) | `select` grammar, `crossCompany`, `in`, joins, aggregates |
+| [`xpp-runtime-functions`](references/xpp-runtime-functions.md) | predefined function catalog, arities, gone/obsolete names |
+| [`xpp-runtime-types`](references/xpp-runtime-types.md) | Collections, date/time zones, .NET interop, `Dict*`, macros |
+| [`xpp-statement-and-type-rules`](references/xpp-statement-and-type-rules.md) | `switch`, ternary, null handling, `using`, casting, `is`/`as` |
 <!-- END references -->
