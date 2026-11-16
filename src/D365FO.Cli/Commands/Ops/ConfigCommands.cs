@@ -39,6 +39,7 @@ internal static class ConfigCommandSupport
         "D365FO_FORM_PATTERN_ENFORCE",
         "D365FO_KERNEL_TYPES",
         "MCP_SERVER_MODE",
+        "MCP_TOOLSETS",
         "API_KEY",
         "MCP_HTTP_PORT",
     };
