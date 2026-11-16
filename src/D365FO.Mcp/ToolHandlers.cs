@@ -116,9 +116,13 @@ public sealed partial class ToolHandlers
     {
         var mi = _repo.GetMenuItem(name);
         return mi is null
-            ? ToolResult<object>.Fail("MENU_ITEM_NOT_FOUND", $"Menu item '{name}' not found.")
+            ? ToolResult<object>.Fail("MENU_ITEM_NOT_FOUND", $"Menu item '{name}' not found.",
+                $"To find the menu items that open an object named '{name}', use search (type=menu-items, query={name}).")
             : ToolResult<object>.Success(mi);
     }
+
+    /// <summary>Menu items of every kind whose Object is exactly <paramref name="objectName"/>.</summary>
+    public ToolResult<object> FindMenuItems(string objectName) => MenuItemLookup.ForObject(_repo, objectName);
 
     public ToolResult<object> GetLabel(string file, string language, string key, bool raw = false)
     {
@@ -287,7 +291,8 @@ public sealed partial class ToolHandlers
     {
         var e = _repo.GetDataEntity(name);
         return e is null
-            ? ToolResult<object>.Fail("ENTITY_NOT_FOUND", $"Data entity '{name}' not found.")
+            ? ToolResult<object>.Fail("ENTITY_NOT_FOUND", $"Data entity '{name}' not found.",
+                $"Looked for an AOT name, PublicEntityName or PublicCollectionName equal to '{name}'. For a partial name use search (type=entity, query={name}).")
             : ToolResult<object>.Success(e);
     }
 

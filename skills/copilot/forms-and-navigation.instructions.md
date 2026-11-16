@@ -168,6 +168,23 @@ d365fo generate extension Menu AccountsReceivable --suffix Fleet \
 d365fo validate metadata <path-to-menu-xml> --output json
 ```
 
+### Which menu items open a form
+
+Before adding a menu item, or to find the entry point a security privilege needs,
+ask the index rather than a live environment:
+
+```sh
+# Every Display/Action/Output menu item whose Object is exactly CustTable
+d365fo find menu-items CustTable --output json
+
+# The other direction: what one menu item opens (kind, object, objectType)
+d365fo get menu-item CustTable --output json
+```
+
+Over MCP the same lookup is `search` with `type=menu-items` and `query=<Object>`.
+A menu item's XML omits `<ObjectType>` when it is `Form`, the default; the answer
+reports `Form` with `objectTypeIsDefault: true` rather than leaving it empty.
+
 ### Tiles, form parts and image resources
 
 - A **tile** (`AxTile`) sits on a workspace and opens whatever its `<Type>`
