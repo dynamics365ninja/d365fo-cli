@@ -391,7 +391,8 @@ public static class ToolCatalog
             "Return the effective configuration in use (paths, custom-model patterns, label languages). Each "
             + "D365FO_* key resolves via CLI flag → environment variable → settings.json → default. "
             + "`changes=true` answers a different question with the same tool: what has changed in the working "
-            + "tree (`git diff` over `repo`, default the current directory, from `baseRev` to `headRev`) plus a "
+            + "tree (`git diff` over `repo`, default the current directory, which may be the repository root, a "
+            + "subfolder or a linked worktree, from `baseRev` to `headRev`) plus a "
             + "cheap rule pass over the changed AOT XML — fields with no EDT or label, hard-coded strings, "
             + "dynamic query construction. Shallow on purpose: it tells you whether a build or a BP check is "
             + "worth its minutes, and says plainly when the directory is not a git work tree.",
