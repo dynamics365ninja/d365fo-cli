@@ -170,7 +170,8 @@ public static class ToolCatalog
             "entity | report | service | service-group | menu-item | business-event | security-policy. For tables, set exactly one of " +
             "`relations` | `methods` | `indexes` | `deleteActions` to return just that slice instead of the full table, or " +
             "`detail=brief` for a summary (properties, field name/type/EDT, index names and fields, relation names and " +
-            "related table) at a fraction of the size — read it first when you only need to know what the table holds.",
+            "related table) at a fraction of the size — read it first when you only need to know what the table holds. " +
+            "`detail=brief` also works for class (method signatures, inherited methods counted) and form (data sources and their tables).",
             Schema(("objectType", "string", true), ("name", "string", true),
                    ("relations", "boolean", false), ("methods", "boolean", false),
                    ("indexes", "boolean", false), ("deleteActions", "boolean", false),
@@ -184,15 +185,21 @@ public static class ToolCatalog
                     if (detail != "brief")
                         return D365FO.Core.ToolResult<object>.Fail("BAD_INPUT",
                             $"Unknown detail '{Str(p, "detail")}'.", "Use detail=brief or detail=full (the default).");
-                    if (!string.Equals(StrOr(p, "objectType", ""), "table", StringComparison.OrdinalIgnoreCase))
+                    var briefType = StrOr(p, "objectType", "").ToLowerInvariant();
+                    if (briefType is not ("table" or "class" or "form"))
                         return D365FO.Core.ToolResult<object>.Fail("BAD_INPUT",
-                            $"detail=brief is available for objectType=table only, not '{Str(p, "objectType")}'.",
+                            $"detail=brief is available for objectType=table, class and form only, not '{Str(p, "objectType")}'.",
                             "Drop detail for this objectType.");
                     if (Bool(p, "relations") || Bool(p, "methods") || Bool(p, "indexes") || Bool(p, "deleteActions"))
                         return D365FO.Core.ToolResult<object>.Fail("BAD_INPUT",
                             "detail=brief is a fixed summary shape and does not combine with a slice flag.",
                             "Drop detail=brief to read one slice, or drop the slice flag to read the summary.");
-                    return h.GetTableBrief(name);
+                    return briefType switch
+                    {
+                        "class" => h.GetClassBrief(name),
+                        "form" => h.GetFormBrief(name),
+                        _ => h.GetTableBrief(name),
+                    };
                 }
                 return StrOr(p, "objectType", "").ToLowerInvariant() switch
                 {
@@ -335,7 +342,7 @@ public static class ToolCatalog
             "`coverage` names what was answered from the index, from disk, and not searched. `Owner.member` " +
             "searches the member and keeps methods that also mention Owner (text-based, flagged in `match`). " +
             "`xref: true`: the compiler's cross-reference (DYNAMICSXREFDB) — complete and compiler-resolved, " +
-            "`kind` is a reference kind (Call/Read/Set/Type/…), no `model`/`allModels`. Returns one row per " +
+            "`kind` is a reference kind (Call/Type/Extends/Implements/Property/Attribute/…), no `model`/`allModels`. Returns one row per " +
             "referencing object (`limit` caps objects, default 200); `lines: N` returns one row per method with " +
             "up to N sample lines (xref: one row per reference with line/column).",
             Schema(("name", "string", true), ("kind", "string", false), ("model", "string", false), ("limit", "integer", false),
@@ -384,7 +391,8 @@ public static class ToolCatalog
             "Return the effective configuration in use (paths, custom-model patterns, label languages). Each "
             + "D365FO_* key resolves via CLI flag → environment variable → settings.json → default. "
             + "`changes=true` answers a different question with the same tool: what has changed in the working "
-            + "tree (`git diff` over `repo`, default the current directory, from `baseRev` to `headRev`) plus a "
+            + "tree (`git diff` over `repo`, default the current directory, which may be the repository root, a "
+            + "subfolder or a linked worktree, from `baseRev` to `headRev`) plus a "
             + "cheap rule pass over the changed AOT XML — fields with no EDT or label, hard-coded strings, "
             + "dynamic query construction. Shallow on purpose: it tells you whether a build or a BP check is "
             + "worth its minutes, and says plainly when the directory is not a git work tree.",

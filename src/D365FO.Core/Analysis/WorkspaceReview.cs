@@ -19,10 +19,24 @@ public static class WorkspaceReview
 {
     public static ToolResult<object> Diff(string? repoPath, string baseRev = "HEAD", string? headRev = null)
     {
-        var repo = string.IsNullOrWhiteSpace(repoPath) ? Directory.GetCurrentDirectory() : repoPath!;
-        if (!Directory.Exists(Path.Combine(repo, ".git")))
-            return ToolResult<object>.Fail("NOT_A_GIT_REPO", $"No .git found at {repo}",
-                "Pass a repository path, or run this from inside a git work tree.");
+        var start = string.IsNullOrWhiteSpace(repoPath) ? Directory.GetCurrentDirectory() : repoPath!;
+
+        // Ask git where the work tree is rather than looking for a .git directory: in a linked
+        // worktree (`git worktree add`) .git is a file, and from a subfolder there is no .git at
+        // all. git diff names files relative to the top level, so that is the root to read from.
+        if (!Directory.Exists(start))
+            return NotAGitRepo(start);
+        (int Exit, string StdOut, string StdErr) top;
+        try { top = RunGit(new[] { "-C", start, "rev-parse", "--show-toplevel" }); }
+        catch (System.ComponentModel.Win32Exception)
+        {
+            return ToolResult<object>.Fail("GIT_NOT_FOUND", "git could not be started.",
+                "Install git and make sure it is on PATH.");
+        }
+        var repo = top.StdOut.Trim();
+        if (top.Exit != 0 || repo.Length == 0)
+            return NotAGitRepo(start);
+        repo = Path.GetFullPath(repo);
 
         var args = new List<string> { "-C", repo, "--no-pager", "diff", "--name-only" };
         args.Add(string.IsNullOrWhiteSpace(baseRev) ? "HEAD" : baseRev);
@@ -53,6 +67,7 @@ public static class WorkspaceReview
 
         return ToolResult<object>.Success(new
         {
+            repo,
             baseRev,
             headRev,
             changedFiles = changed.Count,
@@ -60,6 +75,10 @@ public static class WorkspaceReview
             violations,
         });
     }
+
+    private static ToolResult<object> NotAGitRepo(string path) =>
+        ToolResult<object>.Fail("NOT_A_GIT_REPO", $"{path} is not inside a git work tree.",
+            "Pass a repository path (the root, a subfolder or a linked worktree), or run this from inside a git work tree.");
 
     public static void InspectTableXml(string path, string text, List<object> bag)
     {

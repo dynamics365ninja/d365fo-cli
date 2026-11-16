@@ -95,7 +95,8 @@ public sealed class GenerateBusinessEventCommand : Command<GenerateBusinessEvent
         // about the existing AOT, so it is what the gate proves.
         var gate = GenerateInstaller.Gate(
             settings, settings.Name, eventDoc,
-            requiredSymbols: string.IsNullOrWhiteSpace(settings.PrimaryTable) ? null : new[] { settings.PrimaryTable! });
+            requiredSymbols: string.IsNullOrWhiteSpace(settings.PrimaryTable) ? null : new[] { settings.PrimaryTable! },
+            generatedObjects: new[] { settings.Name, contractName });
         if (gate.Failure is not null) return RenderHelpers.Render(kind, gate.Failure);
 
         try
