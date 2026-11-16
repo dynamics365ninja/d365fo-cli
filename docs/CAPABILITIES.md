@@ -307,6 +307,7 @@ Pass `--project <path>.rnrproj` to any `generate` command to list every object i
 | `modify add-field` | Add a field to a live table; the concrete `AxTableField*` subtype is resolved from the EDT's indexed base type, and a base enum becomes `AxTableFieldEnum` with `EnumType`. A type the index cannot resolve is guessed from its name and reported as `EDT_BASETYPE_UNRESOLVED`. |
 | `modify add-enum-value` | Add a value to a live base enum — positional, never a hard-coded ordinal. |
 | `modify add-control` | Add a control to a live form's Design, optionally inside `--parent` and bound to `--datasource`/`--datafield`. |
+| `modify batch` | Several steps in one read-edit-write: `modify batch <KIND> <OBJECT> --operations <JSON>` (or `--operations-file <PATH>`, `-` for stdin) applies them to one object, and a refused step discards the batch. When the steps name their own objects (`{"kind":"table","object":"MyTable","op":"property",…}`) the kind and object arguments become optional defaults, and one process with one bridge applies every object (#268): steps are grouped by object, each object is all-or-nothing, the others still run, and `data.results` reports each object. `BATCH_PARTIAL` when some were written and some refused; `data.undo` is the `d365fo undo --steps N` that reverts the batch. `--dry-run` applies the steps in memory and reports them without journaling or writing. MCP: `modify_object` `operations` (+ `dryRun`). |
 
 #### Extension fallback
 

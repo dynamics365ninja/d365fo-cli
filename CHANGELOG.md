@@ -19,6 +19,24 @@ was ported from.
 
 ## [Unreleased]
 
+### Added — `modify batch` over many objects in one call, and `--dry-run` (#268)
+
+A clean-up such as setting `OperationalDomain` on every new table was one process per object: about
+20 tables took 113 s, a failure halfway left the rest to be sorted out by hand, and agents fell back
+to Python scripts that edited the AOT XML around every check.
+
+- **Steps can name their object:** `{"kind":"table","object":"ContosoOrderTable","op":"property",
+  "member":"OperationalDomain","value":"Company"}`. With such steps, `modify batch` takes
+  `[KIND] [OBJECT]` as optional defaults and applies every object in one process, with one index
+  connection and one bridge. Steps are grouped by object, and each object is one read-edit-write.
+- **A refused object does not stop the others.** Each object is all-or-nothing. `data.results` has
+  one entry per object (steps, ok, data or error). The batch fails `BATCH_PARTIAL` when some objects
+  were written and some refused, and `data.undo` names the `d365fo undo --steps N` that reverts it.
+- **`--dry-run`** reads each object and applies the steps in memory, then reports what would change.
+  Nothing is journaled or written. It works on a one-object batch too.
+- `--operations-file -` reads the steps from stdin. `op` is accepted for `operation`.
+- **MCP:** `modify_object` takes the same steps in `operations`, and `dryRun`. `kind` and `name`
+  are no longer required when the steps name their objects.
 ### Added — `modify add-method` adds an instance or static method to an existing object (#256)
 
 `modify method` only changes a method that exists, and a new name failed `METHOD_NOT_FOUND`, so

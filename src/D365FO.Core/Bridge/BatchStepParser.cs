@@ -26,12 +26,18 @@ namespace D365FO.Core.Bridge;
 public static class BatchStepParser
 {
     /// <summary>
-    /// Turn a JSON array of steps into requests bound to one object.
+    /// Turn a JSON array of steps into requests.
     /// </summary>
+    /// <remarks>
+    /// A step may name its own object with <c>"kind"</c>, <c>"object"</c> and <c>"model"</c>
+    /// (issue #268); the arguments are the defaults for a step that does not. Whether the steps
+    /// named any object is what <see cref="NamesObjects(JsonElement)"/> reports, and decides
+    /// between a batch on one object and a batch over several.
+    /// </remarks>
     /// <param name="json">The step array. Anything else throws.</param>
-    /// <param name="kind">Object kind every step inherits.</param>
-    /// <param name="objectName">Object every step applies to.</param>
-    /// <param name="model">Model every step inherits, when the caller pinned one.</param>
+    /// <param name="kind">Object kind a step inherits when it names none.</param>
+    /// <param name="objectName">Object a step applies to when it names none.</param>
+    /// <param name="model">Model a step inherits when it names none.</param>
     /// <exception cref="InvalidOperationException">The array, or one step, is not usable.</exception>
     public static List<ObjectModifyEngine.ModifyRequest> Parse(
         string json, string kind, string objectName, string? model)
@@ -53,7 +59,9 @@ public static class BatchStepParser
         foreach (var element in array.EnumerateArray())
         {
             index++;
-            var name = Str(element, "operation")
+            if (element.ValueKind != JsonValueKind.Object)
+                throw new InvalidOperationException($"step {index} is not an object");
+            var name = Str(element, "operation") ?? Str(element, "op")
                        ?? throw new InvalidOperationException($"step {index} has no \"operation\"");
             if (!ObjectModifyEngine.TryParseOperation(name, out var operation))
                 throw new InvalidOperationException($"step {index}: unknown operation \"{name}\"");
@@ -61,9 +69,9 @@ public static class BatchStepParser
             steps.Add(new ObjectModifyEngine.ModifyRequest
             {
                 Operation = operation,
-                Kind = kind,
-                ObjectName = objectName,
-                Model = model,
+                Kind = Str(element, "kind") ?? kind,
+                ObjectName = Str(element, "object") ?? Str(element, "objectName") ?? objectName,
+                Model = Str(element, "model") ?? model,
                 Member = Str(element, "member") ?? Str(element, "name") ?? "",
                 Value = Str(element, "value"),
                 Type = Str(element, "type") ?? Str(element, "edt"),
@@ -90,6 +98,19 @@ public static class BatchStepParser
         }
         return steps;
     }
+
+    /// <summary>True when any step names its own object (<c>"object"</c> or <c>"objectName"</c>).</summary>
+    public static bool NamesObjects(string json)
+    {
+        using var doc = JsonDocument.Parse(json);
+        return NamesObjects(doc.RootElement);
+    }
+
+    /// <inheritdoc cref="NamesObjects(string)"/>
+    public static bool NamesObjects(JsonElement array) =>
+        array.ValueKind == JsonValueKind.Array
+        && array.EnumerateArray().Any(e => e.ValueKind == JsonValueKind.Object
+                                           && (Str(e, "object") is not null || Str(e, "objectName") is not null));
 
     private static string? Str(JsonElement element, string name) =>
         element.TryGetProperty(name, out var value) && value.ValueKind == JsonValueKind.String

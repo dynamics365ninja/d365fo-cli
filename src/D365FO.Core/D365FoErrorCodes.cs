@@ -99,4 +99,10 @@ public static class D365FoErrorCodes
     /// </summary>
     public const string MemberNotFound = "MEMBER_NOT_FOUND";
     public const string AlreadyExists = "ALREADY_EXISTS";
+
+    /// <summary>
+    /// A batch over several objects wrote some of them and refused others (issue #268). The
+    /// result still carries every object's outcome in <c>data.results</c>.
+    /// </summary>
+    public const string BatchPartial = "BATCH_PARTIAL";
 }

@@ -1579,6 +1579,12 @@ public sealed partial class ToolHandlers
     public ToolResult<object> ModifyObject(D365FO.Core.Bridge.ObjectModifyEngine.ModifyRequest request)
         => D365FO.Core.Bridge.ObjectModifyEngine.Modify(request, _repo);
 
+    /// <summary>A batch whose steps name their own objects: one bridge for all of them (#268).</summary>
+    public ToolResult<object> ModifyMany(
+        IReadOnlyList<D365FO.Core.Bridge.ObjectModifyEngine.ModifyRequest> steps,
+        D365FO.Core.Bridge.ObjectModifyEngine.ModifyRequest options)
+        => D365FO.Core.Bridge.ObjectModifyEngine.ModifyMany(steps, options, _repo);
+
     public ToolResult<object> GenerateClass(
         string name, string? extends, bool nonFinal,
         string? installTo, string? outPath, bool overwrite, string? groundingToken = null)

@@ -1,6 +1,7 @@
 ﻿using System.Text.Json;
 using D365FO.Core;
 using D365FO.Core.Bridge;
+using D365FO.Core.Index;
 using Spectre.Console.Cli;
 
 namespace D365FO.Cli.Commands.Modify;
@@ -143,7 +144,8 @@ public sealed class ModifyRemoveEntryPointCommand : Command<ModifyRemoveEntryPoi
 }
 
 /// <summary>
-/// <c>d365fo modify batch</c> — several changes to one object in a single read-edit-write.
+/// <c>d365fo modify batch</c> — several changes to one object in a single read-edit-write, or,
+/// when the steps name their objects, to many objects in one process (issue #268).
 /// </summary>
 /// <remarks>
 /// Adding a field, an index over it and a field group showing it is three commands, three bridge
@@ -156,21 +158,25 @@ public sealed class ModifyBatchCommand : Command<ModifyBatchCommand.Settings>
 {
     public sealed class Settings : ModifyObjectSettings
     {
-        [CommandArgument(0, "<KIND>")]
-        [System.ComponentModel.Description("Object kind: table, form, enum, query, securityprivilege, …")]
-        public string Kind { get; init; } = "";
+        [CommandArgument(0, "[KIND]")]
+        [System.ComponentModel.Description("Object kind: table, form, enum, query, securityprivilege, … Omit it when every step names its own \"kind\" and \"object\".")]
+        public string? Kind { get; init; }
 
-        [CommandArgument(1, "<OBJECT>")]
-        [System.ComponentModel.Description("Object every step applies to.")]
-        public string ObjectName { get; init; } = "";
+        [CommandArgument(1, "[OBJECT]")]
+        [System.ComponentModel.Description("Object every step applies to. Omit it when the steps name their objects; a step that names none takes this one.")]
+        public string? ObjectName { get; init; }
 
         [CommandOption("--operations <JSON>")]
         [System.ComponentModel.Description("JSON array of steps, e.g. [[{\"operation\":\"add-field\",\"member\":\"Note\",\"type\":\"Notes\"},{\"operation\":\"add-index\",\"member\":\"NoteIdx\",\"fields\":[[\"Note\"]]}]]. Use --operations-file for anything long.")]
         public string? Operations { get; init; }
 
         [CommandOption("--operations-file <PATH>")]
-        [System.ComponentModel.Description("File holding the same JSON array. Shell quoting makes a long inline array painful; this avoids it.")]
+        [System.ComponentModel.Description("File holding the same JSON array; `-` reads it from stdin. Shell quoting makes a long inline array painful; this avoids it.")]
         public string? OperationsFile { get; init; }
+
+        [CommandOption("--dry-run")]
+        [System.ComponentModel.Description("Read each object and apply the steps in memory, then report what would change. Nothing is journaled or written.")]
+        public bool DryRun { get; init; }
     }
 
     public override int Execute(CommandContext ctx, Settings settings)
@@ -178,7 +184,11 @@ public sealed class ModifyBatchCommand : Command<ModifyBatchCommand.Settings>
         var outputKind = OutputMode.Resolve(settings.Output);
 
         var json = settings.Operations;
-        if (!string.IsNullOrWhiteSpace(settings.OperationsFile))
+        if (settings.OperationsFile == "-")
+        {
+            json = Console.In.ReadToEnd();
+        }
+        else if (!string.IsNullOrWhiteSpace(settings.OperationsFile))
         {
             if (!File.Exists(settings.OperationsFile))
             {
@@ -198,9 +208,13 @@ public sealed class ModifyBatchCommand : Command<ModifyBatchCommand.Settings>
         }
 
         List<ObjectModifyEngine.ModifyRequest> steps;
+        bool manyObjects;
         try
         {
-            steps = BatchStepParser.Parse(json!, settings.Kind, settings.ObjectName, settings.Model);
+            steps = BatchStepParser.Parse(json!, settings.Kind ?? "", settings.ObjectName ?? "", settings.Model);
+            manyObjects = BatchStepParser.NamesObjects(json!)
+                          || string.IsNullOrWhiteSpace(settings.Kind)
+                          || string.IsNullOrWhiteSpace(settings.ObjectName);
         }
         catch (Exception ex)
         {
@@ -214,18 +228,27 @@ public sealed class ModifyBatchCommand : Command<ModifyBatchCommand.Settings>
                 D365FoErrorCodes.BadInput, "The step array is empty."));
         }
 
-        return ModifyRunner.Run(settings, new ObjectModifyEngine.ModifyRequest
+        var header = new ObjectModifyEngine.ModifyRequest
         {
             // Placeholders: the header names the object, the steps carry the operations.
             Operation = ObjectModifyEngine.Operation.SetProperty,
-            Kind = settings.Kind,
-            ObjectName = settings.ObjectName,
+            Kind = settings.Kind ?? "",
+            ObjectName = settings.ObjectName ?? "",
             Member = "batch",
             Batch = steps,
             Model = settings.Model,
+            DryRun = settings.DryRun,
             ExtensionSuffix = settings.ResolvedExtensionSuffix,
             ExtensionModel = settings.ExtensionModel,
             RequireExtension = settings.RequireExtension,
-        });
+        };
+
+        if (!manyObjects)
+            return ModifyRunner.Run(settings, header);
+
+        // Steps that name their objects: one process and one bridge for all of them (#268).
+        MetadataRepository? repo = null;
+        try { repo = RepoFactory.Create(); } catch { /* engine surfaces the degraded-mode warning */ }
+        return RenderHelpers.Render(outputKind, ObjectModifyEngine.ModifyMany(steps, header, repo));
     }
 }
