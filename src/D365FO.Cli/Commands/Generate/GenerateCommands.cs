@@ -61,7 +61,8 @@ internal static class GenerateInstaller
         string targetObject,
         System.Xml.Linq.XDocument? doc = null,
         IEnumerable<(string Owner, string Method)>? requiredMethods = null,
-        IEnumerable<string>? requiredSymbols = null)
+        IEnumerable<string>? requiredSymbols = null,
+        IEnumerable<string>? generatedObjects = null)
     {
         // --project is checked before anything is written: a project that is not there would
         // otherwise surface only after every object had landed, as one warning per file.
@@ -81,7 +82,7 @@ internal static class GenerateInstaller
 
         var gate = GroundingGate.Check(
             settings.GroundingToken, targetObject, doc, requiredMethods, requiredSymbols,
-            RequestedValues(settings), TryRepo());
+            RequestedValues(settings), TryRepo(), generatedObjects);
         gate.Project = project;
         return gate;
     }

@@ -75,9 +75,12 @@ NOT report added classes, modified fields, or new CoC wrappers. It only
 scans changed `.xml`/`.xpp` files and flags a small fixed set of issues:
 fields with no `<ExtendedDataType>` or no `<Label>` in changed
 `AxTable/…` XML, and hard-coded string literals / dynamic-`Query`
-construction in changed `AxClass/…` XML. Output shape: `{baseRev, headRev,
-changedFiles, violationCount, violations: [{file, rule, severity, message,
-…}]}`.
+construction in changed `AxClass/…` XML. Output shape: `{repo, baseRev,
+headRev, changedFiles, violationCount, violations: [{file, rule, severity,
+message, …}]}`. `--repo` (default the current directory) may be the
+repository root, any folder inside it, or a linked `git worktree`. `repo` in
+the output is the work-tree root git resolved, and the diff always covers the
+whole work tree.
 
 | Tool | Shows | Best for |
 |---|---|---|
