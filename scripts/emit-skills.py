@@ -214,10 +214,11 @@ def replace_region(text: str, name: str, body: str) -> str:
     return text[: i + len(begin)] + "\n" + body.rstrip("\n") + "\n" + text[j:]
 
 
-# How each router's topic table names a topic: the Copilot router lazily loads
-# references/<id>.md by name; the Claude router links the sibling topic skill.
+# How each router's topic table names a topic: the Copilot router links its own
+# references/<id>.md (a bare id made agents guess `.github/<id>.md`, issue #264);
+# the Claude router links the sibling topic skill.
 SKILL_MD_ROW = {
-    "d365fo-cli": ("| Resource file | Covers |", "| `{id}` | {covers} |"),
+    "d365fo-cli": ("| Resource file | Covers |", "| [`{id}`](references/{id}.md) | {covers} |"),
     "anthropic": ("| Skill | Covers |", "| [`{id}`](../{id}/SKILL.md) | {covers} |"),
     "copilot": ("| Instruction file | Covers |", "| [`{id}`]({id}.instructions.md) | {covers} |"),
 }

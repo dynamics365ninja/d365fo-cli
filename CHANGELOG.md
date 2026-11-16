@@ -19,6 +19,14 @@ was ported from.
 
 ## [Unreleased]
 
+### Fixed — the Copilot skill names the path of each topic file (#264)
+
+The topic table of `skills/d365fo-cli/SKILL.md` listed bare ids (`table-scaffolding`), and
+Copilot in Visual Studio looked for `.github/table-scaffolding.md`, which does not exist. Each
+row now links `references/<id>.md`. The section also says where the folder sits in an installed
+repo, and that `d365fo knowledge get <id>` returns the same text when the file tool cannot open
+files outside the solution.
+
 ### Added — the commands agents guess now run, and an unknown sub-command names the real ones
 
 In a sample of real agent sessions, 15 of 43 failed CLI calls were commands the agent guessed
