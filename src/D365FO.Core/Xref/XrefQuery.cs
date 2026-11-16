@@ -34,22 +34,33 @@ namespace D365FO.Core.Xref
             "Server=.;Database=DYNAMICSXREFDB;Integrated Security=true;Connection Timeout=5";
 
         /// <summary>
-        /// Reference kinds by their <c>[References].Kind</c> id, from the X++ compiler source
-        /// (Microsoft.Dynamics.AX.Metadata.Xref).
+        /// Reference kinds by their <c>[References].Kind</c> id: the values of the compiler's
+        /// <c>Microsoft.Dynamics.AX.Framework.Xlnt.XReference.CrossReferenceKind</c> enum
+        /// (XReferenceProviders.dll; 0 Any, 1 MethodCall, 2 TypeReference, 3 InterfaceImplementation,
+        /// 4 ClassExtended, 5 TestCall, 6 Property, 7 Attribute, 8 TestHelperCall, 9 Tag,
+        /// 10 MethodOverride), under shorter labels.
         /// </summary>
         public static readonly string[] ReferenceKinds =
-            { "Declaration", "Set", "Read", "Call", "Reference", "Type", "Extends", "Implements" };
+            { "Any", "Call", "Type", "Implements", "Extends", "TestCall", "Property", "Attribute",
+              "TestHelperCall", "Tag", "Override" };
+
+        /// <summary>The enum's own names, accepted as filters next to the labels.</summary>
+        private static readonly string[] CrossReferenceKindNames =
+            { "Any", "MethodCall", "TypeReference", "InterfaceImplementation", "ClassExtended", "TestCall",
+              "Property", "Attribute", "TestHelperCall", "Tag", "MethodOverride" };
 
         /// <summary>The label for a kind id; unknown ids read as <c>Kind&lt;id&gt;</c>.</summary>
         public static string KindLabel(int id) =>
             id >= 0 && id < ReferenceKinds.Length ? ReferenceKinds[id] : "Kind" + id;
 
-        /// <summary>The id for a kind label (case-insensitive), or -1.</summary>
+        /// <summary>The id for a kind label or enum name (case-insensitive), or -1.</summary>
         public static int KindId(string label)
         {
             if (string.IsNullOrWhiteSpace(label)) return -1;
             for (int i = 0; i < ReferenceKinds.Length; i++)
-                if (string.Equals(ReferenceKinds[i], label.Trim(), StringComparison.OrdinalIgnoreCase)) return i;
+                if (string.Equals(ReferenceKinds[i], label.Trim(), StringComparison.OrdinalIgnoreCase)
+                    || string.Equals(CrossReferenceKindNames[i], label.Trim(), StringComparison.OrdinalIgnoreCase))
+                    return i;
             return -1;
         }
 

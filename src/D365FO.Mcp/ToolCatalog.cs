@@ -335,7 +335,7 @@ public static class ToolCatalog
             "`coverage` names what was answered from the index, from disk, and not searched. `Owner.member` " +
             "searches the member and keeps methods that also mention Owner (text-based, flagged in `match`). " +
             "`xref: true`: the compiler's cross-reference (DYNAMICSXREFDB) — complete and compiler-resolved, " +
-            "`kind` is a reference kind (Call/Read/Set/Type/…), no `model`/`allModels`. Returns one row per " +
+            "`kind` is a reference kind (Call/Type/Extends/Implements/Property/Attribute/…), no `model`/`allModels`. Returns one row per " +
             "referencing object (`limit` caps objects, default 200); `lines: N` returns one row per method with " +
             "up to N sample lines (xref: one row per reference with line/column).",
             Schema(("name", "string", true), ("kind", "string", false), ("model", "string", false), ("limit", "integer", false),

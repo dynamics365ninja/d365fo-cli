@@ -63,7 +63,7 @@ public static class XrefReferences
 
     /// <summary>Where-used for <paramref name="symbol"/> from the compiler's cross-reference.</summary>
     /// <param name="symbol">A name, <c>Owner.member</c>, an AOT path, or a label reference.</param>
-    /// <param name="kind">A reference kind (<c>Call</c>, <c>Read</c>, …), or null.</param>
+    /// <param name="kind">A reference kind (<c>Call</c>, <c>Type</c>, …), or null.</param>
     /// <param name="model">Must be null: the database is keyed by module, not model.</param>
     /// <param name="limit">Most objects (names-only) or references (<paramref name="lines"/> &gt; 0).</param>
     /// <param name="lines">0 for one row per referencing object; above 0 for one row per reference.</param>
