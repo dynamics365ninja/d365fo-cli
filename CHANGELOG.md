@@ -19,6 +19,22 @@ was ported from.
 
 ## [Unreleased]
 
+### Fixed — `review diff` works in a linked worktree and from a subfolder (#255)
+
+`review diff` and MCP `get_workspace_info(changes=true)` refused to run with `NOT_A_GIT_REPO`
+unless the directory they were given held a `.git` folder. In a linked worktree (`git worktree
+add`) `.git` is a file, and in any subfolder of a repository there is no `.git` at all, so both
+were refused although `git diff` itself works there.
+
+- **The work tree is resolved with `git rev-parse --show-toplevel`.** `--repo` (MCP `repo`) and
+  the current directory may now be the repository root, any folder inside it, or a linked
+  worktree. Changed files are read from the resolved root, which is where `git diff --name-only`
+  paths are relative to, so the rule pass also runs from a subfolder. The diff still covers the
+  whole work tree.
+- **The result names the root it reviewed** in a new `repo` field.
+- **A path that is not inside a work tree is still `NOT_A_GIT_REPO`**, and a missing `git` is now
+  `GIT_NOT_FOUND` with a hint instead of an unhandled exception.
+
 ### Fixed — EDT base types are in the index, so generated fields get their real type (#233)
 
 Every EDT in the index had an empty `BaseType`: the extractor read it off the root element
