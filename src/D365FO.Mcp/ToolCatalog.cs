@@ -123,7 +123,9 @@ public static class ToolCatalog
         new Descriptor("search", ToolEffect.Read,
             "Unified metadata search across the index. `type` selects the kind: " +
             "class | table | edt | enum | query | view | entity | report | service | workflow | " +
-            "business-event | security-policy | configuration-key | tile | workspace | batch-jobs | any. " +
+            "business-event | security-policy | configuration-key | tile | workspace | batch-jobs | menu-items | any. " +
+            "`menu-items` answers \"which menu items open form X\": the Display/Action/Output menu items whose Object is " +
+            "exactly `query`, with kind, objectType, label and model. " +
             "Pass `queries` (array) to run several searches in one call (batch). Omit `type` (or use `any`) " +
             "for a scope-agnostic search across every kind. `model` filters class/table searches; " +
             "`category` filters business-event searches.",
@@ -154,7 +156,8 @@ public static class ToolCatalog
                     "tile"              => h.SearchTiles(query, limit),
                     "workspace"         => h.SearchWorkspaces(query, limit),
                     "batch-jobs"        => h.FindBatchJobs(model),
-                    _                   => h.SearchAny(query, limit),
+                    "menu-items"        => h.FindMenuItems(query),
+                    _                  => h.SearchAny(query, limit),
                 };
             }),
 
@@ -170,7 +173,9 @@ public static class ToolCatalog
             "entity | report | service | service-group | menu-item | business-event | security-policy. For tables, set exactly one of " +
             "`relations` | `methods` | `indexes` | `deleteActions` to return just that slice instead of the full table, or " +
             "`detail=brief` for a summary (properties, field name/type/EDT, index names and fields, relation names and " +
-            "related table) at a fraction of the size — read it first when you only need to know what the table holds.",
+            "related table) at a fraction of the size — read it first when you only need to know what the table holds. " +
+            "An entity's `name` may be its AOT name, PublicEntityName or PublicCollectionName (the OData entity set in a " +
+            "URL or an integration error); `matchedOn` says which matched.",
             Schema(("objectType", "string", true), ("name", "string", true),
                    ("relations", "boolean", false), ("methods", "boolean", false),
                    ("indexes", "boolean", false), ("deleteActions", "boolean", false),

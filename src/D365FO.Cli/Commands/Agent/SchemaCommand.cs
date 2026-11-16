@@ -178,7 +178,7 @@ public sealed class SchemaCommand : Command<SchemaCommand.Settings>
         C("get privilege", "Get security privilege entry points.", ["<NAME>"], ["--output"], ["security_info (mode=artifact,type=privilege)"]),
         C("get query", "Get query metadata and joins.", ["<NAME>"], ["--output"], ["get_object_info (objectType=query)"]),
         C("get view", "Get view fields and source query.", ["<NAME>"], ["--output"], ["get_object_info (objectType=view)"]),
-        C("get entity", "Get data entity metadata and OData names.", ["<NAME>"], ["--output"], ["get_object_info (objectType=entity)"]),
+        C("get entity", "Get data entity metadata and OData names. NAME is the AOT name, the PublicEntityName or the PublicCollectionName (OData entity set); `matchedOn` says which.", ["<NAME>"], ["--output"], ["get_object_info (objectType=entity)"]),
         C("get report", "Get report datasets.", ["<NAME>"], ["--output"], ["get_object_info (objectType=report)"]),
         C("get service", "Get service operations.", ["<NAME>"], ["--output"], ["get_object_info (objectType=service)"]),
         C("get service-group", "Get service group members.", ["<NAME>"], ["--output"], ["get_object_info (objectType=service-group)"]),
@@ -269,6 +269,7 @@ public sealed class SchemaCommand : Command<SchemaCommand.Settings>
         C("get security-policy", "XDS security policy: constrained table, query, operation type.", ["<NAME>"], ["--output"], ["get_object_info (objectType=security-policy)"]),
 
         C("find batch-jobs", "Find all RunBaseBatch / SysOperationServiceController subclasses.", [], ["--model", "--output"], ["search (type=batch-jobs)"]),
+        C("find menu-items", "Which menu items open a form, class or report: Display/Action/Output items whose Object is exactly <OBJECT>, with kind, object type, label and model.", ["<OBJECT>"], ["--output"], ["search (type=menu-items)"]),
 
         C("resolve label", "Resolve @SYS12345-style label token to its text.", ["<TOKEN>"], ["--lang", "--output"], ["labels (action=resolve)"]),
 

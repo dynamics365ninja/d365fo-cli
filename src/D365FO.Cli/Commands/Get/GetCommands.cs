@@ -333,6 +333,7 @@ public sealed class GetMenuItemCommand : Command<GetMenuItemCommand.Settings>
     public sealed class Settings : D365OutputSettings
     {
         [CommandArgument(0, "<NAME>")]
+        [System.ComponentModel.Description("Menu item name. The answer names its kind (Display/Action/Output) and the object it opens (object, objectType).")]
         public string Name { get; init; } = "";
     }
 
@@ -342,7 +343,8 @@ public sealed class GetMenuItemCommand : Command<GetMenuItemCommand.Settings>
         var repo = RepoFactory.Create();
         var mi = repo.GetMenuItem(settings.Name);
         var result = mi is null
-            ? ToolResult<object>.Fail("MENU_ITEM_NOT_FOUND", $"Menu item '{settings.Name}' not found.")
+            ? ToolResult<object>.Fail("MENU_ITEM_NOT_FOUND", $"Menu item '{settings.Name}' not found.",
+                $"To find the menu items that open an object named '{settings.Name}', run `d365fo find menu-items {settings.Name}`.")
             : ToolResult<object>.Success(mi);
         return RenderHelpers.Render(kind, result);
     }
@@ -632,7 +634,8 @@ public sealed class GetEntityCommand : Command<GetEntityCommand.Settings>
         var kind = OutputMode.Resolve(settings.Output);
         var e = RepoFactory.Create().GetDataEntity(settings.Name);
         if (e is null)
-            return RenderHelpers.Render(kind, ToolResult<object>.Fail("ENTITY_NOT_FOUND", $"Data entity '{settings.Name}' not found."));
+            return RenderHelpers.Render(kind, ToolResult<object>.Fail("ENTITY_NOT_FOUND", $"Data entity '{settings.Name}' not found.",
+                $"Looked for an AOT name, PublicEntityName or PublicCollectionName equal to '{settings.Name}'. For a partial name run `d365fo search entity {settings.Name}`."));
 
         if (settings.ODataMetadata)
         {

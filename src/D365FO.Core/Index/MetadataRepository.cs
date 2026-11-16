@@ -890,13 +890,43 @@ public sealed partial class MetadataRepository
         }
     }
 
+    private const string MenuItemColumns =
+        "mi.Name, mi.Kind, mi.Object, mi.ObjectType, mi.Label, m.Name AS Model";
+
+    /// <summary>
+    /// AOT XML omits <c>ObjectType</c> when it is the default, <c>Form</c> — 374 of the first 400
+    /// display menu items in ApplicationSuite carry no such element — so the column is null for
+    /// most of them, and a null read as "unknown target" rather than "a form". Applied in C#
+    /// rather than SQL: a computed column has no declared type, and on an empty result Dapper
+    /// then cannot match the record's constructor.
+    /// </summary>
+    private static MenuItemInfo WithDefaultObjectType(MenuItemInfo mi)
+        => string.IsNullOrEmpty(mi.ObjectType) ? mi with { ObjectType = "Form", ObjectTypeIsDefault = true } : mi;
+
     public MenuItemInfo? GetMenuItem(string name)
     {
         using var conn = OpenReadOnly();
-        return conn.QueryFirstOrDefault<MenuItemInfo>(@"
-            SELECT mi.Name, mi.Kind, mi.Object, mi.ObjectType, mi.Label, m.Name AS Model
+        var mi = conn.QueryFirstOrDefault<MenuItemInfo>($@"
+            SELECT {MenuItemColumns}
             FROM MenuItems mi JOIN Models m ON m.ModelId = mi.ModelId
             WHERE mi.Name = @name LIMIT 1", new { name });
+        return mi is null ? null : WithDefaultObjectType(mi);
+    }
+
+    /// <summary>
+    /// Menu items of every kind (Display, Action, Output) whose <c>Object</c> is exactly
+    /// <paramref name="objectName"/> — "which menu items open form X". Case-insensitive, as X++
+    /// names are. Custom models first, then by kind and name.
+    /// </summary>
+    public IReadOnlyList<MenuItemInfo> FindMenuItemsByObject(string objectName)
+    {
+        using var conn = OpenReadOnly();
+        return conn.Query<MenuItemInfo>($@"
+            SELECT {MenuItemColumns}
+            FROM MenuItems mi JOIN Models m ON m.ModelId = mi.ModelId
+            WHERE mi.Object = @o COLLATE NOCASE
+            ORDER BY m.IsCustom DESC, mi.Kind, mi.Name", new { o = objectName })
+            .Select(WithDefaultObjectType).ToList();
     }
 
     public IReadOnlyList<RelationInfo> GetTableRelations(string table)
@@ -1615,6 +1645,13 @@ public sealed partial class MetadataRepository
             p).ToList();
     }
 
+    /// <summary>
+    /// One data entity by its AOT name, its <c>PublicEntityName</c>, or its
+    /// <c>PublicCollectionName</c> — the entity set an OData URL and an integration error name
+    /// (<c>/data/CustomersV3</c>). The AOT name wins over a public name, so an entity whose
+    /// name another entity happens to publish is still found under its own.
+    /// <see cref="DataEntityDetails.MatchedOn"/> says which of the three matched.
+    /// </summary>
     public DataEntityDetails? GetDataEntity(string name)
     {
         using var conn = OpenReadOnly();
@@ -1622,12 +1659,18 @@ public sealed partial class MetadataRepository
             SELECT e.EntityId, e.Name, m.Name AS Model, e.PublicEntityName, e.PublicCollectionName,
                    e.StagingTable, e.QueryName, e.Label, e.SourcePath
             FROM DataEntities e JOIN Models m ON m.ModelId = e.ModelId
-            WHERE e.Name = @n OR e.PublicEntityName = @n LIMIT 1", new { n = name });
+            WHERE e.Name = @n OR e.PublicEntityName = @n OR e.PublicCollectionName = @n
+            ORDER BY CASE WHEN e.Name = @n THEN 0 WHEN e.PublicEntityName = @n THEN 1 ELSE 2 END,
+                     m.IsCustom DESC, e.Name
+            LIMIT 1", new { n = name });
         if (e is null) return null;
         var fields = conn.Query<DataEntityFieldInfo>(@"
             SELECT Name, DataSource, DataField, IsMandatory, IsReadOnly
             FROM DataEntityFields WHERE EntityId = @id", new { id = e.EntityId }).ToList();
-        return new DataEntityDetails(e, fields);
+        var matchedOn = string.Equals(e.Name, name, StringComparison.Ordinal) ? "name"
+            : string.Equals(e.PublicEntityName, name, StringComparison.Ordinal) ? "publicEntityName"
+            : "publicCollectionName";
+        return new DataEntityDetails(e, fields, matchedOn);
     }
 
     public IReadOnlyList<ReportInfo> SearchReports(string query, int limit = 50)

@@ -161,7 +161,12 @@ find refs <needle>                    — Who uses it: one row per object + matc
 find refs --xref                      — The compiler's where-used from DYNAMICSXREFDB, queried directly: one row per object + members + reference kinds; --lines 1 for path/line/kind. Refuses an empty answer when the symbol's module has no rows there, and names the build that fills it (`build --model <Model> --xref`). A bare name the index knows (table, class, form, EDT, enum) — or, failing that, one the cross-reference database has as a table, class, form, EDT, enum, view, map, data entity or query — is matched as that object and its children by index seeks (`match: "object"`, `objectKinds`); a namesake of another kind (menu item, data source, …) is asked for by its AOT path (`/MenuItemDisplays/CustTable`). Any other name is matched anywhere in a path, which scans the whole database
 find form-patterns [--pattern P]      — Form pattern histogram / filter
 find batch-jobs [--model M]           — RunBaseBatch subclasses
+find menu-items <object>              — Display/Action/Output menu items whose Object is exactly <object> (case-insensitive), custom models first, each with kind, objectType, label and model. The answer's `objectIndexedAs` names what the index holds under that name, and an empty answer for a name it does not know carries a `hint`. MCP: `search(type=menu-items, query=<object>)`
 ```
+
+`get menu-item` and `find menu-items` report `objectType: Form` with `objectTypeIsDefault: true` for a menu item whose XML has no `<ObjectType>`: the platform omits it when it is the default, which is most display menu items.
+
+`get entity <Name>` takes the AOT name, the `PublicEntityName` or the `PublicCollectionName` (the OData entity set an integration error or a `/data/<Set>` URL names), in that order of preference. `matchedOn` (`name`, `publicEntityName`, `publicCollectionName`) says which one matched. `search entity` matches all three as substrings.
 
 ### `models`
 

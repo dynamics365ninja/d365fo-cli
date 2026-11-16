@@ -19,6 +19,26 @@ was ported from.
 
 ## [Unreleased]
 
+### Added — `get entity` takes the OData entity set, and `find menu-items` says which menu items open a form
+
+Two lookups agents needed and did not find in the index, so they asked a live environment
+instead, where 15 of 22 menu-item lookups timed out at 60 s.
+
+- **`get entity <Name>` resolves the `PublicCollectionName` too**, the entity set an
+  integration error or a `/data/CustomersV3` URL names. It matched only the AOT name and the
+  `PublicEntityName`, while `search entity` matched all three. The AOT name still wins over a
+  public name, and the answer's `matchedOn` (`name`, `publicEntityName`,
+  `publicCollectionName`) says which one matched. MCP: `get_object_info(objectType=entity)`.
+- **`find menu-items <Object>`** lists the Display, Action and Output menu items whose Object is
+  exactly that name (case-insensitive), custom models first, with kind, object type, label and
+  model. Before, the only route was `search any <X> --kind menuitem`, a substring match over
+  names and objects that nobody reached for. An empty answer for a name the index does not know
+  says so. MCP: `search(type=menu-items, query=<Object>)`.
+- **`get menu-item` states what the item opens.** A menu item's XML omits `<ObjectType>` when it
+  is `Form`, which is most display menu items, so `objectType` came back null. It now reads
+  `Form` with `objectTypeIsDefault: true`. A `MENU_ITEM_NOT_FOUND` hint points at
+  `find menu-items` for a name that is an object rather than a menu item.
+
 ### Fixed — EDT base types are in the index, so generated fields get their real type (#233)
 
 Every EDT in the index had an empty `BaseType`: the extractor read it off the root element

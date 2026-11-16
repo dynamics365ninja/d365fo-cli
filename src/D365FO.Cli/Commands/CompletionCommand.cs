@@ -35,7 +35,7 @@ public sealed class CompletionCommand : Command<CompletionCommand.Settings>
     private static readonly string[] FindSubcommands =
     [
         "coc", "relations", "usages", "extensions", "handlers", "refs",
-        "form-patterns", "related", "batch-jobs",
+        "form-patterns", "related", "batch-jobs", "menu-items",
     ];
 
     private static readonly string[] GenerateSubcommands =
