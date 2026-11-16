@@ -121,7 +121,12 @@ public static class XrefReferences
         var (raw, directError) = direct(symbol, refKind, rowLimit, aggregate, objectKinds);
         var source = "xrefdb";
         string? bridgeError = null;
-        if (raw is null && bridge is not null)
+
+        // The bridge reads the same D365FO_XREF_CONNECTIONSTRING. When the server itself could not
+        // be reached it can only wait out the same connect timeout again, and so can the coverage
+        // probe below: a stopped LocalDB cost three timeouts, about 74 s, before the error.
+        var unreachable = directError?.StartsWith(ServerUnreachable, StringComparison.Ordinal) == true;
+        if (raw is null && bridge is not null && !unreachable)
         {
             (raw, bridgeError) = bridge(symbol, refKind, rowLimit, aggregate, objectKinds);
             source = "xrefdb-bridge";
@@ -131,17 +136,19 @@ public static class XrefReferences
         // outcomes: an empty answer from a module never compiled with cross-references is not
         // "no references", and a failed query over such a module has a precise cause worth naming.
         bool? hasRows = null;
-        if (owner?.Module is { } module && moduleHasRows is not null) (hasRows, _) = moduleHasRows(module);
+        if (!unreachable && owner?.Module is { } module && moduleHasRows is not null) (hasRows, _) = moduleHasRows(module);
 
         if (raw is null)
         {
-            var queryError = directError + (bridgeError is null ? "" : " Bridge fallback: " + bridgeError);
+            var queryError = Display(directError) + (bridgeError is null ? "" : " Bridge fallback: " + bridgeError)
+                + (unreachable && bridge is not null ? " (Bridge fallback skipped: it reads the same server.)" : "");
             if (XrefCoverage.Assess(0, symbol, owner, hasRows).Failure is { Error: { } pe })
                 return ToolResult<object>.Fail(pe.Code, pe.Message + " (The reference query itself failed: " + queryError + ")", pe.Hint);
 
             return ToolResult<object>.Fail(D365FoErrorCodes.XrefUnavailable,
                 "DYNAMICSXREFDB could not be queried: " + queryError,
-                "Check D365FO_XREF_CONNECTIONSTRING (default: local SQL, integrated auth) and that the "
+                (unreachable ? LocalDbHint(ConnectionStringOrNull()) : null)
+                ?? "Check D365FO_XREF_CONNECTIONSTRING (default: local SQL, integrated auth) and that the "
                 + "database exists — it is filled by a build with cross-references enabled "
                 + "(`d365fo build --model <Model> --xref`). Or use the text "
                 + "scan over indexed X++ source: it is not compiler-resolved and can miss references made "
@@ -258,12 +265,72 @@ public static class XrefReferences
         return result;
     }
 
+    /// <summary>
+    /// Prefix of a direct-query error that means the server itself was not reached (not found,
+    /// not started, connect timeout), as opposed to a login, certificate or query failure, which
+    /// the bridge's other SQL client can still get past.
+    /// </summary>
+    internal const string ServerUnreachable = "SERVER_UNREACHABLE: ";
+
+    /// <summary>
+    /// Whether a failed <c>Open()</c> means the server was never reached. By number: -2 connect
+    /// timeout, -1 and 2 network or instance error, 26 instance not located, 40 and 53 no
+    /// connection or network path, 258 wait timeout. By severity: the client raises the rest of
+    /// its transport failures at class 20, LocalDB's among them, with HRESULT-like numbers
+    /// (<c>-1983577849</c>, "the specified LocalDB instance does not exist"). A class-20 failure
+    /// after the connection was established (the TLS pre-login handshake, a certificate) is
+    /// answered by a server, and the bridge's other SQL client can get past it.
+    /// </summary>
+    internal static bool IsUnreachable(int number, byte severity, string? message) =>
+        number is -2 or -1 or 2 or 26 or 40 or 53 or 258
+        || (severity >= 20 && message?.Contains("successfully established", StringComparison.OrdinalIgnoreCase) != true);
+
+    /// <summary>The direct-query error without the <see cref="ServerUnreachable"/> marker, for display.</summary>
+    private static string? Display(string? error) =>
+        error is not null && error.StartsWith(ServerUnreachable, StringComparison.Ordinal) ? error[ServerUnreachable.Length..] : error;
+
+    /// <summary>
+    /// A hint for a LocalDB instance that did not answer, or null when the connection string
+    /// names another server. LocalDB starts on the first connection, but an instance whose
+    /// process is left behind reports "Stopped" and refuses <c>SqlLocalDB start</c> until it is
+    /// stopped explicitly.
+    /// </summary>
+    internal static string? LocalDbHint(string? connectionString)
+    {
+        if (string.IsNullOrWhiteSpace(connectionString)) return null;
+        string dataSource;
+        try { dataSource = new SqlConnectionStringBuilder(connectionString).DataSource ?? ""; }
+        catch { return null; }
+
+        const string prefix = "(localdb)\\";
+        if (!dataSource.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)) return null;
+        var instance = dataSource[prefix.Length..];
+        return $"The LocalDB instance '{instance}' did not answer. `SqlLocalDB info {instance}` shows its state; a "
+            + "stopped instance normally starts on the first connection. If it stays 'Stopped' and "
+            + $"`SqlLocalDB start {instance}` fails with \"SQL Server process failed to start\", a process of the "
+            + $"previous run is still holding it: `SqlLocalDB stop {instance}`, then ask again.";
+    }
+
+    private static string? ConnectionStringOrNull()
+    {
+        try { return ConnectionString(); }
+        catch { return null; }
+    }
+
     private static (JsonObject? Result, string? Error) QueryDirect(
         string symbol, string? kind, int limit, bool aggregate, IReadOnlyList<string>? objectKinds)
     {
         try
         {
             using var connection = new SqlConnection(ConnectionString());
+            try
+            {
+                connection.Open();
+            }
+            catch (SqlException ex) when (IsUnreachable(ex.Number, ex.Class, ex.Message))
+            {
+                return (null, ServerUnreachable + ex.GetType().Name + ": " + ex.Message);
+            }
             var result = XrefQuery.Find(connection, symbol, kind, limit, aggregate, objectKinds?.ToList());
             if ((bool?)result["ok"] == true) return (result, null);
             return (null, (string?)result["error"] + ": " + (string?)result["message"]);
