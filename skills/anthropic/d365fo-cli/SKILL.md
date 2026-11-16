@@ -85,7 +85,7 @@ Examples:
 | Need | Command |
 |---|---|
 | Read class structure (methods, signatures) | `d365fo get class <Name> --output json` |
-| Read X++ method body | `d365fo read class <Name> --method <M>` |
+| Read X++ method body | `d365fo get method <Owner> <M>` (class, table or form) or `d365fo read class <Name> --method <M>` |
 | Read table fields / indexes / relations | `d365fo get table <Name> --brief --output json` first, the full `get table` (or `--include <parts>`) when you need labels, field groups or methods |
 | Read form controls / data sources | `d365fo get form <Name> --output json` |
 | Search objects by name | `d365fo search class\|table\|form\|edt\|enum <query> --output json` |

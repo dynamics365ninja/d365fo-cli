@@ -91,11 +91,14 @@ Up to 10 `<kind>:<name>` specs per call. Each item carries its own `ok`/`error`
 
 ```sh
 d365fo labels resolve @SYS12345 --lang en-US,cs
+d365fo labels resolve @SYS12345 @SYS4724 --output json   # one result per token
 ```
 
 ### `read` — pull X++ source from AOT XML
 
 ```sh
+d365fo get method CustTable validateWrite              # owner kind found from the index
+d365fo get method SalesFormLetter.run --lines 1-30     # Owner.method as one token
 d365fo read class CustTable_Extension --method validateWriteExt
 ```
 

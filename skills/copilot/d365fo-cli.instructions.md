@@ -101,7 +101,7 @@ Copilot: "Since I cannot access the codebase, I'll provide generic guidance…"
 | Need | Command |
 |---|---|
 | Read class structure (methods, signatures) | `d365fo get class <Name> --output json` |
-| Read X++ method body | `d365fo read class <Name> --method <M>` |
+| Read X++ method body | `d365fo get method <Owner> <M>` (class, table or form) or `d365fo read class <Name> --method <M>` |
 | Read table fields / indexes / relations | `d365fo get table <Name> --output json` |
 | Read form controls / data sources | `d365fo get form <Name> --output json` |
 | Search objects by name | `d365fo search class\|table\|form\|edt\|enum <query> --output json` |

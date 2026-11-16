@@ -106,6 +106,8 @@ public static class CliApp
                 b.AddCommand<GetFormPatternCommand>("form-pattern").WithDescription("Form pattern spec catalog: structure tree, versions, when-to-use, reference forms. Omit NAME to list all.");
                 b.AddCommand<GetBusinessEventCommand>("business-event").WithDescription("Business event: class, category, contract.");
                 b.AddCommand<GetSecurityPolicyCommand>("security-policy").WithDescription("XDS security policy: constrained table, query, operation type.");
+                // The MCP surface names this read `get_method`, so agents that know it type `get method`.
+                b.AddCommand<GetMethodCommand>("method").WithDescription("One method's source: `get method <OWNER> <METHOD>` or `<OWNER>.<METHOD>`. Finds whether the owner is a class, table or form. Same answer as `read <kind> <OWNER> --method <METHOD>`.");
             });
 
             cfg.AddBranch("find", b =>
@@ -124,6 +126,7 @@ public static class CliApp
                 // Parity aliases matching the unified MCP surface (extension_info mode=events / find_references).
                 b.AddCommand<FindHandlersCommand>("event-handlers").WithDescription("Alias of `find handlers` — event handlers subscribed to a form/table/delegate.");
                 b.AddCommand<FindRefsCommand>("references").WithDescription("Alias of `find refs` — reverse references to a symbol in indexed X++ source.");
+                b.AddCommand<FindFieldsCommand>("tables-by-field").WithDescription("Alias of `find fields` (the MCP `find_tables_by_field` tool) — tables that declare a field name or EDT.");
             });
 
             // Unified `security` branch — mirrors the MCP `security_info` tool

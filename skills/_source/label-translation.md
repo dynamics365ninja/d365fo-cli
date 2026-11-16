@@ -23,6 +23,7 @@ appliesWhen: User intent mentions labels, translations, `@SYS`, `@MODULE`, displ
 ```sh
 d365fo labels search "Customer account" --lang en-us,cs --output json
 d365fo labels resolve @SYS4724 --lang en-us,cs --output json     # confirm an existing token
+d365fo labels resolve @SYS4724 @SYS7576 @File:Key --output json  # several tokens: one result each
 ```
 
 - Pick an existing `key` if any value matches your intent exactly.

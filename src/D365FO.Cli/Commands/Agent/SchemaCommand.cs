@@ -1,4 +1,4 @@
-﻿using D365FO.Core;
+using D365FO.Core;
 using Spectre.Console.Cli;
 
 namespace D365FO.Cli.Commands.Agent;
@@ -127,6 +127,7 @@ public sealed class SchemaCommand : Command<SchemaCommand.Settings>
         C("read class", "Read X++ source embedded in an AxClass.", ["<NAME>"], ["--method", "--declaration", "--lines", "--around", "--output"], ["get_method (objectType=class)"], true),
         C("read table", "Read X++ source embedded in an AxTable.", ["<NAME>"], ["--method", "--declaration", "--lines", "--around", "--output"], ["get_method (objectType=table)"], true),
         C("read form", "Read X++ source embedded in an AxForm.", ["<NAME>"], ["--method", "--declaration", "--lines", "--around", "--output"], ["get_method (objectType=form)"], true),
+        C("get method", "One method's source, owner kind (class/table/form) found from the index. `<OWNER>.<METHOD>` works as one token.", ["<OWNER>", "[METHOD]"], ["--kind", "--lines", "--around", "--output"], ["get_method"], true),
         C("suggest edt", "Suggest EDTs for a field name.", ["<FIELDNAME>"], ["--limit", "--output"], ["suggest_edt"], true),
         C("suggest extension", "Recommend CoC/event-handler/AOT-extension strategy.", ["<TARGET>"], ["--kind", "--output"], ["extension_info (mode=strategy)"], true),
         C("validate name", "Check object name against naming conventions.", ["<KIND>", "<NAME>"], ["--prefix", "--output"], ["validate_object_naming"], true),
@@ -142,7 +143,7 @@ public sealed class SchemaCommand : Command<SchemaCommand.Settings>
         C("security coverage", "Role→Duty→Privilege routes that grant access to an object.", ["<OBJECT>"], ["--type", "--output"], ["security_info (mode=coverage)"], true),
         C("security any", "Any security name: a role, duty or privilege, else the coverage of the object it names. Bare `security <NAME>` runs this.", ["<NAME>"], ["--output"], ["security_info (mode=any)"], true),
         C("labels search", "Search label keys/values; FTS5 is preferred automatically.", ["<QUERY>"], ["--lang", "--limit", "--fts", "--raw-text", "--output"], ["labels (action=search/fts)"], true),
-        C("labels resolve", "Resolve a @SYS12345-style label token across languages.", ["<TOKEN>"], ["--lang", "--raw-text", "--output"], ["labels (action=resolve)"], true),
+        C("labels resolve", "Resolve @SYS12345-style label tokens across languages; several tokens give one result each.", ["<TOKEN>..."], ["--lang", "--raw-text", "--output"], ["labels (action=resolve)"], true),
         C("labels info", "Fetch one label entry by (file, language, key).", ["<FILE_OR_KEY>", "[KEY]"], ["--lang", "--raw-text", "--output"], ["labels (action=info)"], true),
         C("labels create", "Create or update a label entry.", ["<KEY>", "<VALUE>"], ["--file", "--overwrite", "--output"], ["labels (action=create)"], true),
         C("labels update", "Correct the text of a label that already exists — never creates, so a mistyped key is refused rather than added.", ["<KEY>", "<VALUE>"], ["--file", "--install-to", "--lang", "--label-file", "--output"], ["labels (action=update)"], true),
@@ -190,7 +191,8 @@ public sealed class SchemaCommand : Command<SchemaCommand.Settings>
         C("find extensions", "Find Table/Form/Edt/Enum extensions targeting an object.", ["<TARGET>"], ["--kind", "--output"], ["extension_info (mode=points)"]),
         C("find handlers", "Find event subscribers.", ["<OBJECT>"], ["--kind", "--output"], ["extension_info (mode=events)"]),
         C("find event-handlers", "Alias of `find handlers`.", ["<OBJECT>"], ["--kind", "--output"], ["extension_info (mode=events)"]),
-        C("find refs", "Where a symbol is used: text scan of indexed X++ source, or the compiler's xref with --xref.", ["<NAME>"], ["--kind", "--model", "--limit", "--lines", "--all-models", "--xref", "--output"], ["find_references"]),
+        C("find tables-by-field", "Alias of `find fields`, named like the MCP tool.", ["<NAME>"], ["--model", "--limit", "--output"], ["find_tables_by_field"]),
+        C("find refs","Where a symbol is used: text scan of indexed X++ source, or the compiler's xref with --xref.", ["<NAME>"], ["--kind", "--model", "--limit", "--lines", "--all-models", "--xref", "--output"], ["find_references"]),
         C("find references", "Alias of `find refs`.", ["<NAME>"], ["--kind", "--model", "--limit", "--lines", "--all-models", "--xref", "--output"], ["find_references"]),
         C("find form-patterns", "Find forms by Microsoft form pattern, table, or peer form.", [], ["--pattern", "--table", "--similar-to", "--output"], ["object_patterns (domain=form, action=analyze)"]),
 
@@ -270,7 +272,7 @@ public sealed class SchemaCommand : Command<SchemaCommand.Settings>
 
         C("find batch-jobs", "Find all RunBaseBatch / SysOperationServiceController subclasses.", [], ["--model", "--output"], ["search (type=batch-jobs)"]),
 
-        C("resolve label", "Resolve @SYS12345-style label token to its text.", ["<TOKEN>"], ["--lang", "--output"], ["labels (action=resolve)"]),
+        C("resolve label", "Resolve @SYS12345-style label tokens to their text; several tokens give one result each.", ["<TOKEN>..."], ["--lang", "--output"], ["labels (action=resolve)"]),
 
         C("label create", "Create or update a label entry.", ["[KEY]", "[VALUE]"], ["--entry", "--file", "--install-to", "--lang", "--label-file", "--overwrite", "--allow-extension-label-file", "--output"], ["labels (action=create)"]),
         C("label update", "Correct the text of a label that already exists.", ["<KEY>", "<VALUE>"], ["--file", "--install-to", "--lang", "--label-file", "--allow-extension-label-file", "--output"], ["labels (action=update)"]),

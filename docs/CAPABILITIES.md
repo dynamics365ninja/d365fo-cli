@@ -89,13 +89,17 @@ The fix for a gap is to regenerate the named catalog on the installation that pr
 Fuzzy substring search across every indexed type.
 
 ```
-search table|class|edt|enum|form|menu-item|query|view|entity|report
-search service|service-group|workflow|map|label|role|duty|privilege
+search table|class|edt|enum|query|view|entity|report|service|workflow|label
 search business-event|security-policy|configuration-key|tile|workspace
-search batch-jobs
-search any <query>   — UNIONs all types, returns byKind counts
-search <query>       — the same: a first word that is not a sub-command runs `search any`
+search any <query> [--kind k,k,…]   — UNIONs all types, returns byKind counts
+search <query>                      — the same: a first word that is not a sub-command runs `search any`
+search form|menu-item|map <query>   — runs `search any <query> --kind form|menuitem|map`
 ```
+
+`form`, `menu-item` and `map` have no sub-command of their own, but agents type them anyway.
+`search form CustTable` used to become `search any form CustTable` and fail on the stray second
+word. It now runs `search any CustTable --kind form`, with every other option passed on. Adding
+`--kind` as well is not rewritten, so two filters fail rather than one being dropped.
 
 ### `get`
 
@@ -105,7 +109,14 @@ Full metadata for one named object. Returns a structured JSON envelope.
 get table|class|edt|enum|form|menu-item|query|view|entity|report
 get service|service-group|map|role|duty|privilege|label
 get business-event|security-policy
+get method <Owner> <method>   — one method's source; also `get method <Owner>.<method>`
 ```
+
+`get method` is the CLI name of the MCP `get_method` read. It finds whether the owner is a class, a table or a form, then answers exactly what `read <kind> <Owner> --method <method>` answers (`--lines` and `--around` too). When a table and a form share the name, the kind that declares the method wins. When both declare it, the call is refused with the `--kind table|form` choices in the hint, rather than one being picked.
+
+`get class|table|form <Name> --source` runs `read class|table|form <Name>`: `get` returns metadata and `read` the X++, so the flag names the other command. Every other option is passed on to `read`, so one it does not accept fails rather than being dropped.
+
+An unknown sub-command (`get metod`, `find field`) answers with the sub-commands that do exist, inline in `error.hint`, and the closest one by edit distance when one is close. An unknown top-level command lists the commands the same way.
 
 `get table <T> --brief` returns a summary: the table's properties, each field's name, type and EDT, index names with their fields, and the relations the table declares with their related table. It is a fraction of the full answer (no field labels or property bags, no field groups, relation constraints or method signatures, just `methodCount`), so read it first and ask for parts with `--include` when you need them. It does not combine with `--include` or `--merged`. MCP: `get_object_info(objectType=table, detail=brief)`.
 
@@ -157,6 +168,7 @@ find usages <needle> [--kind k,k,…]  — All references by kind
 find extensions <target>              — All object extensions
 find handlers <object>                — Event subscribers
 find relations <table>                — FK relations
+find fields <name|EDT>                — Tables that declare a field name or EDT (exact). `find tables-by-field` is the same command, named like the MCP tool
 find refs <needle>                    — Who uses it: one row per object + matching methods (FTS5 when `--index-source` was used, else on-demand source scan); --lines N for sample lines. A form hit names its member: `init`, `CustTable.init`, `CustTable.AccountNum.modified`, `OkButton.clicked`. Each model is answered from the index when it has source indexed, else from disk. Without `--model` the scope is the source-indexed models plus the custom models (`D365FO_CUSTOM_MODELS`); `--all-models` scans every other model from disk too. The answer carries `scope` and a `coverage` block (models from the index, from disk, not searched). `Owner.member` (or `Owner::member`) without `--xref` searches the member and keeps methods that also mention Owner, flagged `match.kind: member-text`. A needle the index does not know gets a `hint`
 find refs --xref                      — The compiler's where-used from DYNAMICSXREFDB, queried directly: one row per object + members + reference kinds; --lines 1 for path/line/kind. Refuses an empty answer when the symbol's module has no rows there, and names the build that fills it (`build --model <Model> --xref`). A bare name the index knows (table, class, form, EDT, enum) — or, failing that, one the cross-reference database has as a table, class, form, EDT, enum, view, map, data entity or query — is matched as that object and its children by index seeks (`match: "object"`, `objectKinds`); a namesake of another kind (menu item, data source, …) is asked for by its AOT path (`/MenuItemDisplays/CustTable`). Any other name is matched anywhere in a path, which scans the whole database
 find form-patterns [--pattern P]      — Form pattern histogram / filter
@@ -190,6 +202,8 @@ read class <C> --method <M>
 read table <T> [--declaration]
 read form <F> [--lines 10-40]
 ```
+
+`get method <Owner> <M>` reads one method without naming the owner's kind (see `get`).
 
 ---
 
@@ -498,6 +512,7 @@ d365fo labels search "Customer invoice"
 d365fo labels search "..." --fts                        # FTS5 ranked search
 d365fo labels info @SYS12345 --language en-us
 d365fo labels resolve @SYS12345 --lang en-US,cs
+d365fo labels resolve @SYS12345 @SYS4724 @File:Key      # several tokens: one result each
 
 # Write (atomic, preserves BOM + comments)
 d365fo labels create Key "Value" --file path/Foo.en-us.label.txt
@@ -505,6 +520,11 @@ d365fo labels create Key "New"   --file path/Foo.en-us.label.txt --overwrite
 d365fo labels rename OldKey NewKey --file path/Foo.en-us.label.txt
 d365fo labels delete Key           --file path/Foo.en-us.label.txt
 ```
+
+`labels resolve` with one token answers as it always has (`count`, `items`). With several it
+answers `results`, one entry per token in the order given, each with `found` and its `items`, and
+names the tokens that did not resolve in `notResolved` and a warning. It fails with
+`LABEL_NOT_FOUND` only when none of them resolves.
 
 ---
 
@@ -826,7 +846,7 @@ The same 38 topics are also emitted as `skills/copilot/*.instructions.md` (legac
 | Scenario | Built-in editor / terminal tools | `d365fo` CLI |
 |---|---|---|
 | Read class structure (methods, signatures) | ❌ `get_file` on XML — unreliable schema | ✅ `d365fo get class <Name> --output json` |
-| Read a method body (X++ source) | ❌ | ✅ `d365fo read class <Name> --method <M>` |
+| Read a method body (X++ source) | ❌ | ✅ `d365fo get method <Owner> <M>` (or `read class <Name> --method <M>`) |
 | Inspect table fields / indexes / relations | ❌ `get_file` on AxTable XML — unreliable | ✅ `d365fo get table <Name> --output json` |
 | Inspect several objects at once | ❌ | ✅ `d365fo get batch table:CustTable class:CustTableType --output json` |
 | Search for a class / table / method | ❌ `code_search` / `file_search` — can't parse AOT XML schema, returns misleading snippets | ✅ `d365fo search class <query> --output json` |

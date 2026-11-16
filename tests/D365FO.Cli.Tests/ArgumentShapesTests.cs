@@ -147,7 +147,9 @@ public sealed class ArgumentShapesTests : IDisposable
         var hint = ArgumentShapes.HintFor(["get", "ContosoDealTable"], "Unknown command 'ContosoDealTable'.");
 
         Assert.Contains("d365fo get <sub-command> ContosoDealTable", hint);
-        Assert.Contains("d365fo get --help", hint);
+        // The sub-commands themselves, inline, rather than a pointer to `get --help`.
+        Assert.Contains("Sub-commands of `get`:", hint);
+        Assert.Contains("table", hint);
 
         // Anything else keeps the generic hint.
         Assert.Contains("--help to see the options",
