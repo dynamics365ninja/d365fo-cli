@@ -69,6 +69,18 @@ public sealed record SourceRefResult(
     public string? Hint { get; init; }
 
     /// <summary>
+    /// For a label reference only: the metadata properties (<c>Label</c>, <c>HelpText</c>, a form
+    /// control's <c>Text</c> …) that hold it. Null for any other needle.
+    /// </summary>
+    public IReadOnlyList<LabelPropertyHit>? Properties { get; init; }
+
+    /// <summary>The property list was cut at the limit.</summary>
+    public bool PropertiesTruncated { get; init; }
+
+    /// <summary>Where the property search looked. Null for a needle that is not a label reference.</summary>
+    public LabelPropertyCoverage? PropertyCoverage { get; init; }
+
+    /// <summary>
     /// The reachability verdict for a finished search.
     /// </summary>
     /// <remarks>
@@ -161,8 +173,9 @@ public static class MethodSourceSearch
         var member = qualified.Success
             ? new MemberNeedle(qualified.Groups["owner"].Value, qualified.Groups["member"].Value)
             : null;
-        var token = member?.Member ?? needle;
-        var rx = new Regex($@"\b{Regex.Escape(token)}\b", RegexOptions.IgnoreCase);
+        var token = member?.Member ?? needle.Trim();
+        var isLabel = member is null && IsLabelReference(token);
+        var rx = TokenRegex(token);
         var ownerRx = member is null ? null : new Regex($@"\b{Regex.Escape(member.Owner)}\b", RegexOptions.IgnoreCase);
         bool Keep(string objectName, string body) =>
             ownerRx is null
@@ -197,9 +210,17 @@ public static class MethodSourceSearch
             foreach (var mm in rows)
             {
                 if (hits.Count >= limit) { truncated = true; break; }
+                // The tokenizer drops the '@' and the ':', so "@File:Key" matches the words
+                // "File Key" anywhere. A label hit is checked against the body; labels have few uses.
+                var lines = SampleLines(mm.Kind, mm.SourcePath, mm.MethodName, rx,
+                    isLabel ? Math.Max(1, sampleLinesPerHit) : sampleLinesPerHit);
+                if (isLabel)
+                {
+                    if (lines.Count == 0 && !string.IsNullOrEmpty(mm.SourcePath) && File.Exists(mm.SourcePath)) continue;
+                    lines = lines.Take(sampleLinesPerHit).ToList();
+                }
                 hits.Add(new SourceRefHit(
-                    mm.Kind, mm.ObjectName, mm.Model, mm.MethodName, mm.SourcePath,
-                    SampleLines(mm.Kind, mm.SourcePath, mm.MethodName, rx, sampleLinesPerHit)));
+                    mm.Kind, mm.ObjectName, mm.Model, mm.MethodName, mm.SourcePath, lines));
             }
         }
 
@@ -215,7 +236,7 @@ public static class MethodSourceSearch
                 ? Covered(s.Model) < SourceIndexLevel.WithForms
                 : Covered(s.Model) < SourceIndexLevel.ClassesAndTables)
             .Select(s => { diskModels.Add(s.Model); return s; });
-        ScanSources(sources, rx, Keep, limit, sampleLinesPerHit, hits, ref scanned, ref truncated);
+        ScanSources(sources, token, rx, Keep, limit, sampleLinesPerHit, hits, ref scanned, ref truncated);
 
         var result = SourceRefResult.Finish(needle, ftsModels.Count > 0 ? "fts" : "scan",
             scanned, truncated, hits, ftsRows);
@@ -233,6 +254,31 @@ public static class MethodSourceSearch
                    + "models in `coverage`. Pass --all-models (MCP: allModels) to scan the rest from disk, or "
                    + "--model to name one.";
 
+        // A label is mostly used in metadata (a field's Label, a control's Text), not in code. The
+        // index answers the Label properties of every model; the XML is read for the models of the
+        // default scope (or the named one) only, also under --all-models, which widens the code scan.
+        if (isLabel)
+        {
+            var xmlModels = !string.IsNullOrWhiteSpace(model)
+                ? new HashSet<string>([model], StringComparer.OrdinalIgnoreCase)
+                : DefaultScope(states, customModelPatterns);
+            var (props, propsTruncated, propCoverage) =
+                LabelPropertySearch.Find(repo, token, rx, xmlModels, model, limit);
+            // The "models were not searched" caveat warns that an empty answer may not mean unused.
+            // A label found in metadata is not an empty answer.
+            if (props.Count > 0) caveat = result.Caveat;
+            return result with
+            {
+                Caveat = caveat,
+                Coverage = coverage,
+                Member = member,
+                Hint = UnknownLabelHint(repo, token),
+                Properties = props,
+                PropertiesTruncated = propsTruncated,
+                PropertyCoverage = propCoverage,
+            };
+        }
+
         return result with
         {
             Caveat = caveat,
@@ -240,6 +286,56 @@ public static class MethodSourceSearch
             Member = member,
             Hint = UnknownSymbolHint(repo, needle, member),
         };
+    }
+
+    /// <summary>
+    /// A label reference: <c>@SYS12345</c> (a legacy label file id followed by the number) or
+    /// <c>@File:Key</c>.
+    /// </summary>
+    private static readonly Regex LabelReference =
+        new(@"^@[A-Za-z_]\w*(?::[\w.\-]+)?$", RegexOptions.CultureInvariant);
+
+    /// <summary>True when the needle is a label reference rather than an identifier.</summary>
+    public static bool IsLabelReference(string needle) => LabelReference.IsMatch(needle.Trim());
+
+    /// <summary>
+    /// The needle as a whole token. An identifier is bounded by <c>\b</c>. A label reference starts
+    /// with <c>@</c>, which is not a word character, so <c>\b</c> before it matched only after a
+    /// letter or digit — never after the quote or space a label actually follows — and every label
+    /// search answered zero. A label is bounded by anything that cannot continue it instead:
+    /// <c>@SYS12</c> does not match inside <c>@SYS123</c>, nor <c>@File:Key</c> inside <c>@File:Key2</c>.
+    /// </summary>
+    public static Regex TokenRegex(string token) => IsLabelReference(token)
+        ? new Regex($@"(?<![\w@:]){Regex.Escape(token.Trim())}(?![\w:.\-])", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)
+        : new Regex($@"\b{Regex.Escape(token)}\b", RegexOptions.IgnoreCase);
+
+    /// <summary>A note when the label's file has no entry for its key in the index.</summary>
+    private static string? UnknownLabelHint(MetadataRepository repo, string label)
+    {
+        try
+        {
+            return repo.ResolveLabel(label).Count > 0
+                ? null
+                : $"'{label}' is not a label in the index. The search ran anyway. Check the id with "
+                  + $"`d365fo labels resolve {label}`, or extract the model that owns the label file.";
+        }
+        catch (Microsoft.Data.Sqlite.SqliteException)
+        {
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// The default scope's models: those with source indexed, those extracted as custom and those
+    /// <c>D365FO_CUSTOM_MODELS</c> names.
+    /// </summary>
+    private static HashSet<string> DefaultScope(IReadOnlyList<ModelSourceState> states, IEnumerable<string>? customModelPatterns)
+    {
+        var matcher = new ModelMatcher(customModelPatterns ?? D365FoSettings.FromEnvironment().CustomModels);
+        return new HashSet<string>(
+            states.Where(s => s.Level >= SourceIndexLevel.ClassesAndTables || s.IsCustom || matcher.IsMatch(s.Name))
+                  .Select(s => s.Name),
+            StringComparer.OrdinalIgnoreCase);
     }
 
     /// <summary>
@@ -266,10 +362,7 @@ public static class MethodSourceSearch
             return new SearchCoverage("all", [], [], [], Note: null);
         }
 
-        var matcher = new ModelMatcher(customModelPatterns ?? D365FoSettings.FromEnvironment().CustomModels);
-        foreach (var s in states)
-            if (s.Level >= SourceIndexLevel.ClassesAndTables || s.IsCustom || matcher.IsMatch(s.Name))
-                inScope.Add(s.Name);
+        inScope.UnionWith(DefaultScope(states, customModelPatterns));
 
         if (inScope.Count == 0)
         {
@@ -297,7 +390,11 @@ public static class MethodSourceSearch
     /// then each model list as <c>{ count, models }</c>, with <c>models</c> left out past
     /// <see cref="CoverageListCap"/> so an all-models answer does not spend its tokens on names.
     /// </summary>
-    public static object? CoveragePayload(SearchCoverage? coverage)
+    /// <remarks>
+    /// For a label reference, <c>properties</c> says the same for the metadata search: which models
+    /// were answered from the index's <c>Label</c> columns only, and which had their XML read.
+    /// </remarks>
+    public static object? CoveragePayload(SearchCoverage? coverage, LabelPropertyCoverage? properties = null)
     {
         if (coverage is null) return null;
         static object Part(IReadOnlyList<string> models) => new
@@ -312,8 +409,30 @@ public static class MethodSourceSearch
             fromDisk = Part(coverage.FromDisk),
             notSearched = Part(coverage.NotSearched),
             note = coverage.Note,
+            properties = properties is null ? null : new
+            {
+                fromIndex = Part(properties.FromIndex),
+                fromDisk = Part(properties.FromDisk),
+                filesScanned = properties.FilesScanned,
+                note = properties.Note,
+            },
         };
     }
+
+    /// <summary>
+    /// The <c>properties</c> rows of a label search: each metadata property that holds the label,
+    /// with the object, where in it, and the model. Null for a needle that is not a label.
+    /// </summary>
+    public static object? PropertiesPayload(SourceRefResult result, int limit = int.MaxValue) =>
+        result.Properties?.Take(limit).Select(p => new
+        {
+            kind = p.Kind,
+            name = p.Name,
+            model = p.Model,
+            element = p.Element,
+            property = p.Property,
+            via = p.Via,
+        }).ToList();
 
     /// <summary>The <c>match</c> block for an <c>Owner.member</c> needle, or null for a plain one.</summary>
     public static object? MemberMatchPayload(MemberNeedle? member) => member is null ? null : new
@@ -360,13 +479,16 @@ public static class MethodSourceSearch
 
     private static void ScanSources(
         IEnumerable<(string Kind, string Name, string Model, string SourcePath)> sources,
-        Regex rx, Func<string, string, bool> keep, int limit, int sampleLinesPerHit,
+        string token, Regex rx, Func<string, string, bool> keep, int limit, int sampleLinesPerHit,
         List<SourceRefHit> hits, ref int scanned, ref bool truncated)
     {
         foreach (var row in sources)
         {
             if (hits.Count >= limit) { truncated = true; break; }
             scanned++;
+            // Most files do not contain the token at all. Reading the text and looking for it costs
+            // a fraction of parsing the XML into methods, which is then done for the few that do.
+            if (!MayContain(row.SourcePath, token)) continue;
             var src = ReadMethods(row.Kind, row.SourcePath);
             if (src is null) continue;
             foreach (var m in src)
@@ -378,6 +500,17 @@ public static class MethodSourceSearch
                     SampleLinesFromBody(m.Body, rx, sampleLinesPerHit)));
             }
         }
+    }
+
+    /// <summary>
+    /// False only when the file was read and the token is not in it. A file that cannot be read
+    /// is left to the parser, which reports it the way it always has.
+    /// </summary>
+    private static bool MayContain(string path, string token)
+    {
+        try { return File.ReadAllText(path).Contains(token, StringComparison.OrdinalIgnoreCase); }
+        catch (IOException) { return true; }
+        catch (UnauthorizedAccessException) { return true; }
     }
 
     private static IReadOnlyList<SourceRefMatchLine> SampleLines(string kind, string? path, string method, Regex rx, int max)

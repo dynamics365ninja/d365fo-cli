@@ -2824,12 +2824,15 @@ public sealed partial class ToolHandlers
                 filesScanned = result.FilesScanned,
                 searched = result.Searched,
                 scope = result.Coverage?.Scope,
-                coverage = MethodSourceSearch.CoveragePayload(result.Coverage),
+                coverage = MethodSourceSearch.CoveragePayload(result.Coverage, result.PropertyCoverage),
                 match = MethodSourceSearch.MemberMatchPayload(result.Member),
                 hint = result.Hint,
                 count = items.Count,
                 truncated = result.Truncated,
                 items,
+                propertyCount = result.Properties?.Count,
+                propertiesTruncated = result.Properties is null ? (bool?)null : result.PropertiesTruncated,
+                properties = MethodSourceSearch.PropertiesPayload(result),
             }, result.Caveat is null ? null : [result.Caveat]);
         }
 
@@ -2857,13 +2860,18 @@ public sealed partial class ToolHandlers
             filesScanned = scan.FilesScanned,
             searched = scan.Searched,
             scope = scan.Coverage?.Scope,
-            coverage = MethodSourceSearch.CoveragePayload(scan.Coverage),
+            coverage = MethodSourceSearch.CoveragePayload(scan.Coverage, scan.PropertyCoverage),
             match = MethodSourceSearch.MemberMatchPayload(scan.Member),
             hint = scan.Hint,
             count = Math.Min(objects.Count, limit),
             matchedMethods = scan.Hits.Count,
             truncated = scan.Truncated || objects.Count > limit,
             items = objects.Take(limit).ToList(),
+            // A label reference: the metadata properties that hold it (a field's Label, a
+            // control's Text), where most labels are used. Absent for any other needle.
+            propertyCount = scan.Properties is null ? (int?)null : Math.Min(scan.Properties.Count, limit),
+            propertiesTruncated = scan.Properties is null ? (bool?)null : scan.PropertiesTruncated || scan.Properties.Count > limit,
+            properties = MethodSourceSearch.PropertiesPayload(scan, limit),
         }, scan.Caveat is null ? null : [scan.Caveat]);
     }
 
