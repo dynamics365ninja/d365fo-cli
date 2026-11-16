@@ -168,18 +168,18 @@ public sealed class SchemaCommand : Command<SchemaCommand.Settings>
 
         C("get table", "Get table fields, relations, indexes, methods, and delete actions; --merged folds in every extension, --brief returns a summary.", ["<NAME>"], ["--include", "--merged", "--brief", "--output", "--resolve-labels"], ["get_object_info (objectType=table)", "get_object_info (objectType=table, detail=brief)", "extension_info (mode=table-merge)"]),
         C("get edt", "Get an EDT definition.", ["<NAME>"], ["--output"], ["get_object_info (objectType=edt)"]),
-        C("get class", "Get class metadata and method signatures.", ["<NAME>"], ["--output"], ["get_object_info (objectType=class)"]),
+        C("get class", "Get class metadata and method signatures; --brief drops method bodies.", ["<NAME>"], ["--brief", "--output"], ["get_object_info (objectType=class)", "get_object_info (objectType=class, detail=brief)"]),
         C("get enum", "Get enum values.", ["<NAME>"], ["--output"], ["get_object_info (objectType=enum)"]),
         C("get menu-item", "Resolve menu item to launched object.", ["<NAME>"], ["--output"], ["get_object_info (objectType=menu-item)"]),
         C("get security", "Get role/duty/privilege coverage for an object.", ["<OBJECT>"], ["--type", "--output"], ["security_info (mode=coverage)"]),
         C("get label", "Resolve a label entry or token.", ["<FILE_OR_KEY>", "[KEY]"], ["--lang", "--raw-text", "--output"], ["labels (action=info)"]),
-        C("get form", "Get form data sources and metadata.", ["<NAME>"], ["--output"], ["get_object_info (objectType=form)"]),
+        C("get form", "Get form data sources and metadata; --brief returns a summary.", ["<NAME>"], ["--brief", "--output"], ["get_object_info (objectType=form)", "get_object_info (objectType=form, detail=brief)"]),
         C("get role", "Get security role duties/privileges.", ["<NAME>"], ["--output"], ["security_info (mode=artifact,type=role)"]),
         C("get duty", "Get security duty privileges.", ["<NAME>"], ["--output"], ["security_info (mode=artifact,type=duty)"]),
         C("get privilege", "Get security privilege entry points.", ["<NAME>"], ["--output"], ["security_info (mode=artifact,type=privilege)"]),
         C("get query", "Get query metadata and joins.", ["<NAME>"], ["--output"], ["get_object_info (objectType=query)"]),
         C("get view", "Get view fields and source query.", ["<NAME>"], ["--output"], ["get_object_info (objectType=view)"]),
-        C("get entity", "Get data entity metadata and OData names.", ["<NAME>"], ["--output"], ["get_object_info (objectType=entity)"]),
+        C("get entity", "Get data entity metadata and OData names. NAME is the AOT name, the PublicEntityName or the PublicCollectionName (OData entity set); `matchedOn` says which.", ["<NAME>"], ["--output"], ["get_object_info (objectType=entity)"]),
         C("get report", "Get report datasets.", ["<NAME>"], ["--output"], ["get_object_info (objectType=report)"]),
         C("get service", "Get service operations.", ["<NAME>"], ["--output"], ["get_object_info (objectType=service)"]),
         C("get service-group", "Get service group members.", ["<NAME>"], ["--output"], ["get_object_info (objectType=service-group)"]),
@@ -271,6 +271,7 @@ public sealed class SchemaCommand : Command<SchemaCommand.Settings>
         C("get security-policy", "XDS security policy: constrained table, query, operation type.", ["<NAME>"], ["--output"], ["get_object_info (objectType=security-policy)"]),
 
         C("find batch-jobs", "Find all RunBaseBatch / SysOperationServiceController subclasses.", [], ["--model", "--output"], ["search (type=batch-jobs)"]),
+        C("find menu-items", "Which menu items open a form, class or report: Display/Action/Output items whose Object is exactly <OBJECT>, with kind, object type, label and model.", ["<OBJECT>"], ["--output"], ["search (type=menu-items)"]),
 
         C("resolve label", "Resolve @SYS12345-style label tokens to their text; several tokens give one result each.", ["<TOKEN>..."], ["--lang", "--output"], ["labels (action=resolve)"]),
 

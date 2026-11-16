@@ -123,6 +123,7 @@ public static class CliApp
                 b.AddCommand<FindFormPatternsCommand>("form-patterns").WithDescription("Analyse indexed forms by Microsoft pattern / primary table / similarity to a reference form.");
                 b.AddCommand<FindRelatedCommand>("related").WithDescription("Generic relation lookup by relation/name for agent workflows.");
                 b.AddCommand<FindBatchJobsCommand>("batch-jobs").WithDescription("Find all RunBaseBatch / SysOperationServiceController subclasses.");
+                b.AddCommand<FindMenuItemsCommand>("menu-items").WithDescription("Find the Display/Action/Output menu items that open a form, class or report (exact Object match).");
                 // Parity aliases matching the unified MCP surface (extension_info mode=events / find_references).
                 b.AddCommand<FindHandlersCommand>("event-handlers").WithDescription("Alias of `find handlers` — event handlers subscribed to a form/table/delegate.");
                 b.AddCommand<FindRefsCommand>("references").WithDescription("Alias of `find refs` — reverse references to a symbol in indexed X++ source.");

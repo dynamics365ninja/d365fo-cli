@@ -123,7 +123,9 @@ public static class ToolCatalog
         new Descriptor("search", ToolEffect.Read,
             "Unified metadata search across the index. `type` selects the kind: " +
             "class | table | edt | enum | query | view | entity | report | service | workflow | " +
-            "business-event | security-policy | configuration-key | tile | workspace | batch-jobs | any. " +
+            "business-event | security-policy | configuration-key | tile | workspace | batch-jobs | menu-items | any. " +
+            "`menu-items` answers \"which menu items open form X\": the Display/Action/Output menu items whose Object is " +
+            "exactly `query`, with kind, objectType, label and model. " +
             "Pass `queries` (array) to run several searches in one call (batch). Omit `type` (or use `any`) " +
             "for a scope-agnostic search across every kind. `model` filters class/table searches; " +
             "`category` filters business-event searches.",
@@ -154,6 +156,7 @@ public static class ToolCatalog
                     "tile"              => h.SearchTiles(query, limit),
                     "workspace"         => h.SearchWorkspaces(query, limit),
                     "batch-jobs"        => h.FindBatchJobs(model),
+                    "menu-items"        => h.FindMenuItems(query),
                     _                   => h.SearchAny(query, limit),
                 };
             }),
@@ -170,7 +173,10 @@ public static class ToolCatalog
             "entity | report | service | service-group | menu-item | business-event | security-policy. For tables, set exactly one of " +
             "`relations` | `methods` | `indexes` | `deleteActions` to return just that slice instead of the full table, or " +
             "`detail=brief` for a summary (properties, field name/type/EDT, index names and fields, relation names and " +
-            "related table) at a fraction of the size — read it first when you only need to know what the table holds.",
+            "related table) at a fraction of the size — read it first when you only need to know what the table holds. " +
+            "`detail=brief` also works for class (method signatures, inherited methods counted) and form (data sources and their tables). " +
+            "An entity's `name` may be its AOT name, PublicEntityName or PublicCollectionName (the OData entity set in a " +
+            "URL or an integration error); `matchedOn` says which matched.",
             Schema(("objectType", "string", true), ("name", "string", true),
                    ("relations", "boolean", false), ("methods", "boolean", false),
                    ("indexes", "boolean", false), ("deleteActions", "boolean", false),
@@ -184,15 +190,21 @@ public static class ToolCatalog
                     if (detail != "brief")
                         return D365FO.Core.ToolResult<object>.Fail("BAD_INPUT",
                             $"Unknown detail '{Str(p, "detail")}'.", "Use detail=brief or detail=full (the default).");
-                    if (!string.Equals(StrOr(p, "objectType", ""), "table", StringComparison.OrdinalIgnoreCase))
+                    var briefType = StrOr(p, "objectType", "").ToLowerInvariant();
+                    if (briefType is not ("table" or "class" or "form"))
                         return D365FO.Core.ToolResult<object>.Fail("BAD_INPUT",
-                            $"detail=brief is available for objectType=table only, not '{Str(p, "objectType")}'.",
+                            $"detail=brief is available for objectType=table, class and form only, not '{Str(p, "objectType")}'.",
                             "Drop detail for this objectType.");
                     if (Bool(p, "relations") || Bool(p, "methods") || Bool(p, "indexes") || Bool(p, "deleteActions"))
                         return D365FO.Core.ToolResult<object>.Fail("BAD_INPUT",
                             "detail=brief is a fixed summary shape and does not combine with a slice flag.",
                             "Drop detail=brief to read one slice, or drop the slice flag to read the summary.");
-                    return h.GetTableBrief(name);
+                    return briefType switch
+                    {
+                        "class" => h.GetClassBrief(name),
+                        "form" => h.GetFormBrief(name),
+                        _ => h.GetTableBrief(name),
+                    };
                 }
                 return StrOr(p, "objectType", "").ToLowerInvariant() switch
                 {
@@ -334,8 +346,10 @@ public static class ToolCatalog
             "models; `allModels: true` also scans every other model from disk (minutes on a full installation). " +
             "`coverage` names what was answered from the index, from disk, and not searched. `Owner.member` " +
             "searches the member and keeps methods that also mention Owner (text-based, flagged in `match`). " +
+            "A label (`@SYS12345`, `@File:Key`) also returns `properties`: the metadata properties that hold it " +
+            "(Label, HelpText, a control's Text …) with object, element and model. " +
             "`xref: true`: the compiler's cross-reference (DYNAMICSXREFDB) — complete and compiler-resolved, " +
-            "`kind` is a reference kind (Call/Read/Set/Type/…), no `model`/`allModels`. Returns one row per " +
+            "`kind` is a reference kind (Call/Type/Extends/Implements/Property/Attribute/…), no `model`/`allModels`. Returns one row per " +
             "referencing object (`limit` caps objects, default 200); `lines: N` returns one row per method with " +
             "up to N sample lines (xref: one row per reference with line/column).",
             Schema(("name", "string", true), ("kind", "string", false), ("model", "string", false), ("limit", "integer", false),
@@ -384,7 +398,8 @@ public static class ToolCatalog
             "Return the effective configuration in use (paths, custom-model patterns, label languages). Each "
             + "D365FO_* key resolves via CLI flag → environment variable → settings.json → default. "
             + "`changes=true` answers a different question with the same tool: what has changed in the working "
-            + "tree (`git diff` over `repo`, default the current directory, from `baseRev` to `headRev`) plus a "
+            + "tree (`git diff` over `repo`, default the current directory, which may be the repository root, a "
+            + "subfolder or a linked worktree, from `baseRev` to `headRev`) plus a "
             + "cheap rule pass over the changed AOT XML — fields with no EDT or label, hard-coded strings, "
             + "dynamic query construction. Shallow on purpose: it tells you whether a build or a BP check is "
             + "worth its minutes, and says plainly when the directory is not a git work tree.",
@@ -717,7 +732,9 @@ public static class ToolCatalog
             "Structured edits to an EXISTING object beyond its method bodies, via D365FO.Bridge (Windows VM, " +
             "requires D365FO_BRIDGE_ENABLED=1). `action` names the edit — the same twenty-one the CLI's `d365fo " +
             "modify` sub-commands carry:\n" +
-            "• property — set `member` (Label, ConfigurationKey, TableGroup, …) to `value` on any kind\n" +
+            "• property — set `member` (Label, ConfigurationKey, TableGroup, …) to `value` on any kind; checked " +
+            "against the object's AOT contract. A property with child elements is set one child at a time with a " +
+            "dotted `member` (`SubscriberAccessLevel.Read` = Allow)\n" +
             "• add-field / remove-field / rename-field — a field on table `name`; on add, `type` is the EDT and " +
             "decides the concrete AxTableField subtype (`label`, `mandatory`, `noEdit`, `noEditOnCreate` optional); on rename, `newName`\n" +
             "• field-property — set `property` (AllowEdit, AllowEditOnCreate, Mandatory, Visible, HelpText, " +

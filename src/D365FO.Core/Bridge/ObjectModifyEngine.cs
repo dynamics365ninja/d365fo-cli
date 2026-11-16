@@ -346,7 +346,7 @@ public static class ObjectModifyEngine
         if (planFailure is not null) return planFailure;
 
         // ---- 2. Read the live object (or start a new extension) ----
-        var (doc, preImage, readFailure) = ReadOrCreate(client, target!, request, kind);
+        var (doc, preImage, readFailure) = ReadOrCreate(client, target!, kind);
         if (readFailure is not null) return readFailure;
 
         // ---- 3. Structured edit(s) ----
@@ -372,7 +372,7 @@ public static class ObjectModifyEngine
             if (stepValidation is not null)
                 return BatchFailure(stepValidation, i, operations.Count, applied);
 
-            var (stepApplied, editFailure) = ApplyOperation(doc!, step, kind, target!, repo, warnings);
+            var (stepApplied, editFailure) = ApplyOperation(doc!, step, target!, repo, warnings, client);
             if (editFailure is not null)
                 return BatchFailure(editFailure, i, operations.Count, applied);
 
@@ -387,6 +387,7 @@ public static class ObjectModifyEngine
         // that had none, `<EnumValues>`, `<Controls>` — appended it at the end of the root and
         // the write came back "ok" with the change silently absent. Canonicalise the same way
         // before serialising; it is idempotent and leaves collection item order alone.
+        if (target!.Kind == "formextension") ContractNamespaceApplier.Apply(doc!);
         ContractOrderCanonicalizer.Apply(doc!);
         var newXml = doc!.ToString(SaveOptions.DisableFormatting);
         var verb = target!.Exists ? "updateObject" : "createObject";
@@ -416,7 +417,7 @@ public static class ObjectModifyEngine
             var msg = (string?)writeResult["message"] ?? "unknown error";
             return ToolResult<object>.Fail(code,
                 $"Bridge could not write {target.Kind} '{target.Name}': {msg}",
-                BridgeFailureHint(code, target));
+                BridgeFailureHint(code, target.Kind, target.Name, target.IsExtension));
         }
 
         warnings.Add($"Index not auto-refreshed — run `d365fo index refresh --model {target.Model}` so the change is searchable.");
@@ -468,16 +469,16 @@ public static class ObjectModifyEngine
     /// so if this process planned a write to a kind the bridge does not recognise, the
     /// two binaries are from different builds — that is the thing to say.
     /// </remarks>
-    private static string? BridgeFailureHint(string code, WriteTarget target)
+    private static string? BridgeFailureHint(string code, string kind, string name, bool isExtension)
     {
         if (string.Equals(code, "INVALID_KIND", StringComparison.Ordinal))
         {
-            return $"The bridge does not recognise '{target.Kind}', but this build resolves it to the " +
-                   $"{ObjectTypeRegistry.Find(target.Kind)?.ProviderCollection ?? "?"} provider collection — " +
+            return $"The bridge does not recognise '{kind}', but this build resolves it to the " +
+                   $"{ObjectTypeRegistry.Find(kind)?.ProviderCollection ?? "?"} provider collection — " +
                    "the bridge executable is from an older build. Rebuild it, or point D365FO_BRIDGE_PATH at a matching one.";
         }
-        return target.IsExtension
-            ? $"Check `d365fo doctor` and the bridge log for why {target.Kind} '{target.Name}' was rejected."
+        return isExtension
+            ? $"Check `d365fo doctor` and the bridge log for why {kind} '{name}' was rejected."
             : null;
     }
 
@@ -803,7 +804,7 @@ public static class ObjectModifyEngine
     // ------------------------------------------------------------------- read leg
 
     private static (XDocument? Doc, string? PreImage, ToolResult<object>? Failure) ReadOrCreate(
-        BridgeClient client, WriteTarget target, ModifyRequest request, string kind)
+        BridgeClient client, WriteTarget target, string kind)
     {
         if (!target.Exists)
         {
@@ -818,13 +819,19 @@ public static class ObjectModifyEngine
             return (fresh, null, null);
         }
 
+        return ReadObjectDocument(client, target.Kind, target.Name, target.IsExtension ? kind : null);
+    }
+
+    private static (XDocument? Doc, string? PreImage, ToolResult<object>? Failure) ReadObjectDocument(
+        BridgeClient client, string kind, string name, string? baseKind = null)
+    {
         JsonObject? readResult;
         try
         {
             readResult = client.SendAsync("readObjectXml", new JsonObject
             {
-                ["kind"] = target.Kind,
-                ["name"] = target.Name,
+                ["kind"] = kind,
+                ["name"] = name,
             }).GetAwaiter().GetResult();
         }
         catch (BridgeException ex)
@@ -839,14 +846,14 @@ public static class ObjectModifyEngine
         {
             var code = (string?)readResult["error"] ?? "READ_FAILED";
             var msg = (string?)readResult["message"] ?? "unknown error";
-            return (null, null, ToolResult<object>.Fail(code == "NOT_FOUND" ? NotFoundCodeFor(kind) : code,
-                $"Bridge could not read {target.Kind} '{target.Name}': {msg}",
-                BridgeFailureHint(code, target)));
+            return (null, null, ToolResult<object>.Fail(code == "NOT_FOUND" ? NotFoundCodeFor(baseKind ?? kind) : code,
+                $"Bridge could not read {kind} '{name}': {msg}",
+                BridgeFailureHint(code, kind, name, baseKind is not null)));
         }
 
         var xml = (string?)readResult["xml"];
         if (string.IsNullOrWhiteSpace(xml))
-            return (null, null, ToolResult<object>.Fail("READ_FAILED", $"Bridge returned an empty xml payload for {target.Name}."));
+            return (null, null, ToolResult<object>.Fail("READ_FAILED", $"Bridge returned an empty xml payload for {name}."));
 
         try
         {
@@ -861,14 +868,14 @@ public static class ObjectModifyEngine
     // ------------------------------------------------------------------ edit leg
 
     private static (object? Applied, ToolResult<object>? Failure) ApplyOperation(
-        XDocument doc, ModifyRequest request, string kind, WriteTarget target, MetadataRepository? repo,
-        List<string> warnings)
+        XDocument doc, ModifyRequest request, WriteTarget target, MetadataRepository? repo,
+        List<string> warnings, BridgeClient client)
         => request.Operation switch
         {
-            Operation.SetProperty => SetProperty(doc, request),
+            Operation.SetProperty => SetProperty(doc, request, target),
             Operation.AddField => AddField(doc, request, repo, warnings),
             Operation.AddEnumValue => AddEnumValue(doc, request),
-            Operation.AddControl => AddControl(doc, request),
+            Operation.AddControl => AddControl(doc, request, target.IsExtension, client),
             Operation.AddIndex => AddIndex(doc, request, target, repo),
             Operation.AddRelation => AddRelation(doc, request),
             Operation.AddFieldGroup => AddFieldGroup(doc, request),
@@ -1178,9 +1185,7 @@ public static class ObjectModifyEngine
         var root = doc.Root!;
         var design = root.Elements().FirstOrDefault(e => e.Name.LocalName == "Design") ?? root;
 
-        var control = design.Descendants()
-            .FirstOrDefault(e => e.Name.LocalName.StartsWith("AxFormControl", StringComparison.Ordinal)
-                                 && string.Equals(LocalValue(e, "Name"), request.Member, StringComparison.OrdinalIgnoreCase));
+        var control = FindFormControl(design, request.Member);
 
         if (control is null)
         {
@@ -1190,9 +1195,9 @@ public static class ObjectModifyEngine
         }
 
         // Removing a container takes its children with it — say so, rather than reporting "1".
-        var descendants = control.Descendants()
-            .Count(e => e.Name.LocalName.StartsWith("AxFormControl", StringComparison.Ordinal));
-        control.Remove();
+        var descendants = control.Descendants().Count(IsFormControl);
+        var item = control.Parent?.Name.LocalName == "AxFormExtensionControl" ? control.Parent : control;
+        item.Remove();
 
         return (new { removedControl = request.Member, nestedControlsRemoved = descendants }, null);
     }
@@ -1388,28 +1393,181 @@ public static class ObjectModifyEngine
         }, null);
     }
 
-    private static (object?, ToolResult<object>?) SetProperty(XDocument doc, ModifyRequest request)
+    /// <summary>
+    /// Set one property of the object, or one child of a property that holds child elements
+    /// (<c>SubscriberAccessLevel.Read</c>). Each name on the path is checked against the AOT
+    /// contract of the element it lands in, so a typo is refused instead of written as an
+    /// element the reader drops.
+    /// </summary>
+    /// <remarks>
+    /// A property such as <c>SubscriberAccessLevel</c> is an <c>AccessGrant</c> with six
+    /// children. Setting it to plain text used to replace those children with a text node,
+    /// which the bridge then failed to deserialize (<c>Expecting state 'Element'.. Encountered
+    /// 'Text'</c>). It is refused now, before anything is written, with the dotted form to use.
+    /// New elements are appended; <see cref="ContractOrderCanonicalizer"/> puts them in contract
+    /// order before the write.
+    /// </remarks>
+    private static (object?, ToolResult<object>?) SetProperty(XDocument doc, ModifyRequest request, WriteTarget target)
     {
         var root = doc.Root!;
-        var existing = root.Elements().FirstOrDefault(e =>
-            string.Equals(e.Name.LocalName, request.Member, StringComparison.OrdinalIgnoreCase));
-
-        var oldValue = existing?.Value;
-        if (existing is not null)
+        var ns = root.Name.Namespace;
+        var path = request.Member.Split('.', StringSplitOptions.TrimEntries);
+        if (path.Any(s => s.Length == 0))
         {
-            existing.SetValue(request.Value!);
-        }
-        else
-        {
-            // Property order under an Ax* root is alphabetical after <Name>; inserting
-            // after <Name> keeps the document readable without risking the serializer,
-            // which is order-tolerant for simple properties on the root.
-            var el = new XElement(root.Name.Namespace + request.Member, request.Value!);
-            var nameEl = root.Elements().FirstOrDefault(e => e.Name.LocalName == "Name");
-            if (nameEl is not null) nameEl.AddAfterSelf(el); else root.AddFirst(el);
+            return (null, ToolResult<object>.Fail(D365FoErrorCodes.BadInput,
+                $"'{request.Member}' is not a property path.",
+                "Name a property (Label) or one child of a property (SubscriberAccessLevel.Read)."));
         }
 
-        return (new { property = request.Member, oldValue, newValue = request.Value }, null);
+        // An extension's root holds the extension's own members (PropertyModifications, …), not
+        // the base object's, so there is no contract to check a base property name against.
+        var contracts = target.IsExtension ? null : RootContracts(root);
+        if (contracts is null && path.Length > 1)
+        {
+            return (null, ToolResult<object>.Fail(D365FoErrorCodes.BadInput,
+                $"'{request.Member}' cannot be checked: {root.Name.LocalName} '{target.Name}' has no known AOT contract here.",
+                "A dotted property path is only written where it can be checked against the contract. " +
+                "Set the property on the object itself, not on an extension."));
+        }
+
+        var owner = root;
+        var walked = new List<string>(path.Length);
+        for (var i = 0; i < path.Length; i++)
+        {
+            var segment = path[i];
+            MetadataContract? declaring = null;
+            if (contracts is not null)
+            {
+                declaring = contracts.FirstOrDefault(c => c.Members.Any(m => string.Equals(m, segment, StringComparison.OrdinalIgnoreCase)));
+                if (declaring is null)
+                    return (null, UnknownProperty(contracts, walked, segment));
+                segment = declaring.Members.First(m => string.Equals(m, segment, StringComparison.OrdinalIgnoreCase));
+            }
+
+            walked.Add(segment);
+            var dotted = string.Join('.', walked);
+            var existing = owner.Elements().FirstOrDefault(e =>
+                string.Equals(e.Name.LocalName, segment, StringComparison.OrdinalIgnoreCase));
+            var held = MetadataContracts.MemberContract(declaring, segment);
+
+            if (i == path.Length - 1)
+            {
+                if (held is not null || existing?.HasElements == true)
+                    return (null, HoldsChildElements(request, dotted, held));
+
+                var value = request.Value!;
+                if (declaring is not null && MetadataContracts.EnumForMember(declaring, segment) is { } enumName
+                    && MetadataContracts.EnumValues(enumName) is { Count: > 0 } allowed)
+                {
+                    var trimmed = value.Trim();
+                    if (enumName == "NoYes" && bool.TryParse(trimmed, out var flag)) trimmed = flag ? "Yes" : "No";
+                    var match = allowed.FirstOrDefault(v => string.Equals(v, trimmed, StringComparison.OrdinalIgnoreCase));
+                    if (match is null)
+                    {
+                        return (null, ToolResult<object>.Fail(D365FoErrorCodes.BadInput,
+                            $"'{value}' is not a value of {enumName}, which {dotted} takes.",
+                            $"Use one of: {string.Join(", ", allowed)}."));
+                    }
+                    value = match;
+                }
+
+                var oldValue = existing?.Value;
+                if (existing is not null) existing.SetValue(value);
+                else owner.Add(new XElement(ns + segment, value));
+                return (new { property = dotted, oldValue, newValue = value }, null);
+            }
+
+            // Walking into a property: it must hold one object with members of its own, not a
+            // value and not a collection of named items (those have their own operations).
+            if (held is null)
+            {
+                return (null, ToolResult<object>.Fail(D365FoErrorCodes.BadInput,
+                    $"{dotted} holds a value, not child properties, so '{request.Member}' does not exist.",
+                    $"Set it directly: `d365fo modify property {request.Kind} {request.ObjectName} {dotted} --value <VALUE>`."));
+            }
+            if (IsCollectionMember(held, existing))
+            {
+                return (null, ToolResult<object>.Fail(D365FoErrorCodes.BadInput,
+                    $"{dotted} is a collection of {held.Name} items, not a property with child properties.",
+                    "Change its items with the dedicated `d365fo modify` operations (add-field, add-index, " +
+                    "add-control, …), or `d365fo modify --help` for the list."));
+            }
+
+            if (existing is null)
+            {
+                existing = new XElement(ns + segment);
+                owner.Add(existing);
+            }
+            owner = existing;
+            contracts = new[] { held };
+        }
+
+        // Unreachable: the loop returns on the last segment.
+        return (null, ToolResult<object>.Fail(D365FoErrorCodes.BadInput, $"'{request.Member}' is not a property path."));
+    }
+
+    /// <summary>
+    /// The contracts a root element's members may come from: its own, or, for an abstract root
+    /// that pins no <c>i:type</c>, also every concrete type derived from it. Null when unknown.
+    /// </summary>
+    private static IReadOnlyList<MetadataContract>? RootContracts(XElement root)
+    {
+        var contract = MetadataContracts.GoverningContract(root, parent: null);
+        if (contract is null) return null;
+        XNamespace xsi = "http://www.w3.org/2001/XMLSchema-instance";
+        if (!contract.IsAbstract || root.Attribute(xsi + "type") is not null) return new[] { contract };
+        return new[] { contract }.Concat(MetadataContracts.DerivedFrom(contract.Name)).ToList();
+    }
+
+    /// <summary>
+    /// True when a member holds a list of named items (<c>Fields</c>, <c>Indexes</c>) rather
+    /// than one object (<c>SubscriberAccessLevel</c>, <c>Design</c>). The catalog records the
+    /// item type for both, so this is read from the item type having a <c>Name</c>, and from
+    /// the element itself when it already holds items named after a type.
+    /// </summary>
+    private static bool IsCollectionMember(MetadataContract held, XElement? existing)
+        => held.IndexOf("Name") >= 0
+           || existing?.Elements().Any(e => held.IndexOf(e.Name.LocalName) < 0) == true;
+
+    private static ToolResult<object> UnknownProperty(
+        IReadOnlyList<MetadataContract> contracts, IReadOnlyList<string> parents, string segment)
+    {
+        var owner = parents.Count == 0 ? contracts[0].Name : string.Join('.', parents);
+        var members = contracts.SelectMany(c => c.Members).Where(m => m != "Name")
+            .Distinct(StringComparer.Ordinal).ToList();
+        var close = members
+            .Where(m => m.Contains(segment, StringComparison.OrdinalIgnoreCase)
+                        || segment.Contains(m, StringComparison.OrdinalIgnoreCase))
+            .Take(5)
+            .ToList();
+        return ToolResult<object>.Fail(D365FoErrorCodes.BadInput,
+            $"{owner} has no property '{segment}'.",
+            close.Count > 0
+                ? $"Did you mean: {string.Join(", ", close)}?"
+                : $"Settable on {owner}: {string.Join(", ", members)}.");
+    }
+
+    private static ToolResult<object> HoldsChildElements(ModifyRequest request, string dotted, MetadataContract? held)
+    {
+        if (held is null || IsCollectionMember(held, null))
+        {
+            return ToolResult<object>.Fail(D365FoErrorCodes.BadInput,
+                $"{dotted} holds child elements, not a value, so it cannot be set to '{request.Value}'.",
+                held is null
+                    ? $"Set one child at a time: `d365fo modify property {request.Kind} {request.ObjectName} {dotted}.<CHILD> --value <VALUE>`."
+                    : $"It is a collection of {held.Name} items. Change them with the dedicated `d365fo modify` " +
+                      "operations (add-field, add-index, add-control, …).");
+        }
+
+        var children = held.Members.ToList();
+        var enums = children.Select(held.EnumFor).Distinct().ToList();
+        var values = enums.Count == 1 && enums[0] is { } e && MetadataContracts.EnumValues(e) is { Count: > 0 } v
+            ? $" Each takes {string.Join(", ", v)}."
+            : string.Empty;
+        return ToolResult<object>.Fail(D365FoErrorCodes.BadInput,
+            $"{dotted} holds child elements ({held.Name}), not a value, so it cannot be set to '{request.Value}'.",
+            $"Set one child at a time: `d365fo modify property {request.Kind} {request.ObjectName} " +
+            $"{dotted}.<CHILD> --value <VALUE>`. Children of {dotted}: {string.Join(", ", children)}.{values}");
     }
 
     private static (object?, ToolResult<object>?) AddField(
@@ -1579,18 +1737,28 @@ public static class ObjectModifyEngine
         return (new { enumValue = request.Member, positional = true }, null);
     }
 
-    private static (object?, ToolResult<object>?) AddControl(XDocument doc, ModifyRequest request)
+    private static (object?, ToolResult<object>?) AddControl(
+        XDocument doc, ModifyRequest request, bool isExtension, BridgeClient client)
     {
         var root = doc.Root!;
-        var design = root.Elements().FirstOrDefault(e => e.Name.LocalName == "Design");
-        if (design is null)
+        var design = FormDesignWalker.Child(root, "Design") ?? root;
+        var parentName = string.IsNullOrWhiteSpace(request.Parent) ? null : request.Parent;
+        var container = parentName is null ? design : FindFormControl(design, parentName);
+
+        if (container is null && isExtension)
         {
-            // A form extension has no <Design>; controls are added under its own
-            // <Controls> collection, which the metadata model merges into the base design.
-            design = root;
+            var (baseForm, _, failure) = ReadObjectDocument(client, "form", request.ObjectName);
+            if (failure is not null) return (null, failure);
+
+            var baseDesign = FormDesignWalker.Child(baseForm!.Root!, "Design");
+            var inherited = baseDesign is null ? null : FindFormControl(baseDesign, parentName!);
+            if (inherited is not null && FormDesignWalker.Child(inherited, "Controls") is not null)
+            {
+                parentName = LocalValue(inherited, "Name");
+                container = root;
+            }
         }
 
-        var container = FindContainer(design, request.Parent);
         if (container is null)
         {
             return (null, ToolResult<object>.Fail(D365FoErrorCodes.ControlNotFound,
@@ -1598,14 +1766,9 @@ public static class ObjectModifyEngine
                 "Omit --parent to add at the Design root, or check the names with `d365fo get form " + request.ObjectName + "`."));
         }
 
-        var controls = container.Elements().FirstOrDefault(e => e.Name.LocalName == "Controls");
-        if (controls is null)
-        {
-            controls = new XElement(XNamespace.None + "Controls");
-            container.Add(controls);
-        }
-
-        if (controls.Elements().Any(e => string.Equals(LocalValue(e, "Name"), request.Member, StringComparison.OrdinalIgnoreCase)))
+        var controls = EnsureCollection(container, "Controls");
+        var exists = isExtension ? FindFormControl(root, request.Member) is not null : HasNamed(controls, "Name", request.Member);
+        if (exists)
         {
             return (null, ToolResult<object>.Fail(D365FoErrorCodes.AlreadyExists,
                 $"Control '{request.Member}' already exists under {request.Parent ?? "Design"}."));
@@ -1615,25 +1778,43 @@ public static class ObjectModifyEngine
             ? FormControlFactory.Create(request.Type!, request.Member)
             : FormControlFactory.CreateBoundField(request.Type!, request.Member, request.DataSource ?? "", request.DataField!);
 
-        controls.Add(control);
+        controls.Attribute(FormControlFactory.Xsi + "nil")?.Remove();
+        if (isExtension && container == root)
+        {
+            // A direct extension addition refers to its parent in the base form by name.
+            // The wrapper has its own identity, independent of the form control's name.
+            control.Name = "FormControl";
+            controls.Add(new XElement("AxFormExtensionControl",
+                new XElement("Name", "FormExtensionControl" + Guid.NewGuid().ToString("N")[..12]),
+                control,
+                parentName is null ? null : new XElement("Parent", parentName)));
+        }
+        else
+        {
+            controls.Add(control);
+        }
+
         return (new
         {
             control = request.Member,
             type = request.Type,
             axType = FormControlFactory.AxTypeFor(request.Type!),
-            parent = request.Parent ?? "Design",
+            parent = parentName ?? "Design",
             bound = !string.IsNullOrWhiteSpace(request.DataField),
         }, null);
     }
 
-    /// <summary>Find a container control by name anywhere in the design tree; null name means the design root.</summary>
-    private static XElement? FindContainer(XElement design, string? name)
-    {
-        if (string.IsNullOrWhiteSpace(name)) return design;
-        return design.Descendants()
-            .FirstOrDefault(e => e.Name.LocalName == "AxFormControl" &&
-                                 string.Equals(LocalValue(e, "Name"), name, StringComparison.OrdinalIgnoreCase));
-    }
+    private static XElement? FindFormControl(XElement design, string name)
+        => design.Descendants().Where(IsFormControl)
+            .FirstOrDefault(e => string.Equals(LocalValue(e, "Name"), name, StringComparison.OrdinalIgnoreCase));
+
+    private static bool IsFormControl(XElement element)
+        => element.Parent?.Name.LocalName switch
+        {
+            "Controls" => element.Name.LocalName.StartsWith("AxFormControl", StringComparison.Ordinal),
+            "AxFormExtensionControl" => element.Name.LocalName == "FormControl",
+            _ => false,
+        };
 
     // ------------------------------------------------------------------ journaling
 

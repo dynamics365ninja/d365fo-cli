@@ -3,7 +3,7 @@
 
 Every tool the bundled `d365fo-mcp` adapter advertises, and the `d365fo` commands that reach the same handler. Both columns are read from the running code — the command manifest (`d365fo schema --full`) and the adapter's own `tools/list` — so a tool that stops matching a command fails the generator rather than quietly outliving the mapping.
 
-**32 tools · 192 command routes · 15 commands with no MCP route.**
+**32 tools · 195 command routes · 15 commands with no MCP route.**
 
 The adapter is consolidated on purpose: one tool dispatches on a `type` / `objectType` / `mode` / `action` discriminator instead of shipping one tool per object kind. That keeps the schema payload a host injects every turn from growing with the object model — see [TOKEN_ECONOMICS.md](TOKEN_ECONOMICS.md) for what that payload actually measures.
 
@@ -160,10 +160,12 @@ Read one object's full metadata by `objectType`: table | class | edt | enum | fo
 | `d365fo find relations` | `objectType=table,relations` |
 | `d365fo get business-event` | `objectType=business-event` |
 | `d365fo get class` | `objectType=class` |
+| `d365fo get class` | `objectType=class, detail=brief` |
 | `d365fo get edt` | `objectType=edt` |
 | `d365fo get entity` | `objectType=entity` |
 | `d365fo get enum` | `objectType=enum` |
 | `d365fo get form` | `objectType=form` |
+| `d365fo get form` | `objectType=form, detail=brief` |
 | `d365fo get menu-item` | `objectType=menu-item` |
 | `d365fo get object` | — |
 | `d365fo get query` | `objectType=query` |
@@ -338,6 +340,7 @@ Unified metadata search across the index. `type` selects the kind: class | table
 | CLI command | Discriminator |
 |---|---|
 | `d365fo find batch-jobs` | `type=batch-jobs` |
+| `d365fo find menu-items` | `type=menu-items` |
 | `d365fo find related` | `type=any` |
 | `d365fo find usages` | `type=any` |
 | `d365fo search any` | `type=any` |

@@ -63,6 +63,24 @@ public sealed partial class ToolHandlers
             : ToolResult<object>.Success(D365FO.Core.Analysis.TableBrief.FromIndex(t, _repo.GetEdtBaseType));
     }
 
+    /// <summary><c>get_object_info(objectType=class, detail=brief)</c> — see <see cref="D365FO.Core.Analysis.ClassBrief"/>.</summary>
+    public ToolResult<object> GetClassBrief(string name)
+    {
+        var c = _repo.GetClassDetails(name);
+        return c is null
+            ? ToolResult<object>.Fail("CLASS_NOT_FOUND", $"Class '{name}' not found.")
+            : ToolResult<object>.Success(D365FO.Core.Analysis.ClassBrief.FromIndex(c));
+    }
+
+    /// <summary><c>get_object_info(objectType=form, detail=brief)</c> — see <see cref="D365FO.Core.Analysis.FormBrief"/>.</summary>
+    public ToolResult<object> GetFormBrief(string name)
+    {
+        var f = _repo.GetForm(name);
+        return f is null
+            ? ToolResult<object>.Fail("FORM_NOT_FOUND", $"Form '{name}' not found.")
+            : ToolResult<object>.Success(D365FO.Core.Analysis.FormBrief.FromIndex(f));
+    }
+
     public ToolResult<object> GetEdt(string name)
     {
         var resolved = _repo.GetEdtResolved(name);
@@ -98,9 +116,13 @@ public sealed partial class ToolHandlers
     {
         var mi = _repo.GetMenuItem(name);
         return mi is null
-            ? ToolResult<object>.Fail("MENU_ITEM_NOT_FOUND", $"Menu item '{name}' not found.")
+            ? ToolResult<object>.Fail("MENU_ITEM_NOT_FOUND", $"Menu item '{name}' not found.",
+                $"To find the menu items that open an object named '{name}', use search (type=menu-items, query={name}).")
             : ToolResult<object>.Success(mi);
     }
+
+    /// <summary>Menu items of every kind whose Object is exactly <paramref name="objectName"/>.</summary>
+    public ToolResult<object> FindMenuItems(string objectName) => MenuItemLookup.ForObject(_repo, objectName);
 
     public ToolResult<object> GetLabel(string file, string language, string key, bool raw = false)
     {
@@ -269,7 +291,8 @@ public sealed partial class ToolHandlers
     {
         var e = _repo.GetDataEntity(name);
         return e is null
-            ? ToolResult<object>.Fail("ENTITY_NOT_FOUND", $"Data entity '{name}' not found.")
+            ? ToolResult<object>.Fail("ENTITY_NOT_FOUND", $"Data entity '{name}' not found.",
+                $"Looked for an AOT name, PublicEntityName or PublicCollectionName equal to '{name}'. For a partial name use search (type=entity, query={name}).")
             : ToolResult<object>.Success(e);
     }
 
@@ -2795,7 +2818,7 @@ public sealed partial class ToolHandlers
             && kind.Trim().ToLowerInvariant() is not ("class" or "table" or "form"))
             return ToolResult<object>.Fail(D365FoErrorCodes.BadInput,
                 $"Unknown kind '{kind}' for the text scan.",
-                "Use class | table | form. A reference kind (Call, Read, Set, …) needs the xref query.");
+                "Use class | table | form. A reference kind (Call, Type, Extends, …) needs the xref query.");
         if (allModels && !string.IsNullOrWhiteSpace(model))
             return ToolResult<object>.Fail(D365FoErrorCodes.BadInput,
                 "allModels and model contradict each other.",
@@ -2824,12 +2847,15 @@ public sealed partial class ToolHandlers
                 filesScanned = result.FilesScanned,
                 searched = result.Searched,
                 scope = result.Coverage?.Scope,
-                coverage = MethodSourceSearch.CoveragePayload(result.Coverage),
+                coverage = MethodSourceSearch.CoveragePayload(result.Coverage, result.PropertyCoverage),
                 match = MethodSourceSearch.MemberMatchPayload(result.Member),
                 hint = result.Hint,
                 count = items.Count,
                 truncated = result.Truncated,
                 items,
+                propertyCount = result.Properties?.Count,
+                propertiesTruncated = result.Properties is null ? (bool?)null : result.PropertiesTruncated,
+                properties = MethodSourceSearch.PropertiesPayload(result),
             }, result.Caveat is null ? null : [result.Caveat]);
         }
 
@@ -2857,13 +2883,18 @@ public sealed partial class ToolHandlers
             filesScanned = scan.FilesScanned,
             searched = scan.Searched,
             scope = scan.Coverage?.Scope,
-            coverage = MethodSourceSearch.CoveragePayload(scan.Coverage),
+            coverage = MethodSourceSearch.CoveragePayload(scan.Coverage, scan.PropertyCoverage),
             match = MethodSourceSearch.MemberMatchPayload(scan.Member),
             hint = scan.Hint,
             count = Math.Min(objects.Count, limit),
             matchedMethods = scan.Hits.Count,
             truncated = scan.Truncated || objects.Count > limit,
             items = objects.Take(limit).ToList(),
+            // A label reference: the metadata properties that hold it (a field's Label, a
+            // control's Text), where most labels are used. Absent for any other needle.
+            propertyCount = scan.Properties is null ? (int?)null : Math.Min(scan.Properties.Count, limit),
+            propertiesTruncated = scan.Properties is null ? (bool?)null : scan.PropertiesTruncated || scan.Properties.Count > limit,
+            properties = MethodSourceSearch.PropertiesPayload(scan, limit),
         }, scan.Caveat is null ? null : [scan.Caveat]);
     }
 

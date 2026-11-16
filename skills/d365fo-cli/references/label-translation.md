@@ -63,8 +63,9 @@ d365fo labels rename @FleetManagement:OldKey @FleetManagement:NewKey \
 ```
 
 The rename touches *only* the resource file — XML / X++ references to the
-old key are NOT rewritten. After the rename, run a project-wide search and
-update them yourself, then `d365fo index refresh --model <Model>` so
+old key are NOT rewritten. Find them first with
+`d365fo find references @FleetManagement:OldKey` (see §6), update them
+yourself, then `d365fo index refresh --model <Model>` so
 `BPErrorUnknownLabel` gates pick up the new state.
 
 ## 5. Delete a label entry
@@ -75,7 +76,29 @@ d365fo labels delete @FleetManagement:DeprecatedKey --file <path>.label.txt
 
 - Pre-flight: `d365fo find references @FleetManagement:DeprecatedKey` to ensure no
   remaining references — deleting a referenced label triggers
-  `BPErrorUnknownLabel` on every consumer.
+  `BPErrorUnknownLabel` on every consumer. Check both `items` (X++ code) and
+  `properties` (metadata) in the answer.
+
+## 6. Where is a label used?
+
+```sh
+d365fo find references "@SYS340678" --output json
+d365fo find references "@FleetManagement:VehicleVin" --model FleetManagement --output json
+```
+
+- A label token is matched as a whole token: `@SYS12` does not match `@SYS123`.
+- `items` lists the X++ methods that use it. `properties` lists the metadata
+  properties that hold it, each with `kind`, `name`, `model`, `element`
+  (`Fields/AccountNum`, `Design/TabGeneral/OkButton`) and `property`
+  (`Label`, `HelpText`, `Text`, `Caption`, …). Most labels are used there,
+  not in code.
+- `via: index` rows come from the index's `Label` columns and cover every
+  model in well under a second. Other properties (`HelpText`, a control's
+  `Text`, a form's `Caption`) are read from the XML only for the default
+  scope (custom and source-indexed models) or the model `--model` names.
+  `coverage.properties` says which models were answered which way.
+- Do not reach for `--all-models` to find a label in metadata: it widens only
+  the X++ code scan, which takes minutes on a full installation.
 
 ## Hard rules
 

@@ -189,7 +189,14 @@ public sealed record MenuItemInfo(
     string? Object,
     string? ObjectType,
     string? Label,
-    string Model);
+    string Model)
+{
+    /// <summary>
+    /// True when the AOT XML carries no <c>ObjectType</c> element and <see cref="ObjectType"/>
+    /// is the platform default, <c>Form</c>.
+    /// </summary>
+    public bool ObjectTypeIsDefault { get; init; }
+}
 
 public sealed record RelationInfo(string FromTable, string ToTable, string? Cardinality, string? RelationName);
 
@@ -349,7 +356,9 @@ public sealed record DataEntityInfo(
     string? Label,
     string? SourcePath);
 public sealed record DataEntityFieldInfo(string Name, string? DataSource, string? DataField, bool IsMandatory, bool IsReadOnly);
-public sealed record DataEntityDetails(DataEntityInfo Entity, IReadOnlyList<DataEntityFieldInfo> Fields);
+/// <remarks><c>MatchedOn</c> is the identifier the lookup matched: <c>name</c> (the AOT name),
+/// <c>publicEntityName</c> or <c>publicCollectionName</c> (the OData entity set).</remarks>
+public sealed record DataEntityDetails(DataEntityInfo Entity, IReadOnlyList<DataEntityFieldInfo> Fields, string MatchedOn = "name");
 
 public sealed record ReportInfo(long ReportId, string Name, string? Kind, string Model, string? SourcePath);
 public sealed record ReportDataSetInfo(string Name, string? Kind, string? QueryOrClass);

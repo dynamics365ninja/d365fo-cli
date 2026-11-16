@@ -152,6 +152,40 @@ public sealed class RnrProjRegistryTests : IDisposable
     }
 
     [Fact]
+    public void RegisterInProject_adds_the_folder_entries_visual_studio_needs()
+    {
+        // An empty item group (a hand- or script-made project), plus an item an earlier
+        // registration linked into a folder it never listed: Visual Studio refuses to load either.
+        var rnrproj = Path.Combine(_dir, "MyProject.rnrproj");
+        File.WriteAllText(rnrproj,
+            "<?xml version=\"1.0\" encoding=\"utf-8\"?>\r\n" +
+            "<Project xmlns=\"http://schemas.microsoft.com/developer/msbuild/2003\">\r\n" +
+            "  <PropertyGroup>\r\n    <Model>MyModel</Model>\r\n  </PropertyGroup>\r\n" +
+            "  <ItemGroup>\r\n  </ItemGroup>\r\n" +
+            "</Project>\r\n");
+
+        RnrProjRegistry.RegisterInProject(rnrproj, "AxEdt", "MyEdt", "MyModel");
+        RnrProjRegistry.RegisterInProject(rnrproj, "AxTable", "MyTable", "MyModel");
+        RnrProjRegistry.RegisterInProject(rnrproj, "AxTable", "MyTable2", "MyModel");
+
+        var doc = System.Xml.Linq.XDocument.Load(rnrproj);
+        System.Xml.Linq.XNamespace ns = "http://schemas.microsoft.com/developer/msbuild/2003";
+        var folders = doc.Descendants(ns + "Folder").Select(f => (string?)f.Attribute("Include")).ToList();
+        Assert.Equal([@"Extended Data Types\", @"Tables\"], folders);
+        // One group of folders, before the group listing the objects.
+        var groups = doc.Root!.Elements(ns + "ItemGroup").Where(g => g.HasElements).ToList();
+        Assert.Equal(2, groups.Count);
+        Assert.All(groups[0].Elements(), e => Assert.Equal(ns + "Folder", e.Name));
+        Assert.All(groups[1].Elements(), e => Assert.Equal(ns + "Content", e.Name));
+
+        // A project an older version left without folder entries is repaired on the next registration.
+        File.WriteAllText(rnrproj, VisualStudioProject.Replace("  <ItemGroup>\r\n    <Folder Include=\"Classes\\\"/>\r\n  </ItemGroup>\r\n", ""));
+        RnrProjRegistry.RegisterInProject(rnrproj, "AxForm", "MyForm", "MyModel");
+        folders = System.Xml.Linq.XDocument.Load(rnrproj).Descendants(ns + "Folder").Select(f => (string?)f.Attribute("Include")).ToList();
+        Assert.Equal([@"Classes\", @"Forms\"], folders);
+    }
+
+    [Fact]
     public void RegisterInProject_does_not_list_an_object_twice()
     {
         var rnrproj = Path.Combine(_dir, "MyProject.rnrproj");

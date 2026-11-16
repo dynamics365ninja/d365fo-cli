@@ -25,6 +25,19 @@ d365fo get table CustTable --resolve-labels    # rewrite @File:Id tokens to text
 
 Supports `get class|edt|enum|form|menu-item|security|label|role|duty|privilege|query|view|entity|report|service|service-group`. Unknown names return a `*_NOT_FOUND` envelope with a `hint: "Did you mean: …"`.
 
+An integration error or an OData URL names the entity set, not the entity. `get entity` resolves that too:
+
+```sh
+d365fo get entity CustomersV3        # → CustCustomerV3Entity, data.matchedOn = "publicCollectionName"
+```
+
+### `find menu-items` — which menu items open a form
+
+```sh
+d365fo find menu-items CustTable     # Display/Action/Output items whose Object is CustTable
+d365fo get menu-item CustTable       # the reverse: kind, object, objectType of one item
+```
+
 ### `find` — trace cross-references
 
 ```sh
