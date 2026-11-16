@@ -1,4 +1,4 @@
-using D365FO.Core;
+﻿using D365FO.Core;
 using Spectre.Console.Cli;
 
 namespace D365FO.Cli.Commands.Agent;
@@ -192,7 +192,7 @@ public sealed class SchemaCommand : Command<SchemaCommand.Settings>
         C("find handlers", "Find event subscribers.", ["<OBJECT>"], ["--kind", "--output"], ["extension_info (mode=events)"]),
         C("find event-handlers", "Alias of `find handlers`.", ["<OBJECT>"], ["--kind", "--output"], ["extension_info (mode=events)"]),
         C("find tables-by-field", "Alias of `find fields`, named like the MCP tool.", ["<NAME>"], ["--model", "--limit", "--output"], ["find_tables_by_field"]),
-        C("find refs","Where a symbol is used: text scan of indexed X++ source, or the compiler's xref with --xref.", ["<NAME>"], ["--kind", "--model", "--limit", "--lines", "--all-models", "--xref", "--output"], ["find_references"]),
+        C("find refs", "Where a symbol is used: text scan of indexed X++ source, or the compiler's xref with --xref.", ["<NAME>"], ["--kind", "--model", "--limit", "--lines", "--all-models", "--xref", "--output"], ["find_references"]),
         C("find references", "Alias of `find refs`.", ["<NAME>"], ["--kind", "--model", "--limit", "--lines", "--all-models", "--xref", "--output"], ["find_references"]),
         C("find form-patterns", "Find forms by Microsoft form pattern, table, or peer form.", [], ["--pattern", "--table", "--similar-to", "--output"], ["object_patterns (domain=form, action=analyze)"]),
 
