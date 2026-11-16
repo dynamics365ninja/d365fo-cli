@@ -19,6 +19,21 @@ was ported from.
 
 ## [Unreleased]
 
+### Fixed — `d365fo build` on a UDE writes compiled metadata next to the model, not into the platform
+
+`d365fo build` passed xppc `-compilermetadata=<FrameworkDirectory>`. xppc writes a package's
+compiled metadata there, so every custom package built on a UDE left a copy of itself in the
+FrameworkDirectory (`<Package>\XppMetadata` only, no `Descriptor` or `bin`). Visual Studio's "Build
+models" writes it into the ModelStoreFolder, next to the source. The stale copy can shadow the
+source on the next build: an object that the copy lacks fails with
+`CompilerMetadataWriteBackFailure` ("Failed to write metadata back to the file … This is often due
+to the file being read-only"), although the file is writable and Visual Studio builds the model.
+
+- **`-compilermetadata` is the model's own root**, as in Visual Studio. On a VM, where the model
+  and the platform share `PackagesLocalDirectory`, the arguments are unchanged.
+- **Copies left by an earlier build stay** until removed by hand: in the FrameworkDirectory, delete
+  the folders of your own packages that hold nothing but `XppMetadata`. The platform's packages
+  all have `Descriptor` and `bin`.
 ### Fixed — `index sync <Model>` works from a folder that has a subfolder of that name
 
 `d365fo index sync MyModel` failed with `BAD_INPUT` ("Could not tell which model 'MyModel'
