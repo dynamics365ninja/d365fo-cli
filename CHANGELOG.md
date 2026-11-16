@@ -19,6 +19,130 @@ was ported from.
 
 ## [Unreleased]
 
+### Fixed — `modify property` sets one child of a property such as `SubscriberAccessLevel`
+
+`SubscriberAccessLevel` is not a value but an `AccessGrant` with six children (Correct, Create,
+Delete, Invoke, Read, Update). `modify property table <T> SubscriberAccessLevel --value …` replaced
+those children with text, and the bridge refused the result with `XML_DESERIALIZE_FAILED …
+Expecting state 'Element'.. Encountered 'Text'`. Nothing was written, but there was no way to make
+the change with the CLI, so agents fell back to editing the XML by hand. The property name was not
+checked either, so a misspelled one was written as an element the AOT reader drops.
+
+- **A dotted name sets one child**: `modify property table <T> SubscriberAccessLevel.Read --value
+  Allow` (MCP `modify_object` `action=property`, `member=SubscriberAccessLevel.Read`). The parent
+  and the child are created when missing and land in contract order. Existing siblings are kept.
+- **A plain value for a property with child elements is refused before any write**, with
+  `error.hint` naming the dotted form, the child names and the values they take.
+- **Every name on the path is checked against the object's AOT contract**, the way
+  `field-property` already checks a field's, and an enum-typed value against its enum. A
+  misspelled property or child, a collection (`Fields.Name`) or a value (`Label.Text`) is refused
+  with `BAD_INPUT` and the object is untouched. Properties written to an extension are not checked,
+  as before, because an extension's root has members of its own.
+### Fixed — `review diff` works in a linked worktree and from a subfolder (#255)
+
+`review diff` and MCP `get_workspace_info(changes=true)` refused to run with `NOT_A_GIT_REPO`
+unless the directory they were given held a `.git` folder. In a linked worktree (`git worktree
+add`) `.git` is a file, and in any subfolder of a repository there is no `.git` at all, so both
+were refused although `git diff` itself works there.
+
+- **The work tree is resolved with `git rev-parse --show-toplevel`.** `--repo` (MCP `repo`) and
+  the current directory may now be the repository root, any folder inside it, or a linked
+  worktree. Changed files are read from the resolved root, which is where `git diff --name-only`
+  paths are relative to, so the rule pass also runs from a subfolder. The diff still covers the
+  whole work tree.
+- **The result names the root it reviewed** in a new `repo` field.
+- **A path that is not inside a work tree is still `NOT_A_GIT_REPO`**, and a missing `git` is now
+  `GIT_NOT_FOUND` with a hint instead of an unhandled exception.
+### Added — `get class --brief` and `get form --brief`
+
+Through the bridge, `get class` returns every method's full source and `get form` returns the
+whole AxForm. Measured on a real installation: a 15-method custom class came back as 23.7k
+characters (20.6k of them method bodies), a 300-method standard class as 238k, a custom
+details-transaction form as 200k and `SalesTable` as 760k. That is the right answer before an edit
+and far too much for "what does this class offer" or "which tables does this form show".
+
+`--brief` returns a summary, from the bridge when it answers, else from the index:
+
+- class: properties, and each method's name and signature (from the index) without its body.
+  Without a signature, the return type and the flags that are set. From the index, inherited
+  methods are counted, not listed.
+- form: properties, the design's pattern, style and caption, each data source with its table,
+  join source, link type, field count and method names, the top-level controls with how many
+  controls each holds, and the form's method names.
+
+On the same objects: 2.1k, 23k, 5.8k and 20k characters. The default output is unchanged. MCP:
+`get_object_info(objectType=class|form, detail=brief)`, from the index. The router skills now
+point at `--brief` first for classes and forms, as they already did for tables.
+### Fixed — the grounding gate no longer flags objects the same command writes
+
+The gate proves the generated X++ against the index, and a command that writes several objects
+writes its companions in the same run, so they are not in the index yet. `generate workflow`
+warned on every scaffold that the query its WorkflowDocument returns (`queryStr(XQuery)`) was
+unknown, although the command writes `XQuery` itself. `sysoperation` did the same with its
+contract class, `business-event` with its contract, and `number-sequence` with the EDT it
+creates. Under `D365FO_GROUNDING_ENFORCE=true` the same finding refused the write, so these four
+commands could not run at all with enforcement on.
+
+`GroundingGate.Check` takes the names the command writes (`generatedObjects`). An unknown-type or
+unknown-intrinsic-target finding about one of those names, or a required symbol that is one of
+them, counts as verified. Every other finding stays: a misspelt name the command does not write
+is still reported. The four commands pass their companions.
+### Fixed — `find refs --xref` labels and filters reference kinds by the compiler's enum
+
+The cross-reference database stores `[References].Kind` as the compiler's
+`Microsoft.Dynamics.AX.Framework.Xlnt.XReference.CrossReferenceKind` (XReferenceProviders.dll):
+0 Any, 1 MethodCall, 2 TypeReference, 3 InterfaceImplementation, 4 ClassExtended, 5 TestCall,
+6 Property, 7 Attribute, 8 TestHelperCall, 9 Tag, 10 MethodOverride. The CLI read the ids as
+Declaration, Set, Read, Call, Reference, Type, Extends, Implements, so a method call was reported as
+`Set`, and `--kind Call` filtered on id 3, interface implementations, and found no callers.
+
+- **Labels follow the enum:** `Any`, `Call`, `Type`, `Implements`, `Extends`, `TestCall`,
+  `Property`, `Attribute`, `TestHelperCall`, `Tag`, `Override`.
+- **`--kind` (MCP `kind`) also takes the enum's own names**, such as `MethodCall` or
+  `ClassExtended`. The old labels `Declaration`, `Set`, `Read` and `Reference` named no kind the
+  database stores; they are now refused with `BAD_INPUT` and the list of kinds.
+- Help texts, the MCP tool description and the tests use the new labels.
+### Fixed — `d365fo build` on a UDE writes compiled metadata next to the model, not into the platform
+
+`d365fo build` passed xppc `-compilermetadata=<FrameworkDirectory>`. xppc writes a package's
+compiled metadata there, so every custom package built on a UDE left a copy of itself in the
+FrameworkDirectory (`<Package>\XppMetadata` only, no `Descriptor` or `bin`). Visual Studio's "Build
+models" writes it into the ModelStoreFolder, next to the source. The stale copy can shadow the
+source on the next build: an object that the copy lacks fails with
+`CompilerMetadataWriteBackFailure` ("Failed to write metadata back to the file … This is often due
+to the file being read-only"), although the file is writable and Visual Studio builds the model.
+
+- **`-compilermetadata` is the model's own root**, as in Visual Studio. On a VM, where the model
+  and the platform share `PackagesLocalDirectory`, the arguments are unchanged.
+- **Copies left by an earlier build stay** until removed by hand: in the FrameworkDirectory, delete
+  the folders of your own packages that hold nothing but `XppMetadata`. The platform's packages
+  all have `Descriptor` and `bin`.
+### Fixed — `index sync <Model>` works from a folder that has a subfolder of that name
+
+`d365fo index sync MyModel` failed with `BAD_INPUT` ("Could not tell which model 'MyModel'
+belongs to") when the current folder had a subfolder named `MyModel`. That is the usual case
+in a repository that keeps the model's metadata in a folder of the same name, and
+`index sync <Model>` is the command `doctor` recommends for a stale model. The bare target was
+read as a path because a folder of that name existed. A bare target is now a model name unless
+it contains a path separator or is an existing file (`Foo.xml` typed from inside an `Ax*`
+folder). The decision moved to `IndexSync.SplitTarget`, with tests.
+### Fixed — an unreachable cross-reference server is reported after one timeout, not three
+
+When the direct `--xref` query could not reach the server (not found, not started, connect timeout),
+the bridge fallback connected to the same server again, and so did the coverage probe. All of them
+read `D365FO_XREF_CONNECTIONSTRING`, so each waited out the same connect timeout: about 74 s before
+the error against a stopped or wedged LocalDB on a UDE.
+
+- **No fallback for an unreachable server.** The direct query opens the connection first and marks
+  a failure where no server answered (SQL error -2, -1, 2, 26, 40, 53, 258, or any severity-20 transport failure before the handshake, which is how LocalDB reports a missing or wedged instance). The bridge fallback
+  and the coverage probe are then skipped, and the message says so. A failure a server answered
+  (login, certificate, missing database) still falls back. The bridge's other SQL client can get
+  past a certificate check that Microsoft.Data.SqlClient refuses.
+- **A LocalDB hint.** For a `(LocalDB)\<instance>` connection string the hint names
+  `SqlLocalDB info`, and `SqlLocalDB stop` for an instance that stays `Stopped` while `start` fails.
+- The connect timeout is left as it is. LocalDB starts on the first connection, and on a UDE that
+  took 15 s or more. A shorter timeout would turn a slow start into a failure.
+
 ### Fixed — EDT base types are in the index, so generated fields get their real type (#233)
 
 Every EDT in the index had an empty `BaseType`: the extractor read it off the root element

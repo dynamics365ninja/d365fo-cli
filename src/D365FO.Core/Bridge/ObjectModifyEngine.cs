@@ -872,7 +872,7 @@ public static class ObjectModifyEngine
         List<string> warnings, BridgeClient client)
         => request.Operation switch
         {
-            Operation.SetProperty => SetProperty(doc, request),
+            Operation.SetProperty => SetProperty(doc, request, target),
             Operation.AddField => AddField(doc, request, repo, warnings),
             Operation.AddEnumValue => AddEnumValue(doc, request),
             Operation.AddControl => AddControl(doc, request, target.IsExtension, client),
@@ -1393,28 +1393,181 @@ public static class ObjectModifyEngine
         }, null);
     }
 
-    private static (object?, ToolResult<object>?) SetProperty(XDocument doc, ModifyRequest request)
+    /// <summary>
+    /// Set one property of the object, or one child of a property that holds child elements
+    /// (<c>SubscriberAccessLevel.Read</c>). Each name on the path is checked against the AOT
+    /// contract of the element it lands in, so a typo is refused instead of written as an
+    /// element the reader drops.
+    /// </summary>
+    /// <remarks>
+    /// A property such as <c>SubscriberAccessLevel</c> is an <c>AccessGrant</c> with six
+    /// children. Setting it to plain text used to replace those children with a text node,
+    /// which the bridge then failed to deserialize (<c>Expecting state 'Element'.. Encountered
+    /// 'Text'</c>). It is refused now, before anything is written, with the dotted form to use.
+    /// New elements are appended; <see cref="ContractOrderCanonicalizer"/> puts them in contract
+    /// order before the write.
+    /// </remarks>
+    private static (object?, ToolResult<object>?) SetProperty(XDocument doc, ModifyRequest request, WriteTarget target)
     {
         var root = doc.Root!;
-        var existing = root.Elements().FirstOrDefault(e =>
-            string.Equals(e.Name.LocalName, request.Member, StringComparison.OrdinalIgnoreCase));
-
-        var oldValue = existing?.Value;
-        if (existing is not null)
+        var ns = root.Name.Namespace;
+        var path = request.Member.Split('.', StringSplitOptions.TrimEntries);
+        if (path.Any(s => s.Length == 0))
         {
-            existing.SetValue(request.Value!);
-        }
-        else
-        {
-            // Property order under an Ax* root is alphabetical after <Name>; inserting
-            // after <Name> keeps the document readable without risking the serializer,
-            // which is order-tolerant for simple properties on the root.
-            var el = new XElement(root.Name.Namespace + request.Member, request.Value!);
-            var nameEl = root.Elements().FirstOrDefault(e => e.Name.LocalName == "Name");
-            if (nameEl is not null) nameEl.AddAfterSelf(el); else root.AddFirst(el);
+            return (null, ToolResult<object>.Fail(D365FoErrorCodes.BadInput,
+                $"'{request.Member}' is not a property path.",
+                "Name a property (Label) or one child of a property (SubscriberAccessLevel.Read)."));
         }
 
-        return (new { property = request.Member, oldValue, newValue = request.Value }, null);
+        // An extension's root holds the extension's own members (PropertyModifications, …), not
+        // the base object's, so there is no contract to check a base property name against.
+        var contracts = target.IsExtension ? null : RootContracts(root);
+        if (contracts is null && path.Length > 1)
+        {
+            return (null, ToolResult<object>.Fail(D365FoErrorCodes.BadInput,
+                $"'{request.Member}' cannot be checked: {root.Name.LocalName} '{target.Name}' has no known AOT contract here.",
+                "A dotted property path is only written where it can be checked against the contract. " +
+                "Set the property on the object itself, not on an extension."));
+        }
+
+        var owner = root;
+        var walked = new List<string>(path.Length);
+        for (var i = 0; i < path.Length; i++)
+        {
+            var segment = path[i];
+            MetadataContract? declaring = null;
+            if (contracts is not null)
+            {
+                declaring = contracts.FirstOrDefault(c => c.Members.Any(m => string.Equals(m, segment, StringComparison.OrdinalIgnoreCase)));
+                if (declaring is null)
+                    return (null, UnknownProperty(contracts, walked, segment));
+                segment = declaring.Members.First(m => string.Equals(m, segment, StringComparison.OrdinalIgnoreCase));
+            }
+
+            walked.Add(segment);
+            var dotted = string.Join('.', walked);
+            var existing = owner.Elements().FirstOrDefault(e =>
+                string.Equals(e.Name.LocalName, segment, StringComparison.OrdinalIgnoreCase));
+            var held = MetadataContracts.MemberContract(declaring, segment);
+
+            if (i == path.Length - 1)
+            {
+                if (held is not null || existing?.HasElements == true)
+                    return (null, HoldsChildElements(request, dotted, held));
+
+                var value = request.Value!;
+                if (declaring is not null && MetadataContracts.EnumForMember(declaring, segment) is { } enumName
+                    && MetadataContracts.EnumValues(enumName) is { Count: > 0 } allowed)
+                {
+                    var trimmed = value.Trim();
+                    if (enumName == "NoYes" && bool.TryParse(trimmed, out var flag)) trimmed = flag ? "Yes" : "No";
+                    var match = allowed.FirstOrDefault(v => string.Equals(v, trimmed, StringComparison.OrdinalIgnoreCase));
+                    if (match is null)
+                    {
+                        return (null, ToolResult<object>.Fail(D365FoErrorCodes.BadInput,
+                            $"'{value}' is not a value of {enumName}, which {dotted} takes.",
+                            $"Use one of: {string.Join(", ", allowed)}."));
+                    }
+                    value = match;
+                }
+
+                var oldValue = existing?.Value;
+                if (existing is not null) existing.SetValue(value);
+                else owner.Add(new XElement(ns + segment, value));
+                return (new { property = dotted, oldValue, newValue = value }, null);
+            }
+
+            // Walking into a property: it must hold one object with members of its own, not a
+            // value and not a collection of named items (those have their own operations).
+            if (held is null)
+            {
+                return (null, ToolResult<object>.Fail(D365FoErrorCodes.BadInput,
+                    $"{dotted} holds a value, not child properties, so '{request.Member}' does not exist.",
+                    $"Set it directly: `d365fo modify property {request.Kind} {request.ObjectName} {dotted} --value <VALUE>`."));
+            }
+            if (IsCollectionMember(held, existing))
+            {
+                return (null, ToolResult<object>.Fail(D365FoErrorCodes.BadInput,
+                    $"{dotted} is a collection of {held.Name} items, not a property with child properties.",
+                    "Change its items with the dedicated `d365fo modify` operations (add-field, add-index, " +
+                    "add-control, …), or `d365fo modify --help` for the list."));
+            }
+
+            if (existing is null)
+            {
+                existing = new XElement(ns + segment);
+                owner.Add(existing);
+            }
+            owner = existing;
+            contracts = new[] { held };
+        }
+
+        // Unreachable: the loop returns on the last segment.
+        return (null, ToolResult<object>.Fail(D365FoErrorCodes.BadInput, $"'{request.Member}' is not a property path."));
+    }
+
+    /// <summary>
+    /// The contracts a root element's members may come from: its own, or, for an abstract root
+    /// that pins no <c>i:type</c>, also every concrete type derived from it. Null when unknown.
+    /// </summary>
+    private static IReadOnlyList<MetadataContract>? RootContracts(XElement root)
+    {
+        var contract = MetadataContracts.GoverningContract(root, parent: null);
+        if (contract is null) return null;
+        XNamespace xsi = "http://www.w3.org/2001/XMLSchema-instance";
+        if (!contract.IsAbstract || root.Attribute(xsi + "type") is not null) return new[] { contract };
+        return new[] { contract }.Concat(MetadataContracts.DerivedFrom(contract.Name)).ToList();
+    }
+
+    /// <summary>
+    /// True when a member holds a list of named items (<c>Fields</c>, <c>Indexes</c>) rather
+    /// than one object (<c>SubscriberAccessLevel</c>, <c>Design</c>). The catalog records the
+    /// item type for both, so this is read from the item type having a <c>Name</c>, and from
+    /// the element itself when it already holds items named after a type.
+    /// </summary>
+    private static bool IsCollectionMember(MetadataContract held, XElement? existing)
+        => held.IndexOf("Name") >= 0
+           || existing?.Elements().Any(e => held.IndexOf(e.Name.LocalName) < 0) == true;
+
+    private static ToolResult<object> UnknownProperty(
+        IReadOnlyList<MetadataContract> contracts, IReadOnlyList<string> parents, string segment)
+    {
+        var owner = parents.Count == 0 ? contracts[0].Name : string.Join('.', parents);
+        var members = contracts.SelectMany(c => c.Members).Where(m => m != "Name")
+            .Distinct(StringComparer.Ordinal).ToList();
+        var close = members
+            .Where(m => m.Contains(segment, StringComparison.OrdinalIgnoreCase)
+                        || segment.Contains(m, StringComparison.OrdinalIgnoreCase))
+            .Take(5)
+            .ToList();
+        return ToolResult<object>.Fail(D365FoErrorCodes.BadInput,
+            $"{owner} has no property '{segment}'.",
+            close.Count > 0
+                ? $"Did you mean: {string.Join(", ", close)}?"
+                : $"Settable on {owner}: {string.Join(", ", members)}.");
+    }
+
+    private static ToolResult<object> HoldsChildElements(ModifyRequest request, string dotted, MetadataContract? held)
+    {
+        if (held is null || IsCollectionMember(held, null))
+        {
+            return ToolResult<object>.Fail(D365FoErrorCodes.BadInput,
+                $"{dotted} holds child elements, not a value, so it cannot be set to '{request.Value}'.",
+                held is null
+                    ? $"Set one child at a time: `d365fo modify property {request.Kind} {request.ObjectName} {dotted}.<CHILD> --value <VALUE>`."
+                    : $"It is a collection of {held.Name} items. Change them with the dedicated `d365fo modify` " +
+                      "operations (add-field, add-index, add-control, …).");
+        }
+
+        var children = held.Members.ToList();
+        var enums = children.Select(held.EnumFor).Distinct().ToList();
+        var values = enums.Count == 1 && enums[0] is { } e && MetadataContracts.EnumValues(e) is { Count: > 0 } v
+            ? $" Each takes {string.Join(", ", v)}."
+            : string.Empty;
+        return ToolResult<object>.Fail(D365FoErrorCodes.BadInput,
+            $"{dotted} holds child elements ({held.Name}), not a value, so it cannot be set to '{request.Value}'.",
+            $"Set one child at a time: `d365fo modify property {request.Kind} {request.ObjectName} " +
+            $"{dotted}.<CHILD> --value <VALUE>`. Children of {dotted}: {string.Join(", ", children)}.{values}");
     }
 
     private static (object?, ToolResult<object>?) AddField(

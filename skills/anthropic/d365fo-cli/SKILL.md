@@ -84,10 +84,10 @@ Examples:
 
 | Need | Command |
 |---|---|
-| Read class structure (methods, signatures) | `d365fo get class <Name> --output json` |
+| Read class structure (methods, signatures) | `d365fo get class <Name> --brief --output json` first (signatures, no bodies), `get method` for one body |
 | Read X++ method body | `d365fo read class <Name> --method <M>` |
 | Read table fields / indexes / relations | `d365fo get table <Name> --brief --output json` first, the full `get table` (or `--include <parts>`) when you need labels, field groups or methods |
-| Read form controls / data sources | `d365fo get form <Name> --output json` |
+| Read form controls / data sources | `d365fo get form <Name> --brief --output json` first (data sources, pattern, control outline), the full `get form` when you need control properties |
 | Search objects by name | `d365fo search class\|table\|form\|edt\|enum <query> --output json` |
 | Multiple searches in one call | `d365fo search batch <q1> <q2> … --output json` |
 | Multiple searches limited to one kind | `d365fo search batch <q1> <q2> … --kind class --output json` |

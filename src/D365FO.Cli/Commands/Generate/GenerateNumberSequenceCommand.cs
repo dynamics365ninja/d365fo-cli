@@ -99,7 +99,8 @@ public sealed class GenerateNumberSequenceCommand : Command<GenerateNumberSequen
         var gate = GenerateInstaller.Gate(
             settings, edtName, moduleDoc,
             requiredSymbols: new[] { settings.ModuleName, settings.TableName }
-                .Where(n => !string.IsNullOrWhiteSpace(n)).Select(n => n!));
+                .Where(n => !string.IsNullOrWhiteSpace(n)).Select(n => n!),
+            generatedObjects: new[] { edtName, extensionName });
         if (gate.Failure is not null) return RenderHelpers.Render(kind, gate.Failure);
 
         try

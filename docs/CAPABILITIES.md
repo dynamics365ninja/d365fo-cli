@@ -109,6 +109,10 @@ get business-event|security-policy
 
 `get table <T> --brief` returns a summary: the table's properties, each field's name, type and EDT, index names with their fields, and the relations the table declares with their related table. It is a fraction of the full answer (no field labels or property bags, no field groups, relation constraints or method signatures, just `methodCount`), so read it first and ask for parts with `--include` when you need them. It does not combine with `--include` or `--merged`. MCP: `get_object_info(objectType=table, detail=brief)`.
 
+`get class <C> --brief` returns the class's properties and each method's name and signature, without bodies. Through the bridge the full answer carries every method's source, so the brief is a small fraction of it. Read one body with `get method`. From the index, inherited methods are counted (`inheritedMethodCount`), not listed. MCP: `get_object_info(objectType=class, detail=brief)`.
+
+`get form <F> --brief` returns the form's properties, the design's pattern, style and caption, each data source with its table, join source, link type, field count and method names, the top-level controls with how many controls each holds, and the form's method names. The full answer carries every data source field's and every control's property bag and every method body. Without the bridge the index has the data sources and their tables only. MCP: `get_object_info(objectType=form, detail=brief)` (index shape).
+
 `get table <T> --odata-metadata` emits an OData `<EntityType>` + `<EntitySet>` XML fragment for the table.
 
 ### `security`
@@ -279,7 +283,7 @@ Pass `--project <path>.rnrproj` to any `generate` command to list every object i
 | `generate form-clone` | Copy of an existing `AxForm` under a new name, datasources optionally re-bound |
 | `generate simple-list` | Alias for `generate form --pattern SimpleList` |
 | `modify method` | Replace an existing method's body on a live class/table/edt/form via D365FO.Bridge (`IMetadataProvider`, structured `XDocument` replace — no CDATA string surgery, no on-disk fallback). `--body` is statements only: they replace what sits between the method's outer braces, and the doc comment, attributes and signature are kept. A full declaration passed as `--body` is refused, and so is a method with no body (abstract, delegate, interface). `--source` replaces the whole method instead and must declare exactly that one method. Reference/BP validation always blocks on error-severity findings. |
-| `modify property` | Set a property (`Label`, `ConfigurationKey`, `TableGroup`, …) on a live object. |
+| `modify property` | Set a property (`Label`, `ConfigurationKey`, `TableGroup`, …) on a live object. The name, and an enum-typed value, are checked against the object's AOT contract, so a misspelled property is refused rather than written. A property with child elements is set one child at a time with a dotted name (`SubscriberAccessLevel.Read --value Allow`), and the parent is created in contract order when missing. A plain value for such a property is refused with the child names. |
 | `modify add-field` | Add a field to a live table; the concrete `AxTableField*` subtype is resolved from the EDT's indexed base type, and a base enum becomes `AxTableFieldEnum` with `EnumType`. A type the index cannot resolve is guessed from its name and reported as `EDT_BASETYPE_UNRESOLVED`. |
 | `modify add-enum-value` | Add a value to a live base enum — positional, never a hard-coded ordinal. |
 | `modify add-control` | Add a control to a live form's Design, optionally inside `--parent` and bound to `--datasource`/`--datafield`. |
