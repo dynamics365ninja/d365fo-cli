@@ -1562,6 +1562,10 @@ public sealed partial class ToolHandlers
     /// Taking the engine's own request type means an operation that the engine gains cannot be
     /// unreachable here without also being unreachable from the CLI.
     /// </remarks>
+    /// <summary>`labels` action=audit (#272): undefined, untranslated and unused labels of one model.</summary>
+    public ToolResult<object> AuditLabels(string? model, string? path, string? checks, bool allModels, int limit)
+        => D365FO.Core.Index.LabelAudit.Run(_repo, model, path, checks, allModels, limit);
+
     public ToolResult<object> ModifyObject(D365FO.Core.Bridge.ObjectModifyEngine.ModifyRequest request)
         => D365FO.Core.Bridge.ObjectModifyEngine.Modify(request, _repo);
 

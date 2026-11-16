@@ -252,7 +252,10 @@ public static class ToolCatalog
             "pass `labels:[{key,value}, …]` for a bulk create with shared top-level fields) · " +
             "update (correct the text of a key that MUST already exist — unlike create, which writes a new entry "
             + "when the key is absent, so a mistyped key in a correction becomes a second label and reports "
-            + "success) · rename (rename a key in place) · delete (remove a key). Values are sanitised unless raw=true.",
+            + "success) · rename (rename a key in place) · delete (remove a key) · audit (`model`: labels the model uses in "
+            + "metadata or X++ that no label file defines, keys missing in some of their file's languages, keys nothing "
+            + "uses; `checks` narrows to undefined,untranslated,unused, `allModels` counts uses anywhere in the index, "
+            + "`limit` caps each list; counts come first). Values are sanitised unless raw=true.",
             Schema(("action", "string", true), ("query", "string", false), ("token", "string", false),
                    ("languages", "array", false), ("limit", "integer", false), ("raw", "boolean", false),
                    ("file", "string", false), ("language", "string", false), ("key", "string", false),
@@ -261,9 +264,12 @@ public static class ToolCatalog
                    ("oldKey", "string", false), ("newKey", "string", false),
                    // create-input aliases tolerated for clients that guess the schema
                    ("labelId", "string", false), ("text", "string", false), ("label", "string", false),
-                   ("model", "string", false), ("labelFileId", "string", false)),
+                   ("model", "string", false), ("labelFileId", "string", false),
+                   ("checks", "string", false), ("allModels", "boolean", false), ("path", "string", false)),
             (h, p) => StrOr(p, "action", "search").ToLowerInvariant() switch
             {
+                "audit"  => h.AuditLabels(StrOrNull(p, "model"), StrOrNull(p, "path"), StrOrNull(p, "checks"),
+                            Bool(p, "allModels"), Int(p, "limit", 50)),
                 "fts"    => h.SearchLabelsFts(Str(p, "query"), StrArray(p, "languages"), Int(p, "limit", 100), Bool(p, "raw")),
                 "info" or "resolve" => StrOrNull(p, "file") is not null
                             ? h.GetLabel(Str(p, "file"), Str(p, "language"), Str(p, "key"), Bool(p, "raw"))

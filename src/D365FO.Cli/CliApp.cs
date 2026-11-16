@@ -165,6 +165,7 @@ public static class CliApp
                 b.AddCommand<D365FO.Cli.Commands.Label.LabelUpdateCommand>("update").WithDescription("Correct the text of a label that already exists — never creates, so a mistyped key is refused rather than added.");
                 b.AddCommand<D365FO.Cli.Commands.Label.LabelRenameCommand>("rename").WithDescription("Rename a label key.");
                 b.AddCommand<D365FO.Cli.Commands.Label.LabelDeleteCommand>("delete").WithDescription("Delete a label entry.");
+                b.AddCommand<D365FO.Cli.Commands.Label.LabelAuditCommand>("audit").WithDescription("Audit a model's labels: used but defined nowhere, missing in some languages, used by nothing.");
             });
 
             cfg.AddBranch("resolve", b =>

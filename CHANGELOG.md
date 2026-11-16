@@ -19,6 +19,26 @@ was ported from.
 
 ## [Unreleased]
 
+### Added — `labels audit`: labels used but defined nowhere, missing translations, labels nobody uses (#272)
+
+Labels are where an ISV release most often ships a visible mistake: a token used in code or
+metadata that no label file defines shows the raw `@ContosoExt:OrderNotFound` to the user, a key
+added in one language only is found by a user of another, and unused labels pile up because nobody
+can tell they are unused. xppbp reports labels in code as unknown unless it runs with
+`-compilerMetadata` after `labelc`, and cannot read other packages' labels at all.
+
+- **`d365fo labels audit --model <M>`** (MCP: `labels` with `action=audit`) runs three checks:
+  - `undefined`: tokens used in any metadata property or X++ string literal with no definition.
+    Each finding has the object, the element path or method, and the property.
+  - `untranslated`: keys missing in some of their file's languages.
+  - `unused`: keys nothing in the model uses. With `--all-models`, nothing in the index uses them
+    either.
+- **Sized for an agent:** `counts` come first and are complete, and each list stops at `--limit`.
+  `--check` runs a subset.
+- **Where the answers come from:** the model's XML and label files are read from disk (every
+  property, every language). Other models' labels come from the index, one query per label file:
+  1.5 s for a model on a full installation, against 1 min 40 s when it resolved token by token.
+
 ### Added — the commands agents guess now run, and an unknown sub-command names the real ones
 
 In a sample of real agent sessions, 15 of 43 failed CLI calls were commands the agent guessed
