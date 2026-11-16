@@ -145,6 +145,7 @@ public sealed class SchemaCommand : Command<SchemaCommand.Settings>
         C("labels search", "Search label keys/values; FTS5 is preferred automatically.", ["<QUERY>"], ["--lang", "--limit", "--fts", "--raw-text", "--output"], ["labels (action=search/fts)"], true),
         C("labels resolve", "Resolve @SYS12345-style label tokens across languages; several tokens give one result each.", ["<TOKEN>..."], ["--lang", "--raw-text", "--output"], ["labels (action=resolve)"], true),
         C("labels info", "Fetch one label entry by (file, language, key).", ["<FILE_OR_KEY>", "[KEY]"], ["--lang", "--raw-text", "--output"], ["labels (action=info)"], true),
+        C("labels audit", "Audit a model's labels: used but defined nowhere, missing in some of their file's languages, used by nothing.", [], ["--model", "--path", "--check", "--all-models", "--limit", "--output"], ["labels (action=audit)"]),
         C("labels create", "Create or update a label entry.", ["<KEY>", "<VALUE>"], ["--file", "--overwrite", "--output"], ["labels (action=create)"], true),
         C("labels update", "Correct the text of a label that already exists — never creates, so a mistyped key is refused rather than added.", ["<KEY>", "<VALUE>"], ["--file", "--install-to", "--lang", "--label-file", "--output"], ["labels (action=update)"], true),
         C("labels rename", "Rename a label key.", ["<OLD>", "<NEW>"], ["--file", "--overwrite", "--output"], ["labels (action=rename)"], true),

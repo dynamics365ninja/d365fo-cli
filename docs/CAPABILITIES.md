@@ -581,6 +581,29 @@ language's string into every file silently replaces the other translations. The 
 
 MCP parity: `labels (action=update)`.
 
+### `labels audit` — undefined, untranslated and unused labels of a model
+
+```sh
+d365fo labels audit --model ContosoExt --output json
+d365fo labels audit --model ContosoExt --check unused --all-models
+```
+
+Three checks, counts first, then up to `--limit` findings per check (default 50):
+
+- **Undefined** — a label token the model uses that no label file defines: in any metadata property
+  (`Label`, `HelpText`, a control's `Text`, `Caption`, …) or in an X++ string literal (a token in a
+  comment does not count). Each finding names the object, the element path or method, and the
+  property. This is the mistake that ships a raw `@ContosoExt:OrderNotFound` to the screen.
+- **Untranslated** — a key of the model's label files that exists in some of the file's languages and
+  not in others, with the languages it is missing in.
+- **Unused** — a key of the model's label files that nothing in the model refers to. `--all-models`
+  also counts the `Label` columns of every indexed model and the X++ of every model in the source
+  index; `unusedScope` says how many models' code was not seen.
+
+The model's XML and its `*.label.txt` files are read from disk (every property, every language). Every
+other model's labels come from the index. Not checked: whether the package that defines a label is
+referenced by the model — the build reports that one. MCP parity: `labels (action=audit)`.
+
 ## Modification journal & undo
 
 Every metadata write — `generate *`, `labels create\|rename\|delete`, and `delete` — appends

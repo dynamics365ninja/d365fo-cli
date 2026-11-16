@@ -171,7 +171,7 @@ public static class LabelPropertySearch
     /// <c>AxTable</c> → <c>Table</c>, <c>AxEdtString</c> → <c>Edt</c> (the index's name for every EDT
     /// type), <c>AxMenuItemDisplay</c> → <c>MenuItemDisplay</c>.
     /// </summary>
-    private static string KindOf(string rootName)
+    internal static string KindOf(string rootName)
     {
         var kind = rootName.StartsWith("Ax", StringComparison.Ordinal) ? rootName[2..] : rootName;
         return kind.StartsWith("Edt", StringComparison.Ordinal) && !kind.EndsWith("Extension", StringComparison.Ordinal)
@@ -183,7 +183,7 @@ public static class LabelPropertySearch
     /// The path from the object to the element's parent: the section directly under the root
     /// (<c>Fields</c>, <c>Design</c>), then each named node (<c>AccountNum</c>, <c>OkButton</c>).
     /// </summary>
-    private static string? ElementPath(XElement root, XElement el)
+    internal static string? ElementPath(XElement root, XElement el)
     {
         var parts = new List<string>();
         for (var a = el.Parent; a is not null && a != root; a = a.Parent)

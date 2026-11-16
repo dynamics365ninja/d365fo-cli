@@ -3,7 +3,7 @@
 
 Every tool the bundled `d365fo-mcp` adapter advertises, and the `d365fo` commands that reach the same handler. Both columns are read from the running code — the command manifest (`d365fo schema --full`) and the adapter's own `tools/list` — so a tool that stops matching a command fails the generator rather than quietly outliving the mapping.
 
-**32 tools · 196 command routes · 15 commands with no MCP route.**
+**32 tools · 197 command routes · 15 commands with no MCP route.**
 
 The adapter is consolidated on purpose: one tool dispatches on a `type` / `objectType` / `mode` / `action` discriminator instead of shipping one tool per object kind. That keeps the schema payload a host injects every turn from growing with the object model — see [TOKEN_ECONOMICS.md](TOKEN_ECONOMICS.md) for what that payload actually measures.
 
@@ -228,6 +228,7 @@ Unified label operations via `action`: search (substring across label files) · 
 | `d365fo label delete` | `action=delete` |
 | `d365fo label rename` | `action=rename` |
 | `d365fo label update` | `action=update` |
+| `d365fo labels audit` | `action=audit` |
 | `d365fo labels create` | `action=create` |
 | `d365fo labels delete` | `action=delete` |
 | `d365fo labels info` | `action=info` |

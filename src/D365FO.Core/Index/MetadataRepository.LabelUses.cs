@@ -84,4 +84,84 @@ public sealed partial class MetadataRepository
             .Select(r => new IndexedLabelUse(r.Kind, r.Name, r.Model, r.Element, r.Property))
             .ToList();
     }
+
+    /// <summary>The indexed <c>Label</c> columns, as <c>(source, column)</c> pairs that each join to <c>Models m</c>.</summary>
+    private static readonly (string From, string Column)[] LabelColumns =
+    {
+        ("Tables t JOIN Models m ON m.ModelId = t.ModelId", "t.Label"),
+        ("TableFields f JOIN Tables t ON t.TableId = f.TableId JOIN Models m ON m.ModelId = t.ModelId", "f.Label"),
+        ("Edts e JOIN Models m ON m.ModelId = e.ModelId", "e.Label"),
+        ("Enums e JOIN Models m ON m.ModelId = e.ModelId", "e.Label"),
+        ("EnumValues v JOIN Enums e ON e.EnumId = v.EnumId JOIN Models m ON m.ModelId = e.ModelId", "v.Label"),
+        ("MenuItems mi JOIN Models m ON m.ModelId = mi.ModelId", "mi.Label"),
+        ("SecurityRoles r JOIN Models m ON m.ModelId = r.ModelId", "r.Label"),
+        ("SecurityDuties d JOIN Models m ON m.ModelId = d.ModelId", "d.Label"),
+        ("SecurityPrivileges p JOIN Models m ON m.ModelId = p.ModelId", "p.Label"),
+        ("Views v JOIN Models m ON m.ModelId = v.ModelId", "v.Label"),
+        ("DataEntities d JOIN Models m ON m.ModelId = d.ModelId", "d.Label"),
+        ("Maps mp JOIN Models m ON m.ModelId = mp.ModelId", "mp.Label"),
+        ("MapFields f JOIN Maps mp ON mp.MapId = f.MapId JOIN Models m ON m.ModelId = mp.ModelId", "f.Label"),
+        ("ConfigurationKeys c JOIN Models m ON m.ModelId = c.ModelId", "c.Label"),
+        ("Tiles t JOIN Models m ON m.ModelId = t.ModelId", "t.Label"),
+        ("Workspaces w JOIN Models m ON m.ModelId = w.ModelId", "w.Label"),
+    };
+
+    /// <summary>
+    /// Every indexed <c>Label</c> column holding a reference into <paramref name="labelFile"/>
+    /// (<c>@File:…</c>), with the model that declares it. One pass per column for a whole label
+    /// file, so <c>labels audit --all-models</c> does not run one query per key.
+    /// </summary>
+    public IReadOnlyList<(string Label, string Model)> FindIndexedLabelTokensInFile(string labelFile)
+    {
+        if (string.IsNullOrWhiteSpace(labelFile)) return Array.Empty<(string, string)>();
+        using var conn = OpenReadOnly();
+        var sql = string.Join("\nUNION ALL\n", LabelColumns.Select(c =>
+            $"SELECT {c.Column} AS Label, m.Name AS Model FROM {c.From} WHERE {c.Column} LIKE @p ESCAPE '\\'"));
+        var prefix = "@" + labelFile.Replace("\\", "\\\\").Replace("%", "\\%").Replace("_", "\\_") + ":%";
+        return conn.Query<(string Label, string Model)>(sql, new { p = prefix }).ToList();
+    }
+
+    /// <summary>
+    /// Every key the index holds for label file <paramref name="labelFile"/>, in any indexed
+    /// language. One query per file instead of one <see cref="ResolveLabel"/> per token: that
+    /// compares case-insensitively, which the <c>Labels</c> index cannot serve, and took about
+    /// 0.3 s a token on a full installation. The exact spelling is tried first (an index seek);
+    /// a file id written in another case falls back to the case-insensitive scan.
+    /// </summary>
+    public IReadOnlySet<string> LabelKeysOf(string labelFile)
+    {
+        var keys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        if (string.IsNullOrWhiteSpace(labelFile)) return keys;
+        using var conn = OpenReadOnly();
+        keys.UnionWith(conn.Query<string>("SELECT DISTINCT Key FROM Labels WHERE LabelFile = @f", new { f = labelFile }));
+        if (keys.Count == 0)
+            keys.UnionWith(conn.Query<string>("SELECT DISTINCT Key FROM Labels WHERE LabelFile = @f COLLATE NOCASE", new { f = labelFile }));
+        return keys;
+    }
+
+    /// <summary>
+    /// The X++ bodies in the source index that mention <paramref name="word"/> as a whole token
+    /// (a label file name, so <c>@File:Key</c> in a string literal is found). Empty when the host
+    /// SQLite build has no FTS5 or no model is source-indexed.
+    /// </summary>
+    public IReadOnlyList<string> MethodBodiesMentioning(string word)
+    {
+        if (string.IsNullOrWhiteSpace(word)) return Array.Empty<string>();
+        using var conn = OpenReadOnly();
+        try
+        {
+            using var cmd = conn.CreateCommand();
+            cmd.CommandText = "SELECT Body FROM MethodSourceFts WHERE MethodSourceFts MATCH $q";
+            cmd.Parameters.AddWithValue("$q", "\"" + word.Replace("\"", "\"\"") + "\"");
+            using var reader = cmd.ExecuteReader();
+            var bodies = new List<string>();
+            while (reader.Read())
+                if (!reader.IsDBNull(0)) bodies.Add(reader.GetString(0));
+            return bodies;
+        }
+        catch (Microsoft.Data.Sqlite.SqliteException)
+        {
+            return Array.Empty<string>();
+        }
+    }
 }

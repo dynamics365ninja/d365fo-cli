@@ -100,6 +100,22 @@ d365fo find references "@FleetManagement:VehicleVin" --model FleetManagement --o
 - Do not reach for `--all-models` to find a label in metadata: it widens only
   the X++ code scan, which takes minutes on a full installation.
 
+## 7. Audit a model's labels before a release
+
+```sh
+d365fo labels audit --model FleetManagement --output json
+```
+
+- `undefined`: tokens the model uses (metadata properties and X++ string
+  literals) that no label file defines. Users would see the raw id. Create
+  the label or fix the token.
+- `untranslated`: keys missing in some of their file's languages
+  (`missingIn`). Add the translation with `labels update`/`create`.
+- `unused`: keys nothing in the model refers to. Before deleting one, run
+  `labels audit --check unused --all-models`, or `find references` for that
+  key, so a use in another model is not missed.
+- `counts` are complete; the lists stop at `--limit` (`truncated: true`).
+
 ## Hard rules
 
 - No raw strings in X++ UI code — labels only (BP `BPErrorLabelIsText`).
