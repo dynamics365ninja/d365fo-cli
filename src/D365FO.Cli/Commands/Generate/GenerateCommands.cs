@@ -385,7 +385,7 @@ internal static class GenerateInstaller
         var warnings = new List<string>();
 
         // 1) Metadata-API path — canonical, consistent output.
-        var (ok, err) = BridgeGate.TrySaveObject(axKind, name, model, xml);
+        var (ok, err) = SaveViaBridge(axKind, name, model, xml);
         if (ok) return (InstallOutcome.CreatedViaApi, null, null, warnings);
 
         // 2) Fallback — write the scaffold into the model folder if resolvable.
@@ -407,6 +407,12 @@ internal static class GenerateInstaller
             notFound.Hint));
         return (InstallOutcome.Failed, null, failure, warnings);
     }
+
+    /// <summary>
+    /// The Metadata-API create call <see cref="PlanInstall"/> makes. Tests swap it to see the exact
+    /// XML a generate command hands the provider, which no file on disk records afterwards.
+    /// </summary>
+    internal static Func<string, string, string, string?, (bool ok, string? error)> SaveViaBridge = BridgeGate.TrySaveObject;
 
     /// <summary>Inputs handed to a command's payload factory after the artefact is written.</summary>
     internal readonly record struct EmitResult(string Source, string? Path, long? Bytes, string? Backup);
@@ -448,8 +454,14 @@ internal static class GenerateInstaller
         string xml,
         Func<EmitResult, object> buildPayload,
         List<string>? warnings = null)
-        => EmitCore(kind, gate, settings, axKind, axSubfolder, name, xml,
-            path => Write(gate, xml, path, settings.Overwrite), buildPayload, warnings);
+    {
+        // Canonicalise before the paths split, as Emit does: the bridge hands this string
+        // straight to IMetadataProvider, which skips members that arrive out of contract order
+        // without an error. Forms come from string templates, so this is where they get it.
+        var canonical = ScaffoldFileWriter.CanonicalizeIfNeeded(xml);
+        return EmitCore(kind, gate, settings, axKind, axSubfolder, name, canonical,
+            path => Write(gate, canonical, path, settings.Overwrite), buildPayload, warnings);
+    }
 
     /// <summary>
     /// Opt-in post-write check for <c>--verify</c>: read every artefact the run emitted back
