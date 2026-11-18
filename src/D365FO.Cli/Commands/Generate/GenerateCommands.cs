@@ -346,7 +346,19 @@ internal static class GenerateInstaller
     /// project too. Recorded before, it had no delta, and undoing a bridge create left a
     /// <c>&lt;Content&gt;</c> entry pointing at an object that no longer existed.
     /// </remarks>
-    private static void RecordBridgeCreate(string axKind, string name, string model, D365FO.Core.Journal.RnrProjDelta? projectDelta)
+    /// <summary>
+    /// The file the provider wrote for a bridge create: <c>&lt;model folder&gt;\&lt;subfolder&gt;\&lt;name&gt;.xml</c>,
+    /// resolved like a disk write's target, or null when no file is there to point at.
+    /// </summary>
+    private static string? BridgeWrittenPath(string model, string axSubfolder, string name)
+    {
+        var folder = ResolveModelFolder(model);
+        if (string.IsNullOrEmpty(folder)) return null;
+        var path = System.IO.Path.Combine(folder, axSubfolder, name + ".xml");
+        return File.Exists(path) ? path : null;
+    }
+
+    private static void RecordBridgeCreate(string axKind, string name, string model, string? targetPath, D365FO.Core.Journal.RnrProjDelta? projectDelta)
     {
         try
         {
@@ -361,7 +373,7 @@ internal static class GenerateInstaller
                 Model: model,
                 Operation: JournalOperation.Create,
                 WritePath: JournalWritePath.Bridge,
-                TargetPath: null,
+                TargetPath: targetPath,
                 PreImage: null,
                 IsTombstone: true,
                 RnrProjDelta: projectDelta));
@@ -671,14 +683,16 @@ internal static class GenerateInstaller
 
             if (plan.outcome == InstallOutcome.CreatedViaApi)
             {
-                // Nothing reached disk, but the provider was handed exactly this XML — which is
+                // No Write of ours ran, but the provider was handed exactly this XML — which is
                 // the document the honesty report has to judge, and the object --verify reads
-                // back. Recorded explicitly because no Write ran to derive it.
+                // back. Recorded explicitly because no Write ran to derive it. The file is the
+                // provider's, so its path is reported only when it is where the model folder says.
                 gate.Observe(xml);
-                gate.RecordArtefact(axKind, name, null);
-                RecordBridgeCreate(axKind, name, installTo!, RegisterBridgeCreate(gate, axKind, name, installTo!));
+                var written = BridgeWrittenPath(installTo!, axSubfolder, name);
+                gate.RecordArtefact(axKind, name, written);
+                RecordBridgeCreate(axKind, name, installTo!, written, RegisterBridgeCreate(gate, axKind, name, installTo!));
                 return Finish(kind, gate, verify, installTo,
-                    buildPayload(new EmitResult("bridge", null, null, null)), all);
+                    buildPayload(new EmitResult("bridge", written, null, null)), all);
             }
 
             try

@@ -3,6 +3,7 @@ using System.Xml.Linq;
 using D365FO.Cli.Commands.Generate;
 using D365FO.Cli.Commands.Index;
 using D365FO.Core;
+using D365FO.Core.Journal;
 using D365FO.Core.Scaffolding;
 using Xunit;
 
@@ -139,5 +140,95 @@ public sealed class GenerateFormBridgeContractOrderTests : IDisposable
         var before = doc.ToString(SaveOptions.DisableFormatting);
         ContractOrderCanonicalizer.Apply(doc);
         Assert.Equal(before, doc.ToString(SaveOptions.DisableFormatting));
+    }
+
+    /// <summary>
+    /// A bridge create reports the file the provider wrote, in the result and in the journal, as a
+    /// disk write does. It reported <c>path: null</c> and journaled no target, so a caller could not
+    /// tell which file the command created — or check that <c>undo</c> removed it.
+    /// </summary>
+    [Fact]
+    public void Bridge_create_reports_the_file_it_wrote()
+    {
+        const string formName = "ConFormOrderPath";
+        var expected = Path.Combine(_root, "Metadata", Model, Model, "AxForm", formName + ".xml");
+        var real = GenerateInstaller.SaveViaBridge;
+        GenerateInstaller.SaveViaBridge = (kind, name, model, xml) =>
+        {
+            if (name != formName) return real(kind, name, model, xml);
+            // What IMetadataProvider does on a create: the object lands in the model's folder.
+            Directory.CreateDirectory(Path.GetDirectoryName(expected)!);
+            File.WriteAllText(expected, xml);
+            return (true, null);
+        };
+
+        var saved = Console.Out;
+        var writer = new StringWriter();
+        int exit;
+        try
+        {
+            Console.SetOut(writer);
+            exit = new GenerateFormCommand().Execute(null!, new GenerateFormCommand.Settings
+            {
+                FormName = formName,
+                Pattern = "SimpleList",
+                Table = "ConFormOrderTable",
+                Fields = ["VehicleId"],
+                InstallTo = Model,
+                Output = "json",
+            });
+        }
+        finally
+        {
+            Console.SetOut(saved);
+            GenerateInstaller.SaveViaBridge = real;
+        }
+
+        using var json = JsonDocument.Parse(writer.ToString());
+        Assert.True(exit == 0, json.RootElement.ToString());
+        var data = json.RootElement.GetProperty("data");
+        Assert.Equal("bridge", data.GetProperty("source").GetString());
+        Assert.Equal(expected, data.GetProperty("path").GetString(), ignoreCase: true);
+
+        var entry = Assert.Single(ModificationJournal.ForIndex().List(), e => e.ObjectName == formName);
+        Assert.Equal(expected, entry.TargetPath, ignoreCase: true);
+    }
+
+    /// <summary>When the provider says it saved but no file is where the model folder says, report none.</summary>
+    [Fact]
+    public void Bridge_create_reports_no_path_it_cannot_see()
+    {
+        const string formName = "ConFormOrderNoFile";
+        var real = GenerateInstaller.SaveViaBridge;
+        GenerateInstaller.SaveViaBridge = (kind, name, model, xml) =>
+            name == formName ? (true, null) : real(kind, name, model, xml);
+
+        var saved = Console.Out;
+        var writer = new StringWriter();
+        try
+        {
+            Console.SetOut(writer);
+            new GenerateFormCommand().Execute(null!, new GenerateFormCommand.Settings
+            {
+                FormName = formName,
+                Pattern = "SimpleList",
+                Table = "ConFormOrderTable",
+                Fields = ["VehicleId"],
+                InstallTo = Model,
+                Output = "json",
+            });
+        }
+        finally
+        {
+            Console.SetOut(saved);
+            GenerateInstaller.SaveViaBridge = real;
+        }
+
+        using var json = JsonDocument.Parse(writer.ToString());
+        var data = json.RootElement.GetProperty("data");
+        // Null properties are left out of the envelope.
+        Assert.False(data.TryGetProperty("path", out var path) && path.ValueKind != JsonValueKind.Null, data.ToString());
+        var entry = Assert.Single(ModificationJournal.ForIndex().List(), e => e.ObjectName == formName);
+        Assert.Null(entry.TargetPath);
     }
 }
