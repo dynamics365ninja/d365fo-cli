@@ -335,6 +335,18 @@ internal static class GenerateInstaller
     }
 
     /// <summary>
+    /// The file the provider wrote for a bridge create: <c>&lt;model folder&gt;\&lt;subfolder&gt;\&lt;name&gt;.xml</c>,
+    /// resolved like a disk write's target, or null when no file is there to point at.
+    /// </summary>
+    private static string? BridgeWrittenPath(string model, string axSubfolder, string name)
+    {
+        var folder = ResolveModelFolder(model);
+        if (string.IsNullOrEmpty(folder)) return null;
+        var path = System.IO.Path.Combine(folder, axSubfolder, name + ".xml");
+        return File.Exists(path) ? path : null;
+    }
+
+    /// <summary>
     /// Best-effort modification-journal append (issue #113) for a bridge-mediated create.
     /// Tombstone entry (no pre-image, since nothing existed before) — undo replays it by
     /// calling the bridge's <c>deleteObject</c>. Never lets a journal failure fail the
@@ -346,7 +358,7 @@ internal static class GenerateInstaller
     /// project too. Recorded before, it had no delta, and undoing a bridge create left a
     /// <c>&lt;Content&gt;</c> entry pointing at an object that no longer existed.
     /// </remarks>
-    private static void RecordBridgeCreate(string axKind, string name, string model, D365FO.Core.Journal.RnrProjDelta? projectDelta)
+    private static void RecordBridgeCreate(string axKind, string name, string model, string? targetPath, D365FO.Core.Journal.RnrProjDelta? projectDelta)
     {
         try
         {
@@ -361,7 +373,7 @@ internal static class GenerateInstaller
                 Model: model,
                 Operation: JournalOperation.Create,
                 WritePath: JournalWritePath.Bridge,
-                TargetPath: null,
+                TargetPath: targetPath,
                 PreImage: null,
                 IsTombstone: true,
                 RnrProjDelta: projectDelta));
@@ -385,7 +397,7 @@ internal static class GenerateInstaller
         var warnings = new List<string>();
 
         // 1) Metadata-API path — canonical, consistent output.
-        var (ok, err) = BridgeGate.TrySaveObject(axKind, name, model, xml);
+        var (ok, err) = SaveViaBridge(axKind, name, model, xml);
         if (ok) return (InstallOutcome.CreatedViaApi, null, null, warnings);
 
         // 2) Fallback — write the scaffold into the model folder if resolvable.
@@ -407,6 +419,12 @@ internal static class GenerateInstaller
             notFound.Hint));
         return (InstallOutcome.Failed, null, failure, warnings);
     }
+
+    /// <summary>
+    /// The Metadata-API create call <see cref="PlanInstall"/> makes. Tests swap it to see the exact
+    /// XML a generate command hands the provider, which no file on disk records afterwards.
+    /// </summary>
+    internal static Func<string, string, string, string?, (bool ok, string? error)> SaveViaBridge = BridgeGate.TrySaveObject;
 
     /// <summary>Inputs handed to a command's payload factory after the artefact is written.</summary>
     internal readonly record struct EmitResult(string Source, string? Path, long? Bytes, string? Backup);
@@ -448,8 +466,14 @@ internal static class GenerateInstaller
         string xml,
         Func<EmitResult, object> buildPayload,
         List<string>? warnings = null)
-        => EmitCore(kind, gate, settings, axKind, axSubfolder, name, xml,
-            path => Write(gate, xml, path, settings.Overwrite), buildPayload, warnings);
+    {
+        // Canonicalise before the paths split, as Emit does: the bridge hands this string
+        // straight to IMetadataProvider, which skips members that arrive out of contract order
+        // without an error. Forms come from string templates, so this is where they get it.
+        var canonical = ScaffoldFileWriter.CanonicalizeIfNeeded(xml);
+        return EmitCore(kind, gate, settings, axKind, axSubfolder, name, canonical,
+            path => Write(gate, canonical, path, settings.Overwrite), buildPayload, warnings);
+    }
 
     /// <summary>
     /// Opt-in post-write check for <c>--verify</c>: read every artefact the run emitted back
@@ -659,14 +683,16 @@ internal static class GenerateInstaller
 
             if (plan.outcome == InstallOutcome.CreatedViaApi)
             {
-                // Nothing reached disk, but the provider was handed exactly this XML — which is
+                // No Write of ours ran, but the provider was handed exactly this XML — which is
                 // the document the honesty report has to judge, and the object --verify reads
-                // back. Recorded explicitly because no Write ran to derive it.
+                // back. Recorded explicitly because no Write ran to derive it. The file is the
+                // provider's, so its path is reported only when it is where the model folder says.
                 gate.Observe(xml);
-                gate.RecordArtefact(axKind, name, null);
-                RecordBridgeCreate(axKind, name, installTo!, RegisterBridgeCreate(gate, axKind, name, installTo!));
+                var written = BridgeWrittenPath(installTo!, axSubfolder, name);
+                gate.RecordArtefact(axKind, name, written);
+                RecordBridgeCreate(axKind, name, installTo!, written, RegisterBridgeCreate(gate, axKind, name, installTo!));
                 return Finish(kind, gate, verify, installTo,
-                    buildPayload(new EmitResult("bridge", null, null, null)), all);
+                    buildPayload(new EmitResult("bridge", written, null, null)), all);
             }
 
             try
