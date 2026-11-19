@@ -335,18 +335,6 @@ internal static class GenerateInstaller
     }
 
     /// <summary>
-    /// Best-effort modification-journal append (issue #113) for a bridge-mediated create.
-    /// Tombstone entry (no pre-image, since nothing existed before) — undo replays it by
-    /// calling the bridge's <c>deleteObject</c>. Never lets a journal failure fail the
-    /// create it is recording.
-    /// </summary>
-    /// <remarks>
-    /// Written after the <c>--project</c> registration rather than inside <see cref="PlanInstall"/>,
-    /// so the entry carries that project change and <c>undo</c> takes the object out of the
-    /// project too. Recorded before, it had no delta, and undoing a bridge create left a
-    /// <c>&lt;Content&gt;</c> entry pointing at an object that no longer existed.
-    /// </remarks>
-    /// <summary>
     /// The file the provider wrote for a bridge create: <c>&lt;model folder&gt;\&lt;subfolder&gt;\&lt;name&gt;.xml</c>,
     /// resolved like a disk write's target, or null when no file is there to point at.
     /// </summary>
@@ -358,6 +346,18 @@ internal static class GenerateInstaller
         return File.Exists(path) ? path : null;
     }
 
+    /// <summary>
+    /// Best-effort modification-journal append (issue #113) for a bridge-mediated create.
+    /// Tombstone entry (no pre-image, since nothing existed before) — undo replays it by
+    /// calling the bridge's <c>deleteObject</c>. Never lets a journal failure fail the
+    /// create it is recording.
+    /// </summary>
+    /// <remarks>
+    /// Written after the <c>--project</c> registration rather than inside <see cref="PlanInstall"/>,
+    /// so the entry carries that project change and <c>undo</c> takes the object out of the
+    /// project too. Recorded before, it had no delta, and undoing a bridge create left a
+    /// <c>&lt;Content&gt;</c> entry pointing at an object that no longer existed.
+    /// </remarks>
     private static void RecordBridgeCreate(string axKind, string name, string model, string? targetPath, D365FO.Core.Journal.RnrProjDelta? projectDelta)
     {
         try
