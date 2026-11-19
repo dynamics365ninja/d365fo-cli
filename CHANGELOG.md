@@ -40,14 +40,14 @@ field EDTs, menu item targets, privilege entry points, extensions, CoC and event
 
 ### Added — MCP toolsets: advertise only the tools a client needs (#249)
 
-A host injects every advertised tool's schema into every turn: 47 766 characters for the 32 tools.
+A host injects every advertised tool's schema into every turn: 48 214 characters for the 32 tools.
 A client that only reads metadata paid for `generate_object` (9.5k) and `modify_object` on each
 message.
 
 - **`MCP_TOOLSETS`** (env var or `settings.json`) and **`d365fo-mcp --toolsets`** take a
   comma-separated list of toolsets and tool names. The toolsets are `read`, `knowledge`, `author`,
-  `check`, `index` and `sdlc`, and every tool is in exactly one. `read` is 10 tools and 10 711
-  characters, 22 % of the full list.
+  `check`, `index` and `sdlc`, and every tool is in exactly one. `read` is 10 tools and 11 159
+  characters, 23 % of the full list.
 - Both transports filter `tools/list` and refuse a call outside the selection, naming the toolset
   it belongs to. The selection intersects with `MCP_SERVER_MODE`.
 - The `initialize` instructions name the tools the server does not offer, so the model does not

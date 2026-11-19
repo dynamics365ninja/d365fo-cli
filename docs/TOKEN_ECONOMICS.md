@@ -116,10 +116,10 @@ shrinks with it:
 
 | `MCP_TOOLSETS` | Tools | Schema chars | ≈ tokens |
 |---|---:|---:|---:|
-| `all` (default) | 32 | 47 766 | ~13 300 |
-| `read,knowledge,check` | 19 | 21 683 | ~6 000 |
-| `read,knowledge` | 15 | 16 398 | ~4 600 |
-| `read` | 10 | 10 711 | ~3 000 |
+| `all` (default) | 32 | 48 214 | ~13 400 |
+| `read,knowledge,check` | 19 | 22 131 | ~6 200 |
+| `read,knowledge` | 15 | 16 846 | ~4 700 |
+| `read` | 10 | 11 159 | ~3 100 |
 
 `MCP_TOOLSETS=read python scripts/measure-context-cost.py` reproduces a row. The groups are
 listed in [MCP_CONFIG.md](MCP_CONFIG.md#toolsets).
