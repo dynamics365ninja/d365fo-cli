@@ -130,6 +130,7 @@ Copilot: "Since I cannot access the codebase, I'll provide generic guidance…"
 | Check existing CoC wrappers | `d365fo find coc <Class>::<method> --output json` |
 | Find event handlers | `d365fo find event-handlers <Target> --output json` |
 | Who uses X — calls, reads, writes, extends (where-used) | `d365fo find refs <X> --xref --output json` — the compiler's xref, one row per object; `Owner.member` for one method/field. No XRef DB: drop `--xref` for the text scan, which can miss references |
+| Where X is bound in metadata — form/query data sources, relations, field EDTs, menu items, security, extensions | `d365fo find where-used <X> --output json` — from the index, no build; `--kind Form` (or Query, MenuItem, Security…) narrows, `byVia` counts come first |
 | Find label | `d365fo labels search "<text>" --output json` |
 | Resolve label token | `d365fo labels resolve @SYS12345 --lang en-us,cs` |
 | Trace security (Role → Duty → Privilege) | `d365fo security <Name> --output json` (a role, duty or privilege, or the coverage of an object) |

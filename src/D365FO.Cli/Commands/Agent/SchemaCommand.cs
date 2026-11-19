@@ -193,8 +193,9 @@ public sealed class SchemaCommand : Command<SchemaCommand.Settings>
         C("find handlers", "Find event subscribers.", ["<OBJECT>"], ["--kind", "--output"], ["extension_info (mode=events)"]),
         C("find event-handlers", "Alias of `find handlers`.", ["<OBJECT>"], ["--kind", "--output"], ["extension_info (mode=events)"]),
         C("find tables-by-field", "Alias of `find fields`, named like the MCP tool.", ["<NAME>"], ["--model", "--limit", "--output"], ["find_tables_by_field"]),
-        C("find refs", "Where a symbol is used: text scan of indexed X++ source, or the compiler's xref with --xref.", ["<NAME>"], ["--kind", "--model", "--limit", "--lines", "--all-models", "--xref", "--output"], ["find_references"]),
-        C("find references", "Alias of `find refs`.", ["<NAME>"], ["--kind", "--model", "--limit", "--lines", "--all-models", "--xref", "--output"], ["find_references"]),
+        C("find refs", "Where a symbol is used: text scan of indexed X++ source, the compiler's xref with --xref, or metadata references from the index with --structural.", ["<NAME>"], ["--kind", "--model", "--limit", "--lines", "--all-models", "--structural", "--xref", "--output"], ["find_references"]),
+        C("find references", "Alias of `find refs`.", ["<NAME>"], ["--kind", "--model", "--limit", "--lines", "--all-models", "--structural", "--xref", "--output"], ["find_references"]),
+        C("find where-used", "Where an object is referenced in metadata: form/query data sources, relations, field EDTs, menu items, security, extensions, CoC, handlers. From the index, no build.", ["<NAME>"], ["--kind", "--model", "--limit", "--output"], ["find_references (structural=true)"]),
         C("find form-patterns", "Find forms by Microsoft form pattern, table, or peer form.", [], ["--pattern", "--table", "--similar-to", "--output"], ["object_patterns (domain=form, action=analyze)"]),
 
         C("index build", "Create or ensure the metadata index schema.", [], ["--db", "--output"], []),

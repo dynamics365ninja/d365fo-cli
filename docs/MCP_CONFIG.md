@@ -117,7 +117,7 @@ A client that only looks things up can drop the rest:
 
 | Toolset | Tools | Schema chars |
 |---|---|---:|
-| `read` | `search`, `batch_get_info`, `get_object_info`, `get_method`, `find_references`, `find_tables_by_field`, `extension_info`, `security_info`, `labels`, `models` | 10 711 |
+| `read` | `search`, `batch_get_info`, `get_object_info`, `get_method`, `find_references`, `find_tables_by_field`, `extension_info`, `security_info`, `labels`, `models` | 11 159 |
 | `knowledge` | `get_knowledge`, `object_patterns`, `explain_build_error`, `suggest_edt`, `validate_object_naming` | 5 688 |
 | `author` | `prepare`, `generate_object`, `modify_method`, `modify_object`, `delete_object`, `undo_last_modification`, `journal_list` | 19 450 |
 | `check` | `validate`, `lint`, `analyze`, `verify_project` | 5 286 |

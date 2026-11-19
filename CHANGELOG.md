@@ -19,16 +19,35 @@ was ported from.
 
 ## [Unreleased]
 
+### Added — Structural where-used from the index, no build needed (#249)
+
+"Where is this table bound" had two answers. The X++ text scan sees code only. The compiler's
+cross-reference sees everything, but needs `build --xref` first, and on a UDE that build is the
+expensive part. The index already holds what answers it: form and query data sources, relations,
+field EDTs, menu item targets, privilege entry points, extensions, CoC and event handlers.
+
+- **`d365fo find where-used <NAME>`**, also `find refs <NAME> --structural` (MCP: `find_references`
+  with `structural=true`), returns every object that references the name in metadata. Each item has
+  `kind`, `name`, `model`, `element` (`DataSources/CustTable`, `Fields/AccountNum`) and `via` (`Table`,
+  `RelatedTable`, `ExtendedDataType`, `EntryPoint (Read)` …).
+- `byVia` and `byKind` counts come first and are complete; `items` stop at `--limit`. `--kind` and
+  `--model` filter the referencing side.
+- **No schema change and no re-index.** It is one query over the tables extraction already fills,
+  so it follows every refresh. It takes 0.2 s on a 203-model installation (`CustTable`: 1 260
+  references), and about 3 s on a cold cache.
+- What the index does not hold is named in `notCovered`: X++ code, form control data fields, data
+  entity data sources, and fields typed directly on an enum.
+
 ### Added — MCP toolsets: advertise only the tools a client needs (#249)
 
-A host injects every advertised tool's schema into every turn: 47 766 characters for the 32 tools.
+A host injects every advertised tool's schema into every turn: 48 214 characters for the 32 tools.
 A client that only reads metadata paid for `generate_object` (9.5k) and `modify_object` on each
 message.
 
 - **`MCP_TOOLSETS`** (env var or `settings.json`) and **`d365fo-mcp --toolsets`** take a
   comma-separated list of toolsets and tool names. The toolsets are `read`, `knowledge`, `author`,
-  `check`, `index` and `sdlc`, and every tool is in exactly one. `read` is 10 tools and 10 711
-  characters, 22 % of the full list.
+  `check`, `index` and `sdlc`, and every tool is in exactly one. `read` is 10 tools and 11 159
+  characters, 23 % of the full list.
 - Both transports filter `tools/list` and refuse a call outside the selection, naming the toolset
   it belongs to. The selection intersects with `MCP_SERVER_MODE`.
 - The `initialize` instructions name the tools the server does not offer, so the model does not

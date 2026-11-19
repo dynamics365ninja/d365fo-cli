@@ -226,6 +226,10 @@ public sealed class FindRefsCommand : Command<FindRefsCommand.Settings>
         [System.ComponentModel.Description("Text scan without --model: also scan every model that has no source index and is not custom, from disk (minutes on a full installation). By default those are left out and counted in `coverage.notSearched`.")]
         public bool AllModels { get; init; }
 
+        [CommandOption("--structural")]
+        [System.ComponentModel.Description("Where the object is referenced in metadata, from the index with no build: form and query data sources, table relations, field EDTs, EDT and class extends, menu item objects, privilege entry points and grants, extensions, CoC, event handlers, services, reports. --kind filters the referencing kind (Form, Query, MenuItem, Security…), --model the referencing model. Not with --xref, --lines or --all-models. `find where-used` is the same.")]
+        public bool Structural { get; init; }
+
         [CommandOption("--xref")]
         [System.ComponentModel.Description("Answer from DYNAMICSXREFDB — compiler-resolved and complete, unlike the text scan. Queried directly (D365FO_XREF_CONNECTIONSTRING, default local SQL with integrated auth); the metadata bridge is the fallback when D365FO_BRIDGE_ENABLED=1. Fails XREF_UNAVAILABLE rather than falling back to the text scan, and says so when the database has no rows for the symbol's module (`d365fo build --model <Model> --xref` fills it).")]
         public bool Xref { get; init; }
@@ -239,6 +243,11 @@ public sealed class FindRefsCommand : Command<FindRefsCommand.Settings>
 
         if (settings.Lines < 0)
             return RenderHelpers.Render(kind, ToolResult<object>.Fail(D365FoErrorCodes.BadInput, "--lines must be 0 or more."));
+
+        if (settings.Structural)
+            return RenderHelpers.Render(kind, new D365FO.Mcp.ToolHandlers(RepoFactory.Create()).FindReferences(
+                settings.Name, settings.Kind, settings.Model, settings.Limit, settings.Lines,
+                xref: settings.Xref, allModels: settings.AllModels, structural: true));
 
         // The compiler's xref — fast, precise, and complete. Asked for by name, so
         // it answers or fails: the text scan is a different, less complete answer
@@ -274,6 +283,37 @@ public sealed class FindRefsCommand : Command<FindRefsCommand.Settings>
                 "Try narrowing --kind/--model, or run `d365fo doctor --output json` to confirm the index is healthy."));
         }
     }
+}
+
+/// <summary>
+/// <c>find where-used &lt;NAME&gt;</c>: the structural where-used of #249 item 8 under the name an agent
+/// guesses first. Same answer as <c>find refs --structural</c> and MCP <c>find_references</c> with
+/// <c>structural=true</c>.
+/// </summary>
+public sealed class FindWhereUsedCommand : Command<FindWhereUsedCommand.Settings>
+{
+    public sealed class Settings : D365OutputSettings
+    {
+        [CommandArgument(0, "<NAME>")]
+        [System.ComponentModel.Description("The referenced object: table, EDT, enum, class, form, query, menu item, privilege, duty, service.")]
+        public string Name { get; init; } = "";
+
+        [CommandOption("--kind <KIND>")]
+        [System.ComponentModel.Description("Keep only referencing objects of this kind, or whose kind starts with it: Form, Query, Table, Edt, MenuItem, Security, Class, TableExtension, …")]
+        public string? Kind { get; init; }
+
+        [CommandOption("--model <NAME>")]
+        [System.ComponentModel.Description("Keep only referencing objects declared in this model.")]
+        public string? Model { get; init; }
+
+        [CommandOption("-l|--limit <N>")]
+        [System.ComponentModel.Description("Most references listed (default 200). The byVia/byKind counts are always complete.")]
+        public int Limit { get; init; } = 200;
+    }
+
+    public override int Execute(CommandContext ctx, Settings settings) =>
+        RenderHelpers.Render(OutputMode.Resolve(settings.Output),
+            D365FO.Core.Index.StructuralWhereUsed.Run(RepoFactory.Create(), settings.Name, settings.Kind, settings.Model, settings.Limit));
 }
 
 /// <summary>
