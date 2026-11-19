@@ -285,6 +285,7 @@ public static class XppModelBuild
     /// <param name="incremental">Compile only what changed since the last full build.</param>
     /// <param name="reason">Why the xppc route was chosen, for the payload.</param>
     /// <param name="xref">Also update the cross-reference database (<c>build --xref</c>), or null.</param>
+    /// <param name="extraReferenceFolders">Further reference roots for xppc, see <see cref="XppcArgs"/>.</param>
     public static ToolResult<object> Build(
         IReadOnlyList<Target> targets, string packagesRoot, bool incremental, string reason, XrefTarget? xref = null,
         IReadOnlyList<string>? extraReferenceFolders = null)
