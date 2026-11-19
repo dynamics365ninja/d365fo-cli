@@ -182,8 +182,14 @@ public static class XppModelBuild
     /// cross-reference indexes (<c>-norecreatecrossrefindexes</c>), which its own help asks for
     /// when a build system compiles several models, and the last model rebuilds them once.
     /// </param>
+    /// <param name="extraReferenceFolders">
+    /// Further roots to resolve references against, normally <c>D365FO_CUSTOM_PACKAGES_PATH</c>:
+    /// a module that exists only as compiled binaries there (restored from a feed) is otherwise
+    /// "not found". Roots that do not exist or repeat another reference folder are skipped.
+    /// </param>
     public static IReadOnlyList<string> XppcArgs(
-        Target target, string packagesRoot, bool incremental, XrefTarget? xref = null, bool lastXrefModel = true)
+        Target target, string packagesRoot, bool incremental, XrefTarget? xref = null, bool lastXrefModel = true,
+        IReadOnlyList<string>? extraReferenceFolders = null)
     {
         var package = Path.Combine(target.MetadataRoot, target.Module);
         var output = Path.Combine(package, "bin");
@@ -197,6 +203,14 @@ public static class XppModelBuild
         };
         if (!SamePath(packagesRoot, target.MetadataRoot))
             args.Add($"-referencefolder={target.MetadataRoot}");
+        var seen = new List<string> { packagesRoot, target.MetadataRoot };
+        foreach (var extra in extraReferenceFolders ?? [])
+        {
+            if (string.IsNullOrWhiteSpace(extra) || !Directory.Exists(extra)) continue;
+            if (seen.Any(s => SamePath(s, extra))) continue;
+            seen.Add(extra);
+            args.Add($"-referencefolder={extra}");
+        }
         args.Add($"-refPath={output}");
         args.Add($"-log={Path.Combine(package, "BuildModelResult.log")}");
         args.Add($"-xmlLog={Path.Combine(package, "BuildModelResult.xml")}");
@@ -234,10 +248,11 @@ public static class XppModelBuild
     /// xppc's arguments for the <c>-xrefonly</c> run that recreates the cross-reference indexes
     /// (<see cref="XrefIndexRecreateTarget"/>). It writes its own logs so the build's logs stay.
     /// </summary>
-    public static IReadOnlyList<string> XrefIndexRecreateArgs(Target target, string packagesRoot, XrefTarget xref)
+    public static IReadOnlyList<string> XrefIndexRecreateArgs(
+        Target target, string packagesRoot, XrefTarget xref, IReadOnlyList<string>? extraReferenceFolders = null)
     {
         var package = Path.Combine(target.MetadataRoot, target.Module);
-        var args = XppcArgs(target, packagesRoot, incremental: false, xref, lastXrefModel: true)
+        var args = XppcArgs(target, packagesRoot, incremental: false, xref, lastXrefModel: true, extraReferenceFolders)
             .Where(a => !a.StartsWith("-log=", StringComparison.OrdinalIgnoreCase)
                         && !a.StartsWith("-xmlLog=", StringComparison.OrdinalIgnoreCase))
             .ToList();
@@ -271,7 +286,8 @@ public static class XppModelBuild
     /// <param name="reason">Why the xppc route was chosen, for the payload.</param>
     /// <param name="xref">Also update the cross-reference database (<c>build --xref</c>), or null.</param>
     public static ToolResult<object> Build(
-        IReadOnlyList<Target> targets, string packagesRoot, bool incremental, string reason, XrefTarget? xref = null)
+        IReadOnlyList<Target> targets, string packagesRoot, bool incremental, string reason, XrefTarget? xref = null,
+        IReadOnlyList<string>? extraReferenceFolders = null)
     {
         var xppc = BuildTooling.ResolvePackageBinTool("xppc.exe", packagesRoot);
         if (!xppc.Ok)
@@ -312,7 +328,7 @@ public static class XppModelBuild
                 }
             }
 
-            var args = XppcArgs(target, packagesRoot, incremental, xref, lastXrefModel: i == targets.Count - 1);
+            var args = XppcArgs(target, packagesRoot, incremental, xref, lastXrefModel: i == targets.Count - 1, extraReferenceFolders);
             var started = DateTime.UtcNow;
             var (xExit, xOut, xErr, xElapsed) = SdlcRunner.Run(xppc.Path!, args);
             lastXppcRun = i;
@@ -353,7 +369,7 @@ public static class XppModelBuild
         object? xrefIndexes = null;
         if (xref is not null && XrefIndexRecreateTarget(targets.Count, lastXppcRun, lastSucceeded) is { } r)
         {
-            var recreateArgs = XrefIndexRecreateArgs(targets[r], packagesRoot, xref);
+            var recreateArgs = XrefIndexRecreateArgs(targets[r], packagesRoot, xref, extraReferenceFolders);
             var (rExit, _, _, rElapsed) = SdlcRunner.Run(xppc.Path!, recreateArgs);
             xrefIndexes = new
             {

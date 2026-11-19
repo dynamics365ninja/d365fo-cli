@@ -111,6 +111,24 @@ public class XppModelBuildTests : IDisposable
     }
 
     [Fact]
+    public void Extra_roots_become_reference_folders_deduplicated()
+    {
+        var custom = Directory.CreateDirectory(Path.Combine(root.FullName, "UDE2", "Custom")).FullName;
+        var framework = Directory.CreateDirectory(Path.Combine(root.FullName, "Dynamics365b", "PackagesLocalDirectory")).FullName;
+        var artifacts = Directory.CreateDirectory(Path.Combine(root.FullName, "Artifacts")).FullName;
+        var missing = Path.Combine(root.FullName, "DoesNotExist");
+        var target = new XppModelBuild.Target("M", "Pkg", custom, null);
+
+        var args = XppModelBuild.XppcArgs(target, framework, incremental: false,
+            extraReferenceFolders: [custom, artifacts, artifacts, missing, framework]);
+
+        Assert.Equal(1, args.Count(a => a == $"-referencefolder={artifacts}"));
+        Assert.Equal(1, args.Count(a => a == $"-referencefolder={custom}"));
+        Assert.Equal(1, args.Count(a => a == $"-referencefolder={framework}"));
+        Assert.DoesNotContain($"-referencefolder={missing}", args);
+    }
+
+    [Fact]
     public void On_a_ude_layout_both_roots_are_reference_folders()
     {
         var custom = Path.Combine(root.FullName, "UDE", "Custom");
