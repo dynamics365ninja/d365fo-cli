@@ -109,6 +109,23 @@ The correction does not change the recommendation. It makes the gap larger.
 
 ---
 
+## Narrowing the MCP tool list
+
+`MCP_TOOLSETS` (or `d365fo-mcp --toolsets`) advertises only some tool groups. The per-turn schema
+shrinks with it:
+
+| `MCP_TOOLSETS` | Tools | Schema chars | ≈ tokens |
+|---|---:|---:|---:|
+| `all` (default) | 32 | 47 766 | ~13 300 |
+| `read,knowledge,check` | 19 | 21 683 | ~6 000 |
+| `read,knowledge` | 15 | 16 398 | ~4 600 |
+| `read` | 10 | 10 711 | ~3 000 |
+
+`MCP_TOOLSETS=read python scripts/measure-context-cost.py` reproduces a row. The groups are
+listed in [MCP_CONFIG.md](MCP_CONFIG.md#toolsets).
+
+---
+
 ## When the CLI does **not** save
 
 | Situation | Recommended |
