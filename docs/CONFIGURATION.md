@@ -50,6 +50,7 @@ for the shared-deployment story these enable.
 | Variable | Purpose | Default |
 |---|---|---|
 | `MCP_SERVER_MODE` | `full` \| `read-only` \| `write-only` — gates which MCP tools are exposed/callable (both transports) | `full` |
+| `MCP_TOOLSETS` | Comma-separated toolsets (`read`, `knowledge`, `author`, `check`, `index`, `sdlc`) and tool names the MCP server advertises; intersected with `MCP_SERVER_MODE`. See [MCP_CONFIG.md](MCP_CONFIG.md#toolsets) | `all` |
 | `API_KEY` | Shared secret required in the `X-Api-Key` header on `POST /mcp` (`--http` transport only). Unset = unauthenticated, with a startup warning | — |
 | `MCP_HTTP_PORT` | Listen port for `d365fo-mcp --http` when `--port` isn't passed | `3000` |
 

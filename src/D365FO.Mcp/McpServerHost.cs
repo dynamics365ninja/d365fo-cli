@@ -31,34 +31,33 @@ public static class McpServerHost
         if (!string.IsNullOrEmpty(dir)) Directory.CreateDirectory(dir);
         var repo = new MetadataRepository(settings.DatabasePath);
         repo.EnsureSchema();
-        var mode = ServerModeConfig.Resolve(D365FoSettings.Resolve("MCP_SERVER_MODE"));
-        return RunStdioAsync(new ToolHandlers(repo), mode, loggerFactory, ct);
+        return RunStdioAsync(new ToolHandlers(repo), ToolFilter.FromSettings(), loggerFactory, ct);
     }
 
     public static Task RunStdioAsync(ToolHandlers handlers, ILoggerFactory? loggerFactory = null, CancellationToken ct = default)
         => RunStdioAsync(handlers, McpServerMode.Full, loggerFactory, ct);
 
-    public static async Task RunStdioAsync(ToolHandlers handlers, McpServerMode mode, ILoggerFactory? loggerFactory = null, CancellationToken ct = default)
+    public static async Task RunStdioAsync(ToolHandlers handlers, ToolFilter filter, ILoggerFactory? loggerFactory = null, CancellationToken ct = default)
     {
         loggerFactory ??= LoggerFactory.Create(b => b.SetMinimumLevel(LogLevel.Warning));
 
-        var options = BuildOptions(handlers, mode);
+        var options = BuildOptions(handlers, filter);
         var transport = new StdioServerTransport(options, loggerFactory);
         var server = McpServer.Create(transport, options, loggerFactory, serviceProvider: null);
         await server.RunAsync(ct);
     }
 
     /// <summary>
-    /// The <c>tools/list</c> payload for <paramref name="mode"/> — every
-    /// <see cref="ToolCatalog"/> entry <see cref="ServerModeConfig.IsToolAllowed"/>
-    /// permits under it. Split out from <see cref="BuildOptions"/> (which wraps
+    /// The <c>tools/list</c> payload for <paramref name="filter"/> — every
+    /// <see cref="ToolCatalog"/> entry <see cref="ToolFilter.IsAllowed"/>
+    /// permits (the mode and the toolsets; every tool when null). Split out from <see cref="BuildOptions"/> (which wraps
     /// this in an SDK <see cref="ListToolsHandler"/> delegate) so the mode
     /// filtering can be asserted directly in tests without constructing an SDK
     /// <c>RequestContext</c>.
     /// </summary>
-    public static List<Tool> BuildToolList(McpServerMode mode = McpServerMode.Full) =>
+    public static List<Tool> BuildToolList(ToolFilter? filter = null) =>
         ToolCatalog.All
-            .Where(d => ServerModeConfig.IsToolAllowed(mode, d.Name))
+            .Where(d => (filter ?? ToolFilter.Full).IsAllowed(d.Name))
             .Select(d => new Tool
             {
                 Name = d.Name,
@@ -77,14 +76,17 @@ public static class McpServerHost
                 },
             }).ToList();
 
-    public static McpServerOptions BuildOptions(ToolHandlers handlers, McpServerMode mode = McpServerMode.Full)
+    public static McpServerOptions BuildOptions(ToolHandlers handlers, ToolFilter? filter = null)
     {
-        var tools = BuildToolList(mode);
+        var resolved = filter ?? ToolFilter.Full;
+        var tools = BuildToolList(resolved);
 
         return new McpServerOptions
         {
             ServerInfo = new Implementation { Name = ServerName, Version = ServerVersion },
-            ServerInstructions = ServerInstructions.Routing,
+            ServerInstructions = resolved.InstructionsNote() is { } note
+                ? ServerInstructions.Routing + "\n" + note
+                : ServerInstructions.Routing,
             Capabilities = new ServerCapabilities
             {
                 Tools = new ToolsCapability { ListChanged = false },
@@ -93,7 +95,7 @@ public static class McpServerHost
             {
                 ListToolsHandler = (_, _) =>
                     ValueTask.FromResult(new ListToolsResult { Tools = tools }),
-                CallToolHandler = (ctx, _) => ValueTask.FromResult(Invoke(handlers, mode, ctx.Params)),
+                CallToolHandler = (ctx, _) => ValueTask.FromResult(Invoke(handlers, resolved, ctx.Params)),
             },
         };
     }
@@ -101,7 +103,7 @@ public static class McpServerHost
     public static CallToolResult Invoke(ToolHandlers handlers, CallToolRequestParams? request)
         => Invoke(handlers, McpServerMode.Full, request);
 
-    public static CallToolResult Invoke(ToolHandlers handlers, McpServerMode mode, CallToolRequestParams? request)
+    public static CallToolResult Invoke(ToolHandlers handlers, ToolFilter filter, CallToolRequestParams? request)
     {
         if (request is null)
             return ErrorResult("BAD_REQUEST", "Missing tools/call parameters.");
@@ -110,11 +112,8 @@ public static class McpServerHost
         if (descriptor.Name is null)
             return ErrorResult("UNKNOWN_TOOL", $"Unknown tool: {request.Name}");
 
-        if (!ServerModeConfig.IsToolAllowed(mode, request.Name))
-        {
-            return ErrorResult(D365FoErrorCodes.ModeNotAllowed,
-                $"Tool '{request.Name}' is not available in '{ServerModeConfig.ToWireString(mode)}' mode.");
-        }
+        if (!filter.IsAllowed(request.Name))
+            return ErrorResult(D365FoErrorCodes.ModeNotAllowed, filter.RefusalMessage(request.Name));
 
         var args = SerializeArguments(request.Arguments);
 

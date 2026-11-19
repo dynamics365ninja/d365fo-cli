@@ -33,21 +33,28 @@ public sealed class StdioDispatcher
     private const string ServerVersion = "0.1.0-dev";
 
     private readonly ToolHandlers _handlers;
-    private readonly McpServerMode _mode;
+    private readonly ToolFilter _filter;
 
-    public StdioDispatcher(ToolHandlers handlers, McpServerMode mode = McpServerMode.Full)
+    /// <param name="handlers">The tool implementations.</param>
+    /// <param name="filter">The mode and toolsets to serve; every tool when null. A bare
+    /// <see cref="McpServerMode"/> converts.</param>
+    public StdioDispatcher(ToolHandlers handlers, ToolFilter? filter = null)
     {
         _handlers = handlers;
-        _mode = mode;
+        _filter = filter ?? ToolFilter.Full;
     }
+
+    /// <summary>The mode and toolsets this dispatcher serves.</summary>
+    public ToolFilter Filter => _filter;
 
     /// <summary>
     /// Builds the default dispatcher against the environment-configured index.
     /// <paramref name="mode"/> defaults to the resolved <c>MCP_SERVER_MODE</c>
-    /// setting (env var / settings.json), so every transport built on top of
-    /// this factory — stdio, the daemon socket/pipe, and the HTTP host — honors
-    /// the same mode without each caller re-resolving it.
+    /// setting (env var / settings.json), and the toolsets to <c>MCP_TOOLSETS</c>, so every
+    /// transport built on top of this factory — stdio, the daemon socket/pipe, and the HTTP
+    /// host — honors the same selection without each caller re-resolving it.
     /// </summary>
+    /// <exception cref="InvalidOperationException"><c>MCP_TOOLSETS</c> names an unknown toolset.</exception>
     public static StdioDispatcher CreateDefault(string? databasePath = null, McpServerMode? mode = null)
     {
         var settings = D365FoSettings.FromEnvironment(databasePath);
@@ -55,8 +62,8 @@ public sealed class StdioDispatcher
         if (!string.IsNullOrEmpty(dir)) Directory.CreateDirectory(dir);
         var repo = new MetadataRepository(settings.DatabasePath);
         repo.EnsureSchema();
-        var resolvedMode = mode ?? ServerModeConfig.Resolve(D365FoSettings.Resolve("MCP_SERVER_MODE"));
-        return new StdioDispatcher(new ToolHandlers(repo), resolvedMode);
+        var filter = ToolFilter.FromSettings(mode);
+        return new StdioDispatcher(new ToolHandlers(repo), filter);
     }
 
     public async Task RunAsync(TextReader input, TextWriter output, CancellationToken ct = default)
@@ -138,7 +145,9 @@ public sealed class StdioDispatcher
                         // Spec-defined field clients surface to the model once, before any
                         // tool call. Carries the rule canon so it is not re-paid per tool
                         // description — see ServerInstructions.
-                        ["instructions"] = ServerInstructions.Text,
+                        ["instructions"] = _filter.InstructionsNote() is { } note
+                            ? ServerInstructions.Text + "\n\n" + note
+                            : ServerInstructions.Text,
                     });
 
                 case "initialized":
@@ -150,7 +159,7 @@ public sealed class StdioDispatcher
                     return isNotification ? null : Success(idNode, new JsonObject());
 
                 case "tools/list":
-                    return Success(idNode, BuildToolsList(_mode));
+                    return Success(idNode, BuildToolsList(_filter));
 
                 case "tools/call":
                     return HandleToolsCall(idNode, paramsEl);
@@ -165,16 +174,16 @@ public sealed class StdioDispatcher
         }
     }
 
-    private static JsonObject BuildToolsList(McpServerMode mode)
+    private static JsonObject BuildToolsList(ToolFilter filter)
     {
         var arr = new JsonArray();
         foreach (var d in ToolCatalog.All)
         {
-            // Tools disallowed under the resolved MCP_SERVER_MODE are omitted
-            // from tools/list entirely — advertising a tool tools/call would
-            // then reject with MODE_NOT_ALLOWED just confuses clients that
-            // build a UI from this list.
-            if (!ServerModeConfig.IsToolAllowed(mode, d.Name)) continue;
+            // Tools disallowed under the resolved MCP_SERVER_MODE or outside
+            // MCP_TOOLSETS are omitted from tools/list entirely — advertising a
+            // tool tools/call would then reject with MODE_NOT_ALLOWED just
+            // confuses clients that build a UI from this list.
+            if (!filter.IsAllowed(d.Name)) continue;
             arr.Add(new JsonObject
             {
                 ["name"] = d.Name,
@@ -199,11 +208,10 @@ public sealed class StdioDispatcher
 
         // Call-time mode gate: even if a client cached an earlier tools/list
         // (or calls a tool name it already knew about), a disallowed tool
-        // must never actually run under the resolved MCP_SERVER_MODE.
-        if (!ServerModeConfig.IsToolAllowed(_mode, name))
+        // must never actually run under the resolved MCP_SERVER_MODE / MCP_TOOLSETS.
+        if (!_filter.IsAllowed(name))
         {
-            return ErrorResponse(idNode, -32602,
-                $"Tool '{name}' is not available in '{ServerModeConfig.ToWireString(_mode)}' mode.",
+            return ErrorResponse(idNode, -32602, _filter.RefusalMessage(name),
                 new JsonObject { ["code"] = D365FoErrorCodes.ModeNotAllowed });
         }
 

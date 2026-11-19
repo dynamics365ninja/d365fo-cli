@@ -69,12 +69,12 @@ public static class HttpServerHost
         var repo = new MetadataRepository(settings.DatabasePath);
         repo.EnsureSchema();
 
-        var mode = ServerModeConfig.Resolve(D365FoSettings.Resolve("MCP_SERVER_MODE"));
+        var filter = ToolFilter.FromSettings();
         var apiKey = D365FoSettings.Resolve("API_KEY");
         var handlers = new ToolHandlers(repo);
-        var dispatcher = new StdioDispatcher(handlers, mode);
+        var dispatcher = new StdioDispatcher(handlers, filter);
 
-        var options = new Options(port, apiKey, mode);
+        var options = new Options(port, apiKey, filter.Mode);
         var app = Build(dispatcher, handlers, options);
         app.Urls.Clear();
         app.Urls.Add($"http://0.0.0.0:{port}");
@@ -152,6 +152,10 @@ public static class HttpServerHost
             {
                 status = "ok",
                 mode = ServerModeConfig.ToWireString(options.Mode),
+                // The tools this instance serves, when MCP_TOOLSETS narrows them; null for all.
+                tools = dispatcher.Filter.Enabled is null
+                    ? null
+                    : ToolCatalog.All.Select(d => d.Name).Where(dispatcher.Filter.IsAllowed).ToArray(),
                 indexReachable,
             });
         });

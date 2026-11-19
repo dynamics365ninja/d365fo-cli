@@ -97,13 +97,38 @@ are the ones that decide whether it works at all:
 | `D365FO_PACKAGES_PATH` | Needed by everything that reads X++ source or writes AOT XML — `get_method`, `generate_object`, `labels`. Read-only lookups against the index do not need it. |
 | `D365FO_BRIDGE_ENABLED` | `modify_*` and `generate_object --install-to` go through the local bridge process; without it they refuse rather than half-work. |
 
-And three the adapter alone has:
+And four the adapter alone has:
 
 | Variable | Values | Effect |
 |---|---|---|
 | `MCP_SERVER_MODE` | `full` (default) · `read-only` · `write-only` | Gates which tools are advertised **and** callable. The gate is re-checked at call time, so a client holding a stale tool list cannot get past it. |
+| `MCP_TOOLSETS` | `all` (default), or a comma-separated list of toolsets and tool names | Advertises only those tools, to cut the schema a host injects every turn. Same as `d365fo-mcp --toolsets`. Intersected with `MCP_SERVER_MODE`, gated at call time the same way, and an unknown name stops the server at startup. See [Toolsets](#toolsets). |
 | `API_KEY` | any string | Required value of the `X-Api-Key` header on `POST /mcp`. Unset means no auth, with a startup warning. HTTP only. |
 | `MCP_HTTP_PORT` | port number | Listen port when `--port` is not passed (default `3000`). |
+
+### Toolsets
+
+A host puts every advertised tool's schema into every turn: about 48k characters for all 32 tools.
+A client that only looks things up can drop the rest:
+
+```json
+{ "mcpServers": { "d365fo": { "command": "d365fo-mcp", "args": ["--toolsets", "read"] } } }
+```
+
+| Toolset | Tools | Schema chars |
+|---|---|---:|
+| `read` | `search`, `batch_get_info`, `get_object_info`, `get_method`, `find_references`, `find_tables_by_field`, `extension_info`, `security_info`, `labels`, `models` | 10 711 |
+| `knowledge` | `get_knowledge`, `object_patterns`, `explain_build_error`, `suggest_edt`, `validate_object_naming` | 5 688 |
+| `author` | `prepare`, `generate_object`, `modify_method`, `modify_object`, `delete_object`, `undo_last_modification`, `journal_list` | 19 450 |
+| `check` | `validate`, `lint`, `analyze`, `verify_project` | 5 286 |
+| `index` | `stats`, `index_status`, `index_sync`, `index_history`, `get_workspace_info` | 3 938 |
+| `sdlc` | `sdlc` | 2 698 |
+
+Entries combine, and a single tool name works too: `read,knowledge,prepare`. The `initialize`
+instructions then name the tools the server does not offer, so the model does not reach for one.
+A toolset is a size control, not a safety one: `read` keeps `labels`, whose `create`/`delete`
+actions write label files. For a server that must not write, use `MCP_SERVER_MODE=read-only`
+(it drops `labels` and `get_method` too, which read the local package tree).
 
 ---
 
