@@ -2152,7 +2152,11 @@ public static class ScaffoldFileWriter
         return WriteCore(effective, path, overwrite, declarationOnSaveFromXDoc: false, null, project);
     }
 
-    private static string CanonicalizeIfNeeded(string xml)
+    /// <summary>
+    /// <paramref name="xml"/> in contract member order, or unchanged when it already is (or is not
+    /// well-formed). What <see cref="Write(string, string, bool, string?)"/> writes to disk.
+    /// </summary>
+    public static string CanonicalizeIfNeeded(string xml)
     {
         XDocument doc;
         try
