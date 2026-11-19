@@ -93,8 +93,9 @@ public static class SdlcRunner
             if (failure is not null) return failure;
             if (targets.Count > 0)
             {
-                var root = packagesPath ?? D365FoSettings.FromEnvironment().PackagesPath!;
-                return XppModelBuild.Build(targets, root, incremental, reason, xrefTarget);
+                var settings = D365FoSettings.FromEnvironment();
+                var root = packagesPath ?? settings.PackagesPath!;
+                return XppModelBuild.Build(targets, root, incremental, reason, xrefTarget, settings.CustomPackagesPaths);
             }
             if (engine == "xppc" || xref)
             {
