@@ -6,7 +6,11 @@ using D365FO.Core.Journal;
 namespace D365FO.Core.Labels;
 
 /// <summary>What to delete, and how careful to be about it.</summary>
+/// <param name="Key">The label key.</param>
 /// <param name="Files">The label files to remove the key from.</param>
+/// <param name="DryRun">Report the files and references; write nothing.</param>
+/// <param name="Force">Delete although the owning model still references the label.</param>
+/// <param name="AllowExtensionLabelFile">Permit deleting from a label file extension.</param>
 public sealed record LabelDeleteRequest(
     string Key,
     IReadOnlyList<string> Files,

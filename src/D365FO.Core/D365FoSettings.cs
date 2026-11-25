@@ -311,8 +311,8 @@ public sealed record D365FoSettings(
     public static ToolError? CheckConfigFiles()
     {
         var paths = new List<string> { ConfigPathOverrideForTests ?? GetDefaultConfigPath() };
-        if (D365FoProfiles.GetActive() is { IsValidName: true, Exists: true } active)
-            paths.Add(active.FilePath);
+        if (D365FoProfiles.GetActive() is { IsValidName: true, Exists: true, FilePath: { } profilePath })
+            paths.Add(profilePath);
         foreach (var path in paths)
         {
             if (TryReadJsonFile(path, out _, out var reason)) continue;
