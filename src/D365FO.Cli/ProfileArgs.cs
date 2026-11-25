@@ -41,7 +41,7 @@ public static class ProfileArgs
         }
 
         if (IsExempt(rest)) return (rest, null);
-        return (rest, D365FoProfiles.CheckActive());
+        return (rest, D365FoProfiles.CheckActive() ?? D365FoSettings.CheckConfigFiles());
     }
 
     /// <summary>

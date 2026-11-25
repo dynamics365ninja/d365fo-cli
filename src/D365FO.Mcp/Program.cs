@@ -98,7 +98,8 @@ for (int i = 0; i < args.Length; i++)
 
 // A selected-but-missing profile must not silently fall back to the global
 // settings.json: the server would answer from the wrong environment's index.
-if (D365FoProfiles.CheckActive() is { } profileError)
+// Nor must an unreadable settings or profile file, which a lookup reads as empty.
+if ((D365FoProfiles.CheckActive() ?? D365FoSettings.CheckConfigFiles()) is { } profileError)
 {
     Console.Error.WriteLine(D365Json.Serialize(
         ToolResult<object>.Fail(profileError.Code, profileError.Message, profileError.Hint)));

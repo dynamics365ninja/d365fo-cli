@@ -19,6 +19,16 @@ was ported from.
 
 ## [Unreleased]
 
+### Fixed — an unreadable settings or profile file stops the run (upstream, after 1.25.1)
+
+A `settings.json` or profile file that did not parse (a trailing comma, a `true` where a string
+belongs) was read as empty: the run used defaults without saying so, and the next `init` or
+`config` save replaced the file with only the keys it was saving.
+
+- Commands and the MCP adapter now fail `CONFIG_UNREADABLE`, naming the file. `doctor` reports
+  it, and help, `version` and `config` still run.
+- Saving into such a file is refused. A missing or blank file is still an empty one.
+
 ### Fixed — `labels delete` removes the whole label, and not one that is still used (upstream 1.25.0)
 
 - The label's ` ;comment` line stayed behind and attached itself to the label above. It now goes

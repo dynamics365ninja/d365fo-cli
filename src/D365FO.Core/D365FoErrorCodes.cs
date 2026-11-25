@@ -51,6 +51,7 @@ public static class D365FoErrorCodes
     // Configuration profiles (issue #210)
     public const string ProfileNotFound = "PROFILE_NOT_FOUND";
     public const string InvalidProfileName = "INVALID_PROFILE_NAME";
+    public const string ConfigUnreadable = "CONFIG_UNREADABLE";
 
     // Build / SDLC
     public const string BuildFailed = "BUILD_FAILED";
