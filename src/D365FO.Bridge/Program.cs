@@ -4,6 +4,7 @@
 
 using System;
 using System.IO;
+using System.Reflection;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
@@ -18,7 +19,10 @@ namespace D365FO.Bridge
     /// </summary>
     internal static class Program
     {
-        internal const string BridgeVersion = "0.1.0-poc";
+        /// <summary>Version and source commit, stamped from Directory.Build.props like the CLI's.</summary>
+        internal static readonly string BridgeVersion =
+            typeof(Program).Assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion
+            ?? "unknown";
 
         private static int Main(string[] args)
         {

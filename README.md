@@ -82,6 +82,8 @@ One line in PowerShell checks for the .NET SDK, clones the repo, publishes a sel
 irm https://raw.githubusercontent.com/dynamics365ninja/d365fo-cli/main/install.ps1 | iex
 ```
 
+To pin a release, set `$env:D365FO_CLI_VERSION = 'v<version>'` first; `d365fo --version` reports what is installed. Versioning, release assets and upgrades: [docs/RELEASING.md](docs/RELEASING.md).
+
 macOS / Linux (read · search · scaffold only — `build`/`sync`/`test`/`bp` need a Windows D365FO VM):
 
 ```sh
@@ -333,6 +335,7 @@ The full scenario-by-scenario decision table lives in **[docs/CAPABILITIES.md](d
 | [Testing](docs/TESTING.md) — the four layers and every gate | [New command checklist](docs/NEW_TOOL_CHECKLIST.md) |
 | [Knowledge authoring](docs/KNOWLEDGE_AUTHORING.md) — the corpus and its audit | [Agent eval loop](docs/AGENT_EVAL_LOOP.md) — self-improving eval harness (`eval/README.md`) |
 | [Backlog](docs/BACKLOG.md) — what is knowingly missing | [Changelog](CHANGELOG.md) · [Security](SECURITY.md) |
+| [Releasing](docs/RELEASING.md) — versions, tags, release assets | |
 
 ---
 

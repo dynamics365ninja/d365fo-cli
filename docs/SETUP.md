@@ -25,6 +25,7 @@ Checks for the .NET SDK (installs it if missing, no elevation needed), clones or
 | `D365FO_CLI_NO_WIZARD=1` | Install only, skip `d365fo init` entirely |
 | `D365FO_CLI_RUN_EXTRACT=1` | Also run `index build` + `index extract` during install (can take minutes for `ApplicationSuite`) |
 | `D365FO_CLI_NO_BRIDGE=1` | Windows: skip building `D365FO.Bridge.exe`. The bridge is still off until `D365FO_BRIDGE_ENABLED="1"` is set either way |
+| `D365FO_CLI_VERSION=v0.2.0` | Install that release tag instead of the latest `main` — see [RELEASING.md](RELEASING.md) |
 
 What's left after either installer: **Step 4** below to populate the index (unless `D365FO_CLI_RUN_EXTRACT` was set), then **Step 5** to connect your AI agent. The steps below are what the installer automates — read them if you want to run each one yourself, understand what happened, or install on a machine you don't want to pipe a remote script into.
 
