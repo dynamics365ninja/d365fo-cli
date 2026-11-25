@@ -19,6 +19,16 @@ was ported from.
 
 ## [Unreleased]
 
+### Fixed — table edits that left the table unbuildable (upstream 1.22.0, 1.24.0)
+
+- `remove-field` left the field in its field groups, and the build failed on a group naming a
+  field that is gone. It now removes those entries, and warns which indexes, relations, mappings
+  and title fields still use the field; those are not rewritten.
+- `add-delete-action` did not see an existing action for the same table and wrote a second one.
+- `add-field-group` on a group that exists puts the missing fields into it instead of refusing.
+  On a table extension an `Auto*` group is extended through `FieldGroupExtensions`; it used to be
+  declared a second time.
+
 ### Fixed — `modify add-enum-value` numbers the member when the enum stores values (upstream 1.22.0)
 
 The new member was always written without a `<Value>`. In an enum that stores values it reads

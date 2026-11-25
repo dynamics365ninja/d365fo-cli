@@ -759,7 +759,7 @@ public static class ToolCatalog
             "• add-index / remove-index — an index `member` over `fields` (order is the key order); unique " +
             "unless `allowDuplicates`, `alternateKey` marks it an alternate key\n" +
             "• add-relation / remove-relation — a foreign key `member` to `relatedTable`.`relatedField`\n" +
-            "• add-field-group / remove-field-group — a field group `member` over `fields`\n" +
+            "• add-field-group / remove-field-group — a field group `member` over `fields` (an existing group takes the missing ones)\n" +
             "• add-delete-action / remove-delete-action — `relatedTable` governed with `deleteAction` " +
             "(Cascade | Restricted | CascadeRestricted | None); the remove form is addressed by that table\n" +
             "• add-enum-value / remove-enum-value — a value `member` on base enum `name` (positional; never " +

@@ -1143,7 +1143,8 @@ public static partial class ObjectModifyEngine
             Operation.AddDataSource => AddDataSource(doc, request, target, repo, warnings, client),
             Operation.AddIndex => AddIndex(doc, request, target, repo),
             Operation.AddRelation => AddRelation(doc, request),
-            Operation.AddFieldGroup => AddFieldGroup(doc, request),
+            Operation.AddFieldGroup => AddFieldGroup(doc, request, target),
+            Operation.RemoveField => RemoveField(doc, request, warnings),
             Operation.AddDeleteAction => AddDeleteAction(doc, request),
             Operation.RenameField => RenameField(doc, request),
             Operation.SetFieldProperty => SetFieldProperty(doc, request, target),
@@ -1326,29 +1327,57 @@ public static partial class ObjectModifyEngine
         }, null);
     }
 
-    private static (object?, ToolResult<object>?) AddFieldGroup(XDocument doc, ModifyRequest request)
+    /// <summary>The groups every table has, whether or not its file spells them out.</summary>
+    private static readonly string[] AutoFieldGroups =
+        ["AutoReport", "AutoLookup", "AutoIdentification", "AutoSummary", "AutoBrowse"];
+
+    private static (object?, ToolResult<object>?) AddFieldGroup(XDocument doc, ModifyRequest request, WriteTarget target)
     {
         var root = doc.Root!;
         var ns = root.Name.Namespace;
-        var groups = EnsureCollection(root, "FieldGroups");
 
-        if (HasNamed(groups, "Name", request.Member))
+        // A table extension adds to a group of its base table through FieldGroupExtensions: a
+        // second AutoReport declared under FieldGroups does not compile.
+        var extendsBaseGroup = target.IsExtension
+            && AutoFieldGroups.Contains(request.Member, StringComparer.OrdinalIgnoreCase);
+        var existing = new[] { "FieldGroups", "FieldGroupExtensions" }
+            .SelectMany(c => root.Elements().Where(e => e.Name.LocalName == c).Elements())
+            .FirstOrDefault(g => string.Equals(LocalValue(g, "Name"), request.Member, StringComparison.OrdinalIgnoreCase));
+
+        // A group that is already there takes the fields it does not hold yet.
+        if (existing is not null)
         {
-            return (null, ToolResult<object>.Fail(D365FoErrorCodes.AlreadyExists,
-                $"Field group '{request.Member}' already exists on {request.ObjectName}.",
-                "The five Auto* groups and Overview/General are created with every table."));
+            var members = EnsureCollection(existing, "Fields");
+            var missing = request.Fields!.Where(f => !HasNamed(members, "DataField", f)).ToList();
+            if (missing.Count == 0)
+            {
+                return (null, ToolResult<object>.Fail(D365FoErrorCodes.AlreadyExists,
+                    $"Field group '{request.Member}' already exists on {request.ObjectName} and holds every field given."));
+            }
+            members.Add(missing.Select(f => GroupField(ns, f)));
+            return (new { fieldGroup = request.Member, added = missing, existed = true }, null);
         }
 
+        if (extendsBaseGroup)
+        {
+            EnsureCollection(root, "FieldGroupExtensions").Add(new XElement(ns + "AxTableFieldGroupExtension",
+                new XElement(ns + "Name", request.Member),
+                new XElement(ns + "Fields", request.Fields!.Select(f => GroupField(ns, f)))));
+            return (new { fieldGroup = request.Member, added = request.Fields, extendsBaseGroup = true }, null);
+        }
+
+        var groups = EnsureCollection(root, "FieldGroups");
         var group = new XElement(ns + "AxTableFieldGroup",
             new XElement(ns + "Name", request.Member),
             string.IsNullOrWhiteSpace(request.Label) ? null : new XElement(ns + "Label", request.Label),
-            new XElement(ns + "Fields",
-                request.Fields!.Select(f => new XElement(ns + "AxTableFieldGroupField",
-                    new XElement(ns + "DataField", f)))));
+            new XElement(ns + "Fields", request.Fields!.Select(f => GroupField(ns, f))));
 
         groups.Add(group);
         return (new { fieldGroup = request.Member, fields = request.Fields, label = request.Label }, null);
     }
+
+    private static XElement GroupField(XNamespace ns, string field)
+        => new(ns + "AxTableFieldGroupField", new XElement(ns + "DataField", field));
 
     private static (object?, ToolResult<object>?) AddDeleteAction(XDocument doc, ModifyRequest request)
     {
@@ -1358,7 +1387,7 @@ public static partial class ObjectModifyEngine
 
         // A delete action is identified by the table it points at — two actions for the same
         // related table is not a richer rule, it is a conflict.
-        if (HasNamed(actions, "RelatedTable", request.RelatedTable!))
+        if (HasNamed(actions, "Table", request.RelatedTable!))
         {
             return (null, ToolResult<object>.Fail(D365FoErrorCodes.AlreadyExists,
                 $"{request.ObjectName} already has a delete action for '{request.RelatedTable}'.",
@@ -1625,6 +1654,62 @@ public static partial class ObjectModifyEngine
         var objectType = LocalValue(entryPoint, "ObjectType");
         entryPoint.Remove();
         return (new { removedEntryPoint = request.Member, objectType }, null);
+    }
+
+    /// <summary>
+    /// Remove a table field and its field-group entries, and name what else still uses it.
+    /// </summary>
+    /// <remarks>
+    /// A group entry only lists the field, so it goes with it — left behind, the build fails on a
+    /// group naming a field that is gone. An index, a relation, a mapping or a title field changes
+    /// what the table does when the field is taken out of it, so those are the caller's to decide.
+    /// </remarks>
+    private static (object?, ToolResult<object>?) RemoveField(XDocument doc, ModifyRequest request, List<string> warnings)
+    {
+        var root = doc.Root!;
+        var (removed, failure) = RemoveMember(doc, request, Removals[Operation.RemoveField]);
+        if (failure is not null) return (null, failure);
+
+        bool Names(XElement e) => !e.HasElements
+            && string.Equals(e.Value.Trim(), request.Member, StringComparison.OrdinalIgnoreCase);
+        IEnumerable<XElement> Items(string collection)
+            => root.Elements().Where(e => e.Name.LocalName == collection).Elements();
+
+        var fromGroups = new List<string>();
+        foreach (var group in Items("FieldGroups").Concat(Items("FieldGroupExtensions")))
+        {
+            var entries = group.Descendants()
+                .Where(e => e.Name.LocalName == "AxTableFieldGroupField" && e.Elements().Any(c => c.Name.LocalName == "DataField" && Names(c)))
+                .ToList();
+            if (entries.Count == 0) continue;
+            entries.ForEach(e => e.Remove());
+            fromGroups.Add(LocalValue(group, "Name") ?? "(unnamed)");
+        }
+
+        var still = new List<string>();
+        foreach (var (collection, leaf, noun) in new[]
+                 {
+                     ("Indexes", "DataField", "index"),
+                     ("FullTextIndexes", "DataField", "full-text index"),
+                     ("Relations", "Field", "relation"),
+                     ("RelationExtensions", "Field", "relation extension"),
+                     ("Mappings", "MapFieldTo", "mapping"),
+                 })
+        {
+            still.AddRange(Items(collection)
+                .Where(item => item.Descendants().Any(e => e.Name.LocalName == leaf && Names(e)))
+                .Select(item => $"{noun} '{LocalValue(item, "Name") ?? LocalValue(item, "MappingTable")}'"));
+        }
+        still.AddRange(root.Elements()
+            .Where(e => e.Name.LocalName is "TitleField1" or "TitleField2" && Names(e))
+            .Select(e => $"table property {e.Name.LocalName}"));
+
+        if (fromGroups.Count > 0)
+            warnings.Add($"Also removed '{request.Member}' from field group(s) {string.Join(", ", fromGroups)}.");
+        if (still.Count > 0)
+            warnings.Add($"'{request.Member}' is removed but still used by {string.Join(", ", still)}; "
+                         + "the table will not build until each is changed. They were left as they are, because each changes what the table does.");
+        return (removed, null);
     }
 
     private static (object?, ToolResult<object>?) RemoveMember(XDocument doc, ModifyRequest request, RemovalShape shape)
