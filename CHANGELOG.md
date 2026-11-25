@@ -19,6 +19,13 @@ was ported from.
 
 ## [Unreleased]
 
+### Fixed — relations derived from an EDT join on the right field (upstream 1.24.0)
+
+`generate table-relation` joined on a field named after the EDT. An EDT's `<TableReferences>`
+(or `<Relations>`) names the field, often `RecId`; it is now indexed, and an EDT with a table
+reference but no `<ReferenceTable>` is recognised too. Index schema v23: the column fills as
+models are extracted or refreshed (`d365fo index extract`); until then the old name is assumed.
+
 ### Fixed — the DMF staging table is typed and keyed like its entity (upstream 1.24.0)
 
 - Every business column was a string. Each is now typed like the table column it stages, read

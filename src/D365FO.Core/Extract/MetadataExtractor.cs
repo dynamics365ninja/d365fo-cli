@@ -727,13 +727,38 @@ public sealed class MetadataExtractor
         var baseType = EdtBaseTypeOf(root);
         var label = Local(root, "Label");
         int? stringSize = int.TryParse(Local(root, "StringSize"), out var s) ? s : null;
+        var (referenceTable, referenceField) = EdtReferenceOf(root);
         return new ExtractedEdt(name, extends, baseType, label, stringSize)
         {
-            ReferenceTable = Local(root, "ReferenceTable"),
+            ReferenceTable = referenceTable,
+            ReferenceField = referenceField,
             FormHelp       = Local(root, "FormHelp"),
             AnalysisUsage  = Local(root, "AnalysisUsage"),
             EnumType       = Local(root, "EnumType"),
         };
+    }
+
+    /// <summary>
+    /// The table an EDT refers to and the field of it the reference joins on.
+    /// </summary>
+    /// <remarks>
+    /// The field is written in <c>&lt;TableReferences&gt;</c> (or the older <c>&lt;Relations&gt;</c>)
+    /// and is often not named after the EDT — a surrogate key joins on <c>RecId</c>. An EDT with
+    /// only <c>&lt;ReferenceTable&gt;</c> records no field.
+    /// </remarks>
+    private static (string? Table, string? Field) EdtReferenceOf(XElement root)
+    {
+        var table = Local(root, "ReferenceTable");
+        var entries = root.Elements()
+            .Where(e => e.Name.LocalName is "TableReferences" or "Relations")
+            .OrderByDescending(e => e.Name.LocalName == "TableReferences")
+            .Elements()
+            .Select(e => (Table: Local(e, "Table"), Field: Local(e, "RelatedField")))
+            .Where(e => !string.IsNullOrEmpty(e.Table) && !string.IsNullOrEmpty(e.Field))
+            .ToList();
+        var match = entries.FirstOrDefault(e => string.IsNullOrEmpty(table)
+            || string.Equals(e.Table, table, StringComparison.OrdinalIgnoreCase));
+        return (string.IsNullOrEmpty(table) ? match.Table : table, match.Field);
     }
 
     private static readonly XName XsiType = XName.Get("type", "http://www.w3.org/2001/XMLSchema-instance");

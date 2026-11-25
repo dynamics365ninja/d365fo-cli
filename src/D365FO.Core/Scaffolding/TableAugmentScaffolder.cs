@@ -40,7 +40,8 @@ public static class TableAugmentScaffolder
     /// Derive the explicit relations a table's EDT-backed fields imply. For a field whose
     /// EDT declares a reference table, D365FO requires the implicit EDT relation to be
     /// migrated to an explicit <c>&lt;AxTableRelation&gt;</c> (<c>BPErrorEDTNotMigrated</c>).
-    /// The EDT name is the canonical PK field name on the target table
+    /// The related field is the one the EDT's table reference names (<c>RecId</c> for a
+    /// surrogate key); an EDT that records none joins on the field named after it
     /// (<c>ItemId → InventTable.ItemId</c>).
     /// </summary>
     /// <param name="skipped">Fields that produced no relation, with the reason — reported
@@ -72,7 +73,8 @@ public static class TableAugmentScaffolder
                 if (wanted is not null) skipped.Add($"{f.Name} ({f.EdtName}): EDT carries no reference table");
                 continue;
             }
-            relations.Add(new TableRelationInfo(f.Name, edt!.Name, edt.ReferenceTable!, edt.Name));
+            relations.Add(new TableRelationInfo(f.Name, edt!.Name, edt.ReferenceTable!,
+                string.IsNullOrWhiteSpace(edt.ReferenceField) ? edt.Name : edt.ReferenceField!));
         }
         return relations;
     }

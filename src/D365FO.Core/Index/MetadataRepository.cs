@@ -30,7 +30,7 @@ public sealed partial class MetadataRepository
     /// EnsureSchema, with no re-extract.&lt;/para&gt;
     /// &lt;para&gt;v17: LabelFiles table (per-label-file source paths for the disk check).&lt;/para&gt;
     /// </remarks>
-    public const int CurrentSchemaVersion = 22;
+    public const int CurrentSchemaVersion = 23;
 
     private static readonly Lazy<string> SchemaSql = new(LoadEmbeddedSchema);
 
@@ -234,6 +234,16 @@ public sealed partial class MetadataRepository
                 if (!edtCols.Contains("AnalysisUsage"))  conn.Execute("ALTER TABLE Edts ADD COLUMN AnalysisUsage TEXT", transaction: tx);
                 if (!edtCols.Contains("EnumType"))       conn.Execute("ALTER TABLE Edts ADD COLUMN EnumType TEXT", transaction: tx);
             }
+        }
+
+        if (current < 23)
+        {
+            // v23: the field of the referenced table an EDT reference joins on. Null until the
+            // model is extracted again.
+            var edtCols23 = conn.Query<string>("SELECT name FROM pragma_table_info('Edts')", transaction: tx)
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
+            if (edtCols23.Count > 0 && !edtCols23.Contains("ReferenceField"))
+                conn.Execute("ALTER TABLE Edts ADD COLUMN ReferenceField TEXT", transaction: tx);
         }
 
         if (current < 12)
@@ -505,7 +515,7 @@ public sealed partial class MetadataRepository
         return conn.QueryFirstOrDefault<EdtInfo>(@"
             SELECT e.Name, m.Name AS Model, e.ExtendsName AS Extends,
                    e.BaseType, e.Label, e.StringSize,
-                   e.ReferenceTable, e.FormHelp, e.AnalysisUsage, e.EnumType
+                   e.ReferenceTable, e.FormHelp, e.AnalysisUsage, e.EnumType, e.ReferenceField
             FROM Edts e JOIN Models m ON m.ModelId = e.ModelId
             WHERE e.Name = @name COLLATE NOCASE
             ORDER BY m.IsCustom DESC, m.Name COLLATE NOCASE
@@ -607,7 +617,7 @@ public sealed partial class MetadataRepository
         return conn.Query<EdtInfo>(@"
             SELECT e.Name, m.Name AS Model, e.ExtendsName AS Extends,
                    e.BaseType, e.Label, e.StringSize,
-                   e.ReferenceTable, e.FormHelp, e.AnalysisUsage, e.EnumType
+                   e.ReferenceTable, e.FormHelp, e.AnalysisUsage, e.EnumType, e.ReferenceField
             FROM Edts e JOIN Models m ON m.ModelId = e.ModelId
             WHERE e.Name = @name COLLATE NOCASE
             ORDER BY m.IsCustom DESC, m.Name COLLATE NOCASE, e.Name COLLATE NOCASE
@@ -2328,7 +2338,7 @@ public sealed partial class MetadataRepository
         return conn.Query<EdtInfo>($@"
             SELECT e.Name, m.Name AS Model, e.ExtendsName AS Extends,
                    e.BaseType, e.Label, e.StringSize,
-                   e.ReferenceTable, e.FormHelp, e.AnalysisUsage, e.EnumType
+                   e.ReferenceTable, e.FormHelp, e.AnalysisUsage, e.EnumType, e.ReferenceField
             FROM Edts e JOIN Models m ON m.ModelId = e.ModelId
             WHERE {nameWhere}
             ORDER BY m.IsCustom DESC, e.Name
@@ -3044,10 +3054,10 @@ public sealed partial class MetadataRepository
 
         foreach (var e in batch.Edts)
         {
-            conn.Execute(@"INSERT INTO Edts(Name, ModelId, ExtendsName, BaseType, Label, StringSize, ReferenceTable, FormHelp, AnalysisUsage, EnumType)
-                           VALUES(@n, @m, @e, @b, @l, @s, @rt, @fh, @au, @et)",
+            conn.Execute(@"INSERT INTO Edts(Name, ModelId, ExtendsName, BaseType, Label, StringSize, ReferenceTable, FormHelp, AnalysisUsage, EnumType, ReferenceField)
+                           VALUES(@n, @m, @e, @b, @l, @s, @rt, @fh, @au, @et, @rf)",
                          new { n = e.Name, m = modelId, e = e.Extends, b = e.BaseType, l = e.Label, s = e.StringSize,
-                               rt = e.ReferenceTable, fh = e.FormHelp, au = e.AnalysisUsage, et = e.EnumType }, tx);
+                               rt = e.ReferenceTable, fh = e.FormHelp, au = e.AnalysisUsage, et = e.EnumType, rf = e.ReferenceField }, tx);
         }
 
         foreach (var en in batch.Enums)
