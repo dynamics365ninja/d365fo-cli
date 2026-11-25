@@ -26,8 +26,9 @@ type built with 0 errors and the next full build failed, and a recompiled data e
 OData actions.
 
 - A model whose tables, EDTs, enums or their extensions changed since the last build, or where an
-  element declaring `SysODataActionAttribute` would be recompiled, is built in full.
-  `models[].fullBuildReason` and a warning say so.
+  element declaring `SysODataActionAttribute` would be recompiled, is built in full. So is one
+  whose `ODataExtends.runtime` already lacks actions an entity declares, which is what an earlier
+  incremental build leaves behind. `models[].fullBuildReason` and a warning say so.
 - "Since the last build" is the compiler metadata of the element, or the last successful build run
   through `d365fo` (remembered beside the configuration), whichever is later. After a Visual
   Studio build the first such build may be promoted once more than needed.
