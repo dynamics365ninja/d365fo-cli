@@ -244,6 +244,53 @@ public class FormPatternRepairerTests
         Assert.True(names.IndexOf("Style") > names.IndexOf("Controls"));
     }
 
+    [Theory]
+    [InlineData("Integer", "AxFormIntegerControl", "Integer")]
+    [InlineData("Int", "AxFormIntegerControl", "Integer")]
+    [InlineData("int", "AxFormIntegerControl", "Integer")]
+    [InlineData("integer", "AxFormIntegerControl", "Integer")]
+    [InlineData("UtcDateTime", "AxFormDateTimeControl", "DateTime")]
+    [InlineData("Radio", "AxFormRadioButtonControl", "RadioButton")]
+    [InlineData("RadioButton", "AxFormRadioButtonControl", "RadioButton")]
+    [InlineData("checkbox", "AxFormCheckBoxControl", "CheckBox")]
+    public void Factory_writes_the_metamodel_spelling_for_both_the_subtype_and_the_type(
+        string requested, string axType, string typeElement)
+    {
+        // Issue #282: Integer came out as AxFormIntControl, which does not exist.
+        var el = FormControlFactory.Create(requested, "C");
+        var xsi = XNamespace.Get("http://www.w3.org/2001/XMLSchema-instance");
+
+        Assert.Equal(axType, (string?)el.Attribute(xsi + "type"));
+        Assert.Equal(typeElement, el.Element("Type")!.Value);
+    }
+
+    [Fact]
+    public void Every_input_and_container_type_the_catalog_names_maps_to_a_real_control()
+    {
+        var types = FormPatternCatalog.InputControlTypes
+            .Concat(FormControlFactory.ContainerTypes)
+            .Where(t => t != "Control");
+        var values = D365FO.Core.Metadata.MetadataContracts.EnumValues("FormControlType");
+
+        foreach (var type in types)
+        {
+            var axType = FormControlFactory.AxTypeFor(type);
+            Assert.True(
+                D365FO.Core.Metadata.MetadataContracts.Find(axType) is not null,
+                $"{type} -> {axType} is not a metadata type");
+            Assert.Contains(FormControlFactory.CanonicalType(type), values);
+        }
+    }
+
+    [Fact]
+    public void Factory_emits_multiline_text_as_a_multiline_string_control()
+    {
+        var el = FormControlFactory.Create("MultilineText", "Notes");
+
+        Assert.Equal("String", el.Element("Type")!.Value);
+        Assert.Equal("Yes", el.Element("MultiLine")!.Value);
+    }
+
     [Fact]
     public void Factory_maps_types_without_a_metamodel_class_to_their_real_control()
     {
