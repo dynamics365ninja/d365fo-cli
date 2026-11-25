@@ -1995,11 +1995,21 @@ public static partial class ObjectModifyEngine
         var value = new XElement(ns + "AxEnumValue", new XElement(ns + "Name", request.Member));
         if (!string.IsNullOrWhiteSpace(request.Label)) value.Add(new XElement(ns + "Label", request.Label));
 
-        // Never emit an explicit <Value>: an extensible enum (UseEnumValue=No) is
-        // position-based, and a hard-coded ordinal there is exactly what breaks when
-        // another model inserts a value ahead of it.
+        // An enum with UseEnumValue=No (every extensible one) and an enum extension are numbered
+        // by the platform: a hard-coded ordinal there is what breaks when another model inserts a
+        // member ahead of it. An enum that stores values needs one, or the new member reads as 0
+        // and xppc reports "Duplicate value '0' detected".
+        var storesValues = root.Name.LocalName == "AxEnum"
+            && !string.Equals(LocalValue(root, "UseEnumValue"), "No", StringComparison.OrdinalIgnoreCase);
+        int? number = null;
+        if (storesValues && values.Elements().Any())
+        {
+            number = values.Elements()
+                .Max(e => int.TryParse(LocalValue(e, "Value"), out var v) ? v : 0) + 1;
+            value.Add(new XElement(ns + "Value", number));
+        }
         values.Add(value);
-        return (new { enumValue = request.Member, positional = true }, null);
+        return (new { enumValue = request.Member, value = number, positional = !storesValues }, null);
     }
 
     private static (object?, ToolResult<object>?) AddControl(

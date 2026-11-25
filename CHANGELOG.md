@@ -19,6 +19,13 @@ was ported from.
 
 ## [Unreleased]
 
+### Fixed — `modify add-enum-value` numbers the member when the enum stores values (upstream 1.22.0)
+
+The new member was always written without a `<Value>`. In an enum that stores values it reads
+as 0, the first member's, and the next build failed "Duplicate value '0' detected". It now gets
+one past the highest value. An enum with `UseEnumValue=No` and an enum extension still get none,
+which the platform numbers.
+
 ### Fixed — `build --incremental` runs a full build when an incremental one would be wrong (upstream 1.24.0)
 
 `xppc -incremental` recompiles only what changed. A table field moved to an EDT of another base
