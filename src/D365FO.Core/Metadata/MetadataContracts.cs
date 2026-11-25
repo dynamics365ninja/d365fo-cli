@@ -213,11 +213,34 @@ public static class MetadataContracts
         return found;
     }
 
+    /// <summary>
+    /// For each form parent that restricts its children by naming them, the control types it
+    /// accepts. Keyed by contract name; <c>AxFormDesign</c> is a parent too.
+    /// </summary>
+    public static IReadOnlyDictionary<string, IReadOnlySet<string>> AllowedChildControls
+        => _catalog.Value.AllowedChildren;
+
+    /// <summary>
+    /// For each form parent that restricts its children by exclusion, the control types it
+    /// refuses. Consulted only for a parent absent from <see cref="AllowedChildControls"/>.
+    /// </summary>
+    public static IReadOnlyDictionary<string, IReadOnlySet<string>> DisallowedChildControls
+        => _catalog.Value.DisallowedChildren;
+
     private sealed record Catalog(
         string Version,
         IReadOnlyDictionary<string, MetadataContract> Types,
         IReadOnlyDictionary<string, IReadOnlyList<MetadataContract>> Derived,
-        IReadOnlyDictionary<string, IReadOnlyList<string>> Enums);
+        IReadOnlyDictionary<string, IReadOnlyList<string>> Enums,
+        IReadOnlyDictionary<string, IReadOnlySet<string>> AllowedChildren,
+        IReadOnlyDictionary<string, IReadOnlySet<string>> DisallowedChildren);
+
+    private static IReadOnlyDictionary<string, IReadOnlySet<string>> ChildTable(Dictionary<string, string[]>? table)
+        => (table ?? throw new InvalidOperationException("metadata-contracts.json carries no formContainment table."))
+            .ToDictionary(
+                p => p.Key,
+                p => (IReadOnlySet<string>)new HashSet<string>(p.Value, StringComparer.Ordinal),
+                StringComparer.Ordinal);
 
     private static Catalog Load()
     {
@@ -269,7 +292,9 @@ public static class MetadataContracts
             dto.Version ?? "unknown",
             types,
             derived.ToDictionary(p => p.Key, p => (IReadOnlyList<MetadataContract>)p.Value, StringComparer.Ordinal),
-            enums);
+            enums,
+            ChildTable(dto.FormContainment?.Allowed),
+            ChildTable(dto.FormContainment?.Disallowed));
     }
 
     private static readonly IReadOnlyDictionary<string, string> EmptyMap =
@@ -284,6 +309,15 @@ public static class MetadataContracts
 
         [JsonPropertyName("enums")]
         public Dictionary<string, string[]?> Enums { get; set; } = new();
+
+        [JsonPropertyName("formContainment")]
+        public ContainmentDto? FormContainment { get; set; }
+    }
+
+    private sealed class ContainmentDto
+    {
+        public Dictionary<string, string[]>? Allowed { get; set; }
+        public Dictionary<string, string[]>? Disallowed { get; set; }
     }
 
     private sealed class TypeDto

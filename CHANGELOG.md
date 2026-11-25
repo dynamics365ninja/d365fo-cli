@@ -19,6 +19,22 @@ was ported from.
 
 ## [Unreleased]
 
+### Fixed — `add-control` refuses a control its parent cannot take (#290)
+
+`modify add-control FmForm Grid_Choice --type RadioButton --parent Grid` reported success, and
+the form then failed the build with "Child form control of type … is not allowed for parent
+control of type …". Nesting a control under a field control reported success too, and the control
+was dropped on write.
+
+- Such a request now fails **`CONTROL_NOT_ALLOWED`** and writes nothing. The hint names the
+  parent types that accept the control. This covers forms, form extensions (including a parent
+  inherited from the base form), `modify batch` and MCP `modify_object`.
+- The rule is the compiler's own table, read from
+  `Microsoft.Dynamics.AX.Metadata.Validation.dll` by `scripts/emit-metadata-contracts.ps1`. It
+  judges the direct parent only: a Group inside a Grid still takes a RadioButton.
+- Other pairings now refused include a ListBox or StaticText under a Grid, anything but a TabPage
+  under a Tab, and a TabPage at the Design root or inside a Group.
+
 ### Added — Form datasources and display-method controls (#283)
 
 An existing form could get new controls but no new datasource, and no control could show a

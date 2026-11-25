@@ -20507,5 +20507,92 @@
                                       "Column",
                                       "Line"
                                   ]
-              }
+              },
+    "formContainment":  {
+                            "assembly":  "Microsoft.Dynamics.AX.Metadata.Validation.dll",
+                            "version":  "7.0.0.0",
+                            "allowed":  {
+                                            "AxFormActionPaneControl":  [
+                                                                            "AxFormActionPaneTabControl",
+                                                                            "AxFormButtonGroupControl"
+                                                                        ],
+                                            "AxFormActionPaneTabControl":  [
+                                                                               "AxFormButtonGroupControl"
+                                                                           ],
+                                            "AxFormButtonGroupControl":  [
+                                                                             "AxFormButtonControl",
+                                                                             "AxFormButtonSeparatorControl",
+                                                                             "AxFormCommandButtonControl",
+                                                                             "AxFormDropDialogButtonControl",
+                                                                             "AxFormMenuButtonControl",
+                                                                             "AxFormMenuFunctionButtonControl"
+                                                                         ],
+                                            "AxFormGridControl":  [
+                                                                      "AxFormButtonControl",
+                                                                      "AxFormButtonGroupControl",
+                                                                      "AxFormCheckBoxControl",
+                                                                      "AxFormComboBoxControl",
+                                                                      "AxFormCommandButtonControl",
+                                                                      "AxFormContainerControl",
+                                                                      "AxFormControl",
+                                                                      "AxFormDateControl",
+                                                                      "AxFormDateTimeControl",
+                                                                      "AxFormDropDialogButtonControl",
+                                                                      "AxFormGroupControl",
+                                                                      "AxFormGuidControl",
+                                                                      "AxFormImageControl",
+                                                                      "AxFormInt64Control",
+                                                                      "AxFormIntegerControl",
+                                                                      "AxFormMenuButtonControl",
+                                                                      "AxFormMenuFunctionButtonControl",
+                                                                      "AxFormRealControl",
+                                                                      "AxFormReferenceGroupControl",
+                                                                      "AxFormSegmentedEntryControl",
+                                                                      "AxFormStringControl",
+                                                                      "AxFormTimeControl"
+                                                                  ],
+                                            "AxFormMenuButtonControl":  [
+                                                                            "AxFormButtonControl",
+                                                                            "AxFormButtonSeparatorControl",
+                                                                            "AxFormCommandButtonControl",
+                                                                            "AxFormMenuButtonControl",
+                                                                            "AxFormMenuFunctionButtonControl"
+                                                                        ],
+                                            "AxFormTabControl":  [
+                                                                     "AxFormTabPageControl"
+                                                                 ],
+                                            "AxFormTableControl":  [
+                                                                       "AxFormCheckBoxControl",
+                                                                       "AxFormComboBoxControl",
+                                                                       "AxFormControl",
+                                                                       "AxFormDateControl",
+                                                                       "AxFormDateTimeControl",
+                                                                       "AxFormGuidControl",
+                                                                       "AxFormImageControl",
+                                                                       "AxFormInt64Control",
+                                                                       "AxFormIntegerControl",
+                                                                       "AxFormRealControl",
+                                                                       "AxFormSegmentedEntryControl",
+                                                                       "AxFormStringControl",
+                                                                       "AxFormTimeControl"
+                                                                   ]
+                                        },
+                            "disallowed":  {
+                                               "AxFormDesign":  [
+                                                                    "AxFormActionPaneTabControl",
+                                                                    "AxFormButtonSeparatorControl",
+                                                                    "AxFormTabPageControl"
+                                                                ],
+                                               "AxFormGroupControl":  [
+                                                                          "AxFormActionPaneTabControl",
+                                                                          "AxFormButtonSeparatorControl",
+                                                                          "AxFormTabPageControl"
+                                                                      ],
+                                               "AxFormTabPageControl":  [
+                                                                            "AxFormActionPaneTabControl",
+                                                                            "AxFormButtonSeparatorControl",
+                                                                            "AxFormTabPageControl"
+                                                                        ]
+                                           }
+                        }
 }

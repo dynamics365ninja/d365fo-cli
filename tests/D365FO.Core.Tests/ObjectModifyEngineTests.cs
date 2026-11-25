@@ -1176,6 +1176,121 @@ public sealed class ObjectModifyEngineTests : IDisposable
             Assert.Equal(formNamespace + "PropertyModifications", root.Elements().Last().Name);
     }
 
+    private const string NestedFormXml =
+        "<AxForm xmlns:i=\"http://www.w3.org/2001/XMLSchema-instance\"><Name>FmVehicleList</Name><Design><Controls>" +
+        "<AxFormControl i:type=\"AxFormGridControl\"><Name>Grid</Name><Type>Grid</Type><Controls>" +
+        "<AxFormControl i:type=\"AxFormStringControl\"><Name>Grid_VIN</Name><Type>String</Type></AxFormControl>" +
+        "</Controls></AxFormControl></Controls></Design></AxForm>";
+
+    private static ObjectModifyEngine.ModifyRequest AddControlStep(string member, string type, string? parent) => new()
+    {
+        Operation = ObjectModifyEngine.Operation.AddControl,
+        Kind = "form",
+        ObjectName = "FmVehicleList",
+        Member = member,
+        Type = type,
+        Parent = parent,
+        Model = "FleetCustom",
+    };
+
+    [Theory]
+    [InlineData("RadioButton", "Grid", "AxFormGridControl")]
+    [InlineData("Radio", "grid", "AxFormGridControl")]
+    [InlineData("ListBox", "Grid", "AxFormGridControl")]
+    [InlineData("String", "Grid_VIN", "AxFormStringControl")]
+    [InlineData("TabPage", null, "Design root")]
+    public void Add_control_refuses_a_control_its_parent_cannot_take(string type, string? parent, string under)
+    {
+        var capture = new BridgeCapture(NestedFormXml);
+        using var harness = FakeBridge.Create(capture.Respond);
+
+        var result = ObjectModifyEngine.ModifyCore(
+            AddControlStep("NewControl", type, parent), _repo, harness.Client, _journalDb);
+
+        Assert.False(result.Ok);
+        Assert.Equal(D365FoErrorCodes.ControlNotAllowed, result.Error!.Code);
+        Assert.Contains(under, result.Error.Message);
+        Assert.Equal(0, capture.WriteCount);
+    }
+
+    [Fact]
+    public void A_refused_placement_names_the_parents_that_do_accept_the_control()
+    {
+        var capture = new BridgeCapture(NestedFormXml);
+        using var harness = FakeBridge.Create(capture.Respond);
+
+        var result = ObjectModifyEngine.ModifyCore(
+            AddControlStep("Grid_Choice", "RadioButton", "Grid"), _repo, harness.Client, _journalDb);
+
+        var hint = result.Error!.Hint!;
+        var parents = hint[(hint.IndexOf(':') + 1)..hint.IndexOf('.')].Split(',', StringSplitOptions.TrimEntries);
+        Assert.Equal("Design", parents[0]);
+        Assert.Contains("Group", parents);
+        Assert.Contains("TabPage", parents);
+        Assert.DoesNotContain("Grid", parents);
+        Assert.DoesNotContain("String", parents);
+    }
+
+    [Fact]
+    public void A_batch_judges_a_control_against_a_parent_an_earlier_step_added()
+    {
+        var capture = new BridgeCapture(NestedFormXml);
+        using var harness = FakeBridge.Create(capture.Respond);
+
+        // The compiler asks the direct parent only: a column group inside the grid takes the
+        // RadioButton the grid itself refuses.
+        var request = AddControlStep("batch", "Group", null) with
+        {
+            Batch = new[]
+            {
+                AddControlStep("Grid_Group", "Group", "Grid"),
+                AddControlStep("Grid_Choice", "RadioButton", "Grid_Group"),
+            },
+        };
+        var allowed = ObjectModifyEngine.ModifyCore(request, _repo, harness.Client, _journalDb);
+
+        Assert.True(allowed.Ok, allowed.Error?.Message);
+        Assert.Equal(1, capture.WriteCount);
+
+        var refused = ObjectModifyEngine.ModifyCore(request with
+        {
+            Batch = new[]
+            {
+                AddControlStep("Pages", "Tab", null),
+                AddControlStep("Pages_Name", "String", "Pages"),
+            },
+        }, _repo, harness.Client, _journalDb);
+
+        Assert.False(refused.Ok);
+        Assert.Contains("AxFormTabControl", refused.Error!.Message);
+        Assert.Equal(1, capture.WriteCount);
+    }
+
+    [Theory]
+    [InlineData("RadioButton", "Grid")]
+    [InlineData("String", "Grid_VIN")]
+    [InlineData("TabPage", null)]
+    public void Add_control_on_an_extension_judges_the_parent_inherited_from_the_base_form(string type, string? parent)
+    {
+        var capture = new BridgeCapture(readXml: null) { BaseFormXml = NestedFormXml };
+        using var harness = FakeBridge.Create(capture.Respond);
+
+        var result = ObjectModifyEngine.ModifyCore(new ObjectModifyEngine.ModifyRequest
+        {
+            Operation = ObjectModifyEngine.Operation.AddControl,
+            Kind = "form",
+            ObjectName = "FmVehicleList",
+            Member = "NewControl",
+            Type = type,
+            Parent = parent,
+            ExtensionModel = "FleetCustom",
+        }, _repo, harness.Client, _journalDb);
+
+        Assert.False(result.Ok);
+        Assert.Equal(D365FoErrorCodes.ControlNotAllowed, result.Error!.Code);
+        Assert.Equal(0, capture.WriteCount);
+    }
+
     [Fact]
     public void Add_control_refuses_an_unknown_inherited_parent_without_creating_the_extension()
     {

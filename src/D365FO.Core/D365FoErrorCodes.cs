@@ -90,6 +90,8 @@ public static class D365FoErrorCodes
     // Structured object modification beyond method bodies
     public const string FieldNotFound = "FIELD_NOT_FOUND";
     public const string ControlNotFound = "CONTROL_NOT_FOUND";
+    /// <summary>The parent control cannot take a child of that type. Nothing was written.</summary>
+    public const string ControlNotAllowed = "CONTROL_NOT_ALLOWED";
     public const string DataSourceNotFound = "DATA_SOURCE_NOT_FOUND";
     public const string PropertyNotFound = "PROPERTY_NOT_FOUND";
 
