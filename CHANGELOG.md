@@ -19,6 +19,13 @@ was ported from.
 
 ## [Unreleased]
 
+### Fixed — a menu item used twice no longer breaks the menu (upstream 1.23.0)
+
+`generate menu` and `menu-extension` named each element after its target, so one menu item under
+two submenus produced two elements of one name and xppc refused the menu ("is not unique"). The
+later one is now prefixed with its submenu's name; what it opens is unchanged. The generated menu
+compiles.
+
 ### Fixed — `add-control --type ReferenceGroup` binds the control (upstream 1.24.0)
 
 `--datafield` was written as `<DataField>`, which a reference group does not have, so the control

@@ -139,7 +139,40 @@ public static class NavigationScaffolder
         }
 
         root.Add(elements);
+        MakeElementNamesUnique(elements);
         return new XDocument(root);
+    }
+
+    /// <summary>
+    /// Give every element of the menu its own name: xppc refuses a name used twice anywhere in
+    /// it. A submenu keeps its name, because it is referred to by it; an entry whose name is
+    /// taken — the same menu item in a second submenu — is prefixed with its submenu's name.
+    /// What it opens is a separate property and does not change.
+    /// </summary>
+    private static void MakeElementNamesUnique(XElement elements)
+    {
+        var all = elements.Descendants()
+            .Where(e => e.Name.LocalName is "AxMenuElement" or "MenuElement")
+            .ToList();
+        var used = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var submenus = all.Where(e => (string?)e.Attribute(Xsi + "type") == "AxMenuElementSubMenu").ToList();
+        foreach (var submenu in submenus)
+        {
+            var name = (string)submenu.Element("Name")!;
+            if (!used.Add(name))
+                throw new ArgumentException($"Submenu '{name}' is used twice in the menu; element names are unique across it.");
+        }
+        foreach (var entry in all.Except(submenus))
+        {
+            var name = (string)entry.Element("Name")!;
+            if (used.Add(name)) continue;
+            // A nested entry sits in its submenu's <Elements>; an extension names the parent beside it.
+            var owner = (string?)entry.Parent?.Parent?.Element("Name") ?? (string?)entry.Parent?.Element("Parent");
+            var stem = owner is null ? name : $"{owner}_{name}";
+            var candidate = stem;
+            for (var i = 2; !used.Add(candidate); i++) candidate = $"{stem}_{i}";
+            entry.Element("Name")!.Value = candidate;
+        }
     }
 
     /// <summary>
@@ -253,6 +286,8 @@ public static class NavigationScaffolder
                 throw new ArgumentException($"'{e.Target}' is added twice by extension '{baseMenu}.{suffix}'.", nameof(entries));
             elements.Add(Wrap(e.Submenu, Entry(e, displayInContentArea)));
         }
+
+        MakeElementNamesUnique(elements);
 
         return new XDocument(
             new XElement("AxMenuExtension",
