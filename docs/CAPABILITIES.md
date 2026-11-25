@@ -816,7 +816,7 @@ surfaces return the same answer rather than two answers that agree by inspection
 ### HTTP transport (shared team deployment)
 
 ```sh
-d365fo-mcp --http --port 8080
+d365fo-cli-mcp --http --port 8080
 ```
 
 | Env var | Purpose |

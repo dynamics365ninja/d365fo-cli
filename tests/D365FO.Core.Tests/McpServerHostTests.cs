@@ -40,7 +40,7 @@ public class McpServerHostTests : IDisposable
         Assert.NotNull(options.Handlers?.ListToolsHandler);
 
         // Sanity: server info + capabilities
-        Assert.Equal("d365fo-mcp", options.ServerInfo!.Name);
+        Assert.Equal("d365fo-cli-mcp", options.ServerInfo!.Name);
         Assert.NotNull(options.Capabilities?.Tools);
     }
 

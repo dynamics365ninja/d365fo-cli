@@ -16,7 +16,7 @@ namespace D365FO.Mcp;
 /// <summary>
 /// Streamable-HTTP-lite transport for a shared team deployment (e.g. an Azure
 /// App Service instance a whole team points their MCP client at, instead of
-/// each developer running a local <c>d365fo-mcp</c> stdio process).
+/// each developer running a local <c>d365fo-cli-mcp</c> stdio process).
 ///
 /// This deliberately mirrors upstream <c>d365fo-mcp-server</c>'s
 /// <c>CustomHttpTransport</c>: one JSON-RPC request in, one JSON-RPC response
@@ -42,7 +42,7 @@ namespace D365FO.Mcp;
 public static class HttpServerHost
 {
     public const string ApiKeyHeaderName = "X-Api-Key";
-    private const string RateLimiterPolicy = "d365fo-mcp-http";
+    private const string RateLimiterPolicy = "d365fo-cli-mcp-http";
 
     /// <summary>Runtime configuration for <see cref="Build"/>.</summary>
     public sealed record Options(
@@ -151,6 +151,8 @@ public static class HttpServerHost
             return Results.Json(new
             {
                 status = "ok",
+                // Which server this is: the sibling d365fo-mcp-server answers /health too.
+                service = D365FO.Core.McpIdentity.AdapterName,
                 mode = ServerModeConfig.ToWireString(options.Mode),
                 // The tools this instance serves, when MCP_TOOLSETS narrows them; null for all.
                 tools = dispatcher.Filter.Enabled is null

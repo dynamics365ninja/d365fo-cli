@@ -186,7 +186,7 @@ function Install-Bridge {
     } catch {
         # A running bridge (spawned by d365fo, the daemon or an MCP session) locks its files.
         Write-Note "Could not update $bridgeDir - $($_.Exception.Message)"
-        Write-Note 'Close any d365fo / d365fo-mcp sessions that use the bridge and re-run the installer.'
+        Write-Note 'Close any d365fo / d365fo-cli-mcp sessions that use the bridge and re-run the installer.'
         return
     } finally {
         Remove-Item -Recurse -Force $staging -ErrorAction SilentlyContinue

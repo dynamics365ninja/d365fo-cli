@@ -1,20 +1,20 @@
 using D365FO.Core;
 using D365FO.Mcp;
 
-// Entry point for the `d365fo-mcp` executable. Wires the default
+// Entry point for the `d365fo-cli-mcp` executable. Wires the default
 // MetadataRepository + ToolHandlers stack and runs an MCP server over stdio
 // (official `ModelContextProtocol` SDK) until stdin closes — or, with `--http`,
 // over a streamable-HTTP-lite transport for a shared team deployment (see
 // docs/SETUP_AZURE.md).
 //
 // Usage:
-//   d365fo-mcp                          # stdio, uses env vars
-//   d365fo-mcp --db /path/to/idx.sqlite # override DB path
-//   d365fo-mcp --legacy                 # use built-in StdioDispatcher (no SDK)
-//   d365fo-mcp --http                   # HTTP transport (POST /mcp, GET /health)
-//   d365fo-mcp --http --port 8080       # override HTTP listen port
-//   d365fo-mcp --profile customerA      # resolve settings from a named profile
-//   d365fo-mcp --toolsets read,knowledge # advertise only these tool groups (MCP_TOOLSETS)
+//   d365fo-cli-mcp                          # stdio, uses env vars
+//   d365fo-cli-mcp --db /path/to/idx.sqlite # override DB path
+//   d365fo-cli-mcp --legacy                 # use built-in StdioDispatcher (no SDK)
+//   d365fo-cli-mcp --http                   # HTTP transport (POST /mcp, GET /health)
+//   d365fo-cli-mcp --http --port 8080       # override HTTP listen port
+//   d365fo-cli-mcp --profile customerA      # resolve settings from a named profile
+//   d365fo-cli-mcp --toolsets read,knowledge # advertise only these tool groups (MCP_TOOLSETS)
 //
 // The stdio server speaks the MCP stdio transport — compatible with Claude
 // Desktop, Cursor, VS Code Copilot, and any other MCP client that supports it.
@@ -69,7 +69,7 @@ for (int i = 0; i < args.Length; i++)
     else if (args[i] == "--help" || args[i] == "-h")
     {
         Console.Error.WriteLine("""
-            d365fo-mcp — Model Context Protocol server for D365 F&O metadata.
+            d365fo-cli-mcp — Model Context Protocol server for D365 F&O metadata.
 
             Options:
               --db, -d <PATH>     Override index database path.

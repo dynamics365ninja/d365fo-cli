@@ -24,7 +24,7 @@ advisory.
 Helpful to include:
 
 - Affected commit, and whether you are running the plain `d365fo` binary, the `d365fo daemon`,
-  or the `d365fo-mcp` adapter (stdio or `--http`)
+  or the `d365fo-cli-mcp` adapter (stdio or `--http`)
 - The file and line, or a command that demonstrates the behaviour
 - What an attacker gains — reading indexed source, writing into `PackagesLocalDirectory`,
   or executing on the build VM
@@ -59,7 +59,7 @@ in scope.
 
 **In scope**
 
-- Reaching `d365fo-mcp --http` tools without valid authentication (`API_KEY`)
+- Reaching `d365fo-cli-mcp --http` tools without valid authentication (`API_KEY`)
 - Reaching the `d365fo daemon` named pipe from a security context that should not have it
 - Reading indexed metadata across a boundary that should have separated it
 - Write paths escaping the configured metadata root, or a path traversal through an object name,
@@ -84,7 +84,7 @@ in scope.
 
 - **Do not publish the index.** It is proprietary source in a single file. `index export`
   produces a portable copy — treat it like the codebase it came from.
-- **`d365fo-mcp --http` requires `API_KEY`.** Put it behind a private endpoint or IP
+- **`d365fo-cli-mcp --http` requires `API_KEY`.** Put it behind a private endpoint or IP
   restrictions where the team's addresses are known, and rotate the key when someone leaves the
   project — it is a single shared secret.
 - **Run the read-only surface where you can.** A shared instance serving search/get/prepare

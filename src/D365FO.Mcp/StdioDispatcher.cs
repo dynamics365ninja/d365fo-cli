@@ -29,7 +29,7 @@ namespace D365FO.Mcp;
 public sealed class StdioDispatcher
 {
     private const string ProtocolVersion = "2024-11-05";
-    private const string ServerName = "d365fo-mcp";
+    private const string ServerName = D365FO.Core.McpIdentity.AdapterName;
     private static readonly string ServerVersion = D365FO.Core.ProductVersion.Informational;
 
     private readonly ToolHandlers _handlers;

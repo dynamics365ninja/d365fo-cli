@@ -29,7 +29,7 @@
     symptom is "The type initializer for 'Microsoft.Data.Sqlite.SqliteConnection'
     threw an exception".
 
-    d365fo-mcp is rooted for the same reason: the CLI's `prepare`, `find` and
+    d365fo-cli-mcp is rooted for the same reason: the CLI's `prepare`, `find` and
     friends return the MCP tool handlers' anonymous-type payloads, and a trimmed
     build that drops those properties serialized them as an empty {} object.
 
@@ -42,7 +42,7 @@
   <assembly fullname="d365fo" preserve="all" />
   <assembly fullname="Spectre.Console.Cli" preserve="all" />
   <assembly fullname="D365FO.Core" preserve="all" />
-  <assembly fullname="d365fo-mcp" preserve="all" />
+  <assembly fullname="d365fo-cli-mcp" preserve="all" />
   <assembly fullname="Dapper" preserve="all" />
   <assembly fullname="Microsoft.Data.Sqlite" preserve="all" />
   <assembly fullname="SQLitePCLRaw.core" preserve="all" />

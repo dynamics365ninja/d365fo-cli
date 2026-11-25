@@ -13,7 +13,7 @@ d365fo version --output json
 ```
 
 - The version is set once, in `Directory.Build.props` (`VersionPrefix` and `VersionSuffix`).
-  The CLI, `d365fo-mcp` (its `serverInfo.version`), the bridge and SARIF output all report it.
+  The CLI, `d365fo-cli-mcp` (its `serverInfo.version`), the bridge and SARIF output all report it.
 - The commit is added by the .NET SDK when the build runs in a git checkout. A build from a
   source archive reports the version alone. The commit is `HEAD`: uncommitted changes are not
   visible in it.
@@ -58,10 +58,10 @@ tests, and attaches to the GitHub release:
 
 | Asset | Contents |
 |---|---|
-| `d365fo-cli-<version>-win-x64.zip` | `bin\d365fo.exe`, `mcp\d365fo-mcp.exe`, `D365FO.Bridge\` |
-| `d365fo-cli-<version>-linux-x64.tar.gz` | `bin/d365fo`, `mcp/d365fo-mcp` |
-| `d365fo-cli-<version>-osx-x64.tar.gz` | `bin/d365fo`, `mcp/d365fo-mcp` |
-| `d365fo-cli-<version>-osx-arm64.tar.gz` | `bin/d365fo`, `mcp/d365fo-mcp` |
+| `d365fo-cli-<version>-win-x64.zip` | `bin\d365fo.exe`, `mcp\d365fo-cli-mcp.exe`, `D365FO.Bridge\` |
+| `d365fo-cli-<version>-linux-x64.tar.gz` | `bin/d365fo`, `mcp/d365fo-cli-mcp` |
+| `d365fo-cli-<version>-osx-x64.tar.gz` | `bin/d365fo`, `mcp/d365fo-cli-mcp` |
+| `d365fo-cli-<version>-osx-arm64.tar.gz` | `bin/d365fo`, `mcp/d365fo-cli-mcp` |
 | `SHA256SUMS` | Checksums of the archives |
 
 The binaries are self-contained (no .NET runtime needed; the bridge uses the .NET Framework 4.8

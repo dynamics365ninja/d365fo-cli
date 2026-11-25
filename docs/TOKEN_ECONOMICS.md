@@ -111,7 +111,7 @@ The correction does not change the recommendation. It makes the gap larger.
 
 ## Narrowing the MCP tool list
 
-`MCP_TOOLSETS` (or `d365fo-mcp --toolsets`) advertises only some tool groups. The per-turn schema
+`MCP_TOOLSETS` (or `d365fo-cli-mcp --toolsets`) advertises only some tool groups. The per-turn schema
 shrinks with it:
 
 | `MCP_TOOLSETS` | Tools | Schema chars | ≈ tokens |
@@ -130,7 +130,7 @@ listed in [MCP_CONFIG.md](MCP_CONFIG.md#toolsets).
 
 | Situation | Recommended |
 |---|---|
-| AI host without a shell tool (Claude.ai web, ChatGPT web) | MCP — the bundled `d365fo-mcp` adapter speaks JSON-RPC over the same index |
+| AI host without a shell tool (Claude.ai web, ChatGPT web) | MCP — the bundled `d365fo-cli-mcp` adapter speaks JSON-RPC over the same index |
 | A single lookup per session | Either — a warm MCP connection has no per-turn startup cost, and one turn pays the schema once |
 | The agent needs generated XML back in context | Neither helps: `d365fo generate` always writes to `--out` and returns a JSON summary |
 
@@ -167,5 +167,5 @@ on 2026-09-02; they move whenever a tool or a command is added, which is the poi
 
 - [MCP_TOOLS.md](MCP_TOOLS.md) — the 32 tools, and the commands behind each.
 - [EXAMPLES.md](EXAMPLES.md#agent-integration) — wiring Skills and the CLI into each AI agent.
-- [ARCHITECTURE.md](ARCHITECTURE.md) — the Metadata Bridge and where `d365fo-mcp` plugs in.
+- [ARCHITECTURE.md](ARCHITECTURE.md) — the Metadata Bridge and where `d365fo-cli-mcp` plugs in.
 - [MIGRATION_FROM_MCP.md](MIGRATION_FROM_MCP.md) — decision tree for MCP users.

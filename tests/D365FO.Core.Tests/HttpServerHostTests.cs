@@ -65,6 +65,7 @@ public class HttpServerHostTests : IAsyncLifetime
 
         var doc = JsonDocument.Parse(await resp.Content.ReadAsStringAsync());
         Assert.Equal("ok", doc.RootElement.GetProperty("status").GetString());
+        Assert.Equal("d365fo-cli-mcp", doc.RootElement.GetProperty("service").GetString());
         Assert.Equal("read-only", doc.RootElement.GetProperty("mode").GetString());
         Assert.True(doc.RootElement.GetProperty("indexReachable").GetBoolean());
     }

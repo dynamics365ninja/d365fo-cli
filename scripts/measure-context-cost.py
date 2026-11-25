@@ -65,7 +65,7 @@ def minified(value: object) -> int:
 
 def mcp() -> dict:
     stdin = "\n".join(json.dumps(m) for m in (INIT, LIST)) + "\n"
-    raw = run(invocation("D365FO.Mcp", "d365fo-mcp") + ["--legacy"], stdin)
+    raw = run(invocation("D365FO.Mcp", "d365fo-cli-mcp") + ["--legacy"], stdin)
     messages = [json.loads(line) for line in raw.splitlines() if line.strip()]
     handshake = next(m for m in messages if m.get("id") == 1)["result"]
     tools = next(m for m in messages if m.get("id") == 2)["result"]["tools"]

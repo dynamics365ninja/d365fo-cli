@@ -284,7 +284,7 @@ d365fo-index.sqlite-shm      ← shared memory for WAL
 **Fix:**
 
 1. Stop any running daemon: `d365fo daemon stop`
-2. Stop any running `d365fo-mcp` process.
+2. Stop any running `d365fo-cli-mcp` process.
 3. Delete stale WAL sidecars **only when no process is using the database**:
    ```sh
    # PowerShell
@@ -492,7 +492,7 @@ Fix, in order:
 
 ### How many tools are exposed
 
-The MCP adapter (`d365fo-mcp`) exposes **20 consolidated, discriminator-based tools** covering the CLI search, get, find, generate, and analyze surface (a single tool dispatches on a `type` / `objectType` / `mode` / `action` / `domain` / `include` field). Each tool definition is included in the model context on every turn.
+The MCP adapter (`d365fo-cli-mcp`) exposes **20 consolidated, discriminator-based tools** covering the CLI search, get, find, generate, and analyze surface (a single tool dispatches on a `type` / `objectType` / `mode` / `action` / `domain` / `include` field). Each tool definition is included in the model context on every turn.
 
 ### Reducing token usage
 

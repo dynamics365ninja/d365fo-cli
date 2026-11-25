@@ -182,7 +182,7 @@ flowchart LR
     Cop["GitHub Copilot<br/>VS 2022 17.14+ · VS 2026 · VS Code"] -->|.github/skills/d365fo-cli/| Bin
     Cla["Claude Code<br/>CLI · VS Code ext."]     -->|skills/anthropic/| Bin
     Other["Codex · Gemini · Cursor"]              -->|AGENTS.md| Bin
-    Mcp["Claude Desktop · Continue<br/>(MCP host)"] -->|JSON-RPC stdio| Mbin["d365fo-mcp"]
+    Mcp["Claude Desktop · Continue<br/>(MCP host)"] -->|JSON-RPC stdio| Mbin["d365fo-cli-mcp"]
     Bin["<b>d365fo</b> (shell tool)"] --> Idx[("SQLite<br/>+ optional bridge")]
     Mbin --> Idx
 ```
@@ -278,7 +278,7 @@ Reference the `skills/anthropic/*/SKILL.md` files from your session prompt or `A
 {
   "mcpServers": {
     "d365fo": {
-      "command": "d365fo-mcp",
+      "command": "d365fo-cli-mcp",
       "args": [],
       "env": { "D365FO_PACKAGES_PATH": "K:\\AosService\\PackagesLocalDirectory" }
     }
@@ -286,7 +286,7 @@ Reference the `skills/anthropic/*/SKILL.md` files from your session prompt or `A
 }
 ```
 
-`d365fo-mcp` is the bundled JSON-RPC 2.0 adapter that exposes 20 consolidated, discriminator-based tools backed by the same SQLite index and bridge. Useful for hosts without a shell tool — see [ARCHITECTURE.md#mcp-coexistence](ARCHITECTURE.md#mcp-coexistence).
+`d365fo-cli-mcp` is the bundled JSON-RPC 2.0 adapter that exposes 20 consolidated, discriminator-based tools backed by the same SQLite index and bridge. Useful for hosts without a shell tool — see [ARCHITECTURE.md#mcp-coexistence](ARCHITECTURE.md#mcp-coexistence).
 
 ### Verify
 
@@ -360,7 +360,7 @@ The [one-line install](#one-line-install) at the top of this page **is** the qui
 | Copilot Chat says "There was an error executing code search" then writes generic X++ | VS Copilot Chat cannot search AOT XML — the `d365fo-cli` skill is not being picked up. Open the skills panel (Tools icon, bottom-right of Copilot Chat) and confirm `d365fo-cli` is listed; `.github/skills/d365fo-cli/` must sit next to the `.sln` (or in `%USERPROFILE%\.copilot\skills\`). Restart VS. For full automation switch Copilot Chat to **Agent** mode |
 | Copilot never mentions the `d365fo-cli` skill | The folder is not next to the `.sln` — VS does not search parent folders. Re-run the installer with `-XppRepo` = the solution folder, or copy the skill to `%USERPROFILE%\.copilot\skills\d365fo-cli`, then restart VS and ask in **Agent** mode. Say *"use the d365fo-cli skill"* to force it. Still nothing on an older Copilot build: deploy all of `skills/copilot/*.instructions.md` (including the always-on `d365fo-cli.instructions.md`) to `.github/instructions/`, which needs no skill support |
 | The skills panel (Tools icon in Copilot Chat) is missing | The panel is VS 2026 18.6+ only. On VS 2022 the skill still works — verify it by whether Copilot names `d365fo-cli` in its reply |
-| Index file appears locked | Stop any running `d365fo daemon` or `d365fo-mcp` process; `-wal` / `-shm` sidecar files are normal |
+| Index file appears locked | Stop any running `d365fo daemon` or `d365fo-cli-mcp` process; `-wal` / `-shm` sidecar files are normal |
 | Settings differ between Developer PowerShell and PowerShell 7 | Re-run `d365fo init --persist-profile` — it writes both profiles and the JSON config |
 | Self-contained binary won't start on Linux | `chmod +x d365fo` after copying out of the publish folder |
 | Label values contain control characters | `search label` / `get label` strip them by default — pass `--raw-text` for the unfiltered value |

@@ -60,7 +60,7 @@ A host injects every advertised tool's schema into every turn: 48 569 characters
 A client that only reads metadata paid for `generate_object` (9.5k) and `modify_object` on each
 message.
 
-- **`MCP_TOOLSETS`** (env var or `settings.json`) and **`d365fo-mcp --toolsets`** take a
+- **`MCP_TOOLSETS`** (env var or `settings.json`) and **`d365fo-cli-mcp --toolsets`** take a
   comma-separated list of toolsets and tool names. The toolsets are `read`, `knowledge`, `author`,
   `check`, `index` and `sdlc`, and every tool is in exactly one. `read` is 10 tools and 11 159
   characters, 23 % of the full list.
@@ -120,7 +120,7 @@ to Python scripts that edited the AOT XML around every check.
   are no longer required when the steps name their objects.
 ### Added — Versioned releases (#284)
 
-- One version in `Directory.Build.props` (`0.2.0-dev`) for the CLI, `d365fo-mcp` and the bridge.
+- One version in `Directory.Build.props` (`0.2.0-dev`) for the CLI, `d365fo-cli-mcp` and the bridge.
   `d365fo --version`, `d365fo version` (now with `commit` and `informationalVersion`),
   `d365fo schema`, MCP `serverInfo`, the bridge ping and SARIF output report it, in place of
   four different hard-coded or default values.
@@ -160,6 +160,18 @@ Copilot in Visual Studio looked for `.github/table-scaffolding.md`, which does n
 row now links `references/<id>.md`. The section also says where the folder sits in an installed
 repo, and that `d365fo knowledge get <id>` returns the same text when the file tool cannot open
 files outside the solution.
+
+### Changed — the MCP adapter is `d365fo-cli-mcp`
+
+The sibling project `d365fo-mcp-server` is published on npm as `d365fo-mcp` and installs a command
+of that name. This repository's adapter had the same one, so neither a PATH nor an editor config
+said which of the two it meant.
+
+- The adapter binary and its MCP `serverInfo.name` are now **`d365fo-cli-mcp`**. Change
+  `"command": "d365fo-mcp"` in editor configs that mean this adapter, and the startup command of an
+  HTTP deployment. The npm command `d365fo-mcp` is unaffected.
+- `GET /health` reports `service: "d365fo-cli-mcp"`, and `d365fo connect` warns when the server it
+  is pointed at is `d365fo-mcp-server`.
 
 ### Added — the commands agents guess now run, and an unknown sub-command names the real ones
 

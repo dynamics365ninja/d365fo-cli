@@ -1,6 +1,6 @@
 # Shared deployment (Azure App Service)
 
-Running **one** `d365fo-mcp` instance a whole team points at, instead of a stdio process per
+Running **one** `d365fo-cli-mcp` instance a whole team points at, instead of a stdio process per
 developer. [MIGRATION_FROM_MCP.md](MIGRATION_FROM_MCP.md#http-transport--shared-deployment-azure-app-service)
 explains the transport and the mode split and why the auth is an API key rather than Entra ID;
 this document is the deployment itself.
@@ -19,7 +19,7 @@ Two files and an environment:
 
 | | |
 |---|---|
-| The binary | `d365fo-mcp`, published self-contained for the App Service platform |
+| The binary | `d365fo-cli-mcp`, published self-contained for the App Service platform |
 | The index | One SQLite file — 750 MB for a full installation, and read-only in this deployment |
 | The environment | `D365FO_INDEX_DB`, `MCP_SERVER_MODE=read-only`, `API_KEY` |
 
@@ -60,7 +60,7 @@ the published shape is not the built shape — a trimmed single file has failed 
 build passed (issue #182) — so smoke the published binary before deploying it:
 
 ```sh
-./publish/d365fo-mcp --legacy < probe.jsonl     # a tools/list request; see MCP_CONFIG.md
+./publish/d365fo-cli-mcp --legacy < probe.jsonl     # a tools/list request; see MCP_CONFIG.md
 ```
 
 ## 3. Configure the App Service
@@ -72,7 +72,7 @@ az webapp config appsettings set -g <rg> -n <app> --settings \
   API_KEY=<a long random string> \
   MCP_HTTP_PORT=8080
 
-az webapp config set -g <rg> -n <app> --startup-file "/home/site/wwwroot/d365fo-mcp --http"
+az webapp config set -g <rg> -n <app> --startup-file "/home/site/wwwroot/d365fo-cli-mcp --http"
 ```
 
 Put the index on the App Service file share (`/home/site/data`), not in the deployment package:
@@ -119,7 +119,7 @@ replacing it.
 A read-only shared instance answers questions. It cannot generate, modify, or write labels,
 because those need the package tree and the bridge on the same machine as the caller.
 
-Developers who need both run a **local** `d365fo-mcp` with `MCP_SERVER_MODE=write-only` alongside
+Developers who need both run a **local** `d365fo-cli-mcp` with `MCP_SERVER_MODE=write-only` alongside
 the shared read-only one, and register both. The split is not cosmetic: `CliMcpParityTests` and
 the adapter's own tests assert that no tool which writes is reachable in `read-only` mode, so a
 new write tool that nobody classified fails the build instead of shipping into a shared

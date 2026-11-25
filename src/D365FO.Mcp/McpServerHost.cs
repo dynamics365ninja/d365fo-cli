@@ -21,7 +21,7 @@ namespace D365FO.Mcp;
 /// </summary>
 public static class McpServerHost
 {
-    private const string ServerName = "d365fo-mcp";
+    private const string ServerName = D365FO.Core.McpIdentity.AdapterName;
     private static readonly string ServerVersion = D365FO.Core.ProductVersion.Informational;
 
     public static Task RunStdioAsync(string? databasePath = null, ILoggerFactory? loggerFactory = null, CancellationToken ct = default)
