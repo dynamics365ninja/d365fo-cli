@@ -2240,7 +2240,9 @@ public sealed partial class ToolHandlers
                                    $"{kernel.DeclaredOn}, a kernel type with no AOT metadata, which is why the " +
                                    "symbol index has no row for it. The signature above is the one a CoC wrapper must match exactly.",
                         },
-                        eligibility = $"CoC-eligible — [ExtensionOf(tableStr({objectName}))] final class … wrapping {kernel.Signature}. {kernel.Purpose}",
+                        eligibility = kernel.CocEligible
+                            ? $"CoC-eligible — [ExtensionOf(tableStr({objectName}))] final class … wrapping {kernel.Signature}. {kernel.Purpose}"
+                            : $"NOT CoC-eligible — a wrapper on {kernel.Name} compiles and never runs. {kernel.Purpose}",
                         contract = kernel.Contract,
                     }
                     : new

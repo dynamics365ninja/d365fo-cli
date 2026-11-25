@@ -10,12 +10,16 @@ namespace D365FO.Core.Knowledge;
 /// <param name="DeclaredOn">Kernel type that declares it (<c>xRecord</c> / <c>Common</c>).</param>
 /// <param name="Purpose">What wrapping it is for, in one line.</param>
 /// <param name="Contract">Non-negotiables a green build will not teach.</param>
+/// <param name="CocEligible">
+/// False where a Chain of Command wrapper compiles, with only a warning, and then never runs.
+/// </param>
 public sealed record TableDataMethod(
     string Name,
     string Signature,
     string DeclaredOn,
     string Purpose,
-    IReadOnlyList<string> Contract);
+    IReadOnlyList<string> Contract,
+    bool CocEligible = true);
 
 /// <summary>
 /// The data methods every table inherits from <c>xRecord</c> / <c>Common</c>. Port of the
@@ -58,6 +62,19 @@ public static class TableDataMethods
         "test the re-select spells as \"the select found nothing\".",
     ];
 
+    private static readonly string[] AosValidateRefusal =
+    [
+        "A CoC wrapper here COMPILES AND NEVER RUNS. xppc answers with a warning (\"Chain of command is not " +
+        "supported on method '…' because it is internal or marked as InternalUseOnly\"), builds the model, " +
+        "and the validation silently does nothing.",
+        "These run on the AOS tier as a last check before the physical access, and the platform reserves " +
+        "them. Put the rule in `validateWrite` or `validateDelete`, where a wrapper is honoured.",
+    ];
+
+    private static TableDataMethod AosValidate(string name, string when) => new(
+        name, $"public boolean {name}()", "xRecord",
+        $"Server-tier check {when}; reserved by the platform.", AosValidateRefusal, CocEligible: false);
+
     private static readonly Dictionary<string, TableDataMethod> Catalog =
         new(StringComparer.OrdinalIgnoreCase)
         {
@@ -97,6 +114,46 @@ public static class TableDataMethods
                 "modifiedField", "public void modifiedField(FieldId _fieldId)", "xRecord",
                 "React to one field changing, typically to derive others.",
                 ["Test which field you were called for: `if (_fieldId == fieldNum(MyTable, MyField))`.", .. PreImage, NextOnce]),
+            ["modifiedFieldValue"] = new(
+                "modifiedFieldValue", "public void modifiedFieldValue(FieldName _fieldName, int _value)", "xRecord",
+                "React to a field changing, addressed by name; the form-driven twin of modifiedField.",
+                [
+                    "The signature is not modifiedField's: the first parameter is a FieldName (a str) and the second an int. "
+                    + "Writing `(FieldId, anytype)` by analogy does not compile.",
+                    "Compare by name: `if (_fieldName == fieldStr(MyTable, MyField))`, not fieldNum.",
+                    .. PreImage, NextOnce,
+                ]),
+            ["postLoad"] = new(
+                "postLoad", "public void postLoad()", "xRecord",
+                "Run after a record is read from the database; the place to derive unstored state.",
+                [
+                    "Runs on every row fetched, including in a `while select` over thousands: anything expensive here is paid per row.",
+                    NextOnce,
+                ]),
+            ["defaultRow"] = new(
+                "defaultRow", "public void defaultRow()", "xRecord",
+                "Seed a new row from the current context; called by the form framework, unlike initValue.",
+                ["For a default that always applies, wrap initValue: defaultRow does not run for a plain X++ insert.", NextOnce]),
+            ["defaultField"] = new(
+                "defaultField", "public void defaultField(FieldId _fieldId)", "xRecord",
+                "Seed one field from context.",
+                ["Test which field you were called for: `if (_fieldId == fieldNum(MyTable, MyField))`.", NextOnce]),
+            ["toolTipField"] = new(
+                "toolTipField", "public str toolTipField(FieldId _fieldId)", "xRecord",
+                "The tooltip a form shows for one field of this record.",
+                ["The string is shown to a user: use a label. It is called on hover, so keep it free of database access.", NextOnce]),
+            ["helpField"] = new(
+                "helpField", "public str helpField(FieldId _fieldId)", "xRecord",
+                "The help text for one field of this record.",
+                ["The string is shown to a user: use a label, and no database access on a per-hover path.", NextOnce]),
+            ["caption"] = new(
+                "caption", "public str caption()", "xRecord",
+                "The record's caption, which a form title or a lookup shows.",
+                ["The default comes from TitleField1 and TitleField2; setting those is usually better than wrapping this.", NextOnce]),
+            ["aosValidateInsert"] = AosValidate("aosValidateInsert", "before a physical insert"),
+            ["aosValidateUpdate"] = AosValidate("aosValidateUpdate", "before a physical update"),
+            ["aosValidateDelete"] = AosValidate("aosValidateDelete", "before a physical delete"),
+            ["aosValidateRead"] = AosValidate("aosValidateRead", "on a read"),
         };
 
     /// <summary>The inherited data method by that name, or null. Case-insensitive, as X++ is.</summary>
@@ -104,7 +161,7 @@ public static class TableDataMethods
         => Catalog.TryGetValue(methodName.Trim(), out var m) ? m : null;
 
     /// <summary>
-    /// Every inherited data method, in the order a test author meets them: the three validation
+    /// The inherited data methods a wrapper can take effect on, in the order a test author meets them: the three validation
     /// gates first (the ones a rule is written into), then the write path, then the seeding and
     /// field-level hooks. <c>prepare test</c> lists these for a table because the index cannot —
     /// it stores declared members only, so a table that has never overridden <c>validateWrite</c>
@@ -114,7 +171,9 @@ public static class TableDataMethods
     [
         Catalog["validateWrite"], Catalog["validateField"], Catalog["validateDelete"],
         Catalog["insert"], Catalog["update"], Catalog["delete"],
-        Catalog["initValue"], Catalog["modifiedField"],
+        Catalog["initValue"], Catalog["modifiedField"], Catalog["modifiedFieldValue"],
+        Catalog["postLoad"], Catalog["defaultRow"], Catalog["defaultField"],
+        Catalog["toolTipField"], Catalog["helpField"], Catalog["caption"],
     ];
 
     /// <summary>

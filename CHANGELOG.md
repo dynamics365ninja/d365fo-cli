@@ -19,6 +19,14 @@ was ported from.
 
 ## [Unreleased]
 
+### Added — the rest of the inherited table data methods (upstream 1.17.0 to 1.22.0)
+
+`prepare` knew 8 of the methods every table inherits. It now knows `modifiedFieldValue` (whose
+signature is `(FieldName, int)`, not `modifiedField`'s), `postLoad`, `defaultRow`,
+`defaultField`, `toolTipField`, `helpField` and `caption`, and the four `aosValidate*` methods,
+reported as not eligible for Chain of Command: a wrapper compiles with a warning and never runs.
+All signatures were compiled with `xppc`.
+
 ### Fixed — kernel EDTs are known (upstream 1.22.0)
 
 `RecId`, `UserId`, `ValidFromDateTime`, `FieldId` and 79 others are defined by the X++ runtime
