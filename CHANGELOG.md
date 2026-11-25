@@ -19,6 +19,13 @@ was ported from.
 
 ## [Unreleased]
 
+### Fixed — `build` fails when LabelC compiled nothing (upstream 1.22.0)
+
+LabelC can exit 0 without compiling (given arguments it does not take, it prints its usage), and
+the build went on to report success with stale label assemblies. The label step now succeeds only
+when this run's `-OutLog` says it completed the label compilation with exit code 0; the reason is
+in `models[].labels.failure`.
+
 ### Fixed — `--install-to` does not write a document the metadata provider refused (upstream 1.22.0)
 
 Any failure of the provider create fell back to writing the scaffold, including one where the

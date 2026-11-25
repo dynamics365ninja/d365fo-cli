@@ -230,4 +230,21 @@ public class XppModelBuildTests : IDisposable
     [InlineData("18", 18)]
     public void Install_folder_names_map_to_major_versions(string folder, int major) =>
         Assert.Equal(major, BuildTooling.FolderVersion(folder)!.Major);
+
+    // The log the real LabelC.exe writes to -OutLog (7.0, read on a VM).
+    private const string LabelcCompleted =
+        "Starting label compilation...\r\nDone compiling 1 label files!\r\n"
+        + "Completed label compilation in 2 seconds with exit code 0.\r\n";
+
+    [Fact]
+    public void Labelc_that_reports_completion_succeeded()
+        => Assert.Null(XppModelBuild.LabelcFailure(0, LabelcCompleted));
+
+    [Theory]
+    [InlineData(0, "")]                                          // printed its usage and compiled nothing
+    [InlineData(0, "Starting label compilation...\r\n")]          // stopped before finishing
+    [InlineData(0, "Completed label compilation in 1 seconds with exit code 5.\r\n")]
+    [InlineData(1, "Completed label compilation in 1 seconds with exit code 0.\r\n")]
+    public void Labelc_that_does_not_report_success_failed(int exitCode, string log)
+        => Assert.NotNull(XppModelBuild.LabelcFailure(exitCode, log));
 }

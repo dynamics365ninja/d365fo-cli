@@ -277,6 +277,28 @@ public static class XppModelBuild
     }
 
     /// <summary>
+    /// Why a LabelC run did not compile the labels, or null when it did.
+    /// </summary>
+    /// <remarks>
+    /// The exit code alone is not enough: given arguments it does not take, LabelC prints its
+    /// usage, compiles nothing and exits 0. A run that compiled says so in its <c>-OutLog</c>.
+    /// </remarks>
+    /// <param name="exitCode">LabelC's exit code.</param>
+    /// <param name="log">What this run wrote: standard output and the <c>-OutLog</c> file.</param>
+    public static string? LabelcFailure(int exitCode, string log)
+    {
+        if (exitCode != 0) return $"LabelC exited with code {exitCode}.";
+        var reported = System.Text.RegularExpressions.Regex.Match(
+            log, @"Completed label compilation in .* with exit code (-?\d+)",
+            System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+        if (!reported.Success)
+            return "LabelC exited with code 0 without reporting that it completed label compilation, so no label assembly was built.";
+        return reported.Groups[1].Value == "0"
+            ? null
+            : $"LabelC reported exit code {reported.Groups[1].Value} for the label compilation.";
+    }
+
+    /// <summary>
     /// Build <paramref name="targets"/> in order, stopping at the first that fails — a model
     /// later in a solution usually references the one before it.
     /// </summary>
@@ -318,12 +340,16 @@ public static class XppModelBuild
             {
                 Directory.CreateDirectory(Path.Combine(package, "Resources"));
                 var labelArgs = LabelcArgs(target);
+                var labelStarted = DateTime.UtcNow;
                 var (lExit, lOut, lErr, lElapsed) = SdlcRunner.Run(labelc.Path!, labelArgs);
-                labels = new { exitCode = lExit, elapsedMs = (long)lElapsed.TotalMilliseconds, args = labelArgs };
-                if (lExit != 0)
+                var failure = LabelcFailure(lExit,
+                    lOut + "\n" + ReadIfWrittenSince(Path.Combine(package, "CompileLabels.log"), labelStarted));
+                labels = new { exitCode = lExit, elapsedMs = (long)lElapsed.TotalMilliseconds, args = labelArgs, failure };
+                if (failure is not null)
                 {
-                    exit = lExit;
-                    tail = Tail(lOut + "\n" + lErr + "\n" + ReadOrEmpty(Path.Combine(package, "CompileLabels.err.log")), 20);
+                    exit = lExit != 0 ? lExit : 1;
+                    tail = Tail(failure + "\n" + lOut + "\n" + lErr + "\n"
+                                + ReadIfWrittenSince(Path.Combine(package, "CompileLabels.err.log"), labelStarted), 20);
                     models.Add(new { target.Model, target.Module, target.MetadataRoot, target.Project, labels, xppc = (object?)null });
                     break;
                 }
