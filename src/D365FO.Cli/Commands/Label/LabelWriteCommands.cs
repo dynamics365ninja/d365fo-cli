@@ -277,7 +277,32 @@ public sealed class LabelDeleteCommand : Command<LabelDeleteCommand.Settings>
         public string Key { get; init; } = "";
 
         [CommandOption("--file <PATH>")]
+        [System.ComponentModel.Description("Delete from this one label file. Required unless --install-to is used.")]
         public string? File { get; init; }
+
+        [CommandOption("--install-to <MODEL>")]
+        [System.ComponentModel.Description("Model name: deletes the label from every language of its label file.")]
+        public string? InstallTo { get; init; }
+
+        [CommandOption("--lang <LANG>")]
+        [System.ComponentModel.Description("With --install-to: only these languages, comma-separated.")]
+        public string? Lang { get; init; }
+
+        [CommandOption("--label-file <NAME>")]
+        [System.ComponentModel.Description("Label file name used with --install-to (default: model name).")]
+        public string? LabelFile { get; init; }
+
+        [CommandOption("--dry-run")]
+        [System.ComponentModel.Description("Report the files and references; write nothing.")]
+        public bool DryRun { get; init; }
+
+        [CommandOption("--force")]
+        [System.ComponentModel.Description("Delete although the model still references the label.")]
+        public bool Force { get; init; }
+
+        [CommandOption("--allow-extension-label-file")]
+        [System.ComponentModel.Description("Permit deleting from a label file EXTENSION (…_Extension…). Off by default.")]
+        public bool AllowExtensionLabelFile { get; init; }
     }
 
     public override int Execute(CommandContext ctx, Settings settings)
@@ -285,25 +310,35 @@ public sealed class LabelDeleteCommand : Command<LabelDeleteCommand.Settings>
         var kind = OutputMode.Resolve(settings.Output);
         if (string.IsNullOrWhiteSpace(settings.Key))
             return RenderHelpers.Render(kind, ToolResult<object>.Fail(D365FoErrorCodes.BadInput, "Label key required."));
-        if (string.IsNullOrWhiteSpace(settings.File))
-            return RenderHelpers.Render(kind, ToolResult<object>.Fail(D365FoErrorCodes.BadInput, "--file <PATH> required."));
+
+        IReadOnlyList<string> files;
+        if (!string.IsNullOrWhiteSpace(settings.File))
+        {
+            files = [settings.File!];
+        }
+        else if (!string.IsNullOrWhiteSpace(settings.InstallTo))
+        {
+            var modelDir = Generate.GenerateInstaller.ResolveModelFolder(settings.InstallTo!);
+            if (modelDir is null)
+                return RenderHelpers.Render(kind, Generate.GenerateInstaller.ModelFolderNotFound(settings.InstallTo!));
+            var labelFile = string.IsNullOrWhiteSpace(settings.LabelFile) ? settings.InstallTo! : settings.LabelFile!;
+            var languages = settings.Lang?.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+            files = LabelDeletion.FilesOf(modelDir, labelFile, languages);
+            if (files.Count == 0)
+                return RenderHelpers.Render(kind, ToolResult<object>.Fail("FILE_NOT_FOUND",
+                    $"Model '{settings.InstallTo}' has no '{labelFile}' label file for the requested language(s)."));
+        }
+        else
+        {
+            return RenderHelpers.Render(kind, ToolResult<object>.Fail(D365FoErrorCodes.BadInput,
+                "--file <PATH> or --install-to <MODEL> is required."));
+        }
 
         try
         {
-            var res = LabelFileWriter.Delete(settings.File!, settings.Key);
-            LabelJournalRecorder.RecordDelete(res, "labels delete");
-            return res.Outcome switch
-            {
-                WriteOutcome.FileMissing => RenderHelpers.Render(kind, ToolResult<object>.Fail("FILE_NOT_FOUND", $"Label file not found: {settings.File}")),
-                WriteOutcome.KeyMissing => RenderHelpers.Render(kind, ToolResult<object>.Fail("KEY_NOT_FOUND", $"Label '{settings.Key}' not present in file.")),
-                _ => RenderHelpers.Render(kind, ToolResult<object>.Success(new
-                {
-                    outcome = res.Outcome.ToString(),
-                    file = res.Path,
-                    key = res.Key,
-                    removedValue = res.OldValue,
-                })),
-            };
+            return RenderHelpers.Render(kind, LabelDeletion.Run(
+                new LabelDeleteRequest(settings.Key, files, settings.DryRun, settings.Force, settings.AllowExtensionLabelFile),
+                RepoFactory.Create(), "labels delete"));
         }
         catch (Exception ex)
         {

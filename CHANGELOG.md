@@ -19,6 +19,18 @@ was ported from.
 
 ## [Unreleased]
 
+### Fixed — `labels delete` removes the whole label, and not one that is still used (upstream 1.25.0)
+
+- The label's ` ;comment` line stayed behind and attached itself to the label above. It now goes
+  with the label (also when `rename --overwrite` drops the target), and `undo` restores it.
+- `--install-to <MODEL>` deletes from every language of the label file (`--lang` narrows it).
+- Removing the last definition of a label the owning model still references fails
+  `LABEL_IN_USE`; `--force` overrides. Other models are not scanned, and the reply says so.
+- `--dry-run` reports files and references without writing.
+- A label file extension is refused without `--allow-extension-label-file`; a Microsoft model,
+  or one outside `D365FO_CUSTOM_MODELS`, is refused (`FOREIGN_MODEL`).
+- MCP `labels` `action=delete` applies the same checks and takes `installTo`, `dryRun`, `force`.
+
 ### Fixed — MCP `labels` `action=create` takes a comma-separated `lang`
 
 `lang: "en-us,cs"` created a folder and a file literally named `en-us,cs` and reported success.

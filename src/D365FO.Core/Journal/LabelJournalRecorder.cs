@@ -81,7 +81,8 @@ public static class LabelJournalRecorder
                 TargetType: JournalTargetType.Label,
                 Kind: "label",
                 ObjectName: res.Key,
-                SecondaryKey: null,
+                // For a delete: the entry's comment lines, one per line.
+                SecondaryKey: res.Comments is { Count: > 0 } c ? string.Join('\n', c) : null,
                 Model: null,
                 Operation: JournalOperation.Delete,
                 WritePath: JournalWritePath.Disk,

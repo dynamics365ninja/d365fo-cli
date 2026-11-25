@@ -801,26 +801,36 @@ public sealed partial class ToolHandlers
         }
     }
 
-    public ToolResult<object> DeleteLabel(string file, string key)
+    public ToolResult<object> DeleteLabel(
+        string? file, string key, string? installTo, string? lang, string? labelFile, bool dryRun, bool force)
     {
-        if (string.IsNullOrWhiteSpace(file)) return ToolResult<object>.Fail(D365FoErrorCodes.BadInput, "file required");
         if (string.IsNullOrWhiteSpace(key)) return ToolResult<object>.Fail(D365FoErrorCodes.BadInput, "key required");
+
+        IReadOnlyList<string> files;
+        if (!string.IsNullOrWhiteSpace(file))
+        {
+            files = [file!];
+        }
+        else if (!string.IsNullOrWhiteSpace(installTo))
+        {
+            var (folder, failure) = ResolveModelFolder(installTo!);
+            if (failure is not null) return failure;
+            var id = string.IsNullOrWhiteSpace(labelFile) ? installTo! : labelFile!;
+            files = D365FO.Core.Labels.LabelDeletion.FilesOf(
+                folder!, id, string.IsNullOrWhiteSpace(lang) ? null : SplitLanguages(lang));
+            if (files.Count == 0)
+                return ToolResult<object>.Fail("FILE_NOT_FOUND",
+                    $"Model '{installTo}' has no '{id}' label file for the requested language(s).");
+        }
+        else
+        {
+            return ToolResult<object>.Fail(D365FoErrorCodes.BadInput, "file or installTo is required.");
+        }
+
         try
         {
-            var res = D365FO.Core.Labels.LabelFileWriter.Delete(file, key);
-            D365FO.Core.Journal.LabelJournalRecorder.RecordDelete(res, "labels(delete)");
-            return res.Outcome switch
-            {
-                D365FO.Core.Labels.WriteOutcome.FileMissing => ToolResult<object>.Fail("FILE_NOT_FOUND", $"Label file not found: {file}"),
-                D365FO.Core.Labels.WriteOutcome.KeyMissing => ToolResult<object>.Fail("KEY_NOT_FOUND", $"Label '{key}' not present."),
-                _ => ToolResult<object>.Success(new
-                {
-                    outcome = res.Outcome.ToString(),
-                    file = res.Path,
-                    key = res.Key,
-                    removedValue = res.OldValue,
-                }),
-            };
+            return D365FO.Core.Labels.LabelDeletion.Run(
+                new D365FO.Core.Labels.LabelDeleteRequest(key, files, dryRun, force), _repo, "labels(delete)");
         }
         catch (Exception ex)
         {

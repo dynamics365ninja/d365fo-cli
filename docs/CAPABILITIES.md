@@ -532,6 +532,7 @@ d365fo labels create Key "Value" --file path/Foo.en-us.label.txt
 d365fo labels create Key "New"   --file path/Foo.en-us.label.txt --overwrite
 d365fo labels rename OldKey NewKey --file path/Foo.en-us.label.txt
 d365fo labels delete Key           --file path/Foo.en-us.label.txt
+d365fo labels delete Key           --install-to Foo --dry-run   # every language; refused while Foo uses it
 ```
 
 `labels resolve` with one token answers as it always has (`count`, `items`). With several it

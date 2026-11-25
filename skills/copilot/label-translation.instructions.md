@@ -62,8 +62,7 @@ d365fo labels create "@FleetManagement:VehicleVin" "VIN" \
 ## 4. Rename a label key (refactor across the model)
 
 ```sh
-d365fo labels rename @FleetManagement:OldKey @FleetManagement:NewKey \
-    --file <path>.label.txt
+d365fo labels rename OldKey NewKey --file <path>.label.txt
 ```
 
 The rename touches *only* the resource file — XML / X++ references to the
@@ -75,13 +74,16 @@ yourself, then `d365fo index refresh --model <Model>` so
 ## 5. Delete a label entry
 
 ```sh
-d365fo labels delete @FleetManagement:DeprecatedKey --file <path>.label.txt
+d365fo labels delete DeprecatedKey --install-to FleetManagement --dry-run   # every language
+d365fo labels delete DeprecatedKey --install-to FleetManagement
+d365fo labels delete DeprecatedKey --file <path>.label.txt                   # one language
 ```
 
-- Pre-flight: `d365fo find references @FleetManagement:DeprecatedKey` to ensure no
-  remaining references — deleting a referenced label triggers
-  `BPErrorUnknownLabel` on every consumer. Check both `items` (X++ code) and
-  `properties` (metadata) in the answer.
+- The key and its comment go. Removing the last definition is refused with `LABEL_IN_USE`
+  while the owning model references it; `--force` deletes anyway.
+- Only the owning model is scanned. Before deleting a label other models may use, run
+  `d365fo find references @FleetManagement:DeprecatedKey --all-models` and check both `items`
+  (X++ code) and `properties` (metadata).
 
 ## 6. Where is a label used?
 
