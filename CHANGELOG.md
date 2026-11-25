@@ -19,6 +19,12 @@ was ported from.
 
 ## [Unreleased]
 
+### Fixed — MCP `labels` `action=create` takes a comma-separated `lang`
+
+`lang: "en-us,cs"` created a folder and a file literally named `en-us,cs` and reported success.
+Each language now gets its own file, an existing folder's casing is reused, and a key that
+already exists in one of them writes none.
+
 ### Fixed — `--install-to` writes into the folder the model has (upstream 1.21.0, 1.24.0)
 
 Label writes (CLI and MCP) and MCP `generate_object` assumed `<root>/<model>/<model>`. For a

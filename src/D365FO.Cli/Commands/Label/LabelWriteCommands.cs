@@ -207,28 +207,6 @@ public sealed class LabelCreateCommand : Command<LabelCreateCommand.Settings>
         string? Error,
         string? Message,
         IReadOnlyList<object> Files);
-
-    /// <summary>
-    /// Reuse the existing locale folder's casing ("en-US" vs "en-us") so writes
-    /// on case-sensitive file systems never create a duplicate locale folder.
-    /// </summary>
-    internal static string ResolveOnDiskCasing(string resourcesDir, string lang)
-    {
-        try
-        {
-            if (Directory.Exists(resourcesDir))
-            {
-                foreach (var dir in Directory.EnumerateDirectories(resourcesDir))
-                {
-                    var name = System.IO.Path.GetFileName(dir);
-                    if (string.Equals(name, lang, StringComparison.OrdinalIgnoreCase))
-                        return name;
-                }
-            }
-        }
-        catch { /* fall through to requested casing */ }
-        return lang;
-    }
 }
 
 public sealed class LabelRenameCommand : Command<LabelRenameCommand.Settings>
@@ -367,7 +345,7 @@ internal static class LabelTargets
             var resourcesDir = Path.Combine(modelDir, "AxLabelFile", "LabelResources");
             foreach (var l in langs)
             {
-                var diskLang = LabelCreateCommand.ResolveOnDiskCasing(resourcesDir, l);
+                var diskLang = LabelFileWriter.OnDiskLanguage(resourcesDir, l);
                 files.Add(Path.Combine(resourcesDir, diskLang, $"{lf}.{diskLang}.label.txt"));
             }
         }

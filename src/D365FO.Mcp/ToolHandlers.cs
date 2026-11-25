@@ -612,35 +612,55 @@ public sealed partial class ToolHandlers
 
     public ToolResult<object> CreateLabel(string? file, string key, string value, bool overwrite = false, string? installTo = null, string? lang = null, string? labelFile = null)
     {
-        var resolvedFile = file;
-        if (string.IsNullOrWhiteSpace(resolvedFile) && !string.IsNullOrWhiteSpace(installTo))
+        var targets = new List<string>();
+        if (!string.IsNullOrWhiteSpace(file))
         {
-            var resolvedLang = string.IsNullOrWhiteSpace(lang) ? "en-us" : lang!;
-            var (path, failure) = ResolveLabelPath(installTo!, resolvedLang, labelFile);
-            if (failure is not null) return failure;
-            resolvedFile = path;
+            targets.Add(file!);
         }
-        if (string.IsNullOrWhiteSpace(resolvedFile))
+        else if (!string.IsNullOrWhiteSpace(installTo))
+        {
+            foreach (var l in SplitLanguages(lang))
+            {
+                var (path, failure) = ResolveLabelPath(installTo!, l, labelFile);
+                if (failure is not null) return failure;
+                targets.Add(path!);
+            }
+        }
+        if (targets.Count == 0)
             return ToolResult<object>.Fail(D365FoErrorCodes.BadInput,
                 "Either 'file' (absolute path to the .label.txt) or 'installTo' (model name) is required.",
                 "Use 'file' for an explicit path, or 'installTo' to resolve the path automatically from D365FO_CUSTOM_PACKAGES_PATH or D365FO_PACKAGES_PATH.");
         if (string.IsNullOrWhiteSpace(key)) return ToolResult<object>.Fail(D365FoErrorCodes.BadInput, "key required");
         try
         {
-            var res = D365FO.Core.Labels.LabelFileWriter.CreateOrUpdate(resolvedFile!, key, value, overwrite);
-            if (res.Outcome == D365FO.Core.Labels.WriteOutcome.KeyExists)
-                return ToolResult<object>.Fail("KEY_EXISTS",
-                    $"Label '{key}' already exists; pass overwrite=true to replace.",
-                    hint: $"Existing value: {res.OldValue}");
-            D365FO.Core.Journal.LabelJournalRecorder.RecordCreateOrUpdate(res, "labels(create)");
-            return ToolResult<object>.Success(new
+            // Every target is checked before any is written: a refusal must not leave the key in
+            // the languages that happened to come first.
+            if (!overwrite)
             {
-                outcome = res.Outcome.ToString(),
-                file = res.Path,
-                key = res.Key,
-                oldValue = res.OldValue,
-                newValue = res.NewValue,
-            });
+                foreach (var target in targets)
+                {
+                    if (D365FO.Core.Labels.LabelFileWriter.ReadValue(target, key) is { } existing)
+                        return ToolResult<object>.Fail("KEY_EXISTS",
+                            $"Label '{key}' already exists in {target}; pass overwrite=true to replace.",
+                            hint: $"Existing value: {existing}");
+                }
+            }
+
+            var written = new List<object>();
+            foreach (var target in targets)
+            {
+                var res = D365FO.Core.Labels.LabelFileWriter.CreateOrUpdate(target, key, value, overwrite);
+                D365FO.Core.Journal.LabelJournalRecorder.RecordCreateOrUpdate(res, "labels(create)");
+                written.Add(new
+                {
+                    outcome = res.Outcome.ToString(),
+                    file = res.Path,
+                    key = res.Key,
+                    oldValue = res.OldValue,
+                    newValue = res.NewValue,
+                });
+            }
+            return ToolResult<object>.Success(written.Count == 1 ? written[0] : new { key, files = written });
         }
         catch (Exception ex)
         {
@@ -702,8 +722,7 @@ public sealed partial class ToolHandlers
         }
         else if (!string.IsNullOrWhiteSpace(installTo))
         {
-            var langs = (string.IsNullOrWhiteSpace(lang) ? "en-us" : lang!)
-                .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+            var langs = SplitLanguages(lang);
             // One value cannot be the corrected text of several translations: writing it into each
             // would replace the others and report success.
             if (langs.Length > 1)
@@ -1362,8 +1381,15 @@ public sealed partial class ToolHandlers
                 "A label file id is letters, digits and underscore, starting with a letter."));
         var (folder, failure) = ResolveModelFolder(model);
         if (failure is not null) return (null, failure);
-        return (System.IO.Path.Combine(folder!, "AxLabelFile", "LabelResources", lang, $"{lf}.{lang}.label.txt"), null);
+        var resources = System.IO.Path.Combine(folder!, "AxLabelFile", "LabelResources");
+        var diskLang = D365FO.Core.Labels.LabelFileWriter.OnDiskLanguage(resources, lang);
+        return (System.IO.Path.Combine(resources, diskLang, $"{lf}.{diskLang}.label.txt"), null);
     }
+
+    /// <summary>The languages a comma-separated <c>lang</c> names; <c>en-us</c> when it names none.</summary>
+    private static string[] SplitLanguages(string? lang)
+        => (string.IsNullOrWhiteSpace(lang) ? "en-us" : lang!)
+            .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
 
     /// <summary>
     /// Run the grounding gate, then write. Both halves, in that order, for the same reason the

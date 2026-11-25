@@ -197,6 +197,32 @@ public static class LabelFileWriter
         return dot > 0 && dot < stem.Length - 1 ? stem[(dot + 1)..] : null;
     }
 
+    /// <summary>
+    /// The casing of the locale folder already under <paramref name="resourcesDir"/> ("en-US" for
+    /// "en-us"), so a write on a case-sensitive file system never creates a duplicate folder.
+    /// </summary>
+    public static string OnDiskLanguage(string resourcesDir, string lang)
+    {
+        try
+        {
+            if (Directory.Exists(resourcesDir))
+            {
+                foreach (var dir in Directory.EnumerateDirectories(resourcesDir))
+                {
+                    var name = Path.GetFileName(dir);
+                    if (string.Equals(name, lang, StringComparison.OrdinalIgnoreCase))
+                        return name;
+                }
+            }
+        }
+        catch { /* fall through to the requested casing */ }
+        return lang;
+    }
+
+    /// <summary>The text of <paramref name="key"/> in a label file, or null when it has none.</summary>
+    public static string? ReadValue(string path, string key)
+        => File.Exists(path) ? FindKey(File.ReadAllLines(path).ToList(), key).existingValue : null;
+
     public static bool IsExtensionLabelFile(string labelFileIdOrPath)
     {
         if (string.IsNullOrWhiteSpace(labelFileIdOrPath)) return false;
