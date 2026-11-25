@@ -15,6 +15,7 @@ public static class D365FoErrorCodes
     public const string Unhandled = "UNHANDLED";
     public const string HandlerThrew = "HANDLER_THREW";
     public const string WriteFailed = "WRITE_FAILED";
+    public const string ChangeNotApplied = "CHANGE_NOT_APPLIED";
     public const string SourceUnreadable = "SOURCE_UNREADABLE";
 
     // Index / metadata not found

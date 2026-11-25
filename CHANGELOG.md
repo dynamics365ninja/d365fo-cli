@@ -19,6 +19,17 @@ was ported from.
 
 ## [Unreleased]
 
+### Fixed — `modify` no longer reports a change the metadata model drops (upstream 1.24.0)
+
+`modify property` on a Microsoft object writes to its extension, and appended the property to the
+extension's root: `Label` or `StringSize` is no member of `AxEdtExtension` or `AxTableExtension`,
+the provider skipped it, and the call reported success.
+
+- Before writing, the bridge is asked what it would not store. An element or value the edit added
+  that would vanish fails `CHANGE_NOT_APPLIED` and writes nothing, also under `--dry-run`.
+- A value the provider only spells differently is written and reported as a warning. What the
+  object already carried before the edit is ignored.
+
 ### Fixed — an unreadable settings or profile file stops the run (upstream, after 1.25.1)
 
 A `settings.json` or profile file that did not parse (a trailing comma, a `true` where a string
