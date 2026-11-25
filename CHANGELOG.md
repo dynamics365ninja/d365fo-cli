@@ -19,6 +19,17 @@ was ported from.
 
 ## [Unreleased]
 
+### Fixed — `--install-to` does not write a document the metadata provider refused (upstream 1.22.0)
+
+Any failure of the provider create fell back to writing the scaffold, including one where the
+provider had read the document and rejected a value in it. The invalid object reached the model
+with only a warning.
+
+- `XML_PARSE_FAILED` and `XML_DESERIALIZE_FAILED` now fail `OBJECT_REJECTED` and write nothing.
+- A provider that is unavailable, does not know the model or cannot build the type still falls
+  back, as before. All 95 eval goldens deserialize in the provider, so no generator relies on
+  the old behaviour.
+
 ### Fixed — `modify` no longer reports a change the metadata model drops (upstream 1.24.0)
 
 `modify property` on a Microsoft object writes to its extension, and appended the property to the
