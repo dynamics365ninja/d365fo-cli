@@ -121,6 +121,47 @@ public sealed class IncrementalBuildGuardTests : IDisposable
         Assert.Null(Reason());
     }
 
+    /// <summary>The package's OData resource file: one entity per line, name, tab, resource.</summary>
+    private void ODataRuntime(string entity, params string[] actions)
+    {
+        var items = string.Concat(actions.Select(a =>
+            $"<a:KeyValueOfstringAxODataActionLjh4bohd><a:Key>{a}</a:Key><a:Value><Name>{a}</Name></a:Value></a:KeyValueOfstringAxODataActionLjh4bohd>"));
+        Put(Path.Combine(_root, "ConFleet", "bin", "Dynamics.AX.CONFleet.ODataExtends.runtime"), Built,
+            $"\uFEFF{entity}\t<AxODataResource><Name>{entity}</Name><Actions><Items xmlns:a=\"x\">{items}</Items></Actions></AxODataResource>\r\n");
+    }
+
+    private void EntityWithAction()
+    {
+        Source("AxDataEntityView", "ConEntity", Built.AddHours(-1),
+            "<x><![CDATA[ [SysODataActionAttribute('Confirm', true)] public void confirmIt() {} ]]></x>");
+        Metadata("AxDataEntityView", "ConEntity", Built);
+    }
+
+    [Fact]
+    public void An_action_an_earlier_incremental_build_dropped_needs_a_full_build()
+    {
+        BuiltModel();
+        EntityWithAction();
+        ODataRuntime("ConEntity");
+
+        var reason = Reason();
+
+        Assert.Contains("ConEntity", reason);
+        Assert.Contains("Confirm", reason);
+    }
+
+    [Theory]
+    [InlineData("ConEntity", "confirm")]   // present, compared without regard to case
+    [InlineData("ConOther", "Nothing")]    // no entry: a non-public entity has none
+    public void A_runtime_file_that_lacks_nothing_stays_incremental(string entity, string action)
+    {
+        BuiltModel();
+        EntityWithAction();
+        ODataRuntime(entity, action);
+
+        Assert.Null(Reason());
+    }
+
     [Fact]
     public void An_unchanged_entity_with_actions_stays_incremental()
     {

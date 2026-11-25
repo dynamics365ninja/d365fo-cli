@@ -35,6 +35,12 @@ public static class IncrementalBuildGuard
     private static readonly Regex ODataAction =
         new(@"\bSysODataAction(?:Attribute)?\s*\(", RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
+    private static readonly Regex ODataActionName =
+        new(@"\bSysODataAction(?:Attribute)?\s*\(\s*(?:""([^""]*)""|'([^']*)')", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+
+    private static readonly Regex RuntimeActionKey =
+        new(@"<(?:\w+:)?KeyValueOfstringAxODataAction\w*>\s*<(?:\w+:)?Key>([^<]*)</", RegexOptions.Compiled);
+
     private const int NamesShown = 5;
 
     /// <summary>
@@ -99,12 +105,64 @@ public static class IncrementalBuildGuard
             }
             if (withAction is not null)
                 reasons.Add($"{withAction} declares an OData action, which an incremental recompile drops from the service");
+            else if (MissingActions(package) is { Count: > 0 } missing)
+                reasons.Add($"the OData resources lack actions the source declares ({string.Join("; ", missing.Take(NamesShown))}), "
+                            + "as an earlier incremental build leaves them, and only a full build writes them back");
             return reasons.Count == 0 ? null : string.Join("; ", reasons) + ".";
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
             return $"the model could not be checked for changes an incremental build would miss ({ex.Message}).";
         }
+    }
+
+    /// <summary>
+    /// <c>Entity (Action, …)</c> for each data entity whose entry in the package's
+    /// <c>bin\Dynamics.AX.&lt;Package&gt;.ODataExtends.runtime</c> lacks actions its source declares.
+    /// The AOS reads the actions from that file. An entity without an entry is not public.
+    /// </summary>
+    private static List<string> MissingActions(string package)
+    {
+        var bin = Path.Combine(package, "bin");
+        if (!Directory.Exists(bin)) return [];
+        // Named after the assembly, whose casing need not match the folder's.
+        var files = Directory.GetFiles(bin, "*.ODataExtends.runtime");
+        var expected = $"Dynamics.AX.{Path.GetFileName(package)}.ODataExtends.runtime";
+        var runtime = files.FirstOrDefault(f => string.Equals(Path.GetFileName(f), expected, StringComparison.OrdinalIgnoreCase))
+                      ?? (files.Length == 1 ? files[0] : null);
+        if (runtime is null) return [];
+
+        // One line per entity: its name, a tab, and its resource document.
+        var published = new Dictionary<string, HashSet<string>>(StringComparer.OrdinalIgnoreCase);
+        foreach (var line in File.ReadLines(runtime))
+        {
+            var tab = line.IndexOf('\t');
+            if (tab <= 0) continue;
+            published[line[..tab].Trim()] = RuntimeActionKey.Matches(line)
+                .Select(m => m.Groups[1].Value.Trim())
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        }
+
+        var missing = new List<string>();
+        foreach (var model in Directory.EnumerateDirectories(package))
+        {
+            var folder = Path.Combine(model, "AxDataEntityView");
+            if (string.Equals(Path.GetFileName(model), "XppMetadata", StringComparison.OrdinalIgnoreCase)
+                || !Directory.Exists(folder)) continue;
+            foreach (var source in Directory.EnumerateFiles(folder, "*.xml"))
+            {
+                if (!published.TryGetValue(Path.GetFileNameWithoutExtension(source), out var actions)) continue;
+                var lost = ODataActionName.Matches(Comments.Replace(File.ReadAllText(source), ""))
+                    .Select(m => (m.Groups[1].Success ? m.Groups[1] : m.Groups[2]).Value.Trim())
+                    .Where(name => name.Length > 0 && !actions.Contains(name))
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .ToList();
+                if (lost.Count > 0)
+                    missing.Add($"{Path.GetFileNameWithoutExtension(source)} ({string.Join(", ", lost)})");
+            }
+        }
+        missing.Sort(StringComparer.OrdinalIgnoreCase);
+        return missing;
     }
 
     /// <summary>When the last successful build of this package that ran here started, or null.</summary>
