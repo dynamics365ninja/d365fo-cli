@@ -7,7 +7,7 @@ namespace D365FO.Cli.Commands.Connect;
 
 /// <summary>
 /// <c>d365fo connect &lt;URL&gt;</c> — point an editor's MCP client at an already
-/// deployed <c>d365fo-mcp --http</c> server.
+/// deployed <c>d365fo-cli-mcp --http</c> server.
 /// </summary>
 /// <remarks>
 /// Before this existed the documented procedure was "write this JSON by hand",
@@ -36,7 +36,7 @@ public sealed class ConnectCommand : AsyncCommand<ConnectCommand.Settings>
     public sealed class Settings : D365OutputSettings
     {
         [CommandArgument(0, "<URL>")]
-        [System.ComponentModel.Description("Base URL of the deployed server, e.g. https://d365fo-mcp.example.com. A trailing /mcp is accepted and stripped.")]
+        [System.ComponentModel.Description("Base URL of the deployed server, e.g. https://d365fo-cli-mcp.example.com. A trailing /mcp is accepted and stripped.")]
         public string Url { get; init; } = "";
 
         [CommandOption("--editor <NAME>")]
@@ -78,7 +78,7 @@ public sealed class ConnectCommand : AsyncCommand<ConnectCommand.Settings>
 
         if (!TryNormalizeBaseUrl(settings.Url, out var baseUrl, out var urlError))
             return RenderHelpers.Render(kind, ToolResult<object>.Fail(D365FoErrorCodes.BadInput, urlError!,
-                hint: "Pass an absolute http(s) URL, e.g. https://d365fo-mcp.example.com or http://localhost:3000."));
+                hint: "Pass an absolute http(s) URL, e.g. https://d365fo-cli-mcp.example.com or http://localhost:3000."));
 
         var warnings = new List<string>();
 
@@ -88,6 +88,8 @@ public sealed class ConnectCommand : AsyncCommand<ConnectCommand.Settings>
         {
             var (ok, payload, probeError) = await ProbeHealthAsync(baseUrl!).ConfigureAwait(false);
             health = payload;
+            if (payload is not null && OtherServerWarning(payload) is { } otherServer)
+                warnings.Add(otherServer);
             if (!ok)
             {
                 if (!settings.Force)
@@ -156,7 +158,19 @@ public sealed class ConnectCommand : AsyncCommand<ConnectCommand.Settings>
     }
 
     /// <summary>Shape of the server's <c>GET /health</c> payload.</summary>
-    public sealed record HealthInfo(string? Status, string? Mode, bool? IndexReachable);
+    public sealed record HealthInfo(string? Status, string? Mode, bool? IndexReachable, string? Service = null);
+
+    /// <summary>
+    /// What to tell the caller when the endpoint says it is the sibling project's server
+    /// rather than this CLI's adapter. Null otherwise — including for a server that names
+    /// no service, which is an older build of this adapter.
+    /// </summary>
+    internal static string? OtherServerWarning(HealthInfo health)
+        => string.Equals(health.Service, McpIdentity.SiblingServiceName, StringComparison.OrdinalIgnoreCase)
+            ? $"This server is {McpIdentity.SiblingServiceName} (npm package d365fo-mcp), not this CLI's " +
+              $"{McpIdentity.AdapterName} adapter: its tools differ from the ones the d365fo CLI describes. " +
+              "The config entry was written as requested."
+            : null;
 
     internal sealed record MergeError(string Code, string Message, string? Hint);
 
@@ -277,13 +291,14 @@ public sealed class ConnectCommand : AsyncCommand<ConnectCommand.Settings>
                 var info = new HealthInfo(
                     (string?)node?["status"],
                     (string?)node?["mode"],
-                    (bool?)node?["indexReachable"]);
+                    (bool?)node?["indexReachable"],
+                    (string?)node?["service"]);
                 return (true, info, null);
             }
             catch (JsonException)
             {
                 // Reachable but not our server — say so rather than claim success.
-                return (false, null, "the endpoint answered but did not return a d365fo-mcp health payload");
+                return (false, null, "the endpoint answered but did not return a d365fo-cli-mcp health payload");
             }
         }
         catch (TaskCanceledException)

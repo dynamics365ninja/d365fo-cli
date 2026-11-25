@@ -961,7 +961,7 @@ d365fo get object table CustTable --output json
 d365fo find related coc CustTable --method validateWrite --output json
 ```
 
-### MCP server (`d365fo-mcp`)
+### MCP server (`d365fo-cli-mcp`)
 
 Standalone JSON-RPC 2.0 server (protocol `2024-11-05`) that shares the CLI's index. Config sample for Claude Desktop:
 
@@ -977,7 +977,7 @@ Standalone JSON-RPC 2.0 server (protocol `2024-11-05`) that shares the CLI's ind
 }
 ```
 
-After `dotnet publish src/D365FO.Mcp -c Release -r osx-arm64` you get a standalone `d365fo-mcp` binary you can drop on `$PATH`. The adapter exposes **20 consolidated, discriminator-based tools** (`search`, `get_object_info`, `get_method`, `extension_info`, `object_patterns`, `generate_object`, `security_info`, `labels`, `analyze`, `models`, …) covering CLI parity, security & labels, heuristics, and aggregation — same index, same guardrails. See [MIGRATION_FROM_MCP.md](MIGRATION_FROM_MCP.md) for the full tool list.
+After `dotnet publish src/D365FO.Mcp -c Release -r osx-arm64` you get a standalone `d365fo-cli-mcp` binary you can drop on `$PATH`. The adapter exposes **20 consolidated, discriminator-based tools** (`search`, `get_object_info`, `get_method`, `extension_info`, `object_patterns`, `generate_object`, `security_info`, `labels`, `analyze`, `models`, …) covering CLI parity, security & labels, heuristics, and aggregation — same index, same guardrails. See [MIGRATION_FROM_MCP.md](MIGRATION_FROM_MCP.md) for the full tool list.
 
 ---
 
@@ -994,7 +994,7 @@ d365fo daemon status
 d365fo daemon stop
 ```
 
-Transport: Windows named pipe `\\\\.\\ pipe\\d365fo-cli`; Unix socket at `$XDG_RUNTIME_DIR/d365fo-cli.sock` (fallback `$TMPDIR`). With a profile active (`--profile` / `D365FO_PROFILE`) the pipe, socket and pid file are named `d365fo-cli-<profile>`, so each profile runs its own daemon. The frame format matches `d365fo-mcp`: one newline-terminated JSON-RPC request per connection, one response, close.
+Transport: Windows named pipe `\\\\.\\ pipe\\d365fo-cli`; Unix socket at `$XDG_RUNTIME_DIR/d365fo-cli.sock` (fallback `$TMPDIR`). With a profile active (`--profile` / `D365FO_PROFILE`) the pipe, socket and pid file are named `d365fo-cli-<profile>`, so each profile runs its own daemon. The frame format matches `d365fo-cli-mcp`: one newline-terminated JSON-RPC request per connection, one response, close.
 
 The daemon also starts a `FileSystemWatcher` over `D365FO_PACKAGES_PATH` (or `--packages`). When `*.xml` files change, it debounces (default 3 s) and automatically triggers an incremental `index refresh` for the affected model, emitting a JSON notification to stderr:
 

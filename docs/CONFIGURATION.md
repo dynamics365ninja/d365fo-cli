@@ -40,10 +40,10 @@ With no profile selected, step 3 does not exist and resolution is exactly what i
 
 > ⚠️ **`D365FO_WORKSPACE_PATH` is not the same thing as your editor's "workspace".** This variable only tells the `d365fo` CLI where scaffolded X++ output should be written. It has **no effect** on where Visual Studio or VS Code loads GitHub Copilot instruction files from — that is determined purely by the folder/`.sln` you have open in the editor (see [SETUP.md — Connect your AI agent](SETUP.md#step-5--connect-your-ai-agent)). Setting `D365FO_WORKSPACE_PATH` does **not** make Copilot pick up `.github/copilot-instructions.md` from that path.
 
-### `d365fo-mcp`-only variables
+### `d365fo-cli-mcp`-only variables
 
 Read the same way (env var → `settings.json` → default) but only consulted by
-the `d365fo-mcp` server, not the `d365fo` CLI. See
+the `d365fo-cli-mcp` server, not the `d365fo` CLI. See
 [MIGRATION_FROM_MCP.md](MIGRATION_FROM_MCP.md#http-transport--shared-deployment-azure-app-service)
 for the shared-deployment story these enable.
 
@@ -52,7 +52,7 @@ for the shared-deployment story these enable.
 | `MCP_SERVER_MODE` | `full` \| `read-only` \| `write-only` — gates which MCP tools are exposed/callable (both transports) | `full` |
 | `MCP_TOOLSETS` | Comma-separated toolsets (`read`, `knowledge`, `author`, `check`, `index`, `sdlc`) and tool names the MCP server advertises; intersected with `MCP_SERVER_MODE`. See [MCP_CONFIG.md](MCP_CONFIG.md#toolsets) | `all` |
 | `API_KEY` | Shared secret required in the `X-Api-Key` header on `POST /mcp` (`--http` transport only). Unset = unauthenticated, with a startup warning | — |
-| `MCP_HTTP_PORT` | Listen port for `d365fo-mcp --http` when `--port` isn't passed | `3000` |
+| `MCP_HTTP_PORT` | Listen port for `d365fo-cli-mcp --http` when `--port` isn't passed | `3000` |
 
 ---
 
@@ -134,7 +134,7 @@ All of them accept `--output json`.
 
 ### MCP server
 
-`d365fo-mcp` resolves settings through the same chain, so a profile can be pinned per MCP client — either `"env": { "D365FO_PROFILE": "contoso" }` in the client's server config or `"args": ["--profile", "contoso"]`. A missing profile makes the server exit at start-up with the same `PROFILE_NOT_FOUND` error instead of serving another environment's index.
+`d365fo-cli-mcp` resolves settings through the same chain, so a profile can be pinned per MCP client — either `"env": { "D365FO_PROFILE": "contoso" }` in the client's server config or `"args": ["--profile", "contoso"]`. A missing profile makes the server exit at start-up with the same `PROFILE_NOT_FOUND` error instead of serving another environment's index.
 
 ### Not (yet) supported
 

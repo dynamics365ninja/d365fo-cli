@@ -95,7 +95,7 @@ Both installers read the same `skills/_source/` topics, so the two ecosystems ca
 about a rule, and both remove topics that were retired upstream rather than leaving them to feed
 an agent stale guidance.
 
-For an MCP-only host, see [MCP_CONFIG.md](MCP_CONFIG.md) — the bundled `d365fo-mcp` adapter
+For an MCP-only host, see [MCP_CONFIG.md](MCP_CONFIG.md) — the bundled `d365fo-cli-mcp` adapter
 serves the same index over JSON-RPC. If your agent has a shell, prefer the CLI:
 [TOKEN_ECONOMICS.md](TOKEN_ECONOMICS.md) measures why.
 

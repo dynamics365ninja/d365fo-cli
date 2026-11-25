@@ -43,7 +43,7 @@
   <rect x="40" y="422" width="200" height="78" rx="8" fill="#ffffff" stroke="#7c3aed"/>
   <text x="52" y="446" font-size="13" font-weight="600" fill="#6d28d9">MCP hosts</text>
   <text x="52" y="464" font-size="11" fill="#475569">Claude Desktop · Continue</text>
-  <text x="52" y="480" font-size="11" fill="#475569">via d365fo-mcp adapter</text>
+  <text x="52" y="480" font-size="11" fill="#475569">via d365fo-cli-mcp adapter</text>
 
   <!-- Clients -> Core arrows -->
   <line x1="266" y1="185" x2="308" y2="185" stroke="#64748b" stroke-width="1.6" marker-end="url(#arrow)"/>

@@ -7,7 +7,7 @@ Both tools share an **identical purpose** — give GitHub Copilot access to real
 | Protocol | MCP tools (JSON-RPC over stdio / HTTP) | Shell commands |
 | Implementation | TypeScript + Node.js | C# / .NET 10 |
 | Data layer | SQLite index + C# Bridge | **Shared** — same index, schema v5 is a superset |
-| Deployment | Local or Azure App Service (shared team instance) | Local, or `d365fo-mcp --http` on Azure App Service (shared team instance) |
+| Deployment | Local or Azure App Service (shared team instance) | Local, or `d365fo-cli-mcp --http` on Azure App Service (shared team instance) |
 | Copilot integration | MCP tool calls | Shell tool |
 | Token economy | Larger JSON envelopes | Smaller output — see [TOKEN_ECONOMICS.md](TOKEN_ECONOMICS.md) |
 | CLI-only commands | — | `review diff`, `build/sync/test/bp`, `schema`, batch operations, `read`, `models` |
@@ -69,14 +69,14 @@ d365fo index status
 
 ## HTTP transport & shared deployment (Azure App Service)
 
-`d365fo-mcp` defaults to stdio (one process per developer, spawned by the MCP
+`d365fo-cli-mcp` defaults to stdio (one process per developer, spawned by the MCP
 client). For a team that wants to share one hosted instance instead — the
 scenario upstream `d365fo-mcp-server` addresses with its Azure App Service
 deployment — pass `--http` to serve the same tool surface over HTTP instead:
 
 ```sh
-d365fo-mcp --http --port 8080
-# or: MCP_HTTP_PORT=8080 d365fo-mcp --http
+d365fo-cli-mcp --http --port 8080
+# or: MCP_HTTP_PORT=8080 d365fo-cli-mcp --http
 ```
 
 This mirrors upstream's actual shipped auth/deployment model for shared
@@ -143,8 +143,8 @@ Once a server is reachable, `d365fo connect` writes the MCP client entry for
 you instead of leaving you to hand-edit JSON:
 
 ```sh
-d365fo connect https://d365fo-mcp.example.com                  # → .mcp.json (Claude Code)
-d365fo connect https://d365fo-mcp.example.com --editor vscode  # → .vscode/mcp.json
+d365fo connect https://d365fo-cli-mcp.example.com                  # → .mcp.json (Claude Code)
+d365fo connect https://d365fo-cli-mcp.example.com --editor vscode  # → .vscode/mcp.json
 d365fo connect http://localhost:3000 --name d365fo-local --api-key "$API_KEY"
 ```
 
@@ -167,7 +167,7 @@ the command warns when the file may be committed.
 
 ## The CLI's own MCP tool surface (unified)
 
-This repository also ships `d365fo-mcp`, a JSON-RPC 2.0 adapter over the same
+This repository also ships `d365fo-cli-mcp`, a JSON-RPC 2.0 adapter over the same
 index. Its tool surface was **consolidated to mirror the upstream server**:
 ~70 per-type tools collapsed into **20 discriminator-based** tools (a single
 tool dispatches on a `type` / `objectType` / `mode` / `action` / `domain` /
@@ -310,7 +310,7 @@ skipped silently. The MCP adapter exposes the same engine as `undo_last_modifica
 ### CLI-only commands (no MCP equivalent)
 
 > "No MCP equivalent" here means **upstream** `d365fo-mcp-server` has no such tool. This
-> repository's own `d365fo-mcp` adapter reaches most of them — `analyze`, `models`, `lint`,
+> repository's own `d365fo-cli-mcp` adapter reaches most of them — `analyze`, `models`, `lint`,
 > `stats` and `search(type=batch-jobs)` are all published — and which commands it does *not*
 > reach is no longer a matter of reading two tables and hoping: `CliMcpParityTests` derives the
 > mapping from the registration tree and the tool catalog and fails the build when the published

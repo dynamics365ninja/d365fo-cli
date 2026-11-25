@@ -122,6 +122,18 @@ row now links `references/<id>.md`. The section also says where the folder sits 
 repo, and that `d365fo knowledge get <id>` returns the same text when the file tool cannot open
 files outside the solution.
 
+### Changed — the MCP adapter is `d365fo-cli-mcp`
+
+The sibling project `d365fo-mcp-server` is published on npm as `d365fo-mcp` and installs a command
+of that name. This repository's adapter had the same one, so neither a PATH nor an editor config
+said which of the two it meant.
+
+- The adapter binary and its MCP `serverInfo.name` are now **`d365fo-cli-mcp`**. Change
+  `"command": "d365fo-mcp"` in editor configs that mean this adapter, and the startup command of an
+  HTTP deployment. The npm command `d365fo-mcp` is unaffected.
+- `GET /health` reports `service: "d365fo-cli-mcp"`, and `d365fo connect` warns when the server it
+  is pointed at is `d365fo-mcp-server`.
+
 ### Added — the commands agents guess now run, and an unknown sub-command names the real ones
 
 In a sample of real agent sessions, 15 of 43 failed CLI calls were commands the agent guessed

@@ -5,7 +5,7 @@
     <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
-    <AssemblyName>d365fo-mcp</AssemblyName>
+    <AssemblyName>d365fo-cli-mcp</AssemblyName>
     <RootNamespace>D365FO.Mcp</RootNamespace>
   </PropertyGroup>
 

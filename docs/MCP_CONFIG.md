@@ -1,6 +1,6 @@
 # MCP configuration
 
-Pointing an MCP client at the bundled `d365fo-mcp` adapter. It serves the same SQLite index and
+Pointing an MCP client at the bundled `d365fo-cli-mcp` adapter. It serves the same SQLite index and
 the same handlers the CLI uses — [MCP_TOOLS.md](MCP_TOOLS.md) is the generated map of which tool
 reaches which command.
 
@@ -11,11 +11,28 @@ reaches which command.
 
 ---
 
+## `d365fo-cli-mcp` or `d365fo-mcp`?
+
+Two projects serve D365FO metadata over MCP, and their tool surfaces differ:
+
+| | This repository | [`d365fo-mcp-server`](https://github.com/dynamics365ninja/d365fo-mcp-server) |
+|---|---|---|
+| Command | `d365fo-cli-mcp` | `d365fo-mcp` (npm package `d365fo-mcp`) |
+| MCP `serverInfo.name` | `d365fo-cli-mcp` | `d365fo-mcp-server` (instances add a suffix) |
+| `service` in `GET /health` | `d365fo-cli-mcp` | `d365fo-mcp-server` |
+
+`d365fo connect` warns when the URL you give it answers as `d365fo-mcp-server`.
+
+This adapter was called `d365fo-mcp` before. An editor config with `"command": "d365fo-mcp"` that
+means this adapter has to say `d365fo-cli-mcp`.
+
+---
+
 ## The two transports
 
 ```sh
-d365fo-mcp                      # stdio — one process per developer, spawned by the client
-d365fo-mcp --http --port 8080   # HTTP  — one shared instance for a team
+d365fo-cli-mcp                      # stdio — one process per developer, spawned by the client
+d365fo-cli-mcp --http --port 8080   # HTTP  — one shared instance for a team
 ```
 
 stdio is the default and needs no ports, no auth and no deployment: the client starts the process
@@ -42,7 +59,7 @@ Claude Desktop reads its own `claude_desktop_config.json`. Same shape either way
 {
   "mcpServers": {
     "d365fo": {
-      "command": "d365fo-mcp",
+      "command": "d365fo-cli-mcp",
       "env": {
         "D365FO_PACKAGES_PATH": "K:\\AosService\\PackagesLocalDirectory",
         "D365FO_INDEX_DB": "C:\\Users\\me\\AppData\\Local\\d365fo-cli\\d365fo-index.sqlite"
@@ -61,7 +78,7 @@ Claude Desktop reads its own `claude_desktop_config.json`. Same shape either way
   "servers": {
     "d365fo": {
       "type": "stdio",
-      "command": "d365fo-mcp",
+      "command": "d365fo-cli-mcp",
       "env": { "D365FO_PACKAGES_PATH": "K:\\AosService\\PackagesLocalDirectory" }
     }
   }
@@ -77,7 +94,7 @@ where it is launched from, or put them in `~/.d365fo/config.json`, which the ada
 ### Pointing at a deployed HTTP instance
 
 ```sh
-d365fo connect https://d365fo-mcp.example.com --editor vscode --api-key <key>
+d365fo connect https://d365fo-cli-mcp.example.com --editor vscode --api-key <key>
 ```
 
 `connect` probes `GET /health` first, then **merges** the entry into the client's config rather
@@ -102,7 +119,7 @@ And four the adapter alone has:
 | Variable | Values | Effect |
 |---|---|---|
 | `MCP_SERVER_MODE` | `full` (default) · `read-only` · `write-only` | Gates which tools are advertised **and** callable. The gate is re-checked at call time, so a client holding a stale tool list cannot get past it. |
-| `MCP_TOOLSETS` | `all` (default), or a comma-separated list of toolsets and tool names | Advertises only those tools, to cut the schema a host injects every turn. Same as `d365fo-mcp --toolsets`. Intersected with `MCP_SERVER_MODE`, gated at call time the same way, and an unknown name stops the server at startup. See [Toolsets](#toolsets). |
+| `MCP_TOOLSETS` | `all` (default), or a comma-separated list of toolsets and tool names | Advertises only those tools, to cut the schema a host injects every turn. Same as `d365fo-cli-mcp --toolsets`. Intersected with `MCP_SERVER_MODE`, gated at call time the same way, and an unknown name stops the server at startup. See [Toolsets](#toolsets). |
 | `API_KEY` | any string | Required value of the `X-Api-Key` header on `POST /mcp`. Unset means no auth, with a startup warning. HTTP only. |
 | `MCP_HTTP_PORT` | port number | Listen port when `--port` is not passed (default `3000`). |
 
@@ -112,7 +129,7 @@ A host puts every advertised tool's schema into every turn: about 48k characters
 A client that only looks things up can drop the rest:
 
 ```json
-{ "mcpServers": { "d365fo": { "command": "d365fo-mcp", "args": ["--toolsets", "read"] } } }
+{ "mcpServers": { "d365fo": { "command": "d365fo-cli-mcp", "args": ["--toolsets", "read"] } } }
 ```
 
 | Toolset | Tools | Schema chars |
@@ -136,7 +153,7 @@ actions write label files. For a server that must not write, use `MCP_SERVER_MOD
 
 ```sh
 # 1. Does the adapter start and see an index?
-d365fo-mcp --http --port 8080 &
+d365fo-cli-mcp --http --port 8080 &
 curl http://localhost:8080/health
 # {"status":"ok","mode":"full","indexReachable":true}
 
@@ -144,7 +161,7 @@ curl http://localhost:8080/health
 printf '%s\n%s\n' \
   '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"probe","version":"1"}}}' \
   '{"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}' \
-  | d365fo-mcp --legacy
+  | d365fo-cli-mcp --legacy
 ```
 
 `indexReachable: false` means the adapter started but cannot open the database — usually

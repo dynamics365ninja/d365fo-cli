@@ -47,7 +47,7 @@ This CLI pre-indexes your entire D365FO installation (hundreds of thousands of s
 | 🏗️ **SDLC integration** | MSBuild compilation with structured `xppcDiagnostics`, DB sync, xppbp best practices, SysTestRunner — on Windows D365FO VMs |
 | 📐 **X++ knowledge base** | 43 lazy-loaded Skills: select grammar, CoC authoring, FormRun lifecycle, BP rule canon — loaded only when relevant, for Copilot and Claude alike |
 | ⚡ **Agent-first ergonomics** | Stable `{ ok, data, warnings }` JSON envelope, `search batch` / `get batch` / `prepare` single-round aggregators, `agent-prompt` + `schema` manifests |
-| 🔌 **Daemon & MCP adapter** | Warm-cache named-pipe daemon with file-system watcher; `d365fo-mcp` speaks JSON-RPC 2.0 over the same index for MCP-only hosts, over stdio or `--http` for a shared team deployment (`API_KEY`, `MCP_SERVER_MODE`) |
+| 🔌 **Daemon & MCP adapter** | Warm-cache named-pipe daemon with file-system watcher; `d365fo-cli-mcp` speaks JSON-RPC 2.0 over the same index for MCP-only hosts, over stdio or `--http` for a shared team deployment (`API_KEY`, `MCP_SERVER_MODE`) |
 
 ### Pattern-grounded form development
 
@@ -237,13 +237,13 @@ Reference the `SKILL.md` files from `skills/anthropic/` in your session prompt o
 
 ### MCP (Claude Desktop, Continue, VS Code MCP)
 
-The bundled `d365fo-mcp` adapter speaks JSON-RPC 2.0 over the same index. Its tool surface is **consolidated** into 32 discriminator-based tools (e.g. `search`, `get_object_info`, `get_method`, `labels`, `security_info`, `extension_info`, `object_patterns`, `generate_object`, `modify_method`, `analyze`, `models`) — see [docs/MIGRATION_FROM_MCP.md](docs/MIGRATION_FROM_MCP.md):
+The bundled `d365fo-cli-mcp` adapter speaks JSON-RPC 2.0 over the same index. Its tool surface is **consolidated** into 32 discriminator-based tools (e.g. `search`, `get_object_info`, `get_method`, `labels`, `security_info`, `extension_info`, `object_patterns`, `generate_object`, `modify_method`, `analyze`, `models`) — see [docs/MIGRATION_FROM_MCP.md](docs/MIGRATION_FROM_MCP.md):
 
 ```json
 {
   "mcpServers": {
     "d365fo": {
-      "command": "d365fo-mcp",
+      "command": "d365fo-cli-mcp",
       "args": [],
       "env": { "D365FO_PACKAGES_PATH": "K:\\AosService\\PackagesLocalDirectory" }
     }
@@ -251,7 +251,7 @@ The bundled `d365fo-mcp` adapter speaks JSON-RPC 2.0 over the same index. Its to
 }
 ```
 
-Sharing one instance across a team instead of a local stdio process per developer? Run `d365fo-mcp --http` — see [docs/MIGRATION_FROM_MCP.md](docs/MIGRATION_FROM_MCP.md#http-transport--shared-deployment-azure-app-service) for the `API_KEY` / `MCP_SERVER_MODE` (`read-only` shared instance + `write-only` local companion) deployment pattern.
+Sharing one instance across a team instead of a local stdio process per developer? Run `d365fo-cli-mcp --http` — see [docs/MIGRATION_FROM_MCP.md](docs/MIGRATION_FROM_MCP.md#http-transport--shared-deployment-azure-app-service) for the `API_KEY` / `MCP_SERVER_MODE` (`read-only` shared instance + `write-only` local companion) deployment pattern.
 
 ### Verify
 
@@ -345,7 +345,7 @@ The full scenario-by-scenario decision table lives in **[docs/CAPABILITIES.md](d
 | `NO_INDEX` | Run `d365fo index build` then `d365fo index extract` |
 | `FORM_PATTERN_VIOLATION` | The generated/edited form breaks its pattern — `d365fo form-pattern spec <P>` shows the required structure |
 | Index appears stale after editing XML | Run `d365fo index refresh --model <Model>` |
-| Index file locked | Stop any running `d365fo daemon` or `d365fo-mcp` process; WAL sidecar files (`-wal`, `-shm`) are normal |
+| Index file locked | Stop any running `d365fo daemon` or `d365fo-cli-mcp` process; WAL sidecar files (`-wal`, `-shm`) are normal |
 
 More in [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md) and [docs/SETUP.md](docs/SETUP.md#troubleshooting).
 

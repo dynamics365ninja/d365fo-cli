@@ -192,7 +192,7 @@ public class McpModeGateTests : IDisposable
     {
         // Mode filtering only narrows the tool list, not server identity/capabilities.
         var options = McpServerHost.BuildOptions(Handlers(), McpServerMode.ReadOnly);
-        Assert.Equal("d365fo-mcp", options.ServerInfo!.Name);
+        Assert.Equal("d365fo-cli-mcp", options.ServerInfo!.Name);
         Assert.NotNull(options.Handlers?.ListToolsHandler);
         Assert.NotNull(options.Handlers?.CallToolHandler);
     }

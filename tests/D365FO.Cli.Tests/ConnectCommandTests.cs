@@ -13,6 +13,17 @@ public class ConnectCommandTests
 {
     private static JsonObject Parse(string json) => (JsonObject)JsonNode.Parse(json)!;
 
+    [Theory]
+    [InlineData("d365fo-mcp-server", true)] // the sibling project's server
+    [InlineData("d365fo-cli-mcp", false)]
+    [InlineData(null, false)]               // an older build of this adapter names no service
+    public void Warns_only_when_the_endpoint_is_the_sibling_server(string? service, bool warns)
+    {
+        var warning = ConnectCommand.OtherServerWarning(new ConnectCommand.HealthInfo("ok", null, null, service));
+
+        Assert.Equal(warns, warning is not null);
+    }
+
     [Fact]
     public void Creates_the_section_when_the_file_does_not_exist_yet()
     {

@@ -2,7 +2,7 @@ namespace D365FO.Mcp;
 
 /// <summary>
 /// Named groups of <see cref="ToolCatalog"/> tools, selected with <c>MCP_TOOLSETS</c> (env var or
-/// <c>settings.json</c>) or <c>d365fo-mcp --toolsets</c>, issue #249 item 7. A host injects every
+/// <c>settings.json</c>) or <c>d365fo-cli-mcp --toolsets</c>, issue #249 item 7. A host injects every
 /// advertised tool's schema into every turn (about 50k characters for the full catalog), so a
 /// client that only reads metadata pays for <c>generate_object</c> and <c>modify_object</c> on each
 /// message. <c>MCP_TOOLSETS=read</c> advertises the lookup tools only, about a fifth of that.
