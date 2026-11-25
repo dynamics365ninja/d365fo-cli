@@ -106,6 +106,19 @@ public sealed class LabelDeleteTests : IDisposable
     }
 
     [Fact]
+    public void A_delete_from_several_languages_names_the_undo_that_restores_them_all()
+    {
+        var result = LabelDeletion.Run(new LabelDeleteRequest("ConVehicle", [_en, _cs]), repo: null, "labels delete");
+
+        Assert.True(result.Ok, result.Error?.Message);
+        Assert.Contains("d365fo undo --steps 2", System.Text.Json.JsonSerializer.Serialize(result.Data));
+
+        Assert.True(UndoEngine.Undo(ModificationJournal.ForIndex(), 2, dryRun: false).AllOk);
+        AssertUntouched(_en);
+        AssertUntouched(_cs);
+    }
+
+    [Fact]
     public void A_label_the_model_still_uses_is_refused_unless_forced()
     {
         UseInCode("@ConFleet:ConVehicle");

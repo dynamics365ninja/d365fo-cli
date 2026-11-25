@@ -136,14 +136,21 @@ public static class LabelDeletion
         if (failed.Count > 0)
             return ToolResult<object>.Fail(D365FoErrorCodes.WriteFailed,
                 $"Label '{key}' was removed from {removed.Count} of {carriers.Count} file(s). Failed: {string.Join("; ", failed)}",
-                "`d365fo undo` restores the files that were written.");
+                removed.Count == 0 ? null : $"`d365fo undo --steps {removed.Count}` restores the files that were written.");
 
         if (references.Count > 0)
             warnings.Add($"Deleted although {references.Count} file(s) still reference it: {string.Join(", ", shown)}");
 
         object data = files.Count == 1
             ? new { outcome = nameof(WriteOutcome.Deleted), file = last!.Path, key, removedValue = last.OldValue }
-            : new { outcome = nameof(WriteOutcome.Deleted), key, files = removed };
+            : new
+            {
+                outcome = nameof(WriteOutcome.Deleted),
+                key,
+                files = removed,
+                // One journal entry per file, and undo reverts one unless told otherwise.
+                undo = $"d365fo undo --steps {removed.Count}",
+            };
         return ToolResult<object>.Success(data, warnings.Count > 0 ? warnings : null);
     }
 
