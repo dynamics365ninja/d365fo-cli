@@ -87,7 +87,7 @@ public static class FormControlFactory
         {
             "AlignChild", "AlignChildren", "ArrangeMethod", "FrameType", "Style",
             "ViewEditMode", "DataGroup", "DataSource", "MultiSelect", "ShowRowLabels",
-            "AlternateRowShading", "Columns", "HeightMode", "WidthMode",
+            "AlternateRowShading", "Columns", "HeightMode", "WidthMode", "ReferenceField",
         };
 
     /// <summary>True when a control of <paramref name="normalizedType"/> holds children.</summary>
@@ -179,7 +179,9 @@ public static class FormControlFactory
                 new XElement(none + "ExtensionProperties"))
             : new XElement(none + "FormControlExtension", new XAttribute(Xsi + "nil", "true")));
 
-        if (IsContainer(normalizedType)) el.Add(new XElement(none + "Controls"));
+        // A reference group carries the collection too, though it takes no controls of its own:
+        // the platform fills it from the related table.
+        if (IsContainer(normalizedType) || normalizedType == "ReferenceGroup") el.Add(new XElement(none + "Controls"));
 
         foreach (var (key, value) in props.Where(p => TrailingProperties.Contains(p.Key)).OrderBy(p => p.Key, StringComparer.Ordinal))
             el.Add(new XElement(none + key, value));

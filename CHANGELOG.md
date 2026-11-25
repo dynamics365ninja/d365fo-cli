@@ -19,6 +19,12 @@ was ported from.
 
 ## [Unreleased]
 
+### Fixed — `add-control --type ReferenceGroup` binds the control (upstream 1.24.0)
+
+`--datafield` was written as `<DataField>`, which a reference group does not have, so the control
+was saved bound to nothing. It is now `<ReferenceField>`, with the `<Controls />` collection the
+platform writes.
+
 ### Fixed — table edits that left the table unbuildable (upstream 1.22.0, 1.24.0)
 
 - `remove-field` left the field in its field groups, and the build failed on a group naming a
