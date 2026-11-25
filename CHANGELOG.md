@@ -19,6 +19,17 @@ was ported from.
 
 ## [Unreleased]
 
+### Fixed — `--install-to` writes into the folder the model has (upstream 1.21.0, 1.24.0)
+
+Label writes (CLI and MCP) and MCP `generate_object` assumed `<root>/<model>/<model>`. For a
+package named differently from its model, or a package name passed as the model, they created a
+second folder the compiler never reads and reported success.
+
+- The model is now looked up by its own folder or its `Descriptor/<Model>.xml`. A name that is
+  no model fails `INSTALL_FAILED` and writes nothing.
+- `prepare` `mode=test` reads the TestEssentials reference from the model's own descriptor,
+  also under `D365FO_CUSTOM_PACKAGES_PATH`.
+
 ### Fixed — `labels update` no longer rewrites languages it was given no text for (upstream 1.21.0)
 
 - `--lang en-us,cs --text en-us=X` wrote the (empty) positional value into `cs`. A language

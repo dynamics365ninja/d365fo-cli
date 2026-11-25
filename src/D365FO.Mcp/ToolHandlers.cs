@@ -616,11 +616,9 @@ public sealed partial class ToolHandlers
         if (string.IsNullOrWhiteSpace(resolvedFile) && !string.IsNullOrWhiteSpace(installTo))
         {
             var resolvedLang = string.IsNullOrWhiteSpace(lang) ? "en-us" : lang!;
-            resolvedFile = ResolveLabelPath(installTo!, resolvedLang, labelFile);
-            if (resolvedFile is null)
-                return ToolResult<object>.Fail("INSTALL_FAILED",
-                    $"Cannot resolve label file path for model '{installTo}': neither D365FO_CUSTOM_PACKAGES_PATH nor D365FO_PACKAGES_PATH is set.",
-                    "Set D365FO_CUSTOM_PACKAGES_PATH to your git repo PackagesLocalDirectory before using installTo.");
+            var (path, failure) = ResolveLabelPath(installTo!, resolvedLang, labelFile);
+            if (failure is not null) return failure;
+            resolvedFile = path;
         }
         if (string.IsNullOrWhiteSpace(resolvedFile))
             return ToolResult<object>.Fail(D365FoErrorCodes.BadInput,
@@ -715,8 +713,9 @@ public sealed partial class ToolHandlers
 
             foreach (var l in langs)
             {
-                var path = ResolveLabelPath(installTo!, l, labelFile);
-                if (path is not null) targets.Add(path);
+                var (path, failure) = ResolveLabelPath(installTo!, l, labelFile);
+                if (failure is not null) return failure;
+                targets.Add(path!);
             }
         }
 
@@ -1335,52 +1334,35 @@ public sealed partial class ToolHandlers
 
     // ---- write-to-disk scaffolding handlers ----
 
-    /// <summary>
-    /// Resolve the canonical AOT install path:
-    /// <c>&lt;root&gt;/&lt;model&gt;/&lt;model&gt;/&lt;axSubfolder&gt;/&lt;name&gt;.xml</c>.
-    /// Searches <c>D365FO_CUSTOM_PACKAGES_PATH</c> first (write target), then
-    /// <c>D365FO_PACKAGES_PATH</c>. Returns <c>null</c> when neither is set.
-    /// </summary>
-    private static string? ResolveAotPath(string model, string axSubfolder, string name)
+    /// <summary>The folder holding <paramref name="model"/>'s objects, or why it cannot be written to.</summary>
+    private static (string? Folder, ToolResult<object>? Failure) ResolveModelFolder(string model)
     {
-        var cfg = D365FoSettings.FromEnvironment();
-        // Prefer custom paths (git repo / write target); fall back to standard path.
-        var candidates = cfg.CustomPackagesPaths.Concat(new[] { cfg.PackagesPath });
-        foreach (var root in candidates)
-        {
-            if (string.IsNullOrEmpty(root)) continue;
-            if (Directory.Exists(Path.Combine(root, model, model)))
-                return Path.Combine(root, model, model, axSubfolder, name + ".xml");
-        }
-        // Model not found — default to first custom path, then standard for new model creation.
-        var writeRoot = cfg.CustomPackagesPaths.FirstOrDefault() ?? cfg.PackagesPath;
-        return writeRoot is null ? null : Path.Combine(writeRoot, model, model, axSubfolder, name + ".xml");
+        var roots = D365FoSettings.FromEnvironment().ModelRoots;
+        var folder = D365FO.Core.Index.IndexSync.FindWritableModelDir(roots, model);
+        if (folder is not null) return (folder, null);
+        return (null, ToolResult<object>.Fail("INSTALL_FAILED",
+            $"Could not resolve the folder of model '{model}'. Searched "
+            + (roots.Count == 0 ? "no configured packages path." : string.Join(", ", roots) + "."),
+            "installTo takes a model name (not a package name). Point D365FO_CUSTOM_PACKAGES_PATH at the "
+            + "directory that holds the model, or pass an explicit path."));
     }
 
     /// <summary>
-    /// Resolve the canonical label file path:
-    /// <c>&lt;root&gt;/&lt;model&gt;/&lt;model&gt;/AxLabelFile/LabelResources/&lt;lang&gt;/&lt;labelFile&gt;.&lt;lang&gt;.label.txt</c>.
-    /// Searches <c>D365FO_CUSTOM_PACKAGES_PATH</c> first (write target), then
-    /// <c>D365FO_PACKAGES_PATH</c>. Returns <c>null</c> when neither is set.
+    /// The label file of a model and language:
+    /// <c>&lt;model folder&gt;/AxLabelFile/LabelResources/&lt;lang&gt;/&lt;labelFile&gt;.&lt;lang&gt;.label.txt</c>.
+    /// Fails for an id no <c>@File:Id</c> token could name — a label written there could never be
+    /// referenced.
     /// </summary>
-    /// <summary>
-    /// Resolve the label file for a model and language, or null when the id is one no
-    /// <c>@File:Id</c> token could name — a label written there could never be referenced.
-    /// </summary>
-    private static string? ResolveLabelPath(string model, string lang, string? labelFile)
+    private static (string? Path, ToolResult<object>? Failure) ResolveLabelPath(string model, string lang, string? labelFile)
     {
-        var cfg = D365FoSettings.FromEnvironment();
         var lf = string.IsNullOrWhiteSpace(labelFile) ? model : labelFile!;
-        if (!D365FO.Core.Labels.LabelFileWriter.IsReferenceableLabelFileId(lf)) return null;
-        var candidates = cfg.CustomPackagesPaths.Concat(new[] { cfg.PackagesPath });
-        foreach (var root in candidates)
-        {
-            if (string.IsNullOrEmpty(root)) continue;
-            if (Directory.Exists(Path.Combine(root, model, model)))
-                return Path.Combine(root, model, model, "AxLabelFile", "LabelResources", lang, $"{lf}.{lang}.label.txt");
-        }
-        var writeRoot = cfg.CustomPackagesPaths.FirstOrDefault() ?? cfg.PackagesPath;
-        return writeRoot is null ? null : Path.Combine(writeRoot, model, model, "AxLabelFile", "LabelResources", lang, $"{lf}.{lang}.label.txt");
+        if (!D365FO.Core.Labels.LabelFileWriter.IsReferenceableLabelFileId(lf))
+            return (null, ToolResult<object>.Fail("LABEL_FILE_UNREFERENCEABLE",
+                $"'{lf}' cannot be named by an @File:Id token, so a label written there could never be referenced.",
+                "A label file id is letters, digits and underscore, starting with a letter."));
+        var (folder, failure) = ResolveModelFolder(model);
+        if (failure is not null) return (null, failure);
+        return (System.IO.Path.Combine(folder!, "AxLabelFile", "LabelResources", lang, $"{lf}.{lang}.label.txt"), null);
     }
 
     /// <summary>
@@ -1408,11 +1390,9 @@ public sealed partial class ToolHandlers
         var path = outPath;
         if (string.IsNullOrWhiteSpace(path) && !string.IsNullOrWhiteSpace(installTo))
         {
-            path = ResolveAotPath(installTo!, axSubfolder, name);
-            if (path is null)
-                return ToolResult<object>.Fail("INSTALL_FAILED",
-                    $"Cannot resolve install path for model '{installTo}': neither D365FO_CUSTOM_PACKAGES_PATH nor D365FO_PACKAGES_PATH is set.",
-                    "Set D365FO_CUSTOM_PACKAGES_PATH to your git repo PackagesLocalDirectory before using installTo.");
+            var (folder, failure) = ResolveModelFolder(installTo!);
+            if (failure is not null) return failure;
+            path = Path.Combine(folder!, axSubfolder, name + ".xml");
         }
         if (string.IsNullOrWhiteSpace(path))
             return ToolResult<object>.Fail("BAD_INPUT", "Either 'out' or 'installTo' is required.");
@@ -1462,11 +1442,9 @@ public sealed partial class ToolHandlers
         var path = outPath;
         if (string.IsNullOrWhiteSpace(path) && !string.IsNullOrWhiteSpace(installTo))
         {
-            path = ResolveAotPath(installTo!, axSubfolder, name);
-            if (path is null)
-                return ToolResult<object>.Fail("INSTALL_FAILED",
-                    $"Cannot resolve install path for model '{installTo}': neither D365FO_CUSTOM_PACKAGES_PATH nor D365FO_PACKAGES_PATH is set.",
-                    "Set D365FO_CUSTOM_PACKAGES_PATH to your git repo PackagesLocalDirectory before using installTo.");
+            var (folder, failure) = ResolveModelFolder(installTo!);
+            if (failure is not null) return failure;
+            path = Path.Combine(folder!, axSubfolder, name + ".xml");
         }
         if (string.IsNullOrWhiteSpace(path))
             return ToolResult<object>.Fail("BAD_INPUT", "Either 'out' or 'installTo' is required.");
@@ -2707,19 +2685,15 @@ public sealed partial class ToolHandlers
         if (string.IsNullOrWhiteSpace(modelName)) return null;
         try
         {
-            var packages = D365FoSettings.FromEnvironment().PackagesPath;
-            if (string.IsNullOrWhiteSpace(packages)) return null;
-            var descriptorDir = Path.Combine(packages!, modelName!, "Descriptor");
-            if (!Directory.Exists(descriptorDir)) return null;
-            foreach (var file in Directory.EnumerateFiles(descriptorDir, "*.xml"))
-            {
-                var xml = File.ReadAllText(file);
-                if (System.Text.RegularExpressions.Regex.IsMatch(
-                        xml, "<d2p1:string>TestEssentials</d2p1:string>",
-                        System.Text.RegularExpressions.RegexOptions.IgnoreCase))
-                    return true;
-            }
-            return false;
+            var (folder, _) = ResolveModelFolder(modelName!);
+            var package = folder is null ? null : Path.GetDirectoryName(folder);
+            if (package is null) return null;
+            // The descriptor is the package's, named after the model — which need not be the package.
+            var descriptor = Path.Combine(package, "Descriptor", Path.GetFileName(folder!) + ".xml");
+            if (!File.Exists(descriptor)) return null;
+            return System.Text.RegularExpressions.Regex.IsMatch(
+                File.ReadAllText(descriptor), "<d2p1:string>TestEssentials</d2p1:string>",
+                System.Text.RegularExpressions.RegexOptions.IgnoreCase);
         }
         catch
         {

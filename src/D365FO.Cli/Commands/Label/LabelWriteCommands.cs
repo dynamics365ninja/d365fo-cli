@@ -357,22 +357,14 @@ internal static class LabelTargets
         }
         else
         {
-            var cfg = D365FoSettings.FromEnvironment();
-            // Search custom paths first (write target for git repo models), then standard path.
-            var allRoots = cfg.CustomPackagesPaths.Concat(new[] { cfg.PackagesPath });
-            var root = allRoots
-                .FirstOrDefault(r => !string.IsNullOrEmpty(r) && Directory.Exists(Path.Combine(r!, installTo!)))
-                ?? cfg.CustomPackagesPaths.FirstOrDefault()
-                ?? cfg.PackagesPath;
-            if (string.IsNullOrEmpty(root))
-                return new Resolution([], ToolResult<object>.Fail("INSTALL_FAILED",
-                    $"Cannot resolve label file path for model '{installTo}': neither D365FO_CUSTOM_PACKAGES_PATH nor D365FO_PACKAGES_PATH is set.",
-                    hint: "Set D365FO_CUSTOM_PACKAGES_PATH to your git repo PackagesLocalDirectory, or use --file with an absolute path."));
+            var modelDir = Generate.GenerateInstaller.ResolveModelFolder(installTo!);
+            if (modelDir is null)
+                return new Resolution([], Generate.GenerateInstaller.ModelFolderNotFound(installTo!));
 
             var langs = (string.IsNullOrWhiteSpace(lang) ? "en-us" : lang!)
                 .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
             var lf = string.IsNullOrWhiteSpace(labelFile) ? installTo! : labelFile!;
-            var resourcesDir = Path.Combine(root!, installTo!, installTo!, "AxLabelFile", "LabelResources");
+            var resourcesDir = Path.Combine(modelDir, "AxLabelFile", "LabelResources");
             foreach (var l in langs)
             {
                 var diskLang = LabelCreateCommand.ResolveOnDiskCasing(resourcesDir, l);

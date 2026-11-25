@@ -277,12 +277,12 @@ internal static class GenerateInstaller
     {
         if (string.IsNullOrWhiteSpace(model)) return null;
         var cfg = D365FoSettings.FromEnvironment();
-        return D365FO.Core.Index.IndexSync.FindModelDir(cfg.CustomPackagesPaths, model)
+        return D365FO.Core.Index.IndexSync.FindWritableModelDir(cfg.CustomPackagesPaths, model)
             ?? BridgeGate.TryGetModelFolder(model)
-            ?? D365FO.Core.Index.IndexSync.FindModelDir([cfg.PackagesPath], model);
+            ?? D365FO.Core.Index.IndexSync.FindWritableModelDir([cfg.PackagesPath], model);
     }
 
-    private static ToolResult<object> ModelFolderNotFound(string model)
+    internal static ToolResult<object> ModelFolderNotFound(string model)
     {
         var roots = D365FoSettings.FromEnvironment().ModelRoots;
         return ToolResult<object>.Fail(
