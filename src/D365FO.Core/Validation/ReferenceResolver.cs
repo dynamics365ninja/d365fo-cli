@@ -173,7 +173,8 @@ public static class ReferenceResolver
     /// in no position to judge them — callers must treat a hit here as verified, never as a
     /// hallucination. Names listed in <see cref="ExtraKernelTypesKey"/> count as well.
     /// </summary>
-    public static bool IsKernelType(string name) => KernelTypes.Contains(name) || ExtraKernelTypes().Contains(name);
+    public static bool IsKernelType(string name)
+        => KernelTypes.Contains(name) || Knowledge.KernelEdts.Contains(name) || ExtraKernelTypes().Contains(name);
 
     /// <summary>Methods available on every table buffer via the kernel xRecord/Common base.</summary>
     private static readonly HashSet<string> TableBuiltinMethods = new(StringComparer.OrdinalIgnoreCase)
@@ -515,7 +516,8 @@ public static class ReferenceResolver
             var kinds = LookupKinds(target);
             bool targetOk = expected is null
                 ? (kinds.Count > 0 || SafeMenuItemExists(index, target))
-                : kinds.Any(t => expected.Contains(t, StringComparer.OrdinalIgnoreCase));
+                : kinds.Any(t => expected.Contains(t, StringComparer.OrdinalIgnoreCase))
+                  || (expected.Contains("edt") && Knowledge.KernelEdts.Contains(target));
             if (!targetOk)
             {
                 violations.Add(new ReferenceViolation("unknown-intrinsic-target", "error", line,

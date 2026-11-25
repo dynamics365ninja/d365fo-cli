@@ -19,6 +19,17 @@ was ported from.
 
 ## [Unreleased]
 
+### Fixed — kernel EDTs are known (upstream 1.22.0)
+
+`RecId`, `UserId`, `ValidFromDateTime`, `FieldId` and 79 others are defined by the X++ runtime
+and have no AOT file, so every lookup missed them.
+
+- `extendedTypeNum(UserId)` and `--extends UserId` were reported as unknown types, which blocked
+  `modify method`. They resolve now.
+- Fields on `FieldId`, `TableId`, `RelationType`, `MoneyMST`, `Sha1HashCode` and similar were
+  scaffolded as strings. They get the base type shipped metadata uses, also through a custom EDT
+  that extends one.
+
 ### Fixed — a menu item used twice no longer breaks the menu (upstream 1.23.0)
 
 `generate menu` and `menu-extension` named each element after its target, so one menu item under

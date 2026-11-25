@@ -553,7 +553,25 @@ public sealed partial class MetadataRepository
     /// index holds without one — an index from before schema v21 that has not been refreshed
     /// yet, or a model added by a partial extract.
     /// </remarks>
-    public string? GetEdtBaseType(string name) => FirstOnEdtChain(name, e => e.BaseType);
+    public string? GetEdtBaseType(string name) => FirstOnEdtChain(name, e => e.BaseType) ?? KernelBaseType(name);
+
+    /// <summary>
+    /// The base type from the kernel EDT <paramref name="name"/> is or extends. A kernel EDT has
+    /// no row, so the chain of indexed parents ends at its name.
+    /// </summary>
+    private string? KernelBaseType(string name)
+    {
+        var visited = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var current = name;
+        for (var depth = 0; depth <= InheritanceWalkLimit && !string.IsNullOrWhiteSpace(current); depth++)
+        {
+            if (!visited.Add(current)) break;
+            var edt = GetEdt(current);
+            if (edt is null) return Knowledge.KernelEdts.BaseType(current);
+            current = edt.Extends;
+        }
+        return null;
+    }
 
     /// <summary>
     /// The base enum behind an enum EDT, walking <c>Extends</c> when the EDT itself names none

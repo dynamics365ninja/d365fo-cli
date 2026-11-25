@@ -1784,7 +1784,7 @@ public static class XppScaffolder
 
     private static string InferConcreteTypeSuffixFromExtends(string? extends)
     {
-        var e = extends?.ToLowerInvariant();
+        var e = (Knowledge.KernelEdts.BaseType(extends) ?? extends)?.ToLowerInvariant();
         if (string.IsNullOrEmpty(e)) return "String";
         var exact = e switch
         {
