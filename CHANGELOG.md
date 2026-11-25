@@ -5,11 +5,11 @@ All notable changes to `d365fo-cli` are recorded here. The format follows
 
 ## Versioning
 
-This repository has no release tags yet, and the assembly carries no explicit version, so
-entries below are grouped by the date the work landed on `main` rather than by a version
-number that does not exist. `d365fo version` reports the assembly version. Once the first
-tag is cut, this file switches to [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
-and the dated sections become the pre-1.0 history.
+Releases follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html); the policy, the
+tag format and the release steps are in [docs/RELEASING.md](docs/RELEASING.md). `d365fo --version`
+reports the version and the commit it was built from. No release has been tagged yet: the dated
+sections below are the history from before the first one, grouped by the date the work landed
+on `main`.
 
 Upstream references of the form "upstream 1.15.0" point at the sibling
 [`d365fo-mcp-server`](https://github.com/dynamics365ninja/d365fo-mcp-server) release the work
@@ -90,6 +90,17 @@ to Python scripts that edited the AOT XML around every check.
 - `--operations-file -` reads the steps from stdin. `op` is accepted for `operation`.
 - **MCP:** `modify_object` takes the same steps in `operations`, and `dryRun`. `kind` and `name`
   are no longer required when the steps name their objects.
+### Added — Versioned releases (#284)
+
+- One version in `Directory.Build.props` (`0.2.0-dev`) for the CLI, `d365fo-mcp` and the bridge.
+  `d365fo --version`, `d365fo version` (now with `commit` and `informationalVersion`),
+  `d365fo schema`, MCP `serverInfo`, the bridge ping and SARIF output report it, in place of
+  four different hard-coded or default values.
+- `d365fo doctor` adds `bridge.version`: a warning when the bridge is a different build.
+- `D365FO_CLI_VERSION=v<version>` makes `install.ps1` / `install.sh` install that release tag.
+- A tag `v<version>` publishes a GitHub release with self-contained archives and checksums.
+  Policy and steps: `docs/RELEASING.md`.
+
 ### Added — `modify add-method` adds an instance or static method to an existing object (#256)
 
 `modify method` only changes a method that exists, and a new name failed `METHOD_NOT_FOUND`, so

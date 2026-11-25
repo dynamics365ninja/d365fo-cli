@@ -35,7 +35,7 @@ public sealed class SchemaCommand : Command<SchemaCommand.Settings>
         var payload = new
         {
             name = "d365fo",
-            version = typeof(SchemaCommand).Assembly.GetName().Version?.ToString() ?? "0.1.0-dev",
+            version = ProductVersion.Version,
             defaultOutput = "json when stdout/stderr are redirected; table in an interactive TTY",
             envelope = new
             {

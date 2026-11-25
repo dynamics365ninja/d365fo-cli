@@ -22,7 +22,7 @@ namespace D365FO.Mcp;
 public static class McpServerHost
 {
     private const string ServerName = "d365fo-mcp";
-    private const string ServerVersion = "0.2.0";
+    private static readonly string ServerVersion = D365FO.Core.ProductVersion.Informational;
 
     public static Task RunStdioAsync(string? databasePath = null, ILoggerFactory? loggerFactory = null, CancellationToken ct = default)
     {

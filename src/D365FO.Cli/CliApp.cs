@@ -44,7 +44,7 @@ public static class CliApp
         app.Configure(cfg =>
         {
             cfg.SetApplicationName("d365fo");
-            cfg.SetApplicationVersion("0.1.0-dev");
+            cfg.SetApplicationVersion(D365FO.Core.ProductVersion.Informational);
             cfg.CaseSensitivity(CaseSensitivity.None);
             cfg.PropagateExceptions();
 
