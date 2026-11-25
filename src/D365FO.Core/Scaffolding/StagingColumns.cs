@@ -4,6 +4,9 @@ namespace D365FO.Core.Scaffolding;
 
 /// <summary>How a staging column is typed: the table field it mirrors, as that table declares it.</summary>
 /// <param name="Kind">The field subtype, e.g. <c>String</c> for <c>AxTableFieldString</c>.</param>
+/// <param name="Edt">The field's extended data type, when it has one.</param>
+/// <param name="EnumType">The base enum of an enum field.</param>
+/// <param name="StringSize">The size the field states for itself.</param>
 public sealed record StagingColumnType(string Kind, string? Edt, string? EnumType, string? StringSize = null);
 
 /// <summary>
