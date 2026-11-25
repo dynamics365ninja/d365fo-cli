@@ -1961,7 +1961,7 @@ public static class ObjectModifyEngine
         return (new
         {
             control = request.Member,
-            type = request.Type,
+            type = FormControlFactory.CanonicalType(request.Type!),
             axType = FormControlFactory.AxTypeFor(request.Type!),
             parent = parentName ?? "Design",
             bound = !string.IsNullOrWhiteSpace(request.DataField),

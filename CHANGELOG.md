@@ -53,6 +53,13 @@ message.
 - The `initialize` instructions name the tools the server does not offer, so the model does not
   reach for one. An unknown toolset stops the server at startup.
 
+### Fixed — `modify add-control` writes control types the metadata model declares (#282)
+
+- `modify add-control --type Integer` (or `Int`) wrote `AxFormIntControl`, a type that does not
+  exist; it writes `AxFormIntegerControl`. `RadioButton` (`AxFormRadioButtonControl`),
+  `MultilineText` (a `String` control with `MultiLine=Yes`) and the `UtcDateTime` / `Radio`
+  spellings are corrected the same way, in generated and repaired forms too (#282).
+
 ### Added — `labels audit`: labels used but defined nowhere, missing translations, labels nobody uses (#272)
 
 Labels are where an ISV release most often ships a visible mistake: a token used in code or
