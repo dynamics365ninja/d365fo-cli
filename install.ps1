@@ -110,7 +110,9 @@ function Ensure-Git {
 function Find-Checkout {
     $candidates = @()
     if ($env:D365FO_CLI_DIR) { $candidates += $env:D365FO_CLI_DIR }
-    $candidates += 'K:\d365fo-cli'
+    if (Test-Path -LiteralPath 'K:\' -ErrorAction SilentlyContinue) {
+        $candidates += 'K:\d365fo-cli'
+    }
     $candidates += (Join-Path $env:USERPROFILE 'd365fo-cli')
 
     foreach ($dir in $candidates) {
