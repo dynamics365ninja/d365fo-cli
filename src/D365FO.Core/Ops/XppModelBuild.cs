@@ -329,6 +329,7 @@ public static class XppModelBuild
         var tail = string.Empty;
         var lastXppcRun = -1;
         var lastSucceeded = -1;
+        var promoted = new List<string>();
 
         for (var i = 0; i < targets.Count; i++)
         {
@@ -355,11 +356,24 @@ public static class XppModelBuild
                 }
             }
 
-            var args = XppcArgs(target, packagesRoot, incremental, xref, lastXrefModel: i == targets.Count - 1, extraReferenceFolders);
+            // Asked for an incremental build that would miss an error or lose an OData action:
+            // this model gets a full one, and the reply says why.
+            var fullBuildReason = incremental
+                ? IncrementalBuildGuard.FullBuildReason(target, IncrementalBuildGuard.ReadLastBuild(target))
+                : null;
+            if (fullBuildReason is not null)
+                promoted.Add($"{target.Model} was built in full instead of incrementally: {fullBuildReason}");
+
+            var args = XppcArgs(target, packagesRoot, incremental && fullBuildReason is null, xref,
+                lastXrefModel: i == targets.Count - 1, extraReferenceFolders);
             var started = DateTime.UtcNow;
             var (xExit, xOut, xErr, xElapsed) = SdlcRunner.Run(xppc.Path!, args);
             lastXppcRun = i;
-            if (xExit == 0) lastSucceeded = i;
+            if (xExit == 0)
+            {
+                lastSucceeded = i;
+                IncrementalBuildGuard.RecordBuild(target, started);
+            }
             // Only this run's log: a compiler that rejected its arguments writes none, and the
             // previous build's log would then be reported as this build's result.
             var log = xOut + "\n" + xErr + "\n" + ReadIfWrittenSince(Path.Combine(package, "BuildModelResult.log"), started);
@@ -375,6 +389,7 @@ public static class XppModelBuild
                 target.MetadataRoot,
                 target.Project,
                 labels,
+                fullBuildReason,
                 xppc = new
                 {
                     exitCode = xExit,
@@ -439,7 +454,8 @@ public static class XppModelBuild
             tail,
         };
 
-        return ToolResult<object>.Success(payload, exit == 0 ? null : ["build-failed"]);
+        if (exit != 0) promoted.Insert(0, "build-failed");
+        return ToolResult<object>.Success(payload, promoted.Count > 0 ? promoted : null);
     }
 
     private static object Project(XppcDiagnostic d) => new

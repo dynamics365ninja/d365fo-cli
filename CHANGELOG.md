@@ -19,6 +19,19 @@ was ported from.
 
 ## [Unreleased]
 
+### Fixed — `build --incremental` runs a full build when an incremental one would be wrong (upstream 1.24.0)
+
+`xppc -incremental` recompiles only what changed. A table field moved to an EDT of another base
+type built with 0 errors and the next full build failed, and a recompiled data entity lost its
+OData actions.
+
+- A model whose tables, EDTs, enums or their extensions changed since the last build, or where an
+  element declaring `SysODataActionAttribute` would be recompiled, is built in full.
+  `models[].fullBuildReason` and a warning say so.
+- "Since the last build" is the compiler metadata of the element, or the last successful build run
+  through `d365fo` (remembered beside the configuration), whichever is later. After a Visual
+  Studio build the first such build may be promoted once more than needed.
+
 ### Fixed — `test run` reports which tests failed (upstream 1.22.0)
 
 SysTestConsole exits non-zero when a test fails, and that run was answered `TESTS_FAILED` with the
