@@ -19,6 +19,13 @@ was ported from.
 
 ## [Unreleased]
 
+### Fixed — `test run` reports which tests failed (upstream 1.22.0)
+
+SysTestConsole exits non-zero when a test fails, and that run was answered `TESTS_FAILED` with the
+last lines of stderr: the result document with the failures was never read. It is now reported
+with its counts and failed tests (exit code 2). A `--results` file left by an earlier run is no
+longer read as this run's result.
+
 ### Fixed — `build` fails when LabelC compiled nothing (upstream 1.22.0)
 
 LabelC can exit 0 without compiling (given arguments it does not take, it prints its usage), and
