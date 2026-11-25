@@ -19,6 +19,18 @@ was ported from.
 
 ## [Unreleased]
 
+### Fixed — the DMF staging table is typed and keyed like its entity (upstream 1.24.0)
+
+- Every business column was a string. Each is now typed like the table column it stages, read
+  from the table's file. A field whose type cannot be read is left out and named in a
+  `STAGING_FIELDS_LEFT_OUT` warning, never guessed.
+- `StagingIdx` keyed on the first field; it now keys on the entity key, which is mandatory and
+  not editable, and the `DataEntity` relation to the entity is written.
+- `IsSelected` named `DMFIsSelected` as a base enum, which does not exist: it is the EDT over
+  `NoYes`.
+
+A generated entity and its staging table compile with `xppc`.
+
 ### Added — the rest of the inherited table data methods (upstream 1.17.0 to 1.22.0)
 
 `prepare` knew 8 of the methods every table inherits. It now knows `modifiedFieldValue` (whose
