@@ -1947,6 +1947,8 @@ public static partial class ObjectModifyEngine
         var design = FormDesignWalker.Child(root, "Design") ?? root;
         var parentName = string.IsNullOrWhiteSpace(request.Parent) ? null : request.Parent;
         var container = parentName is null ? design : FindFormControl(design, parentName);
+        // The control the addition goes under; null for the design root.
+        var parent = parentName is null ? null : container;
 
         if (container is null && isExtension)
         {
@@ -1955,9 +1957,10 @@ public static partial class ObjectModifyEngine
 
             var baseDesign = FormDesignWalker.Child(baseForm!.Root!, "Design");
             var inherited = baseDesign is null ? null : FindFormControl(baseDesign, parentName!);
-            if (inherited is not null && FormDesignWalker.Child(inherited, "Controls") is not null)
+            if (inherited is not null)
             {
                 parentName = LocalValue(inherited, "Name");
+                parent = inherited;
                 container = root;
             }
         }
@@ -1979,6 +1982,13 @@ public static partial class ObjectModifyEngine
 
         var (binding, bindingFailure) = ControlBinding(doc, request, target, repo, warnings, client);
         if (bindingFailure is not null) return (null, bindingFailure);
+
+        // A refusal discards the document, so nothing done to it above is ever written.
+        var parentType = parent is null
+            ? FormControlContainment.DesignType
+            : parent.Attribute(FormControlFactory.Xsi + "type")?.Value ?? FormControlContainment.UntypedControl;
+        if (ControlPlacement(request, parentName, parentType) is { } refusal) return (null, refusal);
+
         var control = FormControlFactory.Create(request.Type!, request.Member, binding);
 
         controls.Attribute(FormControlFactory.Xsi + "nil")?.Remove();
@@ -2007,6 +2017,28 @@ public static partial class ObjectModifyEngine
             dataSource = binding!.GetValueOrDefault("DataSource"),
             dataMethod = binding!.GetValueOrDefault("DataMethod"),
         }, null);
+    }
+
+    /// <summary>
+    /// Refuse a control its parent cannot take, before anything is written: the metadata
+    /// reader drops the children of a non-container, and the compiler rejects the form for the
+    /// other pairings.
+    /// </summary>
+    private static ToolResult<object>? ControlPlacement(ModifyRequest request, string? parentName, string parentType)
+    {
+        var childType = FormControlFactory.AxTypeFor(request.Type!);
+        if (childType.Length == 0) childType = FormControlContainment.UntypedControl;
+        if (FormControlContainment.Allows(parentType, childType)) return null;
+
+        var type = FormControlFactory.CanonicalType(request.Type!);
+        var under = parentName is null ? "the Design root" : $"'{parentName}' ({parentType})";
+        var reason = FormControlContainment.HoldsControls(parentType)
+            ? "the compiler rejects that pairing"
+            : "that control holds no child controls";
+        return ToolResult<object>.Fail(D365FoErrorCodes.ControlNotAllowed,
+            $"A {type} control ({childType}) cannot be added under {under}: {reason}. Nothing was written.",
+            $"Parent types that accept {type}: {string.Join(", ", FormControlContainment.ParentsAccepting(childType))}. "
+            + $"Pick one with --parent; `d365fo get form {request.ObjectName}` lists the form's controls.");
     }
 
     private static XElement? FindFormControl(XElement design, string name)

@@ -112,6 +112,10 @@ d365fo modify add-control FmVehicleList Grid_LineTitle --type String --parent Gr
 - A duplicate datasource name, an unknown table, parent datasource or method, and a
   control type with no `DataMethod` are refused. A new method is found only after
   `d365fo index refresh`.
+- A control its parent cannot take fails `CONTROL_NOT_ALLOWED` before the write,
+  and the hint names the parent types that can: a Grid takes no `RadioButton`,
+  `ListBox` or `StaticText` (show an enum there as a `ComboBox`), a Tab takes only
+  `TabPage`, and a field control takes no children. Only the direct parent counts.
 - Several steps in one write: `modify batch form <Form> --operations-file steps.json`
   (`add-data-source`, then `add-control`).
 

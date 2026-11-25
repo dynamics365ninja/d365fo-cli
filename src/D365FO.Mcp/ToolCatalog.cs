@@ -764,7 +764,8 @@ public static class ToolCatalog
             "• add-control / remove-control — control `member` of `type` (Grid, Group, TabPage, String, …) on " +
             "form `name`, optionally inside `parent` and bound to `dataSource` plus `dataField` or " +
             "`dataMethod` (a display/edit method, `Class.method` for one an extension class adds); " +
-            "remove takes everything nested under it too\n" +
+            "remove takes everything nested under it too. A `type` the parent cannot take fails " +
+            "CONTROL_NOT_ALLOWED\n" +
             "• add-data-source — datasource `member` over `table` on form `name`, joined with `joinSource` " +
             "and `linkType` (InnerJoin, OuterJoin, Delayed, …)\n" +
             "• add-query-range / remove-query-range — a range on field `member` of query `name`, in " +
