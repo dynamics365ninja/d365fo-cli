@@ -90,6 +90,7 @@ public static class D365FoErrorCodes
     // Structured object modification beyond method bodies
     public const string FieldNotFound = "FIELD_NOT_FOUND";
     public const string ControlNotFound = "CONTROL_NOT_FOUND";
+    public const string DataSourceNotFound = "DATA_SOURCE_NOT_FOUND";
     public const string PropertyNotFound = "PROPERTY_NOT_FOUND";
 
     /// <summary>

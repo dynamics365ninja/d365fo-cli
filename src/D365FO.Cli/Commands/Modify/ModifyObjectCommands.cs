@@ -236,12 +236,16 @@ public sealed class ModifyAddControlCommand : Command<ModifyAddControlCommand.Se
         public string? Parent { get; init; }
 
         [CommandOption("--datasource <DS>")]
-        [System.ComponentModel.Description("Form datasource to bind to (with --datafield).")]
+        [System.ComponentModel.Description("Form datasource to bind to (with --datafield or --data-method; alone on a container such as a Grid). Must exist on the form.")]
         public string? DataSource { get; init; }
 
         [CommandOption("--datafield <FIELD>")]
         [System.ComponentModel.Description("Table field to bind to. Makes the control data-bound.")]
         public string? DataField { get; init; }
+
+        [CommandOption("--data-method <METHOD>")]
+        [System.ComponentModel.Description("Display or edit method to bind to, instead of --datafield: a method of the datasource or its table, or <Class>.<method> for one an extension class adds. Needs --datasource.")]
+        public string? DataMethod { get; init; }
     }
 
     public override int Execute(CommandContext ctx, Settings settings) =>
@@ -255,6 +259,50 @@ public sealed class ModifyAddControlCommand : Command<ModifyAddControlCommand.Se
             Parent = settings.Parent,
             DataSource = settings.DataSource,
             DataField = settings.DataField,
+            DataMethod = settings.DataMethod,
+            Model = settings.Model,
+            ExtensionSuffix = settings.ResolvedExtensionSuffix,
+            ExtensionModel = settings.ExtensionModel,
+            RequireExtension = settings.RequireExtension,
+        });
+}
+
+/// <summary><c>d365fo modify add-data-source</c> — add a datasource to a live form (or its extension).</summary>
+public sealed class ModifyAddDataSourceCommand : Command<ModifyAddDataSourceCommand.Settings>
+{
+    public sealed class Settings : ModifyObjectSettings
+    {
+        [CommandArgument(0, "<FORM>")]
+        [System.ComponentModel.Description("Form to add the datasource to.")]
+        public string Form { get; init; } = "";
+
+        [CommandArgument(1, "<DATASOURCE>")]
+        [System.ComponentModel.Description("New datasource name. Must be unused on the form and its extensions.")]
+        public string DataSource { get; init; } = "";
+
+        [CommandOption("--table <TABLE>")]
+        [System.ComponentModel.Description("Table, view, data entity or map the datasource reads. Required.")]
+        public string? Table { get; init; }
+
+        [CommandOption("--join-source <DS>")]
+        [System.ComponentModel.Description("Parent datasource to join to. The join uses the relation between the two tables.")]
+        public string? JoinSource { get; init; }
+
+        [CommandOption("--link-type <TYPE>")]
+        [System.ComponentModel.Description("With --join-source: InnerJoin, OuterJoin, ExistJoin, NotExistJoin, Active, Delayed or Passive. Omitted, the platform default (Delayed) applies.")]
+        public string? LinkType { get; init; }
+    }
+
+    public override int Execute(CommandContext ctx, Settings settings) =>
+        ModifyRunner.Run(settings, new ObjectModifyEngine.ModifyRequest
+        {
+            Operation = ObjectModifyEngine.Operation.AddDataSource,
+            Kind = "form",
+            ObjectName = settings.Form,
+            Member = settings.DataSource,
+            Table = settings.Table,
+            JoinSource = settings.JoinSource,
+            LinkType = settings.LinkType,
             Model = settings.Model,
             ExtensionSuffix = settings.ResolvedExtensionSuffix,
             ExtensionModel = settings.ExtensionModel,

@@ -89,7 +89,9 @@ public sealed class ObjectModifyEngineTests : IDisposable
         "<Fields><AxTableField i:type=\"AxTableFieldString\"><Name>VIN</Name></AxTableField></Fields></AxTable>";
 
     private const string FormXml =
-        "<AxForm><Name>FmVehicleList</Name><Design><Controls>" +
+        "<AxForm><Name>FmVehicleList</Name><DataSources>" +
+        "<AxFormDataSource><Name>FmVehicle</Name><Table>FmVehicle</Table></AxFormDataSource>" +
+        "</DataSources><Design><Controls>" +
         "<AxFormControl i:type=\"AxFormGridControl\" xmlns:i=\"http://www.w3.org/2001/XMLSchema-instance\">" +
         "<Name>Grid</Name><Type>Grid</Type><Controls /></AxFormControl>" +
         "</Controls></Design></AxForm>";
@@ -1530,7 +1532,7 @@ public sealed class ObjectModifyEngineTests : IDisposable
         }
     }
 
-    private sealed class FakeBridge : IDisposable
+    internal sealed class FakeBridge : IDisposable
     {
         public BridgeClient Client { get; }
 
