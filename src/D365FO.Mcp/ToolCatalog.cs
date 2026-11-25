@@ -762,8 +762,11 @@ public static class ToolCatalog
             "• add-enum-value / remove-enum-value — a value `member` on base enum `name` (positional; never " +
             "writes an ordinal, which is what breaks when another model inserts a value ahead of it)\n" +
             "• add-control / remove-control — control `member` of `type` (Grid, Group, TabPage, String, …) on " +
-            "form `name`, optionally inside `parent` and bound to `dataSource`/`dataField`; remove takes " +
-            "everything nested under it too\n" +
+            "form `name`, optionally inside `parent` and bound to `dataSource` plus `dataField` or " +
+            "`dataMethod` (a display/edit method, `Class.method` for one an extension class adds); " +
+            "remove takes everything nested under it too\n" +
+            "• add-data-source — datasource `member` over `table` on form `name`, joined with `joinSource` " +
+            "and `linkType` (InnerJoin, OuterJoin, Delayed, …)\n" +
             "• add-query-range / remove-query-range — a range on field `member` of query `name`, in " +
             "`dataSourceName` (optional when the query has one datasource); `rangeValue` is the range " +
             "EXPRESSION, and empty is legal — that is a range whose value is set at run time\n" +
@@ -788,6 +791,8 @@ public static class ToolCatalog
                    ("label", "string", false), ("mandatory", "boolean", false), ("noEdit", "boolean", false),
                    ("noEditOnCreate", "boolean", false), ("property", "string", false), ("parent", "string", false),
                    ("dataSource", "string", false), ("dataField", "string", false), ("model", "string", false),
+                   ("dataMethod", "string", false), ("table", "string", false), ("joinSource", "string", false),
+                   ("linkType", "string", false),
                    ("fields", "array", false), ("relatedTable", "string", false), ("relatedField", "string", false),
                    ("deleteAction", "string", false), ("allowDuplicates", "boolean", false),
                    ("alternateKey", "boolean", false), ("newName", "string", false),
@@ -1144,6 +1149,10 @@ public static class ToolCatalog
             Parent = StrOrNull(p, "parent"),
             DataSource = StrOrNull(p, "dataSource"),
             DataField = StrOrNull(p, "dataField"),
+            DataMethod = StrOrNull(p, "dataMethod"),
+            Table = StrOrNull(p, "table"),
+            JoinSource = StrOrNull(p, "joinSource"),
+            LinkType = StrOrNull(p, "linkType"),
             Model = model,
             Fields = StrArray(p, "fields"),
             RelatedTable = StrOrNull(p, "relatedTable"),

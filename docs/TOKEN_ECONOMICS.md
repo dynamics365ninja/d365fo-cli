@@ -116,7 +116,7 @@ shrinks with it:
 
 | `MCP_TOOLSETS` | Tools | Schema chars | ≈ tokens |
 |---|---:|---:|---:|
-| `all` (default) | 32 | 48 214 | ~13 400 |
+| `all` (default) | 32 | 48 569 | ~13 500 |
 | `read,knowledge,check` | 19 | 22 131 | ~6 200 |
 | `read,knowledge` | 15 | 16 846 | ~4 700 |
 | `read` | 10 | 11 159 | ~3 100 |

@@ -119,7 +119,7 @@ A client that only looks things up can drop the rest:
 |---|---|---:|
 | `read` | `search`, `batch_get_info`, `get_object_info`, `get_method`, `find_references`, `find_tables_by_field`, `extension_info`, `security_info`, `labels`, `models` | 11 159 |
 | `knowledge` | `get_knowledge`, `object_patterns`, `explain_build_error`, `suggest_edt`, `validate_object_naming` | 5 688 |
-| `author` | `prepare`, `generate_object`, `modify_method`, `modify_object`, `delete_object`, `undo_last_modification`, `journal_list` | 19 450 |
+| `author` | `prepare`, `generate_object`, `modify_method`, `modify_object`, `delete_object`, `undo_last_modification`, `journal_list` | 19 805 |
 | `check` | `validate`, `lint`, `analyze`, `verify_project` | 5 286 |
 | `index` | `stats`, `index_status`, `index_sync`, `index_history`, `get_workspace_info` | 3 938 |
 | `sdlc` | `sdlc` | 2 698 |

@@ -19,6 +19,22 @@ was ported from.
 
 ## [Unreleased]
 
+### Added — Form datasources and display-method controls (#283)
+
+An existing form could get new controls but no new datasource, and no control could show a
+display method, so a child-datasource grid could not be built from the CLI.
+
+- **`d365fo modify add-data-source <FORM> <NAME> --table <TABLE>`**, with `--join-source` and
+  `--link-type` (MCP: `modify_object` `action=add-data-source`, also a `modify batch` step).
+  Works on forms and form extensions and only appends. A duplicate name, an unknown table or an
+  unknown parent datasource is refused.
+- **`modify add-control --data-method <METHOD>`** (MCP: `dataMethod`) binds a control to a
+  `display`/`edit` method of a datasource, including `<Class>.<method>` for one an extension
+  class adds.
+- `modify add-control --datasource` is now checked: a datasource the form does not have fails
+  `DATA_SOURCE_NOT_FOUND` instead of being written. Given without a field, it is written onto a
+  container such as a Grid, where it used to be dropped silently.
+
 ### Added — Structural where-used from the index, no build needed (#249)
 
 "Where is this table bound" had two answers. The X++ text scan sees code only. The compiler's
@@ -40,7 +56,7 @@ field EDTs, menu item targets, privilege entry points, extensions, CoC and event
 
 ### Added — MCP toolsets: advertise only the tools a client needs (#249)
 
-A host injects every advertised tool's schema into every turn: 48 214 characters for the 32 tools.
+A host injects every advertised tool's schema into every turn: 48 569 characters for the 32 tools.
 A client that only reads metadata paid for `generate_object` (9.5k) and `modify_object` on each
 message.
 

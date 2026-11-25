@@ -39,7 +39,7 @@ namespace D365FO.Core.Bridge;
 /// same helper as everything here.</description></item>
 /// </list>
 /// </summary>
-public static class ObjectModifyEngine
+public static partial class ObjectModifyEngine
 {
     /// <summary>What a caller wants changed.</summary>
     public enum Operation
@@ -106,6 +106,9 @@ public static class ObjectModifyEngine
 
         /// <summary>Set a property (AllowEdit, Mandatory, HelpText, …) on one field of a table.</summary>
         SetFieldProperty,
+
+        /// <summary>Add a datasource to a form.</summary>
+        AddDataSource,
     }
 
     /// <summary>
@@ -174,6 +177,21 @@ public static class ObjectModifyEngine
         public string? DataSource { get; init; }
 
         public string? DataField { get; init; }
+
+        /// <summary>
+        /// <see cref="Operation.AddControl"/>: display or edit method of <see cref="DataSource"/>
+        /// to bind to, instead of <see cref="DataField"/>.
+        /// </summary>
+        public string? DataMethod { get; init; }
+
+        /// <summary><see cref="Operation.AddDataSource"/>: table, view, data entity or map the datasource reads.</summary>
+        public string? Table { get; init; }
+
+        /// <summary><see cref="Operation.AddDataSource"/>: parent datasource this one is joined to.</summary>
+        public string? JoinSource { get; init; }
+
+        /// <summary><see cref="Operation.AddDataSource"/>: how it is joined to <see cref="JoinSource"/> (InnerJoin, OuterJoin, Delayed, …).</summary>
+        public string? LinkType { get; init; }
 
         /// <summary>Owning model. Resolved from the index when omitted.</summary>
         public string? Model { get; init; }
@@ -688,6 +706,23 @@ public static class ObjectModifyEngine
             Operation.AddControl when string.IsNullOrWhiteSpace(request.Type) =>
                 ToolResult<object>.Fail(D365FoErrorCodes.BadInput,
                     "--type is required for `modify add-control` (Grid, Group, TabPage, String, …)."),
+            Operation.AddControl when !string.IsNullOrWhiteSpace(request.DataMethod)
+                                      && !string.IsNullOrWhiteSpace(request.DataField) =>
+                ToolResult<object>.Fail(D365FoErrorCodes.BadInput,
+                    "A control binds to a field or to a method, not both: pass --datafield or --data-method."),
+            Operation.AddControl when !string.IsNullOrWhiteSpace(request.DataMethod)
+                                      && string.IsNullOrWhiteSpace(request.DataSource) =>
+                ToolResult<object>.Fail(D365FoErrorCodes.BadInput,
+                    "--datasource is required with --data-method: it names the datasource whose method the control shows."),
+
+            Operation.AddDataSource when kind != "form" =>
+                ToolResult<object>.Fail(D365FoErrorCodes.BadInput, $"`modify add-data-source` applies to forms, not {kind}."),
+            Operation.AddDataSource when string.IsNullOrWhiteSpace(request.Table) =>
+                ToolResult<object>.Fail(D365FoErrorCodes.BadInput, "--table is required for `modify add-data-source`."),
+            Operation.AddDataSource when !string.IsNullOrWhiteSpace(request.LinkType)
+                                         && string.IsNullOrWhiteSpace(request.JoinSource) =>
+                ToolResult<object>.Fail(D365FoErrorCodes.BadInput,
+                    "--link-type describes a join, so it needs --join-source."),
 
             // ---- table-shaped operations ----
             _ when TableOnly.Contains(request.Operation) && kind != "table" =>
@@ -834,6 +869,7 @@ public static class ObjectModifyEngine
         Operation.AddEntryPoint => "add-entry-point",
         Operation.RemoveEntryPoint => "remove-entry-point",
         Operation.SetFieldProperty => "field-property",
+        Operation.AddDataSource => "add-data-source",
         _ => op.ToString(),
     };
 
@@ -1039,7 +1075,8 @@ public static class ObjectModifyEngine
             Operation.SetProperty => SetProperty(doc, request, target),
             Operation.AddField => AddField(doc, request, repo, warnings),
             Operation.AddEnumValue => AddEnumValue(doc, request),
-            Operation.AddControl => AddControl(doc, request, target.IsExtension, client),
+            Operation.AddControl => AddControl(doc, request, target, repo, warnings, client),
+            Operation.AddDataSource => AddDataSource(doc, request, target, repo, warnings, client),
             Operation.AddIndex => AddIndex(doc, request, target, repo),
             Operation.AddRelation => AddRelation(doc, request),
             Operation.AddFieldGroup => AddFieldGroup(doc, request),
@@ -1902,8 +1939,10 @@ public static class ObjectModifyEngine
     }
 
     private static (object?, ToolResult<object>?) AddControl(
-        XDocument doc, ModifyRequest request, bool isExtension, BridgeClient client)
+        XDocument doc, ModifyRequest request, WriteTarget target, MetadataRepository? repo,
+        List<string> warnings, BridgeClient client)
     {
+        var isExtension = target.IsExtension;
         var root = doc.Root!;
         var design = FormDesignWalker.Child(root, "Design") ?? root;
         var parentName = string.IsNullOrWhiteSpace(request.Parent) ? null : request.Parent;
@@ -1938,9 +1977,9 @@ public static class ObjectModifyEngine
                 $"Control '{request.Member}' already exists under {request.Parent ?? "Design"}."));
         }
 
-        var control = string.IsNullOrWhiteSpace(request.DataField)
-            ? FormControlFactory.Create(request.Type!, request.Member)
-            : FormControlFactory.CreateBoundField(request.Type!, request.Member, request.DataSource ?? "", request.DataField!);
+        var (binding, bindingFailure) = ControlBinding(doc, request, target, repo, warnings, client);
+        if (bindingFailure is not null) return (null, bindingFailure);
+        var control = FormControlFactory.Create(request.Type!, request.Member, binding);
 
         controls.Attribute(FormControlFactory.Xsi + "nil")?.Remove();
         if (isExtension && container == root)
@@ -1964,7 +2003,9 @@ public static class ObjectModifyEngine
             type = FormControlFactory.CanonicalType(request.Type!),
             axType = FormControlFactory.AxTypeFor(request.Type!),
             parent = parentName ?? "Design",
-            bound = !string.IsNullOrWhiteSpace(request.DataField),
+            bound = !string.IsNullOrWhiteSpace(request.DataField) || !string.IsNullOrWhiteSpace(request.DataMethod),
+            dataSource = binding!.GetValueOrDefault("DataSource"),
+            dataMethod = binding!.GetValueOrDefault("DataMethod"),
         }, null);
     }
 
@@ -2023,6 +2064,7 @@ public static class ObjectModifyEngine
         Operation.AddEnumValue => $"modify add-enum-value {request.ObjectName} {request.Member}",
         Operation.AddControl => $"modify add-control {request.ObjectName} {request.Member}",
         Operation.SetFieldProperty => $"modify field-property {request.ObjectName} {request.Member} {request.Property}",
+        Operation.AddDataSource => $"modify add-data-source {request.ObjectName} {request.Member}",
         _ => $"modify {kind} {request.ObjectName}",
     };
 
