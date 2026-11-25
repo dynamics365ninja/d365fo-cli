@@ -487,6 +487,12 @@ public sealed class LabelUpdateCommand : Command<LabelUpdateCommand.Settings>
                 + $"(e.g. {string.Join(" ", langs.Select(l => $"--text {l}=<VALUE>"))}), or correct one language at a time. "
                 + "Writing the same string into every language would silently replace the other translations."));
 
+        if (multiLingual && !string.IsNullOrWhiteSpace(settings.Value))
+            return RenderHelpers.Render(kind, ToolResult<object>.Fail(D365FoErrorCodes.BadInput,
+                $"A positional <VALUE> cannot be given for {langs.Length} languages.",
+                "Give the text of each language you are correcting as --text <LANG>=<VALUE>; "
+                + "a language without one keeps the text it has."));
+
         if (byLang.Count == 0 && string.IsNullOrWhiteSpace(settings.Value))
             return RenderHelpers.Render(kind, ToolResult<object>.Fail(D365FoErrorCodes.BadInput,
                 "The corrected text is required.", "Pass it as <VALUE>, or as --text <LANG>=<VALUE>."));
@@ -506,18 +512,31 @@ public sealed class LabelUpdateCommand : Command<LabelUpdateCommand.Settings>
 
         var results = new List<object>();
         var missing = new List<string>();
+        var kept = new List<string>();
         try
         {
             for (var i = 0; i < targets.Files.Count; i++)
             {
                 var file = targets.Files[i];
                 // Files come back in --lang order, so the language a file carries is known
-                // without re-parsing its name.
-                var lang = string.IsNullOrWhiteSpace(settings.File) && i < langs.Length ? langs[i] : null;
-                var value = lang is not null && byLang.TryGetValue(lang, out var perLang)
-                    ? perLang
-                    : byLang.Count == 1 && langs.Length == 1 ? byLang.Values.First()
-                    : settings.Value;
+                // without re-parsing its name; an explicit --file says it in its name.
+                var lang = string.IsNullOrWhiteSpace(settings.File)
+                    ? (i < langs.Length ? langs[i] : null)
+                    : LabelFileWriter.LanguageOf(file);
+
+                string value;
+                if (byLang.Count == 0)
+                    value = settings.Value;
+                else if (lang is not null && byLang.TryGetValue(lang, out var perLang))
+                    value = perLang;
+                else if (lang is null && byLang.Count == 1)
+                    value = byLang.Values.First();
+                else
+                {
+                    // No text was given for this language: it keeps the one it has.
+                    kept.Add(file);
+                    continue;
+                }
 
                 var res = LabelFileWriter.Update(file, settings.Key, value);
                 if (res.Outcome == WriteOutcome.KeyMissing)
@@ -541,6 +560,11 @@ public sealed class LabelUpdateCommand : Command<LabelUpdateCommand.Settings>
             return RenderHelpers.Render(kind, ToolResult<object>.Fail(D365FoErrorCodes.WriteFailed, ex.Message));
         }
 
+        if (results.Count == 0 && missing.Count == 0)
+            return RenderHelpers.Render(kind, ToolResult<object>.Fail(D365FoErrorCodes.BadInput,
+                "No --text names the language of a target file, so nothing was corrected.",
+                hint: $"Checked: {string.Join(", ", kept)}. Pass --text <LANG>=<VALUE> with that file's language."));
+
         // Nothing updated anywhere is a failure, not an empty success: the caller believes a
         // correction landed.
         if (results.Count == 0)
@@ -549,13 +573,17 @@ public sealed class LabelUpdateCommand : Command<LabelUpdateCommand.Settings>
                 hint: $"Checked: {string.Join(", ", targets.Files)}. Use `labels create` to add it, or "
                     + "`labels search` to find the key it was actually written under."));
 
-        return RenderHelpers.Render(kind, ToolResult<object>.Success(new
+        var warnings = new List<string>();
+        if (missing.Count > 0)
+            warnings.Add($"{missing.Count} target file(s) do not carry this key and were left alone: {string.Join(", ", missing)}");
+        if (kept.Count > 0)
+            warnings.Add($"{kept.Count} target file(s) had no --text for their language and keep their current text: {string.Join(", ", kept)}");
+
+        return RenderHelpers.Render(kind, ToolResult<object>.Success((object)new
         {
             key = settings.Key,
             updated = results.Count,
             files = results,
-        }, missing.Count > 0
-            ? [$"{missing.Count} target file(s) do not carry this key and were left alone: {string.Join(", ", missing)}"]
-            : null));
+        }, warnings.Count > 0 ? warnings : null));
     }
 }

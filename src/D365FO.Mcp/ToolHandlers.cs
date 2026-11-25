@@ -704,8 +704,16 @@ public sealed partial class ToolHandlers
         }
         else if (!string.IsNullOrWhiteSpace(installTo))
         {
-            foreach (var l in (string.IsNullOrWhiteSpace(lang) ? "en-us" : lang!)
-                     .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+            var langs = (string.IsNullOrWhiteSpace(lang) ? "en-us" : lang!)
+                .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+            // One value cannot be the corrected text of several translations: writing it into each
+            // would replace the others and report success.
+            if (langs.Length > 1)
+                return ToolResult<object>.Fail(D365FoErrorCodes.BadInput,
+                    $"{langs.Length} languages were targeted but update takes one text.",
+                    "Call update once per language, each with its own lang and value.");
+
+            foreach (var l in langs)
             {
                 var path = ResolveLabelPath(installTo!, l, labelFile);
                 if (path is not null) targets.Add(path);

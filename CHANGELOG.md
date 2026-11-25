@@ -19,6 +19,14 @@ was ported from.
 
 ## [Unreleased]
 
+### Fixed — `labels update` no longer rewrites languages it was given no text for (upstream 1.21.0)
+
+- `--lang en-us,cs --text en-us=X` wrote the (empty) positional value into `cs`. A language
+  without a `--text` now keeps its text, and the reply lists it in a warning.
+- A positional `<VALUE>` together with several languages is refused.
+- `--file` takes the `--text` of the language in the file name; with none, nothing is written.
+- MCP `labels` `action=update` refuses several languages in one call: it takes one text.
+
 ### Fixed — `add-control` refuses a control its parent cannot take (#290)
 
 `modify add-control FmForm Grid_Choice --type RadioButton --parent Grid` reported success, and

@@ -183,6 +183,20 @@ public static class LabelFileWriter
         return dot > 0 ? name[..dot] : name;
     }
 
+    /// <summary>
+    /// The language a <c>&lt;Id&gt;.&lt;lang&gt;.label.txt</c> path names, or null when the file
+    /// name does not follow that shape.
+    /// </summary>
+    public static string? LanguageOf(string path)
+    {
+        const string suffix = ".label.txt";
+        var name = Path.GetFileName(path ?? "");
+        if (!name.EndsWith(suffix, StringComparison.OrdinalIgnoreCase)) return null;
+        var stem = name[..^suffix.Length];
+        var dot = stem.LastIndexOf('.');
+        return dot > 0 && dot < stem.Length - 1 ? stem[(dot + 1)..] : null;
+    }
+
     public static bool IsExtensionLabelFile(string labelFileIdOrPath)
     {
         if (string.IsNullOrWhiteSpace(labelFileIdOrPath)) return false;
