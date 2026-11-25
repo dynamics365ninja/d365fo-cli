@@ -72,6 +72,11 @@ can tell they are unused. xppbp reports labels in code as unknown unless it runs
 - **Where the answers come from:** the model's XML and label files are read from disk (every
   property, every language). Other models' labels come from the index, one query per label file:
   1.5 s for a model on a full installation, against 1 min 40 s when it resolved token by token.
+### Fixed — `index optimize` no longer fails on every database (#285)
+
+- `index optimize` failed with "The CommandType 'StoredProcedure' is not supported", and once
+  past that would have reported no space reclaimed (#285).
+
 ### Added — `modify batch` over many objects in one call, and `--dry-run` (#268)
 
 A clean-up such as setting `OperationalDomain` on every new table was one process per object: about
