@@ -89,7 +89,9 @@ public sealed class ObjectModifyEngineTests : IDisposable
         "<Fields><AxTableField i:type=\"AxTableFieldString\"><Name>VIN</Name></AxTableField></Fields></AxTable>";
 
     private const string FormXml =
-        "<AxForm><Name>FmVehicleList</Name><Design><Controls>" +
+        "<AxForm><Name>FmVehicleList</Name><DataSources>" +
+        "<AxFormDataSource><Name>FmVehicle</Name><Table>FmVehicle</Table></AxFormDataSource>" +
+        "</DataSources><Design><Controls>" +
         "<AxFormControl i:type=\"AxFormGridControl\" xmlns:i=\"http://www.w3.org/2001/XMLSchema-instance\">" +
         "<Name>Grid</Name><Type>Grid</Type><Controls /></AxFormControl>" +
         "</Controls></Design></AxForm>";
@@ -1064,6 +1066,33 @@ public sealed class ObjectModifyEngineTests : IDisposable
         Assert.Equal("Make", control.Elements().First(e => e.Name.LocalName == "DataField").Value);
     }
 
+    [Theory]
+    [InlineData("Integer")]
+    [InlineData("Int")]
+    public void Add_control_writes_an_integer_control_the_metadata_model_declares(string requested)
+    {
+        var capture = new BridgeCapture(FormXml);
+        using var harness = FakeBridge.Create(capture.Respond);
+
+        var result = ObjectModifyEngine.ModifyCore(new ObjectModifyEngine.ModifyRequest
+        {
+            Operation = ObjectModifyEngine.Operation.AddControl,
+            Kind = "form",
+            ObjectName = "FmVehicleList",
+            Member = "Grid_Seats",
+            Type = requested,
+            Parent = "Grid",
+            Model = "FleetCustom",
+        }, _repo, harness.Client, _journalDb);
+
+        Assert.True(result.Ok, result.Error?.Message);
+        XNamespace xsi = "http://www.w3.org/2001/XMLSchema-instance";
+        var control = XDocument.Parse((string)capture.WriteArgs!["xml"]!).Descendants()
+            .Single(e => e.Name.LocalName == "AxFormControl" && e.Elements().Any(c => c.Name.LocalName == "Name" && c.Value == "Grid_Seats"));
+        Assert.Equal("AxFormIntegerControl", (string?)control.Attribute(xsi + "type"));
+        Assert.Equal("Integer", control.Elements().Single(e => e.Name.LocalName == "Type").Value);
+    }
+
     [Fact]
     public void Add_control_reports_an_unknown_parent_instead_of_writing_at_the_root()
     {
@@ -1503,7 +1532,7 @@ public sealed class ObjectModifyEngineTests : IDisposable
         }
     }
 
-    private sealed class FakeBridge : IDisposable
+    internal sealed class FakeBridge : IDisposable
     {
         public BridgeClient Client { get; }
 

@@ -153,8 +153,7 @@ public sealed class LintCommand : Command<LintCommand.Settings>
 
     private static object BuildSarif(Dictionary<string, IReadOnlyList<LintHit>> hitsByCat)
     {
-        var assembly = typeof(LintCommand).Assembly;
-        var version = assembly.GetName().Version?.ToString() ?? "0.0.0";
+        var version = D365FO.Core.ProductVersion.Version;
 
         var rules = hitsByCat.Keys
             .Where(RuleMeta.ContainsKey)

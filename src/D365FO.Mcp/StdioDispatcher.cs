@@ -30,7 +30,7 @@ public sealed class StdioDispatcher
 {
     private const string ProtocolVersion = "2024-11-05";
     private const string ServerName = D365FO.Core.McpIdentity.AdapterName;
-    private const string ServerVersion = "0.1.0-dev";
+    private static readonly string ServerVersion = D365FO.Core.ProductVersion.Informational;
 
     private readonly ToolHandlers _handlers;
     private readonly ToolFilter _filter;

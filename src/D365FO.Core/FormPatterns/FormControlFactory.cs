@@ -3,6 +3,7 @@
 // </copyright>
 
 using System.Xml.Linq;
+using D365FO.Core.Metadata;
 
 namespace D365FO.Core.FormPatterns;
 
@@ -34,19 +35,33 @@ public static class FormControlFactory
     internal static readonly XNamespace Xsi = "http://www.w3.org/2001/XMLSchema-instance";
 
     /// <summary>
+    /// The metadata model has no multi-line control type — a multi-line field is a
+    /// String control with <c>MultiLine=Yes</c>.
+    /// </summary>
+    private const string MultilineText = "MultilineText";
+
+    /// <summary>
+    /// Spellings callers use that are not <c>FormControlType</c> values. Both the
+    /// <c>i:type</c> and the <c>&lt;Type&gt;</c> element take the real name: the reader
+    /// fails the whole form on an enum value it does not know (issue #282).
+    /// </summary>
+    private static readonly IReadOnlyDictionary<string, string> TypeAliases =
+        new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["Int"] = "Integer",
+            ["UtcDateTime"] = "DateTime",
+            ["Radio"] = "RadioButton",
+            [MultilineText] = "String",
+        };
+
+    /// <summary>
     /// Normalized type → concrete <c>i:type</c>, for the cases where it is not simply
     /// <c>AxForm{Type}Control</c>. Anything absent falls through to that default, which
-    /// is correct for Grid/Group/Tab/TabPage/ActionPane/ButtonGroup/String/Image/….
+    /// is correct for Grid/Group/Tab/TabPage/ActionPane/ButtonGroup/String/Integer/….
     /// </summary>
     private static readonly IReadOnlyDictionary<string, string> AxTypeOverrides =
         new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
         {
-            // The metadata model has no AxFormMultilineTextControl — a multi-line
-            // field is a String control with MultiLine=Yes.
-            ["MultilineText"] = "AxFormStringControl",
-            ["Integer"] = "AxFormIntControl",
-            ["DateTime"] = "AxFormDateTimeControl",
-            ["RadioButton"] = "AxFormRadioControl",
             // A plain <AxFormControl> with no i:type is how extension controls
             // (QuickFilterControl, dimension controls, …) are represented.
             ["Control"] = "",
@@ -91,10 +106,24 @@ public static class FormControlFactory
     public static bool IsExtensionControl(string normalizedType) =>
         normalizedType.EndsWith("Control", StringComparison.Ordinal);
 
+    /// <summary>
+    /// The metamodel spelling of a control type: aliases resolved and the casing of the
+    /// <c>FormControlType</c> value restored. A name that is neither (an extension
+    /// control) comes back unchanged.
+    /// </summary>
+    public static string CanonicalType(string normalizedType)
+    {
+        if (TypeAliases.TryGetValue(normalizedType, out var alias)) return alias;
+        return MetadataContracts.EnumValues("FormControlType")
+            .FirstOrDefault(v => string.Equals(v, normalizedType, StringComparison.OrdinalIgnoreCase))
+            ?? normalizedType;
+    }
+
     /// <summary>Concrete <c>i:type</c> for a normalized control type; empty for extension controls.</summary>
     public static string AxTypeFor(string normalizedType)
     {
         if (string.IsNullOrWhiteSpace(normalizedType)) return "";
+        normalizedType = CanonicalType(normalizedType);
         if (AxTypeOverrides.TryGetValue(normalizedType, out var overridden)) return overridden;
         return IsExtensionControl(normalizedType) ? "" : $"AxForm{normalizedType}Control";
     }
@@ -112,6 +141,13 @@ public static class FormControlFactory
         string? subPatternVersion = null)
     {
         if (string.IsNullOrWhiteSpace(name)) throw new ArgumentException("name is required", nameof(name));
+
+        var props = new Dictionary<string, string>(StringComparer.Ordinal);
+        if (properties is not null)
+            foreach (var (key, value) in properties) props[key] = value;
+        if (string.Equals(normalizedType, MultilineText, StringComparison.OrdinalIgnoreCase))
+            props.TryAdd("MultiLine", "Yes");
+        normalizedType = CanonicalType(normalizedType);
 
         var none = XNamespace.None;
         var el = new XElement(none + "AxFormControl");
@@ -131,7 +167,6 @@ public static class FormControlFactory
         // <FormControlExtension><Name> below.
         if (axType.Length > 0) el.Add(new XElement(none + "Type", normalizedType));
 
-        var props = properties ?? new Dictionary<string, string>();
         foreach (var (key, value) in props.Where(p => !TrailingProperties.Contains(p.Key)).OrderBy(p => p.Key, StringComparer.Ordinal))
             el.Add(new XElement(none + key, value));
 

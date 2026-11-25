@@ -19,6 +19,7 @@
 #   $env:D365FO_CLI_NO_WIZARD = '1'                # install only, skip 'd365fo init'
 #   $env:D365FO_CLI_RUN_EXTRACT = '1'              # also run 'index build' + 'index extract' (can take minutes)
 #   $env:D365FO_CLI_NO_BRIDGE = '1'                # skip building D365FO.Bridge.exe (live metadata, --install-to)
+#   $env:D365FO_CLI_VERSION = 'v0.2.0'             # install this release tag instead of the latest main
 #
 # D365FO VMs are Windows Server, where winget is usually unavailable - the
 # .NET SDK and Git both fall back to portable/official installers that need
@@ -119,6 +120,32 @@ function Find-Checkout {
         Fail "$($env:D365FO_CLI_DIR) exists, is not empty, and is not a git checkout. Empty it or point `$env:D365FO_CLI_DIR elsewhere."
     }
     return $null
+}
+
+# Puts the checkout on the requested release tag, or on the tip of main. A
+# pinned install leaves HEAD detached, so a later unpinned run has to return to
+# main before it can pull. See docs/RELEASING.md.
+function Update-Checkout([string]$dir, [bool]$fresh) {
+    if ($env:D365FO_CLI_VERSION) {
+        $tag = 'v' + ($env:D365FO_CLI_VERSION -replace '^v', '')
+        Write-Step "Checking out release $tag"
+        git -C $dir fetch --tags origin
+        if ($LASTEXITCODE -ne 0) { Fail 'git fetch failed - see the error above.' }
+        git -C $dir rev-parse -q --verify "refs/tags/$tag" | Out-Null
+        if ($LASTEXITCODE -ne 0) { Fail "There is no release tag $tag. List them with: git -C `"$dir`" tag --list" }
+        git -C $dir -c advice.detachedHead=false checkout --detach "refs/tags/$tag"
+        if ($LASTEXITCODE -ne 0) { Fail "git checkout $tag failed - commit or discard the local changes in $dir and re-run." }
+        return
+    }
+    if ($fresh) { return }
+    Write-Step "Updating $dir"
+    git -C $dir symbolic-ref -q HEAD | Out-Null
+    if ($LASTEXITCODE -ne 0) {
+        git -C $dir checkout main
+        if ($LASTEXITCODE -ne 0) { Fail "git checkout main failed in $dir - resolve it and re-run." }
+    }
+    git -C $dir pull --ff-only
+    if ($LASTEXITCODE -ne 0) { Fail 'git pull failed - resolve the conflict in the install directory and re-run.' }
 }
 
 function Get-InstallDir {
@@ -251,14 +278,13 @@ Ensure-Git
 $checkout = Find-Checkout
 if ($checkout) {
     Write-Note "Existing checkout found at $checkout - updating it in place."
-    Write-Step "Updating $checkout"
-    git -C $checkout pull --ff-only
-    if ($LASTEXITCODE -ne 0) { Fail 'git pull failed - resolve the conflict in the install directory and re-run.' }
+    Update-Checkout $checkout $false
     Build-And-Install $checkout
 } else {
     $installDir = Get-InstallDir
     Write-Step "Cloning into $installDir"
     git clone $RepoUrl $installDir
     if ($LASTEXITCODE -ne 0) { Fail 'git clone failed - see the error above.' }
+    Update-Checkout $installDir $true
     Build-And-Install $installDir
 }

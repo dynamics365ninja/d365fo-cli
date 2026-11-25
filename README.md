@@ -82,6 +82,8 @@ One line in PowerShell checks for the .NET SDK, clones the repo, publishes a sel
 irm https://raw.githubusercontent.com/dynamics365ninja/d365fo-cli/main/install.ps1 | iex
 ```
 
+To pin a release, set `$env:D365FO_CLI_VERSION = 'v<version>'` first; `d365fo --version` reports what is installed. Versioning, release assets and upgrades: [docs/RELEASING.md](docs/RELEASING.md).
+
 macOS / Linux (read · search · scaffold only — `build`/`sync`/`test`/`bp` need a Windows D365FO VM):
 
 ```sh
@@ -297,7 +299,7 @@ See [docs/TOKEN_ECONOMICS.md](docs/TOKEN_ECONOMICS.md) for the full analysis and
 | **Generate** | `generate table\|table-relation\|find-methods\|class\|coc\|form\|form-clone\|datasource-method\|control-method\|simple-list\|entity\|extension\|event-handler\|privilege\|duty\|role\|report\|report-extension\|sysoperation\|number-sequence\|workflow\|menu-item\|edt\|enum\|query\|view\|map\|business-event\|custom-service\|migration-script\|runbase\|security-policy\|systest\|configuration-key\|form-part\|label-file\|menu\|resource\|tile\|workflow-category\|composite-entity\|aggregate-entity` (43) |
 | **Labels** | `labels search\|resolve\|info\|create\|rename\|delete` — search/resolve plus in-place `*.label.txt` edits, multi-language via `--lang` (mirrors the MCP `labels` tool) |
 | **Journal / undo** | `undo [--steps N] [--dry-run]`, `journal list`, `delete` (kind/name, bridge or on-disk) — deterministic single-command rollback for every write path (mirrors the MCP `undo_last_modification` tool) |
-| **Modify** | `modify property\|method`, `modify add-field\|add-enum-value\|add-control`, `modify add-index\|add-relation\|add-field-group\|add-delete-action`, `modify field-property\|rename-field`, `modify add-query-range\|remove-query-range`, `modify add-entry-point\|remove-entry-point`, seven `modify remove-*` forms, and `modify batch` (several changes in one read-edit-write) — 23 operations over all 41 bridge-writable kinds, extension-aware and journalled for `undo` |
+| **Modify** | `modify property\|method`, `modify add-field\|add-enum-value\|add-control\|add-data-source`, `modify add-index\|add-relation\|add-field-group\|add-delete-action`, `modify field-property\|rename-field`, `modify add-query-range\|remove-query-range`, `modify add-entry-point\|remove-entry-point`, seven `modify remove-*` forms, and `modify batch` (several changes in one read-edit-write) — 24 operations over all 41 bridge-writable kinds, extension-aware and journalled for `undo` |
 | **Patterns & rules** | `mobile-pattern list\|spec` — warehouse scanner screens, and which of the two frameworks owns the flow · `report-pattern list\|spec` — the seven SSRS shapes as recipes · `table-pattern list\|spec` — table shapes and what each presets · `bp-moniker validate\|search\|suppress\|extract` — Best-Practice rule monikers from names a real installation declares, never a guess |
 | **Analyze** | `analyze completeness`, `analyze integration`, `analyze impact`, `lint`, `suggest edt`, `suggest extension`, `report-integrations` |
 | **Review** | `review diff` |
@@ -333,6 +335,7 @@ The full scenario-by-scenario decision table lives in **[docs/CAPABILITIES.md](d
 | [Testing](docs/TESTING.md) — the four layers and every gate | [New command checklist](docs/NEW_TOOL_CHECKLIST.md) |
 | [Knowledge authoring](docs/KNOWLEDGE_AUTHORING.md) — the corpus and its audit | [Agent eval loop](docs/AGENT_EVAL_LOOP.md) — self-improving eval harness (`eval/README.md`) |
 | [Backlog](docs/BACKLOG.md) — what is knowingly missing | [Changelog](CHANGELOG.md) · [Security](SECURITY.md) |
+| [Releasing](docs/RELEASING.md) — versions, tags, release assets | |
 
 ---
 

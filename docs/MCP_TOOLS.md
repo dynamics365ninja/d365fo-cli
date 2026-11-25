@@ -3,7 +3,7 @@
 
 Every tool the bundled `d365fo-cli-mcp` adapter advertises, and the `d365fo` commands that reach the same handler. Both columns are read from the running code — the command manifest (`d365fo schema --full`) and the adapter's own `tools/list` — so a tool that stops matching a command fails the generator rather than quietly outliving the mapping.
 
-**32 tools · 198 command routes · 15 commands with no MCP route.**
+**32 tools · 199 command routes · 15 commands with no MCP route.**
 
 The adapter is consolidated on purpose: one tool dispatches on a `type` / `objectType` / `mode` / `action` discriminator instead of shipping one tool per object kind. That keeps the schema payload a host injects every turn from growing with the object model — see [TOKEN_ECONOMICS.md](TOKEN_ECONOMICS.md) for what that payload actually measures.
 
@@ -274,6 +274,7 @@ Structured edits to an EXISTING object beyond its method bodies, via D365FO.Brid
 | CLI command | Discriminator |
 |---|---|
 | `d365fo modify add-control` | `action=add-control` |
+| `d365fo modify add-data-source` | `action=add-data-source` |
 | `d365fo modify add-delete-action` | `action=add-delete-action` |
 | `d365fo modify add-entry-point` | `action=add-entry-point` |
 | `d365fo modify add-enum-value` | `action=add-enum-value` |

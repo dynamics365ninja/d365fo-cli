@@ -88,6 +88,29 @@ needs — the two things that are easy to get wrong from memory and that decide
 whether the form still saves. A method the form already declares is left alone
 rather than overwritten.
 
+### Adding a datasource and bound controls to an existing form
+
+On a live form (Windows VM, bridge enabled) use `modify`, which edits the form or
+— outside your custom models — its extension, journalled for `undo`:
+
+```sh
+# A child datasource joined to an existing one
+d365fo modify add-data-source FmVehicleList FmVehicleLine --table FmVehicleLine \
+  --join-source FmVehicle --link-type OuterJoin
+
+# A grid column that shows a display method of that datasource
+d365fo modify add-control FmVehicleList Grid_LineTitle --type String --parent Grid \
+  --datasource FmVehicleLine --data-method lineTitle
+```
+
+- `--data-method` takes a `display`/`edit` method of the datasource or its table;
+  one an extension class adds is written `<Class>.<method>`. It excludes `--datafield`.
+- A duplicate datasource name, an unknown table, parent datasource or method, and a
+  control type with no `DataMethod` are refused. A new method is found only after
+  `d365fo index refresh`.
+- Several steps in one write: `modify batch form <Form> --operations-file steps.json`
+  (`add-data-source`, then `add-control`).
+
 ### Starting from a form that already works
 
 `generate form-clone` copies an existing AxForm under a new name, keeping its

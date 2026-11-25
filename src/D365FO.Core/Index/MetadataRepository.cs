@@ -3596,8 +3596,14 @@ public sealed partial class MetadataRepository
         long sizeBefore = File.Exists(_databasePath) ? new FileInfo(_databasePath).Length : 0;
         using var conn = Open();
         conn.Execute("PRAGMA wal_checkpoint(TRUNCATE)");
-        conn.Execute("VACUUM");
-        conn.Execute("ANALYZE");
+        // Dapper reads a command text with no whitespace as a stored procedure name,
+        // which Microsoft.Data.Sqlite rejects ("The CommandType 'StoredProcedure' is
+        // not supported"), so these one-word statements have to say what they are.
+        conn.Execute("VACUUM", commandType: CommandType.Text);
+        conn.Execute("ANALYZE", commandType: CommandType.Text);
+        // VACUUM goes through the WAL like any write: without this second checkpoint the
+        // main file keeps its old size and the reported saving is always zero.
+        conn.Execute("PRAGMA wal_checkpoint(TRUNCATE)");
         sw.Stop();
         long sizeAfter = File.Exists(_databasePath) ? new FileInfo(_databasePath).Length : 0;
         return new OptimizeResult(sizeBefore, sizeAfter, sw.ElapsedMilliseconds);

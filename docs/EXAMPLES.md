@@ -347,6 +347,18 @@ Exit codes: `0` clean (or warnings only), `2` structural errors. Run after any
 hand edit of form XML; `d365fo form-pattern spec <P>` shows the required tree
 when a violation needs fixing.
 
+### Add a datasource and a display-method column to an existing form
+
+```sh
+d365fo modify add-data-source FmVehicleList FmVehicleLine --table FmVehicleLine \
+  --join-source FmVehicle --link-type OuterJoin
+d365fo modify add-control FmVehicleList Grid_LineTitle --type String --parent Grid \
+  --datasource FmVehicleLine --data-method lineTitle
+```
+
+Windows VM with the bridge. A form outside your custom models gets the change in its
+extension. Both writes are journalled (`d365fo undo`).
+
 ### Data entity (`AxDataEntityView`)
 
 ```sh

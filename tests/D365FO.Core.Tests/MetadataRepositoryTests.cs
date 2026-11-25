@@ -35,6 +35,36 @@ public class MetadataRepositoryTests : IDisposable
     }
 
     [Fact]
+    public void Optimize_vacuums_the_index_and_reports_the_space_it_reclaimed()
+    {
+        // Issue #285: the one-word VACUUM / ANALYZE statements were sent as stored
+        // procedure calls, so `index optimize` failed on every database.
+        var repo = new MetadataRepository(_dbPath);
+        repo.EnsureSchema();
+
+        using (var conn = new Microsoft.Data.Sqlite.SqliteConnection(repo.ConnectionString))
+        {
+            conn.Open();
+            using var cmd = conn.CreateCommand();
+            cmd.CommandText = """
+                CREATE TABLE Ballast(Payload BLOB);
+                WITH RECURSIVE n(i) AS (SELECT 1 UNION ALL SELECT i + 1 FROM n WHERE i < 500)
+                INSERT INTO Ballast SELECT randomblob(4096) FROM n;
+                DROP TABLE Ballast;
+                PRAGMA wal_checkpoint(TRUNCATE);
+                """;
+            cmd.ExecuteNonQuery();
+        }
+
+        var result = repo.Optimize();
+
+        Assert.True(
+            result.SizeAfterBytes < result.SizeBeforeBytes,
+            $"before {result.SizeBeforeBytes}, after {result.SizeAfterBytes}");
+        Assert.Equal(result.SizeAfterBytes, new FileInfo(_dbPath).Length);
+    }
+
+    [Fact]
     public void SearchClasses_returns_match_with_bool_coercion()
     {
         var repo = new MetadataRepository(_dbPath);

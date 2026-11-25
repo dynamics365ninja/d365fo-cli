@@ -170,6 +170,23 @@ public sealed class DoctorCommand : Command<DoctorCommand.Settings>
                     "Re-run install.ps1 (it builds the bridge), or run `dotnet publish src\\D365FO.Bridge -c Release` " +
                     "and set D365FO_BRIDGE_PATH to the D365FO.Bridge.exe it produces.");
 
+            // The CLI and the bridge ship from one source revision; the JSON protocol
+            // between them is not versioned, so a stale bridge shows up as odd failures.
+            if (bridgeExe is not null)
+            {
+                string? bridgeVersion = null;
+                try { bridgeVersion = System.Diagnostics.FileVersionInfo.GetVersionInfo(bridgeExe).ProductVersion; }
+                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { /* reported as unknown */ }
+                var sameBuild = bridgeVersion is not null
+                    && ProductVersion.SameBuild(ProductVersion.Informational, bridgeVersion);
+                Add("bridge.version",
+                    sameBuild ? DoctorSeverity.Ok : DoctorSeverity.Warn,
+                    sameBuild
+                        ? bridgeVersion
+                        : $"The bridge is {bridgeVersion ?? "of an unknown version"} and the CLI is " +
+                          $"{ProductVersion.Informational}. Rebuild both from the same revision (re-run the installer).");
+            }
+
             // Mirror the bridge's own resolution (MetadataBootstrap.ResolveBinPath):
             // D365FO_BIN_PATH when set, otherwise <D365FO_PACKAGES_PATH>\bin.
             var binPath = D365FoSettings.Resolve("D365FO_BIN_PATH");
@@ -263,11 +280,12 @@ public sealed class VersionCommand : Command<VersionCommand.Settings>
     public override int Execute(CommandContext ctx, Settings settings)
     {
         var kind = OutputMode.Resolve(settings.Output);
-        var asm = typeof(VersionCommand).Assembly.GetName();
         var payload = ToolResult<object>.Success(new
         {
             name = "d365fo",
-            version = asm.Version?.ToString() ?? "0.1.0-dev",
+            version = ProductVersion.Version,
+            commit = ProductVersion.Commit,
+            informationalVersion = ProductVersion.Informational,
             runtime = $".NET {Environment.Version}",
             os = Environment.OSVersion.ToString(),
         });

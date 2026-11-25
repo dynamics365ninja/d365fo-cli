@@ -1,0 +1,145 @@
+name: release
+
+# Publishes a GitHub release for a v<major>.<minor>.<patch> tag. See docs/RELEASING.md.
+on:
+  push:
+    tags: ['v[0-9]+.[0-9]+.[0-9]+*']
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    # Windows, because the bridge targets .NET Framework 4.8.
+    runs-on: windows-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: |
+            8.0.x
+            10.0.x
+
+      # The tag has to name the version the tagged source reports, or the release would
+      # carry binaries that identify themselves as something else.
+      - name: Check the tag against Directory.Build.props
+        id: version
+        shell: pwsh
+        run: |
+          $version = (dotnet msbuild src/D365FO.Cli/D365FO.Cli.csproj -getProperty:Version).Trim()
+          if ("v$version" -cne $env:GITHUB_REF_NAME) {
+            throw "Tag $env:GITHUB_REF_NAME does not match the source version $version. Set VersionPrefix/VersionSuffix in Directory.Build.props (docs/RELEASING.md)."
+          }
+          "version=$version" >> $env:GITHUB_OUTPUT
+
+      # Fails here, before anything is built, when the CHANGELOG has no section for it.
+      - name: Extract release notes
+        shell: pwsh
+        run: ./scripts/get-release-notes.ps1 -Version ${{ steps.version.outputs.version }} | Out-File -Encoding utf8 release-notes.md
+
+      - name: Test
+        run: dotnet test d365fo-cli.slnx -c Release -nologo
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-notes
+          path: release-notes.md
+
+  # Each platform is published on its own runner, so the executable bit and the macOS
+  # code signature are the ones the platform itself produces.
+  publish:
+    needs: verify
+    strategy:
+      matrix:
+        include:
+          - { os: windows-latest, rid: win-x64 }
+          - { os: ubuntu-latest, rid: linux-x64 }
+          - { os: macos-latest, rid: osx-arm64 }
+          - { os: macos-latest, rid: osx-x64 }
+    runs-on: ${{ matrix.os }}
+    env:
+      RID: ${{ matrix.rid }}
+      VERSION: ${{ needs.verify.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: |
+            8.0.x
+            10.0.x
+
+      - name: Publish the CLI and the MCP server
+        shell: bash
+        run: |
+          dotnet publish src/D365FO.Cli -c Release -r "$RID" --self-contained \
+            -p:PublishSingleFile=true -p:PublishTrimmed=true -o publish/bin
+          dotnet publish src/D365FO.Mcp -c Release -r "$RID" --self-contained -o publish/mcp
+          cp README.md CHANGELOG.md publish/
+
+      # Beside bin\, where the CLI probes for it (..\D365FO.Bridge\).
+      - name: Publish the metadata bridge
+        if: matrix.rid == 'win-x64'
+        shell: bash
+        run: dotnet publish src/D365FO.Bridge -c Release -o publish/D365FO.Bridge
+
+      # Only where the runner can execute what it built (the macOS runner is arm64).
+      - name: Check the published version
+        if: matrix.rid != 'osx-x64'
+        shell: bash
+        run: |
+          reported="$(./publish/bin/d365fo --version | tr -d '\r')"
+          case "$reported" in
+            "$VERSION"|"$VERSION+"*) echo "$reported" ;;
+            *) echo "Published CLI reports '$reported', expected $VERSION." >&2; exit 1 ;;
+          esac
+
+      - name: Archive (zip)
+        if: matrix.rid == 'win-x64'
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force dist | Out-Null
+          Compress-Archive -Path publish/* -DestinationPath "dist/d365fo-cli-$env:VERSION-$env:RID.zip"
+
+      - name: Archive (tar.gz)
+        if: matrix.rid != 'win-x64'
+        shell: bash
+        run: |
+          mkdir -p dist
+          tar -czf "dist/d365fo-cli-$VERSION-$RID.tar.gz" -C publish .
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist-${{ matrix.rid }}
+          path: dist/*
+
+  release:
+    needs: [verify, publish]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: dist-*
+          merge-multiple: true
+          path: dist
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: release-notes
+
+      - name: Checksums
+        run: cd dist && sha256sum * > SHA256SUMS
+
+      - name: Create the GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ needs.verify.outputs.version }}
+        run: |
+          flags=(--repo "$GITHUB_REPOSITORY" --verify-tag --title "$GITHUB_REF_NAME" --notes-file release-notes.md)
+          case "$VERSION" in *-*) flags+=(--prerelease) ;; esac
+          gh release create "$GITHUB_REF_NAME" dist/* "${flags[@]}"

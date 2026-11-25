@@ -204,7 +204,7 @@ public sealed class ModifyBatchCommand : Command<ModifyBatchCommand.Settings>
                 D365FoErrorCodes.BadInput, "--operations or --operations-file is required.",
                 "Each step is {\"operation\":\"<name>\", \"member\":\"<name>\", …} — the operation names are the "
                 + "`modify` sub-commands: add-field, add-index, add-relation, add-field-group, add-delete-action, "
-                + "rename-field, property, add-enum-value, add-control, add-query-range, add-entry-point, and the remove-* forms."));
+                + "rename-field, property, add-enum-value, add-control, add-data-source, add-query-range, add-entry-point, and the remove-* forms."));
         }
 
         List<ObjectModifyEngine.ModifyRequest> steps;

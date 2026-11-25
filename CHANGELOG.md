@@ -5,11 +5,11 @@ All notable changes to `d365fo-cli` are recorded here. The format follows
 
 ## Versioning
 
-This repository has no release tags yet, and the assembly carries no explicit version, so
-entries below are grouped by the date the work landed on `main` rather than by a version
-number that does not exist. `d365fo version` reports the assembly version. Once the first
-tag is cut, this file switches to [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
-and the dated sections become the pre-1.0 history.
+Releases follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html); the policy, the
+tag format and the release steps are in [docs/RELEASING.md](docs/RELEASING.md). `d365fo --version`
+reports the version and the commit it was built from. No release has been tagged yet: the dated
+sections below are the history from before the first one, grouped by the date the work landed
+on `main`.
 
 Upstream references of the form "upstream 1.15.0" point at the sibling
 [`d365fo-mcp-server`](https://github.com/dynamics365ninja/d365fo-mcp-server) release the work
@@ -18,6 +18,22 @@ was ported from.
 ---
 
 ## [Unreleased]
+
+### Added — Form datasources and display-method controls (#283)
+
+An existing form could get new controls but no new datasource, and no control could show a
+display method, so a child-datasource grid could not be built from the CLI.
+
+- **`d365fo modify add-data-source <FORM> <NAME> --table <TABLE>`**, with `--join-source` and
+  `--link-type` (MCP: `modify_object` `action=add-data-source`, also a `modify batch` step).
+  Works on forms and form extensions and only appends. A duplicate name, an unknown table or an
+  unknown parent datasource is refused.
+- **`modify add-control --data-method <METHOD>`** (MCP: `dataMethod`) binds a control to a
+  `display`/`edit` method of a datasource, including `<Class>.<method>` for one an extension
+  class adds.
+- `modify add-control --datasource` is now checked: a datasource the form does not have fails
+  `DATA_SOURCE_NOT_FOUND` instead of being written. Given without a field, it is written onto a
+  container such as a Grid, where it used to be dropped silently.
 
 ### Added — Structural where-used from the index, no build needed (#249)
 
@@ -40,11 +56,11 @@ field EDTs, menu item targets, privilege entry points, extensions, CoC and event
 
 ### Added — MCP toolsets: advertise only the tools a client needs (#249)
 
-A host injects every advertised tool's schema into every turn: 48 214 characters for the 32 tools.
+A host injects every advertised tool's schema into every turn: 48 569 characters for the 32 tools.
 A client that only reads metadata paid for `generate_object` (9.5k) and `modify_object` on each
 message.
 
-- **`MCP_TOOLSETS`** (env var or `settings.json`) and **`d365fo-mcp --toolsets`** take a
+- **`MCP_TOOLSETS`** (env var or `settings.json`) and **`d365fo-cli-mcp --toolsets`** take a
   comma-separated list of toolsets and tool names. The toolsets are `read`, `knowledge`, `author`,
   `check`, `index` and `sdlc`, and every tool is in exactly one. `read` is 10 tools and 11 159
   characters, 23 % of the full list.
@@ -52,6 +68,13 @@ message.
   it belongs to. The selection intersects with `MCP_SERVER_MODE`.
 - The `initialize` instructions name the tools the server does not offer, so the model does not
   reach for one. An unknown toolset stops the server at startup.
+
+### Fixed — `modify add-control` writes control types the metadata model declares (#282)
+
+- `modify add-control --type Integer` (or `Int`) wrote `AxFormIntControl`, a type that does not
+  exist; it writes `AxFormIntegerControl`. `RadioButton` (`AxFormRadioButtonControl`),
+  `MultilineText` (a `String` control with `MultiLine=Yes`) and the `UtcDateTime` / `Radio`
+  spellings are corrected the same way, in generated and repaired forms too (#282).
 
 ### Added — `labels audit`: labels used but defined nowhere, missing translations, labels nobody uses (#272)
 
@@ -72,6 +95,11 @@ can tell they are unused. xppbp reports labels in code as unknown unless it runs
 - **Where the answers come from:** the model's XML and label files are read from disk (every
   property, every language). Other models' labels come from the index, one query per label file:
   1.5 s for a model on a full installation, against 1 min 40 s when it resolved token by token.
+### Fixed — `index optimize` no longer fails on every database (#285)
+
+- `index optimize` failed with "The CommandType 'StoredProcedure' is not supported", and once
+  past that would have reported no space reclaimed (#285).
+
 ### Added — `modify batch` over many objects in one call, and `--dry-run` (#268)
 
 A clean-up such as setting `OperationalDomain` on every new table was one process per object: about
@@ -90,6 +118,17 @@ to Python scripts that edited the AOT XML around every check.
 - `--operations-file -` reads the steps from stdin. `op` is accepted for `operation`.
 - **MCP:** `modify_object` takes the same steps in `operations`, and `dryRun`. `kind` and `name`
   are no longer required when the steps name their objects.
+### Added — Versioned releases (#284)
+
+- One version in `Directory.Build.props` (`0.2.0-dev`) for the CLI, `d365fo-cli-mcp` and the bridge.
+  `d365fo --version`, `d365fo version` (now with `commit` and `informationalVersion`),
+  `d365fo schema`, MCP `serverInfo`, the bridge ping and SARIF output report it, in place of
+  four different hard-coded or default values.
+- `d365fo doctor` adds `bridge.version`: a warning when the bridge is a different build.
+- `D365FO_CLI_VERSION=v<version>` makes `install.ps1` / `install.sh` install that release tag.
+- A tag `v<version>` publishes a GitHub release with self-contained archives and checksums.
+  Policy and steps: `docs/RELEASING.md`.
+
 ### Added — `modify add-method` adds an instance or static method to an existing object (#256)
 
 `modify method` only changes a method that exists, and a new name failed `METHOD_NOT_FOUND`, so

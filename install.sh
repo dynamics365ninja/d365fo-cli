@@ -15,6 +15,7 @@
 #   D365FO_CLI_YES=1                 non-interactive: pass --no-wizard to 'd365fo init'
 #   D365FO_CLI_NO_WIZARD=1           install only, skip 'd365fo init' entirely
 #   D365FO_CLI_RUN_EXTRACT=1         also run 'index build' + 'index extract' (can take minutes)
+#   D365FO_CLI_VERSION=v0.2.0        install this release tag instead of the latest main
 
 set -euo pipefail
 
@@ -78,6 +79,27 @@ find_checkout() {
   echo ""
 }
 
+# Puts the checkout on the requested release tag, or on the tip of main. A
+# pinned install leaves HEAD detached, so a later unpinned run has to return to
+# main before it can pull. See docs/RELEASING.md.
+update_checkout() {
+  local dir="$1" fresh="$2"
+  if [ -n "${D365FO_CLI_VERSION:-}" ]; then
+    local tag="v${D365FO_CLI_VERSION#v}"
+    step "Checking out release $tag"
+    git -C "$dir" fetch --tags origin
+    git -C "$dir" rev-parse -q --verify "refs/tags/$tag" >/dev/null \
+      || fail "There is no release tag $tag. List them with: git -C \"$dir\" tag --list"
+    git -C "$dir" -c advice.detachedHead=false checkout --detach "refs/tags/$tag" \
+      || fail "git checkout $tag failed - commit or discard the local changes in $dir and re-run."
+    return
+  fi
+  [ "$fresh" = fresh ] && return
+  step "Updating $dir"
+  git -C "$dir" symbolic-ref -q HEAD >/dev/null || git -C "$dir" checkout main
+  git -C "$dir" pull --ff-only
+}
+
 build_and_install() {
   local dir="$1"
   local bin_dir="$HOME/.local/share/d365fo-cli/bin"
@@ -132,12 +154,12 @@ ensure_git
 checkout="$(find_checkout)"
 if [ -n "$checkout" ]; then
   note "Existing checkout found at $checkout - updating it in place."
-  step "Updating $checkout"
-  git -C "$checkout" pull --ff-only
+  update_checkout "$checkout" existing
   build_and_install "$checkout"
 else
   install_dir="${D365FO_CLI_DIR:-$HOME/d365fo-cli}"
   step "Cloning into $install_dir"
   git clone "$REPO_URL" "$install_dir"
+  update_checkout "$install_dir" fresh
   build_and_install "$install_dir"
 fi
