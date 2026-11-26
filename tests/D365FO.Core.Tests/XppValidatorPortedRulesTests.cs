@@ -873,6 +873,94 @@ public class XppValidatorPortedRulesTests
         Assert.Contains(v, x => x.Rule == "ATTR002" && x.Severity == "warning");
     }
 
+    // ── ATTR003 ──────────────────────────────────────────────────────────────
+
+    [Theory]
+    [InlineData("""
+        [SysTestMethod]
+        [SysTestCategory('Fast')]
+        public void run_zeroRate_returnsZero()
+        {
+        }
+        """)]
+    // a comment between the stack and the method changes nothing
+    [InlineData("""
+        [SysTestMethod]
+        [SysTestPriority(1)] // keep first
+        /// <summary>Does a thing.</summary>
+        /* and another */
+        public void run()
+        {
+        }
+        """)]
+    [InlineData("""
+        public class MyContract
+        {
+            [DataMember]
+            [SysOperationLabel(literalStr("@SYS1"))]
+
+            public str parmName(str _name = name)
+            {
+                return name;
+            }
+        }
+        """)]
+    public void Attr003_flags_attributes_stacked_on_a_method(string code)
+    {
+        var finding = Assert.Single(Run(code), x => x.Rule == "ATTR003");
+        Assert.Equal("error", finding.Severity);
+    }
+
+    [Theory]
+    // legal above a class declaration, comments between or not
+    [InlineData("""
+        [DataContractAttribute]
+        [SysOperationGroupAttribute('Dates', "@SYS1", '1')]
+        public final class MyContract
+        {
+        }
+        """)]
+    [InlineData("""
+        [DataContractAttribute]
+        [SysOperationContractProcessing(classStr(MyBuilder))]
+        /// <summary>Contract.</summary>
+        // note
+        /* block
+           comment */
+        class MyContract
+        {
+        }
+        """)]
+    // one bracket with several attributes, and a single one
+    [InlineData("""
+        [SysTestMethod, SysTestCategory('Fast')]
+        public void run()
+        {
+        }
+
+        [SysTestMethod]
+        public void walk()
+        {
+        }
+        """)]
+    // consecutive container destructuring is not an attribute list
+    [InlineData("""
+        public void run()
+        {
+            [first, second] = this.pair();
+            [third, fourth] = this.pair();
+        }
+        """)]
+    public void Attr003_quiet_where_the_shape_is_legal(string code)
+        => Assert.DoesNotContain(Run(code), x => x.Rule == "ATTR003");
+
+    [Fact]
+    public void Attr003_reads_crlf_source()
+    {
+        var code = "[SysTestMethod]\r\n[SysTestPriority(1)]\r\npublic void run()\r\n{\r\n}\r\n";
+        Assert.Single(Run(code), x => x.Rule == "ATTR003");
+    }
+
     [Fact]
     public void Ext001_flags_extension_class_neither_coc_nor_static()
     {

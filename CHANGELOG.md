@@ -19,6 +19,12 @@ was ported from.
 
 ## [Unreleased]
 
+### Added — ATTR003: attributes stacked on a method (upstream 1.17.0)
+
+Two attribute lines in a row above a method are a parse error: xppc answers "Invalid token '['"
+and abandons the file. `validate xpp` now reports it and says to merge them into one bracket.
+A stack above a class declaration is legal and stays silent, comments between included.
+
 ### Fixed — COC004 accepts `next` in `try`, `finally` and `using` (upstream 1.22.0)
 
 Any block deeper than the method body counted as conditional, so `validate xpp` refused shipped

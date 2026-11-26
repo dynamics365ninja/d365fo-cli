@@ -60,6 +60,7 @@ public interface IPropertyStatsProvider
 ///   MAC001  A precompiler directive written without its dot (#define X)
 ///   ATTR001 An attribute argument that is not a compile-time literal
 ///   ATTR002 [SysObsolete] without message, isError AND date (xppbp moniker)
+///   ATTR003 Two attribute lines stacked on a method (xppc: Invalid token '[')
 ///   EXT001  An extension-method class whose class or methods are not static
 ///   KW001   A variable named after a reserved word (the compiler's own 115-word set)
 ///   RPT001  DP reads parmDataContract() but declares no [SRSReportParameterAttribute]
@@ -218,6 +219,7 @@ public static class XppValidator
         CheckInOperatorLiteral(masked, violations);
         CheckSelectExpressionAndValidTimeState(masked, violations);
         CheckAttributeArguments(code, masked, violations);
+        CheckStackedMethodAttributes(code, masked, violations);
         CheckExtensionMethodClassShape(code, masked, violations);
         CheckReservedIdentifiers(code, masked, violations);
     }
@@ -1475,6 +1477,55 @@ public static class XppValidator
             return false; // ::, quotes, digits, operators — not an attribute list
         }
         return sawName;
+    }
+
+    /// <summary>A masked line that is nothing but one bracketed attribute list (and perhaps a comment).</summary>
+    private static readonly Regex AttributeLine = new(
+        @"^\s*\[\s*[A-Za-z_][^\]]*\]\s*(?:(?://|/\*)\s*)?$", RegexOptions.Compiled);
+
+    /// <summary>A masked line with no code: blank, or a comment (the masker keeps only the opener).</summary>
+    private static readonly Regex BlankOrCommentLine = new(@"^\s*(?://|/\*)?\s*$", RegexOptions.Compiled);
+
+    /// <summary>The declaration an attribute stack is allowed to precede.</summary>
+    private static readonly Regex TypeDeclarationLine = new(
+        @"^\s*(?:(?:public|private|protected|internal|final|abstract|static)\s+)*(?:class|interface)\b",
+        RegexOptions.IgnoreCase | RegexOptions.Compiled);
+
+    /// <summary>
+    /// ATTR003 — two attributes stacked on a method. A method takes several attributes only
+    /// inside ONE bracket; a second bracketed line is a parse error and xppc answers
+    /// "Invalid token '['", which names no rule and abandons the whole file. Above a class
+    /// declaration stacking is legal, and shipped code does it.
+    /// </summary>
+    private static void CheckStackedMethodAttributes(string code, string masked, List<XppViolation> v)
+    {
+        var lines = code.Split('\n');
+        var maskedLines = masked.Split('\n');
+
+        for (int i = 0; i + 1 < maskedLines.Length; i++)
+        {
+            if (!AttributeLine.IsMatch(maskedLines[i]) || !AttributeLine.IsMatch(maskedLines[i + 1])) continue;
+
+            // What is being decorated decides legality, so walk past the rest of the stack.
+            int j = i + 2;
+            while (j < maskedLines.Length
+                && (AttributeLine.IsMatch(maskedLines[j]) || BlankOrCommentLine.IsMatch(maskedLines[j])))
+            {
+                j++;
+            }
+
+            if (j >= maskedLines.Length || !TypeDeclarationLine.IsMatch(maskedLines[j]))
+            {
+                var names = new[] { maskedLines[i], maskedLines[i + 1] }
+                    .Select(l => Regex.Match(l, @"\[\s*([A-Za-z_]\w*)").Groups[1].Value);
+                v.Add(new XppViolation("ATTR003", "error", i + 1, lines[i].Trim(),
+                    $"Merge them into ONE bracket: [{string.Join(", ", names)}]. Two bracketed lines in a row " +
+                    "on a method is a parse error — xppc answers \"Invalid token '['\" and abandons the whole " +
+                    "file. Stacking is legal only above a class declaration."));
+            }
+
+            i = j - 1; // one finding per stack, not one per pair
+        }
     }
 
     /// <summary>
