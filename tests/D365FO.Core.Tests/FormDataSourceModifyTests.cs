@@ -345,6 +345,29 @@ public sealed class FormDataSourceModifyTests : IDisposable
         Assert.True(order.IndexOf("DataSource") < order.IndexOf("ReferenceField"));
     }
 
+    [Theory]
+    [InlineData("Grid")] // a control of the base form
+    [InlineData(null)]   // the design root
+    public void A_reference_group_added_by_a_form_extension_binds_its_reference_field(string? parent)
+    {
+        var (result, written) = Run(Control("Vehicle", type: "ReferenceGroup") with
+        {
+            DataField = "Driver",
+            Parent = parent,
+            ExtensionSuffix = "Fleet",
+            ExtensionModel = "FleetCustom",
+        });
+
+        Assert.True(result.Ok, result.Error?.Message);
+        var control = written!.Descendants().Single(e =>
+            e.Name.LocalName == "FormControl" && e.Elements().Any(c => c.Name.LocalName == "ReferenceField"));
+        Assert.Equal("AxFormReferenceGroupControl", control.Attribute(XName.Get("type", Xsi))!.Value);
+        Assert.Equal("Driver", Child(control, "ReferenceField").Value);
+        Assert.Equal("Vehicle", Child(control, "DataSource").Value);
+        Assert.Empty(Child(control, "Controls").Elements());
+        Assert.DoesNotContain(control.Elements(), e => e.Name.LocalName == "DataField");
+    }
+
     [Fact]
     public void A_field_and_a_method_cannot_both_be_bound()
     {
