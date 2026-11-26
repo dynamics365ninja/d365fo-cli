@@ -117,6 +117,7 @@ public sealed class GenerateEntityCommand : Command<GenerateEntityCommand.Settin
             // The staging table is not optional decoration: DataManagementEnabled=Yes names a
             // table, and the build fails on the next compile if it is not there (issue #162).
             object? staging = null;
+            var stagingWarnings = new List<string>();
             if (settings.DataManagement && !settings.NoStagingTable)
             {
                 var stagingName = string.IsNullOrWhiteSpace(settings.StagingTable)
@@ -134,9 +135,20 @@ public sealed class GenerateEntityCommand : Command<GenerateEntityCommand.Settin
                             $"Wrote the entity but could not resolve where to put its staging table '{stagingName}'."));
                 }
 
+                var columns = StagingColumns.FromTableFile(
+                    RepoFactory.Create().GetTableDetails(settings.Table!)?.Table.SourcePath);
+                var untyped = fields.Where(f => !columns.ContainsKey(f.DataField ?? f.Name)).Select(f => f.Name).ToList();
                 var stagingRes = GenerateInstaller.Write(gate,
-                    XppScaffolder.EntityStagingTable(stagingName, fields), stagingPath!, settings.Overwrite);
-                staging = new { name = stagingName, path = stagingRes.Path, bytes = stagingRes.Bytes };
+                    XppScaffolder.EntityStagingTable(stagingName, fields,
+                        entityName: settings.EntityName, keyFields: keys,
+                        columnType: f => columns.GetValueOrDefault(f.DataField ?? f.Name)),
+                    stagingPath!, settings.Overwrite);
+                if (untyped.Count > 0)
+                    stagingWarnings.Add(
+                        $"STAGING_FIELDS_LEFT_OUT: the type of {string.Join(", ", untyped)} could not be read from table "
+                        + $"'{settings.Table}' (is it indexed, and is the field its own rather than an extension's?). "
+                        + $"Add them to {stagingName} with `d365fo modify add-field` before building.");
+                staging = new { name = stagingName, path = stagingRes.Path, bytes = stagingRes.Bytes, leftOut = untyped };
             }
 
             return GenerateInstaller.Done(kind, gate, settings, new
@@ -155,7 +167,7 @@ public sealed class GenerateEntityCommand : Command<GenerateEntityCommand.Settin
                 computedFields = computed.Select(c => new { c.Name, c.Method, c.Edt }).ToList(),
                 stagingTable = staging,
                 model = settings.InstallTo,
-            });
+            }, stagingWarnings.Count > 0 ? stagingWarnings : null);
         }
         catch (Exception ex)
         {

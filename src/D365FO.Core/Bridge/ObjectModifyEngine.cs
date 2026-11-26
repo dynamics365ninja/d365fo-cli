@@ -373,6 +373,10 @@ public static partial class ObjectModifyEngine
         var (doc, preImage, readFailure) = ReadOrCreate(client, target!, kind);
         if (readFailure is not null) return readFailure;
 
+        // What the document looks like before any edit, to tell what the edit lost from what the
+        // object already carried.
+        var baseline = new XDocument(doc!);
+
         // ---- 3. Structured edit(s) ----
         // A batch applies every operation to the SAME in-memory document, so N changes cost one
         // bridge read, one write and one journal entry. Stopped at the first failure, and since
@@ -403,21 +407,26 @@ public static partial class ObjectModifyEngine
             applied.Add(stepApplied);
         }
 
+        // An element that arrives out of contract order is not rejected by the AOT reader, it is
+        // DROPPED: DataContractSerializer matches children in order and skips anything early or
+        // late. The disk write path has always canonicalised (ScaffoldFileWriter.Finalize) but
+        // this one did not, so an edit that created a missing collection — `<Fields>` on a table
+        // that had none, `<EnumValues>`, `<Controls>` — appended it at the end of the root and
+        // the write came back "ok" with the change silently absent. Canonicalise the same way
+        // before serialising; it is idempotent and leaves collection item order alone.
+        var newXml = Canonical(doc!, target!);
+
+        // The provider reads the document before storing it, and skips what its model does not
+        // declare. Asked now, before anything is written, a change that would vanish is refused
+        // instead of reported as applied. A dry run is asked the same question.
+        if (LostByTheEdit(client, target!, Canonical(baseline, target!), newXml, warnings) is { } lost)
+            return lost;
+
         // A dry run stops here: every step has been applied to the in-memory document and
         // validated, and nothing is journaled or written.
         if (!request.DryRun)
         {
             // ---- 4. Write back, journaling the pre-image first ----
-            // An element that arrives out of contract order is not rejected by the AOT reader, it is
-            // DROPPED: DataContractSerializer matches children in order and skips anything early or
-            // late. The disk write path has always canonicalised (ScaffoldFileWriter.Finalize) but
-            // this one did not, so an edit that created a missing collection — `<Fields>` on a table
-            // that had none, `<EnumValues>`, `<Controls>` — appended it at the end of the root and
-            // the write came back "ok" with the change silently absent. Canonicalise the same way
-            // before serialising; it is idempotent and leaves collection item order alone.
-            if (target!.Kind == "formextension") ContractNamespaceApplier.Apply(doc!);
-            ContractOrderCanonicalizer.Apply(doc!);
-            var newXml = doc!.ToString(SaveOptions.DisableFormatting);
             var verb = target!.Exists ? "updateObject" : "createObject";
 
             RecordJournalEntry(target, preImage, DescribeCommand(request, kind), journalDbOverride);
@@ -1003,6 +1012,61 @@ public static partial class ObjectModifyEngine
 
     // ------------------------------------------------------------------- read leg
 
+    private static string Canonical(XDocument doc, WriteTarget target)
+    {
+        if (target.Kind == "formextension") ContractNamespaceApplier.Apply(doc);
+        ContractOrderCanonicalizer.Apply(doc);
+        return doc.ToString(SaveOptions.DisableFormatting);
+    }
+
+    /// <summary>
+    /// A failure when the provider would not store part of what the edit added; null otherwise.
+    /// </summary>
+    /// <remarks>
+    /// An element or a value that does not arrive at all fails the call. A value that arrives
+    /// spelled differently is only reported: the provider normalises some (a decimal, a number
+    /// with leading zeros). A bridge that cannot answer is not a reason to refuse the write.
+    /// </remarks>
+    private static ToolResult<object>? LostByTheEdit(
+        BridgeClient client, WriteTarget target, string beforeXml, string afterXml, List<string> warnings)
+    {
+        var after = DroppedByProvider(client, target.Kind, afterXml);
+        if (after.Count == 0) return null;
+        var added = after.Except(DroppedByProvider(client, target.Kind, beforeXml), StringComparer.Ordinal).ToList();
+
+        var absent = added.Where(d =>
+            d.Contains("— no such property", StringComparison.Ordinal)
+            || d.Contains("— the whole element did not apply", StringComparison.Ordinal)
+            || d.Contains("— not present in the loaded object", StringComparison.Ordinal)
+            || d.EndsWith("(object has <null>)", StringComparison.Ordinal)).ToList();
+        if (absent.Count > 0)
+            return ToolResult<object>.Fail(D365FoErrorCodes.ChangeNotApplied,
+                $"The metadata model of {target.Kind} '{target.Name}' would not store: {string.Join("; ", absent)}. Nothing was written.",
+                target.IsExtension
+                    ? "An extension holds only its own members. A property of the base object is changed there, "
+                      + "or with the operation that writes a property modification."
+                    : "Check the property name and where it belongs.");
+
+        foreach (var changed in added)
+            warnings.Add($"The provider stores this differently from how it was given: {changed}");
+        return null;
+    }
+
+    private static IReadOnlyList<string> DroppedByProvider(BridgeClient client, string kind, string xml)
+    {
+        try
+        {
+            var result = client.SendAsync("validateArtifact", new JsonObject { ["kind"] = kind, ["xml"] = xml })
+                .GetAwaiter().GetResult();
+            if ((bool?)result?["deserialized"] != true || result["dropped"] is not JsonArray dropped) return [];
+            return dropped.Select(d => (string?)d).OfType<string>().ToList();
+        }
+        catch (BridgeException)
+        {
+            return [];
+        }
+    }
+
     private static (XDocument? Doc, string? PreImage, ToolResult<object>? Failure) ReadOrCreate(
         BridgeClient client, WriteTarget target, string kind)
     {
@@ -1079,7 +1143,8 @@ public static partial class ObjectModifyEngine
             Operation.AddDataSource => AddDataSource(doc, request, target, repo, warnings, client),
             Operation.AddIndex => AddIndex(doc, request, target, repo),
             Operation.AddRelation => AddRelation(doc, request),
-            Operation.AddFieldGroup => AddFieldGroup(doc, request),
+            Operation.AddFieldGroup => AddFieldGroup(doc, request, target, warnings, client),
+            Operation.RemoveField => RemoveField(doc, request, warnings),
             Operation.AddDeleteAction => AddDeleteAction(doc, request),
             Operation.RenameField => RenameField(doc, request),
             Operation.SetFieldProperty => SetFieldProperty(doc, request, target),
@@ -1088,6 +1153,7 @@ public static partial class ObjectModifyEngine
             Operation.RemoveQueryRange => RemoveQueryRange(doc, request),
             Operation.AddEntryPoint => AddEntryPoint(doc, request),
             Operation.RemoveEntryPoint => RemoveEntryPoint(doc, request),
+            Operation.RemoveFieldGroup => RemoveFieldGroup(doc, request),
             _ when Removals.TryGetValue(request.Operation, out var shape) => RemoveMember(doc, request, shape),
             _ => (null, ToolResult<object>.Fail(D365FoErrorCodes.BadInput, $"Unhandled operation {request.Operation}.")),
         };
@@ -1262,29 +1328,95 @@ public static partial class ObjectModifyEngine
         }, null);
     }
 
-    private static (object?, ToolResult<object>?) AddFieldGroup(XDocument doc, ModifyRequest request)
+    /// <summary>The groups every table has, whether or not its file spells them out.</summary>
+    private static readonly string[] AutoFieldGroups =
+        ["AutoReport", "AutoLookup", "AutoIdentification", "AutoSummary", "AutoBrowse"];
+
+    private static (object?, ToolResult<object>?) AddFieldGroup(
+        XDocument doc, ModifyRequest request, WriteTarget target, List<string> warnings, BridgeClient client)
     {
         var root = doc.Root!;
         var ns = root.Name.Namespace;
-        var groups = EnsureCollection(root, "FieldGroups");
 
-        if (HasNamed(groups, "Name", request.Member))
+        var existing = new[] { "FieldGroups", "FieldGroupExtensions" }
+            .SelectMany(c => root.Elements().Where(e => e.Name.LocalName == c).Elements())
+            .FirstOrDefault(g => string.Equals(LocalValue(g, "Name"), request.Member, StringComparison.OrdinalIgnoreCase));
+
+        // A group that is already there takes the fields it does not hold yet.
+        if (existing is not null)
         {
-            return (null, ToolResult<object>.Fail(D365FoErrorCodes.AlreadyExists,
-                $"Field group '{request.Member}' already exists on {request.ObjectName}.",
-                "The five Auto* groups and Overview/General are created with every table."));
+            var members = EnsureCollection(existing, "Fields");
+            var missing = request.Fields!.Where(f => !HasNamed(members, "DataField", f)).ToList();
+            if (missing.Count == 0)
+            {
+                return (null, ToolResult<object>.Fail(D365FoErrorCodes.AlreadyExists,
+                    $"Field group '{request.Member}' already exists on {request.ObjectName} and holds every field given."));
+            }
+            members.Add(missing.Select(f => GroupField(ns, f)));
+            return (new { fieldGroup = request.Member, added = missing, existed = true }, null);
         }
 
+        // A table extension adds to a group of its base table through FieldGroupExtensions: a
+        // second group of the same name declared under FieldGroups does not compile.
+        if (target.IsExtension)
+        {
+            var (baseGroup, failure) = BaseFieldGroup(request, client);
+            if (failure is not null) return (null, failure);
+            if (baseGroup is not null)
+            {
+                EnsureCollection(root, "FieldGroupExtensions").Add(new XElement(ns + "AxTableFieldGroupExtension",
+                    new XElement(ns + "Name", baseGroup),
+                    new XElement(ns + "Fields", request.Fields!.Select(f => GroupField(ns, f)))));
+                if (!string.IsNullOrWhiteSpace(request.Label))
+                    warnings.Add($"The label was not written: '{baseGroup}' is a field group of {request.ObjectName}, "
+                                 + "and an extension only adds fields to it.");
+                return (new { fieldGroup = baseGroup, added = request.Fields, extendsBaseGroup = true }, null);
+            }
+        }
+
+        var groups = EnsureCollection(root, "FieldGroups");
         var group = new XElement(ns + "AxTableFieldGroup",
             new XElement(ns + "Name", request.Member),
             string.IsNullOrWhiteSpace(request.Label) ? null : new XElement(ns + "Label", request.Label),
-            new XElement(ns + "Fields",
-                request.Fields!.Select(f => new XElement(ns + "AxTableFieldGroupField",
-                    new XElement(ns + "DataField", f)))));
+            new XElement(ns + "Fields", request.Fields!.Select(f => GroupField(ns, f))));
 
         groups.Add(group);
         return (new { fieldGroup = request.Member, fields = request.Fields, label = request.Label }, null);
     }
+
+    /// <summary>
+    /// The base table's own spelling of the group a table extension names, or null when the base
+    /// table has no such group and the extension declares its own.
+    /// </summary>
+    private static (string? Name, ToolResult<object>? Failure) BaseFieldGroup(ModifyRequest request, BridgeClient client)
+    {
+        // Every table has the Auto* groups, so they need no read.
+        var auto = AutoFieldGroups.FirstOrDefault(g => string.Equals(g, request.Member, StringComparison.OrdinalIgnoreCase));
+        if (auto is not null) return (auto, null);
+
+        var (baseTable, _, failure) = ReadObjectDocument(client, "table", request.ObjectName);
+        if (failure is not null) return (null, failure);
+
+        var declared = baseTable!.Root!.Elements().Where(e => e.Name.LocalName == "FieldGroups").Elements()
+            .Select(g => LocalValue(g, "Name"))
+            .FirstOrDefault(n => string.Equals(n, request.Member, StringComparison.OrdinalIgnoreCase));
+        return (declared, null);
+    }
+
+    /// <summary>Remove a field group, or the fields an extension adds to a group of its base table.</summary>
+    private static (object?, ToolResult<object>?) RemoveFieldGroup(XDocument doc, ModifyRequest request)
+    {
+        var shape = Removals[Operation.RemoveFieldGroup];
+        bool Holds(string collection) => doc.Root!.Elements().Where(e => e.Name.LocalName == collection).Elements()
+            .Any(g => string.Equals(LocalValue(g, "Name"), request.Member, StringComparison.OrdinalIgnoreCase));
+
+        if (!Holds(shape.Collection) && Holds("FieldGroupExtensions"))
+            shape = new("FieldGroupExtensions", "AxTableFieldGroupExtension", "Name", "Field group extension");
+        return RemoveMember(doc, request, shape);
+    }
+
+    private static XElement GroupField(XNamespace ns, string field)
+        => new(ns + "AxTableFieldGroupField", new XElement(ns + "DataField", field));
 
     private static (object?, ToolResult<object>?) AddDeleteAction(XDocument doc, ModifyRequest request)
     {
@@ -1294,7 +1426,7 @@ public static partial class ObjectModifyEngine
 
         // A delete action is identified by the table it points at — two actions for the same
         // related table is not a richer rule, it is a conflict.
-        if (HasNamed(actions, "RelatedTable", request.RelatedTable!))
+        if (HasNamed(actions, "Table", request.RelatedTable!))
         {
             return (null, ToolResult<object>.Fail(D365FoErrorCodes.AlreadyExists,
                 $"{request.ObjectName} already has a delete action for '{request.RelatedTable}'.",
@@ -1561,6 +1693,62 @@ public static partial class ObjectModifyEngine
         var objectType = LocalValue(entryPoint, "ObjectType");
         entryPoint.Remove();
         return (new { removedEntryPoint = request.Member, objectType }, null);
+    }
+
+    /// <summary>
+    /// Remove a table field and its field-group entries, and name what else still uses it.
+    /// </summary>
+    /// <remarks>
+    /// A group entry only lists the field, so it goes with it — left behind, the build fails on a
+    /// group naming a field that is gone. An index, a relation, a mapping or a title field changes
+    /// what the table does when the field is taken out of it, so those are the caller's to decide.
+    /// </remarks>
+    private static (object?, ToolResult<object>?) RemoveField(XDocument doc, ModifyRequest request, List<string> warnings)
+    {
+        var root = doc.Root!;
+        var (removed, failure) = RemoveMember(doc, request, Removals[Operation.RemoveField]);
+        if (failure is not null) return (null, failure);
+
+        bool Names(XElement e) => !e.HasElements
+            && string.Equals(e.Value.Trim(), request.Member, StringComparison.OrdinalIgnoreCase);
+        IEnumerable<XElement> Items(string collection)
+            => root.Elements().Where(e => e.Name.LocalName == collection).Elements();
+
+        var fromGroups = new List<string>();
+        foreach (var group in Items("FieldGroups").Concat(Items("FieldGroupExtensions")))
+        {
+            var entries = group.Descendants()
+                .Where(e => e.Name.LocalName == "AxTableFieldGroupField" && e.Elements().Any(c => c.Name.LocalName == "DataField" && Names(c)))
+                .ToList();
+            if (entries.Count == 0) continue;
+            entries.ForEach(e => e.Remove());
+            fromGroups.Add(LocalValue(group, "Name") ?? "(unnamed)");
+        }
+
+        var still = new List<string>();
+        foreach (var (collection, leaf, noun) in new[]
+                 {
+                     ("Indexes", "DataField", "index"),
+                     ("FullTextIndexes", "DataField", "full-text index"),
+                     ("Relations", "Field", "relation"),
+                     ("RelationExtensions", "Field", "relation extension"),
+                     ("Mappings", "MapFieldTo", "mapping"),
+                 })
+        {
+            still.AddRange(Items(collection)
+                .Where(item => item.Descendants().Any(e => e.Name.LocalName == leaf && Names(e)))
+                .Select(item => $"{noun} '{LocalValue(item, "Name") ?? LocalValue(item, "MappingTable")}'"));
+        }
+        still.AddRange(root.Elements()
+            .Where(e => e.Name.LocalName is "TitleField1" or "TitleField2" && Names(e))
+            .Select(e => $"table property {e.Name.LocalName}"));
+
+        if (fromGroups.Count > 0)
+            warnings.Add($"Also removed '{request.Member}' from field group(s) {string.Join(", ", fromGroups)}.");
+        if (still.Count > 0)
+            warnings.Add($"'{request.Member}' is removed but still used by {string.Join(", ", still)}; "
+                         + "the table will not build until each is changed. They were left as they are, because each changes what the table does.");
+        return (removed, null);
     }
 
     private static (object?, ToolResult<object>?) RemoveMember(XDocument doc, ModifyRequest request, RemovalShape shape)
@@ -1931,11 +2119,21 @@ public static partial class ObjectModifyEngine
         var value = new XElement(ns + "AxEnumValue", new XElement(ns + "Name", request.Member));
         if (!string.IsNullOrWhiteSpace(request.Label)) value.Add(new XElement(ns + "Label", request.Label));
 
-        // Never emit an explicit <Value>: an extensible enum (UseEnumValue=No) is
-        // position-based, and a hard-coded ordinal there is exactly what breaks when
-        // another model inserts a value ahead of it.
+        // An enum with UseEnumValue=No (every extensible one) and an enum extension are numbered
+        // by the platform: a hard-coded ordinal there is what breaks when another model inserts a
+        // member ahead of it. An enum that stores values needs one, or the new member reads as 0
+        // and xppc reports "Duplicate value '0' detected".
+        var storesValues = root.Name.LocalName == "AxEnum"
+            && !string.Equals(LocalValue(root, "UseEnumValue"), "No", StringComparison.OrdinalIgnoreCase);
+        int? number = null;
+        if (storesValues && values.Elements().Any())
+        {
+            number = values.Elements()
+                .Max(e => int.TryParse(LocalValue(e, "Value"), out var v) ? v : 0) + 1;
+            value.Add(new XElement(ns + "Value", number));
+        }
         values.Add(value);
-        return (new { enumValue = request.Member, positional = true }, null);
+        return (new { enumValue = request.Member, value = number, positional = !storesValues }, null);
     }
 
     private static (object?, ToolResult<object>?) AddControl(

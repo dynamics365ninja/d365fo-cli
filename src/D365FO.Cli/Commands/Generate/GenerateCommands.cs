@@ -277,12 +277,12 @@ internal static class GenerateInstaller
     {
         if (string.IsNullOrWhiteSpace(model)) return null;
         var cfg = D365FoSettings.FromEnvironment();
-        return D365FO.Core.Index.IndexSync.FindModelDir(cfg.CustomPackagesPaths, model)
+        return D365FO.Core.Index.IndexSync.FindWritableModelDir(cfg.CustomPackagesPaths, model)
             ?? BridgeGate.TryGetModelFolder(model)
-            ?? D365FO.Core.Index.IndexSync.FindModelDir([cfg.PackagesPath], model);
+            ?? D365FO.Core.Index.IndexSync.FindWritableModelDir([cfg.PackagesPath], model);
     }
 
-    private static ToolResult<object> ModelFolderNotFound(string model)
+    internal static ToolResult<object> ModelFolderNotFound(string model)
     {
         var roots = D365FoSettings.FromEnvironment().ModelRoots;
         return ToolResult<object>.Fail(
@@ -400,12 +400,23 @@ internal static class GenerateInstaller
         var (ok, err) = SaveViaBridge(axKind, name, model, xml);
         if (ok) return (InstallOutcome.CreatedViaApi, null, null, warnings);
 
+        // The provider read the document and refused it. The disk write below would put exactly
+        // that document into the model.
+        if (RefusedTheDocument(err))
+        {
+            var refused = RenderHelpers.Render(kind, ToolResult<object>.Fail(
+                "OBJECT_REJECTED",
+                $"The metadata provider refused '{name}', so nothing was written. {err}",
+                "Correct the value the message names and run the command again."));
+            return (InstallOutcome.Failed, null, refused, warnings);
+        }
+
         // 2) Fallback — write the scaffold into the model folder if resolvable.
         var folder = ResolveModelFolder(model);
         if (!string.IsNullOrEmpty(folder))
         {
             warnings.Add(
-                $"Metadata API unavailable or rejected the object ({err}); wrote the raw scaffold instead. " +
+                $"Metadata API unavailable or could not create the object ({err}); wrote the raw scaffold instead. " +
                 "The file is structurally valid but not provider-canonicalised — open it in Visual Studio to verify.");
             return (InstallOutcome.WriteScaffold,
                 System.IO.Path.Combine(folder!, axSubfolder, name + ".xml"), null, warnings);
@@ -419,6 +430,15 @@ internal static class GenerateInstaller
             notFound.Hint));
         return (InstallOutcome.Failed, null, failure, warnings);
     }
+
+    /// <summary>
+    /// True when the bridge's error says the document itself is wrong, as opposed to the provider
+    /// being unable to create it here (not available, model unknown to it, unsupported type).
+    /// </summary>
+    private static bool RefusedTheDocument(string? error)
+        => error is not null
+           && (error.StartsWith("XML_DESERIALIZE_FAILED", StringComparison.Ordinal)
+               || error.StartsWith("XML_PARSE_FAILED", StringComparison.Ordinal));
 
     /// <summary>
     /// The Metadata-API create call <see cref="PlanInstall"/> makes. Tests swap it to see the exact

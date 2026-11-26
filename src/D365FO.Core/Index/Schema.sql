@@ -114,6 +114,7 @@ CREATE TABLE IF NOT EXISTS Edts (
     FormHelp        TEXT,
     AnalysisUsage   TEXT,
     EnumType        TEXT,
+    ReferenceField  TEXT,
     FOREIGN KEY (ModelId) REFERENCES Models(ModelId)
 );
 CREATE INDEX IF NOT EXISTS IX_Edts_Name ON Edts(Name);

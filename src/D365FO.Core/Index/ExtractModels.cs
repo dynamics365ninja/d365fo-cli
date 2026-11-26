@@ -118,6 +118,8 @@ public sealed record ExtractedEdt(string Name, string? Extends, string? BaseType
 {
     // v11 gap-fill properties
     public string? ReferenceTable { get; init; }
+    /// <summary>The field of <see cref="ReferenceTable"/> the reference joins on (v23).</summary>
+    public string? ReferenceField { get; init; }
     public string? FormHelp { get; init; }
     public string? AnalysisUsage { get; init; }
     public string? EnumType { get; init; }

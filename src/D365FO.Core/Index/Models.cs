@@ -151,7 +151,8 @@ public sealed record EdtInfo(
     string? ReferenceTable = null,
     string? FormHelp = null,
     string? AnalysisUsage = null,
-    string? EnumType = null);
+    string? EnumType = null,
+    string? ReferenceField = null);
 
 public sealed record EnumInfo(string Name, string Model, string? Label);
 

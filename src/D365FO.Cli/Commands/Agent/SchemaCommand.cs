@@ -149,7 +149,7 @@ public sealed class SchemaCommand : Command<SchemaCommand.Settings>
         C("labels create", "Create or update a label entry.", ["<KEY>", "<VALUE>"], ["--file", "--overwrite", "--output"], ["labels (action=create)"], true),
         C("labels update", "Correct the text of a label that already exists — never creates, so a mistyped key is refused rather than added.", ["<KEY>", "<VALUE>"], ["--file", "--install-to", "--lang", "--label-file", "--output"], ["labels (action=update)"], true),
         C("labels rename", "Rename a label key.", ["<OLD>", "<NEW>"], ["--file", "--overwrite", "--output"], ["labels (action=rename)"], true),
-        C("labels delete", "Delete a label key.", ["<KEY>"], ["--file", "--output"], ["labels (action=delete)"], true),
+        C("labels delete", "Delete a label key and its comment; refused while the model references it.", ["<KEY>"], ["--file", "--install-to", "--lang", "--label-file", "--dry-run", "--force", "--allow-extension-label-file", "--output"], ["labels (action=delete)"], true),
         C("undo", "Revert the last N modification-journal entries (create removed, update/delete restored to their exact pre-image).", [], ["--steps", "--dry-run", "--db", "--output"], ["undo_last_modification"], true),
         C("journal list", "Inspect the modification-journal stack, most-recent-first.", [], ["--limit", "--db", "--output"], ["journal_list"], true),
 
@@ -279,7 +279,7 @@ public sealed class SchemaCommand : Command<SchemaCommand.Settings>
 
         C("label create", "Create or update a label entry.", ["[KEY]", "[VALUE]"], ["--entry", "--file", "--install-to", "--lang", "--label-file", "--overwrite", "--allow-extension-label-file", "--output"], ["labels (action=create)"]),
         C("label update", "Correct the text of a label that already exists.", ["<KEY>", "<VALUE>"], ["--file", "--install-to", "--lang", "--label-file", "--allow-extension-label-file", "--output"], ["labels (action=update)"]),
-        C("label delete", "Delete a label entry.", ["<KEY>"], ["--file", "--output"], ["labels (action=delete)"]),
+        C("label delete", "Delete a label entry.", ["<KEY>"], ["--file", "--install-to", "--lang", "--label-file", "--dry-run", "--force", "--allow-extension-label-file", "--output"], ["labels (action=delete)"]),
         C("label rename", "Rename a label key.", ["<OLD>", "<NEW>"], ["--file", "--overwrite", "--allow-extension-label-file", "--output"], ["labels (action=rename)"]),
 
         C("knowledge get", "Fetch a topic, one of its '##' sections, or just its outline.", ["<TOPIC>"], ["--section", "--outline", "--output"], ["get_knowledge (action=get)"]),
@@ -330,9 +330,9 @@ public sealed class SchemaCommand : Command<SchemaCommand.Settings>
         C("modify add-data-source", "Add a datasource to a live form, optionally joined to an existing one.", ["<FORM>", "<DATASOURCE>"], ["--table", "--join-source", "--link-type", "--model", "--extension", "--extension-model", "--require-extension", "--output"], ["modify_object (action=add-data-source)"]),
         C("modify add-delete-action", "Add a delete action to a live table (Cascade | Restricted | CascadeRestricted | None).", ["<TABLE>"], ["--related-table", "--action", "--model", "--extension", "--extension-model", "--require-extension", "--output"], ["modify_object (action=add-delete-action)"]),
         C("modify add-entry-point", "Grant an entry point on a security privilege.", ["<PRIVILEGE>", "<OBJECT>"], ["--type", "--access", "--model", "--extension", "--extension-model", "--require-extension", "--output"], ["modify_object (action=add-entry-point)"]),
-        C("modify add-enum-value", "Add a value to a live base enum (positional, never a hard-coded ordinal).", ["<ENUM>", "<VALUE>"], ["--label", "--model", "--extension", "--extension-model", "--require-extension", "--output"], ["modify_object (action=add-enum-value)"]),
+        C("modify add-enum-value", "Add a value to a live base enum; numbered after the highest value unless the enum is positional (UseEnumValue=No).", ["<ENUM>", "<VALUE>"], ["--label", "--model", "--extension", "--extension-model", "--require-extension", "--output"], ["modify_object (action=add-enum-value)"]),
         C("modify add-field", "Add a field to a live table — concrete AxTableField subtype resolved from the EDT.", ["<TABLE>", "<FIELD>"], ["--edt", "--label", "--mandatory", "--no-edit", "--no-edit-on-create", "--model", "--extension", "--extension-model", "--require-extension", "--output"], ["modify_object (action=add-field)"]),
-        C("modify add-field-group", "Add a field group to a live table.", ["<TABLE>", "<GROUP>"], ["--field", "--label", "--model", "--extension", "--extension-model", "--require-extension", "--output"], ["modify_object (action=add-field-group)"]),
+        C("modify add-field-group", "Add a field group to a live table, or fields to one it has (a table extension extends a base group).", ["<TABLE>", "<GROUP>"], ["--field", "--label", "--model", "--extension", "--extension-model", "--require-extension", "--output"], ["modify_object (action=add-field-group)"]),
         C("modify add-index", "Add an index to a live table; unique unless --allow-duplicates.", ["<TABLE>", "<INDEX>"], ["--field", "--allow-duplicates", "--alternate-key", "--model", "--extension", "--extension-model", "--require-extension", "--output"], ["modify_object (action=add-index)"]),
         C("modify add-query-range", "Add a range to an AOT query's datasource.", ["<QUERY>", "<FIELD>"], ["--data-source", "--value", "--model", "--extension", "--extension-model", "--require-extension", "--output"], ["modify_object (action=add-query-range)"]),
         C("modify add-relation", "Add a foreign-key relation to a live table.", ["<TABLE>", "<FIELD>"], ["--related-table", "--related-field", "--model", "--extension", "--extension-model", "--require-extension", "--output"], ["modify_object (action=add-relation)"]),

@@ -136,9 +136,9 @@ public static class LabelFileWriter
 
         if (target.lineIdx >= 0)
         {
-            // Overwriting: drop the old occurrence first.
-            lines.RemoveAt(target.lineIdx);
-            if (target.lineIdx < source.lineIdx) source.lineIdx--;
+            // Overwriting: drop the old occurrence, with its comment, first.
+            var dropped = RemoveEntry(lines, target.lineIdx);
+            if (target.lineIdx < source.lineIdx) source.lineIdx -= 1 + dropped.Count;
         }
 
         lines[source.lineIdx] = newKey + "=" + Sanitise(source.existingValue ?? "");
@@ -183,6 +183,46 @@ public static class LabelFileWriter
         return dot > 0 ? name[..dot] : name;
     }
 
+    /// <summary>
+    /// The language a <c>&lt;Id&gt;.&lt;lang&gt;.label.txt</c> path names, or null when the file
+    /// name does not follow that shape.
+    /// </summary>
+    public static string? LanguageOf(string path)
+    {
+        const string suffix = ".label.txt";
+        var name = Path.GetFileName(path ?? "");
+        if (!name.EndsWith(suffix, StringComparison.OrdinalIgnoreCase)) return null;
+        var stem = name[..^suffix.Length];
+        var dot = stem.LastIndexOf('.');
+        return dot > 0 && dot < stem.Length - 1 ? stem[(dot + 1)..] : null;
+    }
+
+    /// <summary>
+    /// The casing of the locale folder already under <paramref name="resourcesDir"/> ("en-US" for
+    /// "en-us"), so a write on a case-sensitive file system never creates a duplicate folder.
+    /// </summary>
+    public static string OnDiskLanguage(string resourcesDir, string lang)
+    {
+        try
+        {
+            if (Directory.Exists(resourcesDir))
+            {
+                foreach (var dir in Directory.EnumerateDirectories(resourcesDir))
+                {
+                    var name = Path.GetFileName(dir);
+                    if (string.Equals(name, lang, StringComparison.OrdinalIgnoreCase))
+                        return name;
+                }
+            }
+        }
+        catch { /* fall through to the requested casing */ }
+        return lang;
+    }
+
+    /// <summary>The text of <paramref name="key"/> in a label file, or null when it has none.</summary>
+    public static string? ReadValue(string path, string key)
+        => File.Exists(path) ? FindKey(File.ReadAllLines(path).ToList(), key).existingValue : null;
+
     public static bool IsExtensionLabelFile(string labelFileIdOrPath)
     {
         if (string.IsNullOrWhiteSpace(labelFileIdOrPath)) return false;
@@ -193,7 +233,10 @@ public static class LabelFileWriter
         return fileId.Contains("_Extension", StringComparison.OrdinalIgnoreCase);
     }
 
-    /// <summary>Delete a key. Returns <see cref="WriteOutcome.KeyMissing"/> when absent.</summary>
+    /// <summary>
+    /// Delete a key and the comment lines that belong to it. Returns
+    /// <see cref="WriteOutcome.KeyMissing"/> when absent.
+    /// </summary>
     public static WriteResult Delete(string path, string key)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(path);
@@ -204,9 +247,21 @@ public static class LabelFileWriter
         var existing = FindKey(lines, key);
         if (existing.lineIdx < 0)
             return new WriteResult(path, WriteOutcome.KeyMissing, key, null, null);
-        lines.RemoveAt(existing.lineIdx);
+        var comments = RemoveEntry(lines, existing.lineIdx);
         AtomicWrite(path, lines);
-        return new WriteResult(path, WriteOutcome.Deleted, key, existing.existingValue, null);
+        return new WriteResult(path, WriteOutcome.Deleted, key, existing.existingValue, null, comments);
+    }
+
+    /// <summary>Put an entry back with the comment lines it had; the undo of <see cref="Delete"/>.</summary>
+    public static WriteResult Restore(string path, string key, string value, IReadOnlyList<string> comments)
+    {
+        var result = CreateOrUpdate(path, key, value, overwrite: true);
+        if (comments.Count == 0 || result.Outcome != WriteOutcome.Created) return result;
+
+        var lines = File.ReadAllLines(path).ToList();
+        lines.InsertRange(FindKey(lines, key).lineIdx + 1, comments);
+        AtomicWrite(path, lines);
+        return result;
     }
 
     // ---- internals ----------------------------------------------------
@@ -226,6 +281,21 @@ public static class LabelFileWriter
                 return (i, trimmed.Substring(eq + 1));
         }
         return (-1, null);
+    }
+
+    /// <summary>
+    /// Remove the entry at <paramref name="index"/> together with its comment: the indented
+    /// <c>;</c> lines that follow it, which is where Visual Studio writes a label's description.
+    /// </summary>
+    private static List<string> RemoveEntry(List<string> lines, int index)
+    {
+        var end = index + 1;
+        while (end < lines.Count && lines[end].Length > 0 && char.IsWhiteSpace(lines[end][0])
+               && lines[end].TrimStart().StartsWith(';'))
+            end++;
+        var comments = lines.GetRange(index + 1, end - index - 1);
+        lines.RemoveRange(index, end - index);
+        return comments;
     }
 
     private static string Sanitise(string value)
@@ -279,4 +349,5 @@ public sealed record WriteResult(
     WriteOutcome Outcome,
     string Key,
     string? OldValue,
-    string? NewValue);
+    string? NewValue,
+    IReadOnlyList<string>? Comments = null);

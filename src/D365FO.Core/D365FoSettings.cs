@@ -302,12 +302,34 @@ public sealed record D365FoSettings(
 
     // ---- private helpers -----------------------------------------------------
 
+    /// <summary>
+    /// Guardrail for the entry points: settings.json, or the active profile file, exists but
+    /// cannot be read. A plain lookup treats such a file as empty so library callers never see an
+    /// exception; a command run that way would use defaults — another environment's packages and
+    /// index — without saying so. Returns null when both are readable or absent.
+    /// </summary>
+    public static ToolError? CheckConfigFiles()
+    {
+        var paths = new List<string> { ConfigPathOverrideForTests ?? GetDefaultConfigPath() };
+        if (D365FoProfiles.GetActive() is { IsValidName: true, Exists: true, FilePath: { } profilePath })
+            paths.Add(profilePath);
+        foreach (var path in paths)
+        {
+            if (TryReadJsonFile(path, out _, out var reason)) continue;
+            return new ToolError(D365FoErrorCodes.ConfigUnreadable,
+                new ConfigUnreadableException(path, reason!).Message, ConfigUnreadableException.Hint);
+        }
+        return null;
+    }
+
     private static Dictionary<string, string> MergeAndWrite(string path, IReadOnlyDictionary<string, string> values, IEnumerable<string>? remove)
     {
         var dir = Path.GetDirectoryName(path);
         if (!string.IsNullOrEmpty(dir)) Directory.CreateDirectory(dir);
 
-        var merged = LoadJsonFile(path);
+        // Merging into a file that cannot be read would replace it with only the keys given here.
+        if (!TryReadJsonFile(path, out var merged, out var reason))
+            throw new ConfigUnreadableException(path, reason!);
         foreach (var (k, v) in values) merged[k] = v;
         if (remove is not null)
             foreach (var k in remove) merged.Remove(k);
@@ -318,18 +340,31 @@ public sealed record D365FoSettings(
 
     private static Dictionary<string, string> LoadJsonFile(string path)
     {
-        if (!File.Exists(path)) return new(StringComparer.OrdinalIgnoreCase);
+        TryReadJsonFile(path, out var values, out _);
+        return values;
+    }
+
+    /// <summary>
+    /// Read a key/value JSON file. A missing or blank file is an empty one; false means the file
+    /// is there and its content could not be read, with <paramref name="reason"/> saying why.
+    /// </summary>
+    private static bool TryReadJsonFile(string path, out Dictionary<string, string> values, out string? reason)
+    {
+        values = new(StringComparer.OrdinalIgnoreCase);
+        reason = null;
+        if (!File.Exists(path)) return true;
         try
         {
             var json = File.ReadAllText(path);
-            return new Dictionary<string, string>(
-                JsonSerializer.Deserialize<Dictionary<string, string>>(json, D365Json.Options)
-                    ?? new(),
-                StringComparer.OrdinalIgnoreCase);
+            if (string.IsNullOrWhiteSpace(json)) return true;
+            var parsed = JsonSerializer.Deserialize<Dictionary<string, string>>(json, D365Json.Options);
+            if (parsed is not null) values = new(parsed, StringComparer.OrdinalIgnoreCase);
+            return true;
         }
-        catch
+        catch (Exception ex) when (ex is JsonException or IOException or UnauthorizedAccessException or ArgumentException)
         {
-            return new(StringComparer.OrdinalIgnoreCase);
+            reason = ex.Message;
+            return false;
         }
     }
 
@@ -366,4 +401,12 @@ public sealed record D365FoSettings(
         string.IsNullOrWhiteSpace(s)
             ? Array.Empty<string>()
             : s.Split([',', ';'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+}
+
+/// <summary>A settings or profile file exists but could not be read.</summary>
+public sealed class ConfigUnreadableException(string path, string reason)
+    : InvalidOperationException($"Configuration file '{path}' cannot be read: {reason}")
+{
+    public const string Hint =
+        "Fix the file (a flat JSON object whose values are all strings), or move it away to start from an empty one.";
 }

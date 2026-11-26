@@ -1372,6 +1372,38 @@ public sealed class ObjectModifyEngineTests : IDisposable
         Assert.Null(value.Element("Value"));
     }
 
+    /// <summary>
+    /// A member of an enum that stores values needs one: without a &lt;Value&gt; it reads as 0, the
+    /// first member's, and xppc refuses the enum with "Duplicate value '0' detected". An enum with
+    /// <c>UseEnumValue=No</c> is numbered by the platform and compiles without.
+    /// </summary>
+    [Theory]
+    [InlineData("", "<AxEnumValue><Name>None</Name></AxEnumValue><AxEnumValue><Name>Open</Name><Value>4</Value></AxEnumValue>", "5")]
+    [InlineData("<UseEnumValue>Yes</UseEnumValue>", "<AxEnumValue><Name>None</Name></AxEnumValue>", "1")]
+    [InlineData("", "", null)] // the first member is 0, which is left out
+    [InlineData("<UseEnumValue>No</UseEnumValue>", "<AxEnumValue><Name>None</Name></AxEnumValue><AxEnumValue><Name>Open</Name><Value>1</Value></AxEnumValue>", null)]
+    public void A_new_member_is_numbered_when_the_enum_stores_values(string useEnumValue, string members, string? expected)
+    {
+        var capture = new BridgeCapture(
+            $"<AxEnum><Name>ConStatus</Name>{useEnumValue}<EnumValues>{members}</EnumValues></AxEnum>");
+        using var harness = FakeBridge.Create(capture.Respond);
+
+        var result = ObjectModifyEngine.ModifyCore(new ObjectModifyEngine.ModifyRequest
+        {
+            Operation = ObjectModifyEngine.Operation.AddEnumValue,
+            Kind = "enum",
+            ObjectName = "ConStatus",
+            Model = "FleetCustom",
+            Member = "Closed",
+        }, _repo, harness.Client, _journalDb);
+
+        Assert.True(result.Ok, result.Error?.Message);
+        Assert.Equal("enum", (string?)capture.WriteArgs!["kind"]);
+        var added = XDocument.Parse((string)capture.WriteArgs!["xml"]!).Descendants("AxEnumValue")
+            .Single(v => v.Element("Name")!.Value == "Closed");
+        Assert.Equal(expected, added.Element("Value")?.Value);
+    }
+
     [Fact]
     public void An_edt_extension_is_scaffolded_with_the_root_element_the_metamodel_declares()
     {
@@ -1394,6 +1426,69 @@ public sealed class ObjectModifyEngineTests : IDisposable
         // $"Ax{kind}Extension" and emitted a mis-cased <AxedtExtension>.
         var written = XDocument.Parse((string)capture.WriteArgs!["xml"]!);
         Assert.Equal("AxEdtExtension", written.Root!.Name.LocalName);
+    }
+
+    // ------------------------------------------- changes the metadata model would drop
+
+    private const string NoSuchProperty = "StringSize — no such property on AxEdtExtension";
+
+    private ToolResult<object> SetStringSize(BridgeCapture capture, bool dryRun = false)
+    {
+        using var harness = FakeBridge.Create(capture.Respond);
+        return ObjectModifyEngine.ModifyCore(new ObjectModifyEngine.ModifyRequest
+        {
+            Operation = ObjectModifyEngine.Operation.SetProperty,
+            Kind = "edt",
+            ObjectName = "CustAccount",
+            Member = "StringSize",
+            Value = "30",
+            DryRun = dryRun,
+        }, _repo, harness.Client, _journalDb);
+    }
+
+    private static string[] DropsStringSize(string xml, string drop)
+        => xml.Contains("<StringSize>", StringComparison.Ordinal) ? [drop] : [];
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void A_change_the_provider_would_drop_is_refused_before_it_is_written(bool dryRun)
+    {
+        var capture = new BridgeCapture(readXml: null) { Dropped = x => DropsStringSize(x, NoSuchProperty) };
+
+        var result = SetStringSize(capture, dryRun);
+
+        Assert.False(result.Ok);
+        Assert.Equal(D365FoErrorCodes.ChangeNotApplied, result.Error!.Code);
+        Assert.Contains(NoSuchProperty, result.Error.Message);
+        Assert.Equal(0, capture.WriteCount);
+    }
+
+    [Fact]
+    public void What_the_object_already_dropped_before_the_edit_does_not_block_it()
+    {
+        var capture = new BridgeCapture("<AxEdtExtension><Name>CustAccount.Extension</Name></AxEdtExtension>")
+        {
+            Dropped = _ => ["Legacy — no such property on AxEdtExtension"],
+        };
+
+        var result = SetStringSize(capture);
+
+        Assert.True(result.Ok, result.Error?.Message);
+        Assert.Equal(1, capture.WriteCount);
+    }
+
+    [Fact]
+    public void A_value_the_provider_normalises_is_written_and_reported()
+    {
+        const string mismatch = "StringSize = 30 (object has 10)";
+        var capture = new BridgeCapture(readXml: null) { Dropped = x => DropsStringSize(x, mismatch) };
+
+        var result = SetStringSize(capture);
+
+        Assert.True(result.Ok, result.Error?.Message);
+        Assert.Equal(1, capture.WriteCount);
+        Assert.Contains(result.Warnings!, w => w.Contains(mismatch, StringComparison.Ordinal));
     }
 
     [Fact]
@@ -1607,6 +1702,9 @@ public sealed class ObjectModifyEngineTests : IDisposable
 
         public string? BaseFormXml { get; init; }
 
+        /// <summary>What <c>validateArtifact</c> reports as dropped for a document; none when null.</summary>
+        public Func<string, string[]>? Dropped { get; init; }
+
         public string? WriteVerb { get; private set; }
 
         public JsonObject? WriteArgs { get; private set; }
@@ -1633,6 +1731,16 @@ public sealed class ObjectModifyEngineTests : IDisposable
                     WriteArgs = (JsonObject?)request["params"]?.DeepClone();
                     WriteCount++;
                     result = new JsonObject { ["ok"] = true };
+                    break;
+                case "validateArtifact" when Dropped is not null:
+                    var dropped = Dropped((string)request["params"]!["xml"]!);
+                    result = new JsonObject
+                    {
+                        ["ok"] = true,
+                        ["deserialized"] = true,
+                        ["valid"] = dropped.Length == 0,
+                        ["dropped"] = new JsonArray(dropped.Select(d => (JsonNode?)d).ToArray()),
+                    };
                     break;
                 default:
                     result = new JsonObject { ["ok"] = true };

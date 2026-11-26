@@ -148,7 +148,11 @@ public static partial class ObjectModifyEngine
 
         if (dataField is not null)
         {
-            properties["DataField"] = dataField;
+            // A reference group binds the surrogate key through ReferenceField; it has no DataField.
+            var binding = string.Equals(FormControlFactory.CanonicalType(request.Type!), "ReferenceGroup", StringComparison.OrdinalIgnoreCase)
+                ? "ReferenceField"
+                : "DataField";
+            properties[binding] = dataField;
             properties["DataSource"] = dataSourceName ?? "";
         }
 

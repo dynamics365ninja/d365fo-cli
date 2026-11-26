@@ -34,6 +34,9 @@ public sealed class DoctorCommand : Command<DoctorCommand.Settings>
         // environment. A selected-but-missing profile fails here instead of at
         // the entry point, so doctor stays usable for diagnosing exactly that.
         var profile = D365FoProfiles.GetActive();
+        if (D365FoSettings.CheckConfigFiles() is { } configError)
+            Add("config.file", DoctorSeverity.Fail, $"{configError.Message} {configError.Hint}");
+
         var profileError = D365FoProfiles.CheckActive();
         if (profile is null)
         {

@@ -252,7 +252,7 @@ public static class ToolCatalog
             "pass `labels:[{key,value}, …]` for a bulk create with shared top-level fields) · " +
             "update (correct the text of a key that MUST already exist — unlike create, which writes a new entry "
             + "when the key is absent, so a mistyped key in a correction becomes a second label and reports "
-            + "success) · rename (rename a key in place) · delete (remove a key) · audit (`model`: labels the model uses in "
+            + "success) · rename (rename a key in place) · delete (remove a key and its comment; `installTo` removes it from every language; refused while the model references it unless `force`; `dryRun` previews) · audit (`model`: labels the model uses in "
             + "metadata or X++ that no label file defines, keys missing in some of their file's languages, keys nothing "
             + "uses; `checks` narrows to undefined,untranslated,unused, `allModels` counts uses anywhere in the index, "
             + "`limit` caps each list; counts come first). Values are sanitised unless raw=true.",
@@ -265,7 +265,8 @@ public static class ToolCatalog
                    // create-input aliases tolerated for clients that guess the schema
                    ("labelId", "string", false), ("text", "string", false), ("label", "string", false),
                    ("model", "string", false), ("labelFileId", "string", false),
-                   ("checks", "string", false), ("allModels", "boolean", false), ("path", "string", false)),
+                   ("checks", "string", false), ("allModels", "boolean", false), ("path", "string", false),
+                   ("dryRun", "boolean", false), ("force", "boolean", false)),
             (h, p) => StrOr(p, "action", "search").ToLowerInvariant() switch
             {
                 "audit"  => h.AuditLabels(StrOrNull(p, "model"), StrOrNull(p, "path"), StrOrNull(p, "checks"),
@@ -294,7 +295,9 @@ public static class ToolCatalog
                             StrAliasOrNull(p, "installTo", "model"), StrAliasOrNull(p, "lang", "language"),
                             StrAliasOrNull(p, "labelFile", "labelFileId")),
                 "rename" => h.RenameLabel(Str(p, "file"), Str(p, "oldKey"), Str(p, "newKey"), Bool(p, "overwrite")),
-                "delete" => h.DeleteLabel(Str(p, "file"), Str(p, "key")),
+                "delete" => h.DeleteLabel(StrOrNull(p, "file"), StrAlias(p, "key", "labelId"),
+                            StrAliasOrNull(p, "installTo", "model"), StrAliasOrNull(p, "lang", "language"),
+                            StrAliasOrNull(p, "labelFile", "labelFileId"), Bool(p, "dryRun"), Bool(p, "force")),
                 _        => h.SearchLabels(Str(p, "query"), StrArray(p, "languages"), Int(p, "limit", 100), Bool(p, "raw")),
             }),
 
@@ -756,11 +759,12 @@ public static class ToolCatalog
             "• add-index / remove-index — an index `member` over `fields` (order is the key order); unique " +
             "unless `allowDuplicates`, `alternateKey` marks it an alternate key\n" +
             "• add-relation / remove-relation — a foreign key `member` to `relatedTable`.`relatedField`\n" +
-            "• add-field-group / remove-field-group — a field group `member` over `fields`\n" +
+            "• add-field-group / remove-field-group — a field group `member` over `fields` (an existing group takes the " +
+            "missing ones; in a table extension a group of the base table is extended)\n" +
             "• add-delete-action / remove-delete-action — `relatedTable` governed with `deleteAction` " +
             "(Cascade | Restricted | CascadeRestricted | None); the remove form is addressed by that table\n" +
-            "• add-enum-value / remove-enum-value — a value `member` on base enum `name` (positional; never " +
-            "writes an ordinal, which is what breaks when another model inserts a value ahead of it)\n" +
+            "• add-enum-value / remove-enum-value — a value `member` on base enum `name`; numbered after the highest " +
+            "value, or left unnumbered where the platform numbers it (UseEnumValue=No, an enum extension)\n" +
             "• add-control / remove-control — control `member` of `type` (Grid, Group, TabPage, String, …) on " +
             "form `name`, optionally inside `parent` and bound to `dataSource` plus `dataField` or " +
             "`dataMethod` (a display/edit method, `Class.method` for one an extension class adds); " +

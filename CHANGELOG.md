@@ -19,6 +19,172 @@ was ported from.
 
 ## [Unreleased]
 
+### Fixed — relations derived from an EDT join on the right field (upstream 1.24.0)
+
+`generate table-relation` joined on a field named after the EDT. An EDT's `<TableReferences>`
+(or `<Relations>`) names the field, often `RecId`; it is now indexed, and an EDT with a table
+reference but no `<ReferenceTable>` is recognised too. Index schema v23: the next
+`d365fo index refresh` re-extracts every model that has EDTs; until then the old name is assumed.
+
+### Fixed — the DMF staging table is typed and keyed like its entity (upstream 1.24.0)
+
+- Every business column was a string. Each is now typed like the table column it stages, read
+  from the table's file. A field whose type cannot be read is left out and named in a
+  `STAGING_FIELDS_LEFT_OUT` warning, never guessed.
+- `StagingIdx` keyed on the first field; it now keys on the entity key, which is mandatory and
+  not editable, and the `DataEntity` relation to the entity is written.
+- `IsSelected` named `DMFIsSelected` as a base enum, which does not exist: it is the EDT over
+  `NoYes`.
+
+A generated entity and its staging table compile with `xppc`.
+
+### Added — the rest of the inherited table data methods (upstream 1.17.0 to 1.22.0)
+
+`prepare` knew 8 of the methods every table inherits. It now knows `modifiedFieldValue` (whose
+signature is `(FieldName, int)`, not `modifiedField`'s), `postLoad`, `defaultRow`,
+`defaultField`, `toolTipField`, `helpField` and `caption`, and the four `aosValidate*` methods,
+reported as not eligible for Chain of Command: a wrapper compiles with a warning and never runs.
+All signatures were compiled with `xppc`.
+
+### Fixed — kernel EDTs are known (upstream 1.22.0)
+
+`RecId`, `UserId`, `ValidFromDateTime`, `FieldId` and 79 others are defined by the X++ runtime
+and have no AOT file, so every lookup missed them.
+
+- `extendedTypeNum(UserId)` and `--extends UserId` were reported as unknown types, which blocked
+  `modify method`. They resolve now.
+- Fields on `FieldId`, `TableId`, `RelationType`, `MoneyMST`, `Sha1HashCode` and similar were
+  scaffolded as strings. They get the base type shipped metadata uses, also through a custom EDT
+  that extends one.
+
+### Fixed — a menu item used twice no longer breaks the menu (upstream 1.23.0)
+
+`generate menu` and `menu-extension` named each element after its target, so one menu item under
+two submenus produced two elements of one name and xppc refused the menu ("is not unique"). The
+later one is now prefixed with its submenu's name; what it opens is unchanged. The generated menu
+compiles.
+
+### Fixed — `add-control --type ReferenceGroup` binds the control (upstream 1.24.0)
+
+`--datafield` was written as `<DataField>`, which a reference group does not have, so the control
+was saved bound to nothing. It is now `<ReferenceField>`, with the `<Controls />` collection the
+platform writes.
+
+### Fixed — table edits that left the table unbuildable (upstream 1.22.0, 1.24.0)
+
+- `remove-field` left the field in its field groups, and the build failed on a group naming a
+  field that is gone. It now removes those entries, and warns which indexes, relations, mappings
+  and title fields still use the field; those are not rewritten.
+- `add-delete-action` did not see an existing action for the same table and wrote a second one.
+- `add-field-group` on a group that exists puts the missing fields into it instead of refusing.
+  On a table extension a group of the base table is extended through `FieldGroupExtensions`; it
+  used to be declared a second time. `remove-field-group` removes such an extension too. The base
+  table is read through the bridge, except for the `Auto*` groups every table has.
+
+### Fixed — `modify add-enum-value` numbers the member when the enum stores values (upstream 1.22.0)
+
+The new member was always written without a `<Value>`. In an enum that stores values it reads
+as 0, the first member's, and the next build failed "Duplicate value '0' detected". It now gets
+one past the highest value. An enum with `UseEnumValue=No` and an enum extension still get none,
+which the platform numbers.
+
+### Fixed — `build --incremental` runs a full build when an incremental one would be wrong (upstream 1.24.0)
+
+`xppc -incremental` recompiles only what changed. A table field moved to an EDT of another base
+type built with 0 errors and the next full build failed, and a recompiled data entity lost its
+OData actions.
+
+- A model whose tables, EDTs, enums or their extensions changed since the last build, or where an
+  element declaring `SysODataActionAttribute` would be recompiled, is built in full. So is one
+  whose `ODataExtends.runtime` already lacks actions an entity declares, which is what an earlier
+  incremental build leaves behind. `models[].fullBuildReason` and a warning say so.
+- "Since the last build" is the compiler metadata of the element, or the last successful build run
+  through `d365fo` (remembered beside the configuration), whichever is later. After a Visual
+  Studio build the first such build may be promoted once more than needed.
+
+### Fixed — `test run` reports which tests failed (upstream 1.22.0)
+
+SysTestConsole exits non-zero when a test fails, and that run was answered `TESTS_FAILED` with the
+last lines of stderr: the result document with the failures was never read. It is now reported
+with its counts and failed tests (exit code 2). A `--results` file left by an earlier run is no
+longer read as this run's result.
+
+### Fixed — `build` fails when LabelC compiled nothing (upstream 1.22.0)
+
+LabelC can exit 0 without compiling (given arguments it does not take, it prints its usage), and
+the build went on to report success with stale label assemblies. The label step now succeeds only
+when this run's `-OutLog` says it completed the label compilation with exit code 0; the reason is
+in `models[].labels.failure`.
+
+### Fixed — `--install-to` does not write a document the metadata provider refused (upstream 1.22.0)
+
+Any failure of the provider create fell back to writing the scaffold, including one where the
+provider had read the document and rejected a value in it. The invalid object reached the model
+with only a warning.
+
+- `XML_PARSE_FAILED` and `XML_DESERIALIZE_FAILED` now fail `OBJECT_REJECTED` and write nothing.
+- A provider that is unavailable, does not know the model or cannot build the type still falls
+  back, as before. All 95 eval goldens deserialize in the provider, so no generator relies on
+  the old behaviour.
+
+### Fixed — `modify` no longer reports a change the metadata model drops (upstream 1.24.0)
+
+`modify property` on a Microsoft object writes to its extension, and appended the property to the
+extension's root: `Label` or `StringSize` is no member of `AxEdtExtension` or `AxTableExtension`,
+the provider skipped it, and the call reported success.
+
+- Before writing, the bridge is asked what it would not store. An element or value the edit added
+  that would vanish fails `CHANGE_NOT_APPLIED` and writes nothing, also under `--dry-run`.
+- A value the provider only spells differently is written and reported as a warning. What the
+  object already carried before the edit is ignored.
+
+### Fixed — an unreadable settings or profile file stops the run (upstream, after 1.25.1)
+
+A `settings.json` or profile file that did not parse (a trailing comma, a `true` where a string
+belongs) was read as empty: the run used defaults without saying so, and the next `init` or
+`config` save replaced the file with only the keys it was saving.
+
+- Commands and the MCP adapter now fail `CONFIG_UNREADABLE`, naming the file. `doctor` reports
+  it, and help, `version` and `config` still run.
+- Saving into such a file is refused. A missing or blank file is still an empty one.
+
+### Fixed — `labels delete` removes the whole label, and not one that is still used (upstream 1.25.0)
+
+- The label's ` ;comment` line stayed behind and attached itself to the label above. It now goes
+  with the label (also when `rename --overwrite` drops the target), and `undo` restores it.
+- `--install-to <MODEL>` deletes from every language of the label file (`--lang` narrows it).
+- Removing the last definition of a label the owning model still references fails
+  `LABEL_IN_USE`; `--force` overrides. Other models are not scanned, and the reply says so.
+- `--dry-run` reports files and references without writing.
+- A label file extension is refused without `--allow-extension-label-file`; a Microsoft model,
+  or one outside `D365FO_CUSTOM_MODELS`, is refused (`FOREIGN_MODEL`).
+- MCP `labels` `action=delete` applies the same checks and takes `installTo`, `dryRun`, `force`.
+
+### Fixed — MCP `labels` `action=create` takes a comma-separated `lang`
+
+`lang: "en-us,cs"` created a folder and a file literally named `en-us,cs` and reported success.
+Each language now gets its own file, an existing folder's casing is reused, and a key that
+already exists in one of them writes none.
+
+### Fixed — `--install-to` writes into the folder the model has (upstream 1.21.0, 1.24.0)
+
+Label writes (CLI and MCP) and MCP `generate_object` assumed `<root>/<model>/<model>`. For a
+package named differently from its model, or a package name passed as the model, they created a
+second folder the compiler never reads and reported success.
+
+- The model is now looked up by its own folder or its `Descriptor/<Model>.xml`. A name that is
+  no model fails `INSTALL_FAILED` and writes nothing.
+- `prepare` `mode=test` reads the TestEssentials reference from the model's own descriptor,
+  also under `D365FO_CUSTOM_PACKAGES_PATH`.
+
+### Fixed — `labels update` no longer rewrites languages it was given no text for (upstream 1.21.0)
+
+- `--lang en-us,cs --text en-us=X` wrote the (empty) positional value into `cs`. A language
+  without a `--text` now keeps its text, and the reply lists it in a warning.
+- A positional `<VALUE>` together with several languages is refused.
+- `--file` takes the `--text` of the language in the file name; with none, nothing is written.
+- MCP `labels` `action=update` refuses several languages in one call: it takes one text.
+
 ### Fixed — `add-control` refuses a control its parent cannot take (#290)
 
 `modify add-control FmForm Grid_Choice --type RadioButton --parent Grid` reported success, and

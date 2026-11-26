@@ -286,11 +286,20 @@ public static class SdlcRunner
         if (!string.IsNullOrWhiteSpace(resultsPath)) args.Add("/xml:" + resultsPath);
         if (parallel) args.Add("/parallel");
 
+        var started = DateTime.UtcNow;
         var (exit, stdout, stderr, elapsed) = Run(runner, args);
 
-        var resultsWritten = !string.IsNullOrWhiteSpace(resultsPath) && File.Exists(resultsPath!);
+        // Only a document this run wrote: one left at the same path by an earlier run would
+        // report that run's verdict as this one's.
+        var resultsExist = !string.IsNullOrWhiteSpace(resultsPath) && File.Exists(resultsPath!);
+        var resultsWritten = resultsExist && File.GetLastWriteTimeUtc(resultsPath!) >= started.AddSeconds(-2);
 
-        if (exit != 0)
+        // The verdict comes from the runner's own result document, not from its exit code: it
+        // exits non-zero when a test fails, and a run that dies half way still exits 0 with its
+        // remaining cases marked pending.
+        var results = resultsWritten ? SysTestResults.TryParseFile(resultsPath) : null;
+
+        if (exit != 0 && results is null)
         {
             return new TestRunOutcome(
                 ToolResult<object>.Fail("TESTS_FAILED", $"Runner exited with {exit}.",
@@ -298,13 +307,13 @@ public static class SdlcRunner
                 Clean: null);
         }
 
-        // The verdict comes from the runner's own result document, not from its exit code: a
-        // run that dies half way still exits 0 with its remaining cases marked pending.
-        var results = SysTestResults.TryParseFile(resultsPath);
-
         var warnings = new List<string>();
+        if (exit != 0)
+            warnings.Add($"The runner exited with {exit}; the results are read from the document it wrote.");
         if (!resultsWritten && !string.IsNullOrWhiteSpace(resultsPath))
-            warnings.Add($"The runner exited cleanly but wrote no result document at {resultsPath}.");
+            warnings.Add(resultsExist
+                ? $"The document at {resultsPath} is older than this run, so it was not read."
+                : $"The runner exited cleanly but wrote no result document at {resultsPath}.");
         else if (resultsWritten && results is null)
             warnings.Add($"{resultsPath} is not a SysTest result document (expected a <test-results> root).");
 
@@ -326,7 +335,7 @@ public static class SdlcRunner
             tail = stdout.Split('\n').TakeLast(40).ToArray(),
         }, warnings.Count > 0 ? warnings : null);
 
-        return new TestRunOutcome(payload, results?.Clean);
+        return new TestRunOutcome(payload, exit == 0 ? results?.Clean : false);
     }
 
     // -------------------------------------------------------------- BP check
