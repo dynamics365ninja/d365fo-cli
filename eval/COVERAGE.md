@@ -74,7 +74,7 @@ whether it is taught and proven.
 | `generate table-relation` | AxTable | ✅ | ✅ | `table-scaffolding` | `L2-table-relation-migrated` |
 | `generate find-methods` | AxTable | ✅ | ✅ | `table-scaffolding` | `L2-find-methods-basic` |
 | `generate class` | AxClass | ✅ | ✅ | `x++-class-authoring` | `L1-class-basic` |
-| `generate coc` | AxClass | ✅ | ✅ | `coc-extension-authoring`, `object-extension-authoring`, `x++-class-authoring` | `L2-coc-extension` |
+| `generate coc` | AxClass | ✅ | ✅ | `coc-extension-authoring`, `object-extension-authoring`, `table-scaffolding`, `x++-class-authoring` | `L2-coc-extension` |
 | `generate form` | AxForm | ✅ | ✅ | `form-pattern-scaffolding`, `forms-and-navigation` | `L1-form-basic`, `L1-form-details-master`, `L1-form-details-transaction`, `L1-form-dialog`, `L1-form-list-page`, `L1-form-lookup`, `L1-form-simplelist-details`, `L1-form-table-of-contents`, `L1-form-workspace` |
 | `generate datasource-method` | AxForm | ✅ | ✅ | `forms-and-navigation` | `L2-datasource-method-basic` |
 | `generate control-method` | AxForm | ✅ | ✅ | `forms-and-navigation` | `L2-control-method-basic` |
