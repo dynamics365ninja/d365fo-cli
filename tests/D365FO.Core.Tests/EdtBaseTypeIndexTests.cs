@@ -284,6 +284,27 @@ public sealed class EdtBaseTypeIndexTests : IDisposable
     }
 
     [Fact]
+    public void Upgrading_a_v22_index_clears_the_fingerprint_of_models_with_edts_only()
+    {
+        // The referenced field is only in the file, so a model with EDTs has to be read again.
+        _repo.ApplyExtract(ExtractBatch.Empty("NoEdts"), sourceFingerprint: "fp-NoEdts");
+        using (var conn = new SqliteConnection(_repo.ConnectionString))
+        {
+            conn.Open();
+            using var cmd = conn.CreateCommand();
+            cmd.CommandText = "ALTER TABLE Edts DROP COLUMN ReferenceField; PRAGMA user_version = 22;";
+            cmd.ExecuteNonQuery();
+        }
+
+        var upgraded = new MetadataRepository(_dbPath);
+        Assert.True(upgraded.EnsureSchema());
+
+        var fingerprints = upgraded.GetModelFingerprints();
+        Assert.Null(fingerprints["TestModel"]);
+        Assert.Equal("fp-NoEdts", fingerprints["NoEdts"]);
+    }
+
+    [Fact]
     public void An_index_already_at_v21_keeps_its_fingerprints()
     {
         var reopened = new MetadataRepository(_dbPath);

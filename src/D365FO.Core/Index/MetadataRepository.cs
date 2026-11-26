@@ -15,9 +15,11 @@ public sealed partial class MetadataRepository
 {
     /// <summary>Current schema version tracked in PRAGMA user_version.</summary>
     /// <remarks>
-    /// v22: no new column — a method whose trimmed signature starts with <c>static</c>
+    /// v23: Edts.ReferenceField, the field an EDT table reference joins on. It is only in the
+    /// EDT's file, so the migration clears the SourceFingerprint of every model that has EDTs.
+    /// &lt;para&gt;v22: no new column — a method whose trimmed signature starts with <c>static</c>
     /// (<c>static void main(Args _args)</c>) was indexed with IsStatic = 0. The migration sets it
-    /// in place from the stored signature, so no re-extract is needed.
+    /// in place from the stored signature, so no re-extract is needed.&lt;/para&gt;
     /// &lt;para&gt;v21: no new column — Edts.BaseType was empty for every EDT before it (issue #233), so the
     /// migration clears every model's SourceFingerprint and the next refresh re-extracts them all.
     /// &lt;para&gt;v20: Models.SourceIndexed — whether the model's method bodies are in MethodSourceFts, so a
@@ -238,8 +240,8 @@ public sealed partial class MetadataRepository
 
         if (current < 23)
         {
-            // v23: the field of the referenced table an EDT reference joins on. Null until the
-            // model is extracted again.
+            // v23: the field of the referenced table an EDT reference joins on. Filled by the
+            // re-extract the fingerprint reset further down asks for.
             var edtCols23 = conn.Query<string>("SELECT name FROM pragma_table_info('Edts')", transaction: tx)
                 .ToHashSet(StringComparer.OrdinalIgnoreCase);
             if (edtCols23.Count > 0 && !edtCols23.Contains("ReferenceField"))
@@ -309,6 +311,14 @@ public sealed partial class MetadataRepository
             // every model instead of skipping the unchanged ones. SourceIndexed is kept, so the
             // re-extract indexes method bodies exactly as the last one did.
             conn.Execute("UPDATE Models SET SourceFingerprint = NULL", transaction: tx);
+        }
+
+        if (current > 0 && current < 23)
+        {
+            // v23: the referenced field is only in the EDT's file. Clearing the fingerprint of
+            // each model that has EDTs makes the next `index refresh` read it again.
+            conn.Execute("UPDATE Models SET SourceFingerprint = NULL WHERE ModelId IN (SELECT ModelId FROM Edts)",
+                transaction: tx);
         }
 
         if (current > 0 && current < 22)
