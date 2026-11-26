@@ -31,9 +31,25 @@ form.init()
 | `FormDataSource.init()` | once per data source; link types resolved | default ranges for that data source |
 | `FormDataSource.executeQuery()` | on **every** refresh | query changes that depend on current state |
 | `FormDataSource.active()` | on every cursor move | update dependent data sources, enable/disable controls |
-| `FormDataSource.validateWrite()` | before save | validation — return `false` to block the save |
+| `FormDataSource.validateWrite()` | before save | checks that only this form needs — return `false` to block the save. Data rules go on the table (below) |
 | `FormDataSource.write()` | after save | post-save work; the record is already committed |
 | `FormControl.clicked()` / `.modified()` | user interaction | button and field handlers |
+
+### Validation and defaults: table first
+
+A rule about the data goes on the **table**: `validateWrite`, `validateDelete`,
+`validateField`, `initValue`. Override the data source method of the same name
+only for what depends on the form itself — caller context, a filter, a second
+data source, a control's state.
+
+| Writer | Runs the table method |
+|---|---|
+| A form on the table | yes — `super()` in the data source method reaches it |
+| A data entity (OData, data management) | yes, for its data sources, unless the entity turns it off |
+| X++ code: service, batch job, runnable class | only when the code calls it: `if (rec.validateWrite()) { rec.insert(); }` |
+
+A rule written on a data source is bypassed by every other writer. Writing it on
+the table is `d365fo knowledge get table-scaffolding --section "Validation and defaulting on the table"`.
 
 - Refresh the grid with `FormDataSource.research(true)` — it keeps the cursor
   position. `executeQuery()` resets it.
@@ -72,9 +88,9 @@ d365fo generate event-handler --source-kind Form --source CustTable \
 
 | Pattern | Usual extension points |
 |---|---|
-| SimpleList / setup | data source `initValue` + `validateWrite` |
-| DetailsMaster | `form.init` + data source `active` / `validateWrite` |
-| DetailsTransaction | line data source `initValue` (defaults from the header) + header `active` |
+| SimpleList / setup | table `initValue` + `validateWrite`; often nothing on the form |
+| DetailsMaster | `form.init` + data source `active`; validation in the table's `validateWrite` |
+| DetailsTransaction | line data source `initValue` (defaults from the header on screen) + header `active` |
 | Dialog | `form.init` (read `element.args()`) + `closeOk` |
 | Lookup | `form.init` + data source `executeQuery` (filter by caller context) |
 
@@ -89,8 +105,9 @@ method scaffolders instead of by hand. Both take the form's XML file as their
 first argument and merge into it:
 
 ```sh
-# Data source override: init, active, validateWrite, initValue, executeQuery, write, delete …
-d365fo generate datasource-method c:/AOT/MyModel/AxForm/FmVehicleList.xml   --datasource FmVehicle --method validateWrite
+# Data source override: init, active, executeQuery, write, delete … (validateWrite and
+# initValue only for form-specific behaviour; data rules belong on the table)
+d365fo generate datasource-method c:/AOT/MyModel/AxForm/FmVehicleList.xml   --datasource FmVehicle --method active
 
 # Control event: clicked, modified, lookup, enter, leave …
 d365fo generate control-method c:/AOT/MyModel/AxForm/FmVehicleList.xml   --control Grid_VIN --method clicked
@@ -289,6 +306,8 @@ Neither is deprecated — they remain the supported way to show a computed value
 
 - Put logic at the lifecycle point that owns the concern. Validation that lives in
   `write()` runs after the record is already saved.
+- Data validation and defaults belong on the table, not on a form data source.
+  Never copy a table rule into `validateWrite` / `validateDelete` of a data source.
 - Never read `_args.record()` without checking `_args.dataset()` first.
 - `research(true)` to refresh, `executeQuery()` to re-shape.
 - Never guess a control or data source name — `d365fo get form <Name>` first.

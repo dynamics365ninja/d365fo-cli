@@ -265,7 +265,7 @@ yourself for tasks where no such file is (bug investigation, questions, reviews)
 | [`ssrs-report-authoring`](ssrs-report-authoring.instructions.md) | TmpTable to Contract to DP to Controller to AxReport, Print management |
 | [`sysoperation-batch-patterns`](sysoperation-batch-patterns.instructions.md) | SysOperation batch jobs, RunBase, migration scripts, retryable/async batch |
 | [`system-objects`](system-objects.instructions.md) | kernel types, xRecord/Common members, system fields, why the index cannot carry them |
-| [`table-scaffolding`](table-scaffolding.instructions.md) | Table creation, EDTs, relations, indexes, `TableGroup` vs `TableType`, inheritance |
+| [`table-scaffolding`](table-scaffolding.instructions.md) | Table creation, EDTs, relations, indexes, `TableGroup` vs `TableType`, inheritance, validation and defaulting methods |
 | [`testing-and-quality`](testing-and-quality.instructions.md) | SysTestCase, ATL, and the offline validate/lint gates |
 | [`transactions-and-concurrency`](transactions-and-concurrency.instructions.md) | tts scoping, OCC retry, `UnitOfWork`, error handling |
 | [`warehouse-mobile-app`](warehouse-mobile-app.instructions.md) | warehouse-app screens, ProcessGuide flows, legacy WHSWorkExecuteDisplay, work execution |

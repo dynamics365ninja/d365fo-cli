@@ -19,6 +19,19 @@ was ported from.
 
 ## [Unreleased]
 
+### Fixed — guidance puts data validation and defaults on the table (#293)
+
+The form references and `form-pattern spec` presented the data source `initValue` /
+`validateWrite` as the place for validation and defaults, so a rule written that way was
+bypassed by every writer but that form.
+
+- `forms-and-navigation` and `form-pattern-scaffolding` send data rules to the table and keep
+  data source overrides for form-specific behaviour.
+- `table-scaffolding` gains a section on `validateWrite` / `validateDelete` / `validateField` /
+  `initValue` with `modify add-method table`.
+- `prepare` no longer says `validateWrite` runs for X++ writes: plain `insert()` / `update()`
+  do not call it.
+
 ### Fixed — relations derived from an EDT join on the right field (upstream 1.24.0)
 
 `generate table-relation` joined on a field named after the EDT. An EDT's `<TableReferences>`

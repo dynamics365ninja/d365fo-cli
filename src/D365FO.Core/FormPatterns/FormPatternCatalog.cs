@@ -156,8 +156,8 @@ public static class FormPatternCatalog
             LifecycleGuidance = new[]
             {
                 "Usually no form methods are needed — the grid binds straight to the datasource.",
-                "Override the datasource initValue() to default new-record fields.",
-                "Override the datasource validateWrite() for cross-field validation before save.",
+                "Defaults and validation belong on the table (initValue(), validateWrite()), so other writers share them.",
+                "Override the datasource initValue()/validateWrite() only for what depends on this form.",
             },
         },
         new FormPatternSpec
@@ -212,7 +212,7 @@ public static class FormPatternCatalog
             LifecycleGuidance = new[]
             {
                 "Override the datasource active() to refresh dependent detail content when selection changes.",
-                "Override the datasource initValue() to default new-record fields.",
+                "Default new-record fields in the table's initValue(); override the datasource's only for defaults this form supplies.",
             },
             Notes = new[]
             {
@@ -280,7 +280,7 @@ public static class FormPatternCatalog
             {
                 "Override form init() to capture caller context (element.args()).",
                 "Override the datasource active() to enable/disable controls per record state.",
-                "Override the datasource validateWrite()/write() for save-time logic.",
+                "Validate records in the table's validateWrite(); override the datasource validateWrite()/write() only for form-specific save logic.",
             },
         },
         new FormPatternSpec
@@ -412,7 +412,7 @@ public static class FormPatternCatalog
             {
                 "Override form init() to read caller args (element.args()) and default field values.",
                 "Override the OK command button clicked() to validate and apply the action.",
-                "For quick-create dialogs bind a datasource and override its initValue().",
+                "For quick-create dialogs bind a datasource; override its initValue() only for defaults this dialog supplies.",
             },
         },
         new FormPatternSpec
@@ -793,7 +793,7 @@ public static class FormPatternCatalog
             ExtraRoot = ExtraChildren.Any,
             LifecycleGuidance = new[]
             {
-                "Override the datasource active()/validateWrite() for record-state logic.",
+                "Override the datasource active() for record-state logic; record validation belongs in the table's validateWrite().",
             },
             Notes = new[]
             {
