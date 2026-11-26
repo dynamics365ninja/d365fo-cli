@@ -335,7 +335,8 @@ public static class UndoEngine
             {
                 if (entry.PreImage is null)
                     return (false, "No pre-image recorded for this label delete.", null, null);
-                LabelFileWriter.CreateOrUpdate(entry.TargetPath, entry.ObjectName, entry.PreImage, overwrite: true);
+                LabelFileWriter.Restore(entry.TargetPath, entry.ObjectName, entry.PreImage,
+                    entry.SecondaryKey?.Split('\n') ?? []);
                 return (true, null, $"recreated label '{entry.ObjectName}' in {entry.TargetPath}", null);
             }
 

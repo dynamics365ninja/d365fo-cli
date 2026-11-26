@@ -207,28 +207,6 @@ public sealed class LabelCreateCommand : Command<LabelCreateCommand.Settings>
         string? Error,
         string? Message,
         IReadOnlyList<object> Files);
-
-    /// <summary>
-    /// Reuse the existing locale folder's casing ("en-US" vs "en-us") so writes
-    /// on case-sensitive file systems never create a duplicate locale folder.
-    /// </summary>
-    internal static string ResolveOnDiskCasing(string resourcesDir, string lang)
-    {
-        try
-        {
-            if (Directory.Exists(resourcesDir))
-            {
-                foreach (var dir in Directory.EnumerateDirectories(resourcesDir))
-                {
-                    var name = System.IO.Path.GetFileName(dir);
-                    if (string.Equals(name, lang, StringComparison.OrdinalIgnoreCase))
-                        return name;
-                }
-            }
-        }
-        catch { /* fall through to requested casing */ }
-        return lang;
-    }
 }
 
 public sealed class LabelRenameCommand : Command<LabelRenameCommand.Settings>
@@ -299,7 +277,32 @@ public sealed class LabelDeleteCommand : Command<LabelDeleteCommand.Settings>
         public string Key { get; init; } = "";
 
         [CommandOption("--file <PATH>")]
+        [System.ComponentModel.Description("Delete from this one label file. Required unless --install-to is used.")]
         public string? File { get; init; }
+
+        [CommandOption("--install-to <MODEL>")]
+        [System.ComponentModel.Description("Model name: deletes the label from every language of its label file.")]
+        public string? InstallTo { get; init; }
+
+        [CommandOption("--lang <LANG>")]
+        [System.ComponentModel.Description("With --install-to: only these languages, comma-separated.")]
+        public string? Lang { get; init; }
+
+        [CommandOption("--label-file <NAME>")]
+        [System.ComponentModel.Description("Label file name used with --install-to (default: model name).")]
+        public string? LabelFile { get; init; }
+
+        [CommandOption("--dry-run")]
+        [System.ComponentModel.Description("Report the files and references; write nothing.")]
+        public bool DryRun { get; init; }
+
+        [CommandOption("--force")]
+        [System.ComponentModel.Description("Delete although the model still references the label.")]
+        public bool Force { get; init; }
+
+        [CommandOption("--allow-extension-label-file")]
+        [System.ComponentModel.Description("Permit deleting from a label file EXTENSION (…_Extension…). Off by default.")]
+        public bool AllowExtensionLabelFile { get; init; }
     }
 
     public override int Execute(CommandContext ctx, Settings settings)
@@ -307,25 +310,35 @@ public sealed class LabelDeleteCommand : Command<LabelDeleteCommand.Settings>
         var kind = OutputMode.Resolve(settings.Output);
         if (string.IsNullOrWhiteSpace(settings.Key))
             return RenderHelpers.Render(kind, ToolResult<object>.Fail(D365FoErrorCodes.BadInput, "Label key required."));
-        if (string.IsNullOrWhiteSpace(settings.File))
-            return RenderHelpers.Render(kind, ToolResult<object>.Fail(D365FoErrorCodes.BadInput, "--file <PATH> required."));
+
+        IReadOnlyList<string> files;
+        if (!string.IsNullOrWhiteSpace(settings.File))
+        {
+            files = [settings.File!];
+        }
+        else if (!string.IsNullOrWhiteSpace(settings.InstallTo))
+        {
+            var modelDir = Generate.GenerateInstaller.ResolveModelFolder(settings.InstallTo!);
+            if (modelDir is null)
+                return RenderHelpers.Render(kind, Generate.GenerateInstaller.ModelFolderNotFound(settings.InstallTo!));
+            var labelFile = string.IsNullOrWhiteSpace(settings.LabelFile) ? settings.InstallTo! : settings.LabelFile!;
+            var languages = settings.Lang?.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+            files = LabelDeletion.FilesOf(modelDir, labelFile, languages);
+            if (files.Count == 0)
+                return RenderHelpers.Render(kind, ToolResult<object>.Fail("FILE_NOT_FOUND",
+                    $"Model '{settings.InstallTo}' has no '{labelFile}' label file for the requested language(s)."));
+        }
+        else
+        {
+            return RenderHelpers.Render(kind, ToolResult<object>.Fail(D365FoErrorCodes.BadInput,
+                "--file <PATH> or --install-to <MODEL> is required."));
+        }
 
         try
         {
-            var res = LabelFileWriter.Delete(settings.File!, settings.Key);
-            LabelJournalRecorder.RecordDelete(res, "labels delete");
-            return res.Outcome switch
-            {
-                WriteOutcome.FileMissing => RenderHelpers.Render(kind, ToolResult<object>.Fail("FILE_NOT_FOUND", $"Label file not found: {settings.File}")),
-                WriteOutcome.KeyMissing => RenderHelpers.Render(kind, ToolResult<object>.Fail("KEY_NOT_FOUND", $"Label '{settings.Key}' not present in file.")),
-                _ => RenderHelpers.Render(kind, ToolResult<object>.Success(new
-                {
-                    outcome = res.Outcome.ToString(),
-                    file = res.Path,
-                    key = res.Key,
-                    removedValue = res.OldValue,
-                })),
-            };
+            return RenderHelpers.Render(kind, LabelDeletion.Run(
+                new LabelDeleteRequest(settings.Key, files, settings.DryRun, settings.Force, settings.AllowExtensionLabelFile),
+                RepoFactory.Create(), "labels delete"));
         }
         catch (Exception ex)
         {
@@ -357,25 +370,17 @@ internal static class LabelTargets
         }
         else
         {
-            var cfg = D365FoSettings.FromEnvironment();
-            // Search custom paths first (write target for git repo models), then standard path.
-            var allRoots = cfg.CustomPackagesPaths.Concat(new[] { cfg.PackagesPath });
-            var root = allRoots
-                .FirstOrDefault(r => !string.IsNullOrEmpty(r) && Directory.Exists(Path.Combine(r!, installTo!)))
-                ?? cfg.CustomPackagesPaths.FirstOrDefault()
-                ?? cfg.PackagesPath;
-            if (string.IsNullOrEmpty(root))
-                return new Resolution([], ToolResult<object>.Fail("INSTALL_FAILED",
-                    $"Cannot resolve label file path for model '{installTo}': neither D365FO_CUSTOM_PACKAGES_PATH nor D365FO_PACKAGES_PATH is set.",
-                    hint: "Set D365FO_CUSTOM_PACKAGES_PATH to your git repo PackagesLocalDirectory, or use --file with an absolute path."));
+            var modelDir = Generate.GenerateInstaller.ResolveModelFolder(installTo!);
+            if (modelDir is null)
+                return new Resolution([], Generate.GenerateInstaller.ModelFolderNotFound(installTo!));
 
             var langs = (string.IsNullOrWhiteSpace(lang) ? "en-us" : lang!)
                 .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
             var lf = string.IsNullOrWhiteSpace(labelFile) ? installTo! : labelFile!;
-            var resourcesDir = Path.Combine(root!, installTo!, installTo!, "AxLabelFile", "LabelResources");
+            var resourcesDir = Path.Combine(modelDir, "AxLabelFile", "LabelResources");
             foreach (var l in langs)
             {
-                var diskLang = LabelCreateCommand.ResolveOnDiskCasing(resourcesDir, l);
+                var diskLang = LabelFileWriter.OnDiskLanguage(resourcesDir, l);
                 files.Add(Path.Combine(resourcesDir, diskLang, $"{lf}.{diskLang}.label.txt"));
             }
         }
@@ -487,6 +492,12 @@ public sealed class LabelUpdateCommand : Command<LabelUpdateCommand.Settings>
                 + $"(e.g. {string.Join(" ", langs.Select(l => $"--text {l}=<VALUE>"))}), or correct one language at a time. "
                 + "Writing the same string into every language would silently replace the other translations."));
 
+        if (multiLingual && !string.IsNullOrWhiteSpace(settings.Value))
+            return RenderHelpers.Render(kind, ToolResult<object>.Fail(D365FoErrorCodes.BadInput,
+                $"A positional <VALUE> cannot be given for {langs.Length} languages.",
+                "Give the text of each language you are correcting as --text <LANG>=<VALUE>; "
+                + "a language without one keeps the text it has."));
+
         if (byLang.Count == 0 && string.IsNullOrWhiteSpace(settings.Value))
             return RenderHelpers.Render(kind, ToolResult<object>.Fail(D365FoErrorCodes.BadInput,
                 "The corrected text is required.", "Pass it as <VALUE>, or as --text <LANG>=<VALUE>."));
@@ -506,18 +517,31 @@ public sealed class LabelUpdateCommand : Command<LabelUpdateCommand.Settings>
 
         var results = new List<object>();
         var missing = new List<string>();
+        var kept = new List<string>();
         try
         {
             for (var i = 0; i < targets.Files.Count; i++)
             {
                 var file = targets.Files[i];
                 // Files come back in --lang order, so the language a file carries is known
-                // without re-parsing its name.
-                var lang = string.IsNullOrWhiteSpace(settings.File) && i < langs.Length ? langs[i] : null;
-                var value = lang is not null && byLang.TryGetValue(lang, out var perLang)
-                    ? perLang
-                    : byLang.Count == 1 && langs.Length == 1 ? byLang.Values.First()
-                    : settings.Value;
+                // without re-parsing its name; an explicit --file says it in its name.
+                var lang = string.IsNullOrWhiteSpace(settings.File)
+                    ? (i < langs.Length ? langs[i] : null)
+                    : LabelFileWriter.LanguageOf(file);
+
+                string value;
+                if (byLang.Count == 0)
+                    value = settings.Value;
+                else if (lang is not null && byLang.TryGetValue(lang, out var perLang))
+                    value = perLang;
+                else if (lang is null && byLang.Count == 1)
+                    value = byLang.Values.First();
+                else
+                {
+                    // No text was given for this language: it keeps the one it has.
+                    kept.Add(file);
+                    continue;
+                }
 
                 var res = LabelFileWriter.Update(file, settings.Key, value);
                 if (res.Outcome == WriteOutcome.KeyMissing)
@@ -541,6 +565,11 @@ public sealed class LabelUpdateCommand : Command<LabelUpdateCommand.Settings>
             return RenderHelpers.Render(kind, ToolResult<object>.Fail(D365FoErrorCodes.WriteFailed, ex.Message));
         }
 
+        if (results.Count == 0 && missing.Count == 0)
+            return RenderHelpers.Render(kind, ToolResult<object>.Fail(D365FoErrorCodes.BadInput,
+                "No --text names the language of a target file, so nothing was corrected.",
+                hint: $"Checked: {string.Join(", ", kept)}. Pass --text <LANG>=<VALUE> with that file's language."));
+
         // Nothing updated anywhere is a failure, not an empty success: the caller believes a
         // correction landed.
         if (results.Count == 0)
@@ -549,13 +578,17 @@ public sealed class LabelUpdateCommand : Command<LabelUpdateCommand.Settings>
                 hint: $"Checked: {string.Join(", ", targets.Files)}. Use `labels create` to add it, or "
                     + "`labels search` to find the key it was actually written under."));
 
-        return RenderHelpers.Render(kind, ToolResult<object>.Success(new
+        var warnings = new List<string>();
+        if (missing.Count > 0)
+            warnings.Add($"{missing.Count} target file(s) do not carry this key and were left alone: {string.Join(", ", missing)}");
+        if (kept.Count > 0)
+            warnings.Add($"{kept.Count} target file(s) had no --text for their language and keep their current text: {string.Join(", ", kept)}");
+
+        return RenderHelpers.Render(kind, ToolResult<object>.Success((object)new
         {
             key = settings.Key,
             updated = results.Count,
             files = results,
-        }, missing.Count > 0
-            ? [$"{missing.Count} target file(s) do not carry this key and were left alone: {string.Join(", ", missing)}"]
-            : null));
+        }, warnings.Count > 0 ? warnings : null));
     }
 }

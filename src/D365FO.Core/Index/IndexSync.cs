@@ -241,6 +241,35 @@ public static class IndexSync
                 .FirstOrDefault();
 
     /// <summary>
+    /// The folder a write for <paramref name="model"/> belongs in, or null when no root has the
+    /// model.
+    /// </summary>
+    /// <remarks>
+    /// <see cref="FindModelDir"/> only sees a model that already holds objects, so a model that
+    /// was just created is also accepted: one declared by <c>&lt;Package&gt;/Descriptor/&lt;Model&gt;.xml</c>,
+    /// or with an existing <c>&lt;root&gt;/&lt;Model&gt;/&lt;Model&gt;</c> folder. Nothing is assumed beyond that —
+    /// a write that guesses <c>&lt;root&gt;/&lt;model&gt;/&lt;model&gt;</c> creates a second folder the compiler never
+    /// reads when the package is named differently, and reports success.
+    /// </remarks>
+    public static string? FindWritableModelDir(IEnumerable<string?> roots, string model)
+    {
+        if (string.IsNullOrWhiteSpace(model)) return null;
+        foreach (var root in roots)
+        {
+            if (string.IsNullOrWhiteSpace(root) || !Directory.Exists(root)) continue;
+            if (FindModelDir([root], model) is { } found) return found;
+            foreach (var package in Directory.EnumerateDirectories(root))
+            {
+                if (File.Exists(Path.Combine(package, "Descriptor", model + ".xml")))
+                    return Path.Combine(package, model);
+            }
+            var conventional = Path.Combine(root, model, model);
+            if (Directory.Exists(conventional)) return conventional;
+        }
+        return null;
+    }
+
+    /// <summary>
     /// Model directories under a packages root, optionally narrowed to one model.
     /// </summary>
     /// <remarks>

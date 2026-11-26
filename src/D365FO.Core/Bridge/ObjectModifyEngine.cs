@@ -373,6 +373,10 @@ public static partial class ObjectModifyEngine
         var (doc, preImage, readFailure) = ReadOrCreate(client, target!, kind);
         if (readFailure is not null) return readFailure;
 
+        // What the document looks like before any edit, to tell what the edit lost from what the
+        // object already carried.
+        var baseline = new XDocument(doc!);
+
         // ---- 3. Structured edit(s) ----
         // A batch applies every operation to the SAME in-memory document, so N changes cost one
         // bridge read, one write and one journal entry. Stopped at the first failure, and since
@@ -403,21 +407,26 @@ public static partial class ObjectModifyEngine
             applied.Add(stepApplied);
         }
 
+        // An element that arrives out of contract order is not rejected by the AOT reader, it is
+        // DROPPED: DataContractSerializer matches children in order and skips anything early or
+        // late. The disk write path has always canonicalised (ScaffoldFileWriter.Finalize) but
+        // this one did not, so an edit that created a missing collection — `<Fields>` on a table
+        // that had none, `<EnumValues>`, `<Controls>` — appended it at the end of the root and
+        // the write came back "ok" with the change silently absent. Canonicalise the same way
+        // before serialising; it is idempotent and leaves collection item order alone.
+        var newXml = Canonical(doc!, target!);
+
+        // The provider reads the document before storing it, and skips what its model does not
+        // declare. Asked now, before anything is written, a change that would vanish is refused
+        // instead of reported as applied. A dry run is asked the same question.
+        if (LostByTheEdit(client, target!, Canonical(baseline, target!), newXml, warnings) is { } lost)
+            return lost;
+
         // A dry run stops here: every step has been applied to the in-memory document and
         // validated, and nothing is journaled or written.
         if (!request.DryRun)
         {
             // ---- 4. Write back, journaling the pre-image first ----
-            // An element that arrives out of contract order is not rejected by the AOT reader, it is
-            // DROPPED: DataContractSerializer matches children in order and skips anything early or
-            // late. The disk write path has always canonicalised (ScaffoldFileWriter.Finalize) but
-            // this one did not, so an edit that created a missing collection — `<Fields>` on a table
-            // that had none, `<EnumValues>`, `<Controls>` — appended it at the end of the root and
-            // the write came back "ok" with the change silently absent. Canonicalise the same way
-            // before serialising; it is idempotent and leaves collection item order alone.
-            if (target!.Kind == "formextension") ContractNamespaceApplier.Apply(doc!);
-            ContractOrderCanonicalizer.Apply(doc!);
-            var newXml = doc!.ToString(SaveOptions.DisableFormatting);
             var verb = target!.Exists ? "updateObject" : "createObject";
 
             RecordJournalEntry(target, preImage, DescribeCommand(request, kind), journalDbOverride);
@@ -1002,6 +1011,61 @@ public static partial class ObjectModifyEngine
     }
 
     // ------------------------------------------------------------------- read leg
+
+    private static string Canonical(XDocument doc, WriteTarget target)
+    {
+        if (target.Kind == "formextension") ContractNamespaceApplier.Apply(doc);
+        ContractOrderCanonicalizer.Apply(doc);
+        return doc.ToString(SaveOptions.DisableFormatting);
+    }
+
+    /// <summary>
+    /// A failure when the provider would not store part of what the edit added; null otherwise.
+    /// </summary>
+    /// <remarks>
+    /// An element or a value that does not arrive at all fails the call. A value that arrives
+    /// spelled differently is only reported: the provider normalises some (a decimal, a number
+    /// with leading zeros). A bridge that cannot answer is not a reason to refuse the write.
+    /// </remarks>
+    private static ToolResult<object>? LostByTheEdit(
+        BridgeClient client, WriteTarget target, string beforeXml, string afterXml, List<string> warnings)
+    {
+        var after = DroppedByProvider(client, target.Kind, afterXml);
+        if (after.Count == 0) return null;
+        var added = after.Except(DroppedByProvider(client, target.Kind, beforeXml), StringComparer.Ordinal).ToList();
+
+        var absent = added.Where(d =>
+            d.Contains("— no such property", StringComparison.Ordinal)
+            || d.Contains("— the whole element did not apply", StringComparison.Ordinal)
+            || d.Contains("— not present in the loaded object", StringComparison.Ordinal)
+            || d.EndsWith("(object has <null>)", StringComparison.Ordinal)).ToList();
+        if (absent.Count > 0)
+            return ToolResult<object>.Fail(D365FoErrorCodes.ChangeNotApplied,
+                $"The metadata model of {target.Kind} '{target.Name}' would not store: {string.Join("; ", absent)}. Nothing was written.",
+                target.IsExtension
+                    ? "An extension holds only its own members. A property of the base object is changed there, "
+                      + "or with the operation that writes a property modification."
+                    : "Check the property name and where it belongs.");
+
+        foreach (var changed in added)
+            warnings.Add($"The provider stores this differently from how it was given: {changed}");
+        return null;
+    }
+
+    private static IReadOnlyList<string> DroppedByProvider(BridgeClient client, string kind, string xml)
+    {
+        try
+        {
+            var result = client.SendAsync("validateArtifact", new JsonObject { ["kind"] = kind, ["xml"] = xml })
+                .GetAwaiter().GetResult();
+            if ((bool?)result?["deserialized"] != true || result["dropped"] is not JsonArray dropped) return [];
+            return dropped.Select(d => (string?)d).OfType<string>().ToList();
+        }
+        catch (BridgeException)
+        {
+            return [];
+        }
+    }
 
     private static (XDocument? Doc, string? PreImage, ToolResult<object>? Failure) ReadOrCreate(
         BridgeClient client, WriteTarget target, string kind)

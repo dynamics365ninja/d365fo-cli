@@ -59,6 +59,14 @@ catch (CommandParseException ex)
             ArgumentShapes.HintFor(refreshArgs, ex.Message))));
     return 2;
 }
+catch (D365FO.Core.ConfigUnreadableException ex)
+{
+    // `init` and `config` run past the entry-point check, and refuse to save over the file here.
+    Console.Error.WriteLine(D365FO.Core.D365Json.Serialize(
+        D365FO.Core.ToolResult<object>.Fail(
+            D365FO.Core.D365FoErrorCodes.ConfigUnreadable, ex.Message, D365FO.Core.ConfigUnreadableException.Hint)));
+    return 2;
+}
 catch (Exception ex)
 {
     Console.Error.WriteLine(D365FO.Core.D365Json.Serialize(
