@@ -1,3 +1,4 @@
+using System.Text;
 using System.Text.RegularExpressions;
 
 namespace D365FO.Core.Validation;
@@ -476,6 +477,12 @@ public static class XppValidator
     /// masked copy, so a '{' inside a literal or a doc comment cannot shift the method
     /// boundaries.
     /// </summary>
+    /// <remarks>
+    /// Only a block whose header branches or loops makes <c>next</c> conditional. A
+    /// <c>try</c>, <c>finally</c>, <c>using</c> or bare block runs its body every time and xppc
+    /// accepts <c>next</c> there; counting every block deeper than the method body refused
+    /// shipped extensions that compile. <c>catch</c> stays conditional.
+    /// </remarks>
     private static void CheckCocNextUnconditional(string code, string masked, List<XppViolation> v)
     {
         if (!Regex.IsMatch(code, @"\[ExtensionOf\s*\(", RegexOptions.IgnoreCase)) return;
@@ -491,6 +498,13 @@ public static class XppValidator
         int methodBodyDepth = 0;
         var nexts = new List<(int Line, string Excerpt, bool Conditional)>();
         int? earlyReturn = null;
+        // One entry per block open inside the current method body: does its header branch?
+        var blocks = new Stack<bool>();
+        // The text since the last '{', '}' or statement-ending ';' — the header of the next
+        // block, or of the statement being read. It spans lines (`if (a`, `&& b)`, `{`), and a
+        // ';' inside parentheses belongs to it (`for (i = 0; i < n; i++)`).
+        var header = new StringBuilder();
+        int parens = 0;
 
         void CloseMethod()
         {
@@ -528,17 +542,11 @@ public static class XppValidator
                 classBodyDepth = depthAtLineStart + 1;
             }
 
+            Match? nextCall = null;
             if (methodName is not null)
             {
-                var nextCall = Regex.Match(clean, $@"\bnext\s+{Regex.Escape(methodName)}\b");
-                if (nextCall.Success)
-                {
-                    nexts.Add((i + 1, lines[i].Trim(),
-                        // Deeper than the method body means it sits inside if/while/switch/try;
-                        // the same-line form "if (ret) ret = next foo();" never opens a block.
-                        depthAtLineStart > methodBodyDepth || Regex.IsMatch(clean, @"\b(if|while|for|switch|case)\b")));
-                }
-                else if (earlyReturn is null && depthAtLineStart > methodBodyDepth && Regex.IsMatch(clean, @"\breturn\b"))
+                nextCall = Regex.Match(clean, $@"\bnext\s+{Regex.Escape(methodName)}\b");
+                if (!nextCall.Success && earlyReturn is null && depthAtLineStart > methodBodyDepth && Regex.IsMatch(clean, @"\breturn\b"))
                 {
                     earlyReturn = i + 1;
                 }
@@ -555,18 +563,58 @@ public static class XppValidator
                 }
             }
 
-            foreach (var ch in clean)
+            // A directive line (#if.X) is not part of any statement's header.
+            var isDirective = clean.TrimStart().StartsWith('#');
+            for (int c = 0; c < clean.Length; c++)
             {
-                if (ch == '{') depth++;
+                if (nextCall is { Success: true } && c == nextCall.Index)
+                {
+                    // Judged where the call sits: inside a branching block, or after a header
+                    // that opens no block of its own — "if (ret) ret = next foo();".
+                    nexts.Add((i + 1, lines[i].Trim(),
+                        blocks.Contains(true) || ConditionalHeader.IsMatch(header.ToString())));
+                }
+
+                var ch = clean[c];
+                if (ch == '{')
+                {
+                    depth++;
+                    if (methodName is not null && depth > methodBodyDepth)
+                        blocks.Push(ConditionalHeader.IsMatch(header.ToString()));
+                    header.Clear();
+                    parens = 0;
+                }
                 else if (ch == '}')
                 {
+                    if (methodName is not null && depth > methodBodyDepth) blocks.TryPop(out _);
                     depth--;
-                    if (methodName is not null && depth < methodBodyDepth) CloseMethod();
+                    if (methodName is not null && depth < methodBodyDepth)
+                    {
+                        CloseMethod();
+                        blocks.Clear();
+                    }
+                    header.Clear();
+                    parens = 0;
+                }
+                else if (ch == ';' && parens <= 0)
+                {
+                    header.Clear();
+                }
+                else if (!isDirective)
+                {
+                    if (ch == '(') parens++;
+                    else if (ch == ')') parens--;
+                    header.Append(ch);
                 }
             }
+            header.Append(' ');
         }
         CloseMethod();
     }
+
+    /// <summary>A block or statement header that branches or loops.</summary>
+    private static readonly Regex ConditionalHeader = new(
+        @"\b(if|else|while|for|do|switch|case|default|catch)\b", RegexOptions.Compiled);
 
     /// <summary>Global functions, not members of <c>Common</c> — unqualified on a table buffer.</summary>
     private static readonly string[] GlobalFunctionsNotOnTable =

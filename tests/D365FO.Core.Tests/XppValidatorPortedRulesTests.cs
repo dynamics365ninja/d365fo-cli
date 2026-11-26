@@ -210,6 +210,190 @@ public class XppValidatorPortedRulesTests
         Assert.DoesNotContain(v, x => x.Rule == "COC004");
     }
 
+    /// <summary>An extension class around <paramref name="methods"/>.</summary>
+    private static string Coc(string methods) => $$"""
+        [ExtensionOf(tableStr(CustTable))]
+        final class CustTable_Extension
+        {
+        {{methods}}
+        }
+        """;
+
+    private static int Coc004Count(string methods) => Run(Coc(methods)).Count(x => x.Rule == "COC004");
+
+    // Only a block that branches or loops makes `next` conditional. try, finally, using and a
+    // bare block run their body every time and xppc accepts next there; counting every block
+    // deeper than the method body refused shipped extensions that compile.
+    [Theory]
+    [InlineData("""
+        public void insert()
+        {
+            try
+            {
+                next insert();
+
+                if (this.RecId)
+                {
+                    this.log();
+                }
+            }
+            finally
+            {
+                if (this.RecId)
+                {
+                    this.dispose();
+                }
+            }
+        }
+        """)]
+    [InlineData("""
+        public InventDimId insertFromForm(InventDim _inventDim)
+        {
+            using (var _ = MyContext::construct())
+            {
+                return next insertFromForm(_inventDim);
+            }
+        }
+        """)]
+    [InlineData("""
+        public void insert()
+        {
+            using (var context = MyContext::construct(
+                this.RecId))
+            {
+                next insert();
+            }
+        }
+        """)]
+    [InlineData("""
+        public void insert()
+        {
+            {
+                next insert();
+            }
+        }
+
+        public void update()
+        {
+            try { next update(); } finally { this.log(); }
+        }
+        """)]
+    public void Coc004_quiet_on_next_inside_a_block_that_always_runs(string methods)
+        => Assert.Equal(0, Coc004Count(methods));
+
+    [Theory]
+    // an if nested in a try
+    [InlineData("""
+        public void insert()
+        {
+            try
+            {
+                if (this.RecId)
+                {
+                    next insert();
+                }
+            }
+            finally
+            {
+            }
+        }
+        """)]
+    // a catch runs only on an exception
+    [InlineData("""
+        public void insert()
+        {
+            try
+            {
+                this.prepare();
+            }
+            catch
+            {
+                next insert();
+            }
+        }
+        """)]
+    // else on its own line
+    [InlineData("""
+        public void insert()
+        {
+            if (this.RecId)
+            {
+                this.prepare();
+            }
+            else
+            {
+                next insert();
+            }
+        }
+        """)]
+    // a condition spanning lines: neither the brace's line nor the one above holds the keyword
+    [InlineData("""
+        public void insert()
+        {
+            if (this.AccountNum
+                && this.CustGroup)
+            {
+                next insert();
+            }
+        }
+        """)]
+    [InlineData("""
+        public void update()
+        {
+            while (this.AccountNum
+                && this.CustGroup) {
+                next update();
+            }
+        }
+        """)]
+    // a for header carries semicolons of its own
+    [InlineData("""
+        public void update()
+        {
+            int i;
+            for (i = 0; i < 2; i++)
+            {
+                next update();
+            }
+        }
+        """)]
+    // a switch, with the case on its own lines
+    [InlineData("""
+        public void update()
+        {
+            switch (this.CustGroup)
+            {
+                case 'A':
+                    next update();
+                    break;
+            }
+        }
+        """)]
+    public void Coc004_flags_next_inside_a_block_that_branches_or_loops(string methods)
+        => Assert.Equal(1, Coc004Count(methods));
+
+    // A condition that opens no block of its own still decides whether next runs.
+    [Theory]
+    [InlineData("""
+        public void insert()
+        {
+            if (this.RecId)
+                next insert();
+        }
+        """)]
+    [InlineData("""
+        public void insert()
+        {
+            if (this.RecId)
+            {
+                this.prepare();
+            }
+            else { next insert(); }
+        }
+        """)]
+    public void Coc004_flags_next_after_a_condition_without_its_own_line(string methods)
+        => Assert.Equal(1, Coc004Count(methods));
+
     [Fact]
     public void Coc005_flags_this_checkFailed_on_table_buffer()
     {

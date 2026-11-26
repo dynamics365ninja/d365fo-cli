@@ -19,6 +19,14 @@ was ported from.
 
 ## [Unreleased]
 
+### Fixed — COC004 accepts `next` in `try`, `finally` and `using` (upstream 1.22.0)
+
+Any block deeper than the method body counted as conditional, so `validate xpp` refused shipped
+extensions that compile. Only a block whose header branches or loops does now (`if`, `else`,
+`while`, `for`, `do`, `switch`, `case`, `default`, `catch`), including a header that spans lines.
+`else { next … }` and a `next` on the line under a braceless `if`, which used to pass, are
+reported.
+
 ### Fixed — relations derived from an EDT join on the right field (upstream 1.24.0)
 
 `generate table-relation` joined on a field named after the EDT. An EDT's `<TableReferences>`
