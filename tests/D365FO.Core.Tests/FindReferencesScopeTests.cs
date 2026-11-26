@@ -173,8 +173,8 @@ public sealed class FindReferencesScopeTests : IDisposable
         Assert.Equal(new MemberNeedle("FmVehicleService", "construct"), result.Member);
         Assert.Contains(result.Hits, h => h is { Name: "StdVehicleCaller", Method: "callService" });
         Assert.Contains(result.Hits, h => h is { Kind: "Form", Name: "FmVehicleList", Method: "RunServiceButton.clicked" });
-        // A method of the owner itself counts even when it does not name its own class.
-        Assert.Contains(result.Hits, h => h is { Name: "FmVehicleService", Method: "construct" });
+        // The member's own declaration is not a call to it.
+        Assert.DoesNotContain(result.Hits, h => h is { Name: "FmVehicleService", Method: "construct" });
         Assert.All(result.Hits, h => Assert.NotEmpty(h.Matches));
         Assert.Null(result.Hint);
     }

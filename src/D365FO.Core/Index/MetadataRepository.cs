@@ -888,8 +888,10 @@ public sealed partial class MetadataRepository
     /// <see cref="SearchMethodSource(string, int, string?, string?)"/> over a set of models
     /// (null: every model), optionally narrowed to the methods of one object.
     /// </summary>
+    /// <remarks><paramref name="bodyOf"/> also returns <see cref="MethodSourceMatch.Body"/> for methods of that name.</remarks>
     public IReadOnlyList<MethodSourceMatch> SearchMethodSource(
-        string query, int limit, IReadOnlyCollection<string>? models, string? kind, string? objectName)
+        string query, int limit, IReadOnlyCollection<string>? models, string? kind, string? objectName,
+        string? bodyOf = null)
     {
         limit = ClampLimit(limit, 100);
         if (models is { Count: 0 }) return Array.Empty<MethodSourceMatch>();
@@ -904,7 +906,11 @@ public sealed partial class MetadataRepository
             using var cmd = conn.CreateCommand();
             cmd.CommandText = @"
                 SELECT Kind, ObjectName, MethodName, Model, SourcePath,
-                       snippet(MethodSourceFts, 0, '«', '»', ' … ', 12) AS Snippet
+                       snippet(MethodSourceFts, 0, '«', '»', ' … ', 12) AS Snippet,
+                       -- A form member is named 'CustTable.init'.
+                       CASE WHEN MethodName = $own COLLATE NOCASE
+                              OR substr(MethodName, -length($own) - 1) = '.' || $own COLLATE NOCASE
+                            THEN Body END AS Body
                 FROM MethodSourceFts
                 WHERE MethodSourceFts MATCH $q
                   {ModelFilter}
@@ -924,6 +930,7 @@ public sealed partial class MetadataRepository
             cmd.Parameters.AddWithValue("$limit", limit);
             cmd.Parameters.AddWithValue("$kind", (object?)kind ?? DBNull.Value);
             cmd.Parameters.AddWithValue("$obj", (object?)objectName ?? DBNull.Value);
+            cmd.Parameters.AddWithValue("$own", (object?)bodyOf ?? DBNull.Value);
             using var reader = cmd.ExecuteReader();
             var results = new List<MethodSourceMatch>();
             while (reader.Read())
@@ -934,7 +941,10 @@ public sealed partial class MetadataRepository
                     reader.GetString(2),
                     reader.GetString(3),
                     reader.IsDBNull(4) ? null : reader.GetString(4),
-                    reader.IsDBNull(5) ? null : reader.GetString(5)));
+                    reader.IsDBNull(5) ? null : reader.GetString(5))
+                {
+                    Body = reader.IsDBNull(6) ? null : reader.GetString(6),
+                });
             }
             return results;
         }

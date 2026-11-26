@@ -45,6 +45,12 @@ zero for the rest.
   4.8 s to 2.3 s on a 19M-reference database.
 - A metadata source keeps its shape (`Form/SalesTable`, no leading slash).
 
+### Fixed — the text scan does not report a declaration as a reference (upstream 1.19.0)
+
+`find refs <method>` listed every method of that name for its own declaration line. Only a call
+further down its body counts now. A table's answer says that metadata uses need `--structural`
+or `--xref`.
+
 ### Added — ATTR003: attributes stacked on a method (upstream 1.17.0)
 
 Two attribute lines in a row above a method are a parse error: xppc answers "Invalid token '['"
