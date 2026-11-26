@@ -41,10 +41,10 @@ they report in the same turn, re-run, and only then write.
   intention-revealing `<memberUnderTest>_<scenario>_<expectedResult>` name, e.g.
   `calculateDiscount_zeroRate_returnsZero` — which is also what
   `d365fo generate systest` emits.
-- A method takes several attributes only inside **one** bracket:
-  `[SysTestMethod, SysTestPriority(1)]`. Two attribute lines in a row on a method
-  are a parse error (xppc: *"Invalid token '['"*; `validate xpp` rule ATTR003).
-  Above a class declaration stacking is legal.
+- A class method takes several attributes only inside **one** bracket:
+  `[SysTestMethod, SysTestPriority(1)]`. Two attribute lines in a row on a class
+  method are a parse error (xppc: *"Invalid token '['"*; `validate xpp` rule ATTR003).
+  Above a class declaration, and on table and form methods, stacking compiles.
 - `setUp()` / `tearDown()` run before and after **each** test method.
 - Assertions (inherited from `SysTestAssert`): `this.assertEquals()`,
   `assertNotEqual()` (no trailing *s*), `assertTrue()`, `assertFalse()`,

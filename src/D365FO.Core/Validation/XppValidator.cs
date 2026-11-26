@@ -60,7 +60,7 @@ public interface IPropertyStatsProvider
 ///   MAC001  A precompiler directive written without its dot (#define X)
 ///   ATTR001 An attribute argument that is not a compile-time literal
 ///   ATTR002 [SysObsolete] without message, isError AND date (xppbp moniker)
-///   ATTR003 Two attribute lines stacked on a method (xppc: Invalid token '[')
+///   ATTR003 Two attribute lines stacked on a class method (xppc: Invalid token '[')
 ///   EXT001  An extension-method class whose class or methods are not static
 ///   KW001   A variable named after a reserved word (the compiler's own 115-word set)
 ///   RPT001  DP reads parmDataContract() but declares no [SRSReportParameterAttribute]
@@ -130,14 +130,19 @@ public static class XppValidator
     /// Where the document came from, when the caller knows. Only XML013 uses it — a file in the
     /// wrong AOT folder is not something stdin can be guilty of.
     /// </param>
+    /// <param name="ownerKind">
+    /// What the methods in <paramref name="code"/> belong to (<c>class</c>, <c>table</c>, <c>form</c>),
+    /// when the caller knows. Only ATTR003 uses it.
+    /// </param>
     public static IReadOnlyList<XppViolation> Validate(
-        string code, string codeType = CodeTypeXpp, IPropertyStatsProvider? stats = null, string? sourcePath = null)
+        string code, string codeType = CodeTypeXpp, IPropertyStatsProvider? stats = null, string? sourcePath = null,
+        string? ownerKind = null)
     {
         var violations = new List<XppViolation>();
         var normalized = NormalizeCodeType(codeType);
         if (normalized == CodeTypeXpp)
         {
-            RunXppRules(code, violations);
+            RunXppRules(code, violations, ownerKind, sourcePath);
         }
         else if (normalized == CodeTypeXmlReport)
         {
@@ -149,7 +154,7 @@ public static class XppValidator
         }
         else if (normalized == CodeTypeXmlTable)
         {
-            RunXppRules(code, violations);
+            RunXppRules(code, violations, "table", sourcePath);
             CheckMissingAlternateKey(code, violations);
             CheckTableProperties(code, stats, violations);
             CheckFieldEdt(code, stats, violations);
@@ -186,7 +191,8 @@ public static class XppValidator
         _ => CodeTypeXpp,
     };
 
-    private static void RunXppRules(string code, List<XppViolation> violations)
+    private static void RunXppRules(
+        string code, List<XppViolation> violations, string? ownerKind, string? sourcePath)
     {
         var masked = XppLexer.Mask(code);
         CheckTodayDeprecated(code, violations);
@@ -219,7 +225,7 @@ public static class XppValidator
         CheckInOperatorLiteral(masked, violations);
         CheckSelectExpressionAndValidTimeState(masked, violations);
         CheckAttributeArguments(code, masked, violations);
-        CheckStackedMethodAttributes(code, masked, violations);
+        CheckStackedMethodAttributes(code, masked, OwnerOfMethods(masked, ownerKind, sourcePath), violations);
         CheckExtensionMethodClassShape(code, masked, violations);
         CheckReservedIdentifiers(code, masked, violations);
     }
@@ -1044,7 +1050,7 @@ public static class XppValidator
             aliased.Add(u.Groups[1].Value);
 
         // `About` names the C# type a pattern is about, when it is about one — read from the
-        // tuple rather than dug back out of the regex, where a leading  left the name without
+        // tuple rather than dug back out of the regex, where a leading \b left the name without
         // a word boundary in front of it and the alias never matched.
         var patterns = new (string Re, RegexOptions Options, string Fix, string? About)[]
         {
@@ -1523,14 +1529,39 @@ public static class XppValidator
             => string.Join(' ', maskedLines.Skip(index + 1).Take(3).Prepend(first));
     }
 
-    /// <summary>
-    /// ATTR003 — two attributes stacked on a method. A method takes several attributes only
-    /// inside ONE bracket; a second bracketed line is a parse error and xppc answers
-    /// "Invalid token '['", which names no rule and abandons the whole file. Above a class
-    /// declaration stacking is legal, and shipped code does it.
-    /// </summary>
-    private static void CheckStackedMethodAttributes(string code, string masked, List<XppViolation> v)
+    private enum MethodOwner { Unknown, Class, TableOrForm }
+
+    /// <summary>A table and a form declare their methods in a class of one of these.</summary>
+    private static readonly Regex TableOrFormDeclaration = new(
+        @"\bclass\s+\w+\s+extends\s+(?:FormRun|Common)\b", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+
+    /// <summary>What the methods in a source belong to: as the caller says, else its AOT folder, else its declaration.</summary>
+    private static MethodOwner OwnerOfMethods(string masked, string? ownerKind, string? sourcePath)
     {
+        bool Is(string kind) => string.Equals(ownerKind, kind, StringComparison.OrdinalIgnoreCase);
+        if (Is("table") || Is("form")) return MethodOwner.TableOrForm;
+        if (Is("class")) return MethodOwner.Class;
+
+        var folders = sourcePath?.Split('/', '\\') ?? [];
+        if (folders.Contains("AxTable", StringComparer.OrdinalIgnoreCase)
+            || folders.Contains("AxForm", StringComparer.OrdinalIgnoreCase)) return MethodOwner.TableOrForm;
+        if (folders.Contains("AxClass", StringComparer.OrdinalIgnoreCase)) return MethodOwner.Class;
+
+        if (TableOrFormDeclaration.IsMatch(masked)) return MethodOwner.TableOrForm;
+        return masked.Split('\n').Any(TypeDeclaration.IsMatch) ? MethodOwner.Class : MethodOwner.Unknown;
+    }
+
+    /// <summary>
+    /// ATTR003 — two attributes stacked on a class method. A class method takes several
+    /// attributes only inside ONE bracket; a second bracketed line is a parse error and xppc
+    /// answers "Invalid token '['", which names no rule and abandons the whole file. Stacking
+    /// is legal above a class declaration, and on table and form methods, and shipped code does
+    /// both. A bare method whose owner is unknown is only warned about.
+    /// </summary>
+    private static void CheckStackedMethodAttributes(string code, string masked, MethodOwner owner, List<XppViolation> v)
+    {
+        if (owner == MethodOwner.TableOrForm) return;
+
         var lines = code.Split('\n');
         var maskedLines = masked.Split('\n');
 
@@ -1545,10 +1576,10 @@ public static class XppValidator
             {
                 var names = new[] { maskedLines[i], maskedLines[i + 1] }
                     .Select(l => Regex.Match(l, @"\[\s*([A-Za-z_]\w*)").Groups[1].Value);
-                v.Add(new XppViolation("ATTR003", "error", i + 1, lines[i].Trim(),
+                v.Add(new XppViolation("ATTR003", owner == MethodOwner.Class ? "error" : "warning", i + 1, lines[i].Trim(),
                     $"Merge them into ONE bracket: [{string.Join(", ", names)}]. Two bracketed lines in a row " +
-                    "on a method is a parse error — xppc answers \"Invalid token '['\" and abandons the whole " +
-                    "file. Stacking is legal only above a class declaration."));
+                    "on a class method is a parse error — xppc answers \"Invalid token '['\" and abandons the whole " +
+                    "file. Table and form methods accept them."));
             }
 
             i = j - 1; // one finding per stack, not one per pair

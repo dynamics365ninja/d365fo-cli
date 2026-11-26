@@ -549,7 +549,7 @@ public static class MethodModifyEngine
                 }
 
                 var stats = repo.HasPropertyStats() ? repo : (IPropertyStatsProvider?)null;
-                foreach (var v in XppValidator.Validate(code, XppValidator.CodeTypeXpp, stats))
+                foreach (var v in XppValidator.Validate(code, XppValidator.CodeTypeXpp, stats, ownerKind: request.Kind))
                 {
                     if (v.Severity == "error") bpErrors++; else bpWarnings++;
                     violationDetails.Add($"[{v.Rule}] line {v.Line}: {v.Excerpt} — {v.Fix}");

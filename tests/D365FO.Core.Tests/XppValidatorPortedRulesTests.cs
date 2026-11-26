@@ -875,6 +875,46 @@ public class XppValidatorPortedRulesTests
 
     // ── ATTR003 ──────────────────────────────────────────────────────────────
 
+    private const string StackedMethod = """
+        [Hookable(false)]
+        [SysObsolete('Obsolete.', false, 26\06\2024)]
+        public void run()
+        {
+        }
+        """;
+
+    /// <summary>
+    /// xppc parses table and form methods one by one and accepts the stack: the shipped form
+    /// RetailTransactionArchiveForm is written that way.
+    /// </summary>
+    [Theory]
+    [InlineData(@"K:\Packages\M\M\AxForm\F.xml", null, null)]
+    [InlineData("/Packages/M/M/AxTable/T.xml", null, null)]
+    [InlineData(null, "form", null)]
+    [InlineData(null, "Table", null)]
+    [InlineData(null, null, "public class F extends FormRun\n{\n}\n")]
+    [InlineData(null, null, "public class T extends common\n{\n}\n")]
+    public void Attr003_quiet_for_a_table_or_form_method(string? path, string? ownerKind, string? declaration)
+        => Assert.DoesNotContain(
+            XppValidator.Validate(declaration + StackedMethod, sourcePath: path, ownerKind: ownerKind),
+            x => x.Rule == "ATTR003");
+
+    [Theory]
+    [InlineData(@"K:\Packages\M\M\AxClass\C.xml", null, null)]
+    [InlineData(null, "class", null)]
+    [InlineData(null, null, "public class C extends RunBaseBatch\n{\n}\n")]
+    public void Attr003_is_an_error_in_a_class(string? path, string? ownerKind, string? declaration)
+    {
+        var finding = Assert.Single(
+            XppValidator.Validate(declaration + StackedMethod, sourcePath: path, ownerKind: ownerKind),
+            x => x.Rule == "ATTR003");
+        Assert.Equal("error", finding.Severity);
+    }
+
+    [Fact]
+    public void Attr003_only_warns_when_the_owner_of_the_method_is_unknown()
+        => Assert.Equal("warning", Assert.Single(Run(StackedMethod), x => x.Rule == "ATTR003").Severity);
+
     [Theory]
     [InlineData("""
         [SysTestMethod]
@@ -907,7 +947,7 @@ public class XppValidatorPortedRulesTests
         """)]
     public void Attr003_flags_attributes_stacked_on_a_method(string code)
     {
-        var finding = Assert.Single(Run(code), x => x.Rule == "ATTR003");
+        var finding = Assert.Single(XppValidator.Validate(code, ownerKind: "class"), x => x.Rule == "ATTR003");
         Assert.Equal("error", finding.Severity);
     }
 

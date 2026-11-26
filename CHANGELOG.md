@@ -68,11 +68,12 @@ It proved that names exist and never read the declaration behind them.
 
 The declaration is read from the indexed AOT file, so nothing needs re-indexing.
 
-### Added — ATTR003: attributes stacked on a method (upstream 1.17.0)
+### Added — ATTR003: attributes stacked on a class method (upstream 1.17.0)
 
-Two attribute lines in a row above a method are a parse error: xppc answers "Invalid token '['"
-and abandons the file. `validate xpp` now reports it and says to merge them into one bracket.
-A stack above a class declaration is legal and stays silent, comments between included.
+Two attribute lines in a row above a class method are a parse error: xppc answers "Invalid token
+'['" and abandons the file. `validate xpp` now reports it and says to merge them into one bracket.
+A stack above a class declaration, or on a table or form method, compiles and stays silent. A
+bare method whose owner is unknown is a warning.
 
 ### Fixed — COC004 accepts `next` in `try`, `finally` and `using` (upstream 1.22.0)
 
