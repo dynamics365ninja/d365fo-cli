@@ -295,12 +295,12 @@ public static class CliApp
                 b.AddCommand<ModifyAddMethodCommand>("add-method").WithDescription("Add a new instance or static method to a class/table/form in a custom model.");
                 b.AddCommand<ModifyPropertyCommand>("property").WithDescription("Set a property (Label, ConfigurationKey, TableGroup, …) on a live object.");
                 b.AddCommand<ModifyAddFieldCommand>("add-field").WithDescription("Add a field to a live table — concrete AxTableField subtype resolved from the EDT.");
-                b.AddCommand<ModifyAddEnumValueCommand>("add-enum-value").WithDescription("Add a value to a live base enum (positional, never a hard-coded ordinal).");
+                b.AddCommand<ModifyAddEnumValueCommand>("add-enum-value").WithDescription("Add a value to a live base enum; numbered after the highest value unless the enum is positional (UseEnumValue=No).");
                 b.AddCommand<ModifyAddControlCommand>("add-control").WithDescription("Add a control to a live form's design, optionally bound to a datasource field or display method.");
                 b.AddCommand<ModifyAddDataSourceCommand>("add-data-source").WithDescription("Add a datasource to a live form, optionally joined to an existing one.");
                 b.AddCommand<ModifyAddIndexCommand>("add-index").WithDescription("Add an index to a live table; unique unless --allow-duplicates.");
                 b.AddCommand<ModifyAddRelationCommand>("add-relation").WithDescription("Add a foreign-key relation to a live table.");
-                b.AddCommand<ModifyAddFieldGroupCommand>("add-field-group").WithDescription("Add a field group to a live table.");
+                b.AddCommand<ModifyAddFieldGroupCommand>("add-field-group").WithDescription("Add a field group to a live table, or fields to one it has (a table extension extends a base group).");
                 b.AddCommand<ModifyAddDeleteActionCommand>("add-delete-action").WithDescription("Add a delete action to a live table (Cascade | Restricted | CascadeRestricted | None).");
                 b.AddCommand<ModifyFieldPropertyCommand>("field-property").WithDescription("Set a property (AllowEdit, AllowEditOnCreate, Mandatory, HelpText, …) on an existing table field, checked against the field's AOT contract.");
                 b.AddCommand<ModifyRenameFieldCommand>("rename-field").WithDescription("Rename a table field, rewriting the indexes, field groups and relations that name it.");

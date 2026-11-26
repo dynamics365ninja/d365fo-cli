@@ -62,6 +62,9 @@ public sealed class FieldTypeResolver
             }
         }
 
+        // Known without an index: the runtime defines these.
+        resolved ??= Knowledge.KernelEdts.BaseType(name);
+
         _cache[name] = resolved;
         if (resolved is null) _unresolved.Add(name);
         return resolved;

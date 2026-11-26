@@ -15,9 +15,11 @@ public sealed partial class MetadataRepository
 {
     /// <summary>Current schema version tracked in PRAGMA user_version.</summary>
     /// <remarks>
-    /// v22: no new column — a method whose trimmed signature starts with <c>static</c>
+    /// v23: Edts.ReferenceField, the field an EDT table reference joins on. It is only in the
+    /// EDT's file, so the migration clears the SourceFingerprint of every model that has EDTs.
+    /// &lt;para&gt;v22: no new column — a method whose trimmed signature starts with <c>static</c>
     /// (<c>static void main(Args _args)</c>) was indexed with IsStatic = 0. The migration sets it
-    /// in place from the stored signature, so no re-extract is needed.
+    /// in place from the stored signature, so no re-extract is needed.&lt;/para&gt;
     /// &lt;para&gt;v21: no new column — Edts.BaseType was empty for every EDT before it (issue #233), so the
     /// migration clears every model's SourceFingerprint and the next refresh re-extracts them all.
     /// &lt;para&gt;v20: Models.SourceIndexed — whether the model's method bodies are in MethodSourceFts, so a
@@ -30,7 +32,7 @@ public sealed partial class MetadataRepository
     /// EnsureSchema, with no re-extract.&lt;/para&gt;
     /// &lt;para&gt;v17: LabelFiles table (per-label-file source paths for the disk check).&lt;/para&gt;
     /// </remarks>
-    public const int CurrentSchemaVersion = 22;
+    public const int CurrentSchemaVersion = 23;
 
     private static readonly Lazy<string> SchemaSql = new(LoadEmbeddedSchema);
 
@@ -236,6 +238,16 @@ public sealed partial class MetadataRepository
             }
         }
 
+        if (current < 23)
+        {
+            // v23: the field of the referenced table an EDT reference joins on. Filled by the
+            // re-extract the fingerprint reset further down asks for.
+            var edtCols23 = conn.Query<string>("SELECT name FROM pragma_table_info('Edts')", transaction: tx)
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
+            if (edtCols23.Count > 0 && !edtCols23.Contains("ReferenceField"))
+                conn.Execute("ALTER TABLE Edts ADD COLUMN ReferenceField TEXT", transaction: tx);
+        }
+
         if (current < 12)
         {
             // v12: Additional lint-flag columns on Methods, TableMethods, and Classes.
@@ -299,6 +311,14 @@ public sealed partial class MetadataRepository
             // every model instead of skipping the unchanged ones. SourceIndexed is kept, so the
             // re-extract indexes method bodies exactly as the last one did.
             conn.Execute("UPDATE Models SET SourceFingerprint = NULL", transaction: tx);
+        }
+
+        if (current > 0 && current < 23)
+        {
+            // v23: the referenced field is only in the EDT's file. Clearing the fingerprint of
+            // each model that has EDTs makes the next `index refresh` read it again.
+            conn.Execute("UPDATE Models SET SourceFingerprint = NULL WHERE ModelId IN (SELECT ModelId FROM Edts)",
+                transaction: tx);
         }
 
         if (current > 0 && current < 22)
@@ -505,7 +525,7 @@ public sealed partial class MetadataRepository
         return conn.QueryFirstOrDefault<EdtInfo>(@"
             SELECT e.Name, m.Name AS Model, e.ExtendsName AS Extends,
                    e.BaseType, e.Label, e.StringSize,
-                   e.ReferenceTable, e.FormHelp, e.AnalysisUsage, e.EnumType
+                   e.ReferenceTable, e.FormHelp, e.AnalysisUsage, e.EnumType, e.ReferenceField
             FROM Edts e JOIN Models m ON m.ModelId = e.ModelId
             WHERE e.Name = @name COLLATE NOCASE
             ORDER BY m.IsCustom DESC, m.Name COLLATE NOCASE
@@ -553,7 +573,25 @@ public sealed partial class MetadataRepository
     /// index holds without one — an index from before schema v21 that has not been refreshed
     /// yet, or a model added by a partial extract.
     /// </remarks>
-    public string? GetEdtBaseType(string name) => FirstOnEdtChain(name, e => e.BaseType);
+    public string? GetEdtBaseType(string name) => FirstOnEdtChain(name, e => e.BaseType) ?? KernelBaseType(name);
+
+    /// <summary>
+    /// The base type from the kernel EDT <paramref name="name"/> is or extends. A kernel EDT has
+    /// no row, so the chain of indexed parents ends at its name.
+    /// </summary>
+    private string? KernelBaseType(string name)
+    {
+        var visited = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var current = name;
+        for (var depth = 0; depth <= InheritanceWalkLimit && !string.IsNullOrWhiteSpace(current); depth++)
+        {
+            if (!visited.Add(current)) break;
+            var edt = GetEdt(current);
+            if (edt is null) return Knowledge.KernelEdts.BaseType(current);
+            current = edt.Extends;
+        }
+        return null;
+    }
 
     /// <summary>
     /// The base enum behind an enum EDT, walking <c>Extends</c> when the EDT itself names none
@@ -589,7 +627,7 @@ public sealed partial class MetadataRepository
         return conn.Query<EdtInfo>(@"
             SELECT e.Name, m.Name AS Model, e.ExtendsName AS Extends,
                    e.BaseType, e.Label, e.StringSize,
-                   e.ReferenceTable, e.FormHelp, e.AnalysisUsage, e.EnumType
+                   e.ReferenceTable, e.FormHelp, e.AnalysisUsage, e.EnumType, e.ReferenceField
             FROM Edts e JOIN Models m ON m.ModelId = e.ModelId
             WHERE e.Name = @name COLLATE NOCASE
             ORDER BY m.IsCustom DESC, m.Name COLLATE NOCASE, e.Name COLLATE NOCASE
@@ -2310,7 +2348,7 @@ public sealed partial class MetadataRepository
         return conn.Query<EdtInfo>($@"
             SELECT e.Name, m.Name AS Model, e.ExtendsName AS Extends,
                    e.BaseType, e.Label, e.StringSize,
-                   e.ReferenceTable, e.FormHelp, e.AnalysisUsage, e.EnumType
+                   e.ReferenceTable, e.FormHelp, e.AnalysisUsage, e.EnumType, e.ReferenceField
             FROM Edts e JOIN Models m ON m.ModelId = e.ModelId
             WHERE {nameWhere}
             ORDER BY m.IsCustom DESC, e.Name
@@ -3026,10 +3064,10 @@ public sealed partial class MetadataRepository
 
         foreach (var e in batch.Edts)
         {
-            conn.Execute(@"INSERT INTO Edts(Name, ModelId, ExtendsName, BaseType, Label, StringSize, ReferenceTable, FormHelp, AnalysisUsage, EnumType)
-                           VALUES(@n, @m, @e, @b, @l, @s, @rt, @fh, @au, @et)",
+            conn.Execute(@"INSERT INTO Edts(Name, ModelId, ExtendsName, BaseType, Label, StringSize, ReferenceTable, FormHelp, AnalysisUsage, EnumType, ReferenceField)
+                           VALUES(@n, @m, @e, @b, @l, @s, @rt, @fh, @au, @et, @rf)",
                          new { n = e.Name, m = modelId, e = e.Extends, b = e.BaseType, l = e.Label, s = e.StringSize,
-                               rt = e.ReferenceTable, fh = e.FormHelp, au = e.AnalysisUsage, et = e.EnumType }, tx);
+                               rt = e.ReferenceTable, fh = e.FormHelp, au = e.AnalysisUsage, et = e.EnumType, rf = e.ReferenceField }, tx);
         }
 
         foreach (var en in batch.Enums)

@@ -581,14 +581,39 @@ public static class XppScaffolder
     /// rejected by the framework at run time, which is the worst place to find out.
     /// </para>
     /// </remarks>
+    /// <param name="stagingTableName">The staging table's name.</param>
+    /// <param name="fields">The entity's fields.</param>
+    /// <param name="label">The table label.</param>
+    /// <param name="entityName">The entity, for the <c>DataEntity</c> relation the framework follows.</param>
+    /// <param name="keyFields">The entity key; the first field stands in when none is given.</param>
+    /// <param name="columnType">
+    /// The type of the column a field maps. A field it answers null for is left out: a guessed
+    /// type compiles and then fails the import. Without a resolver every field is a string.
+    /// </param>
     public static XDocument EntityStagingTable(
-        string stagingTableName, IEnumerable<EntityFieldSpec>? fields = null, string? label = null)
+        string stagingTableName, IEnumerable<EntityFieldSpec>? fields = null, string? label = null,
+        string? entityName = null, IReadOnlyList<string>? keyFields = null,
+        Func<EntityFieldSpec, StagingColumnType?>? columnType = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(stagingTableName);
 
-        var entityFields = (fields ?? [])
-            .Where(f => !string.IsNullOrWhiteSpace(f.Name))
+        var declared = (fields ?? []).Where(f => !string.IsNullOrWhiteSpace(f.Name)).ToList();
+        var types = columnType is null
+            ? null
+            : declared.Select(f => (Field: f, Type: columnType(f)))
+                .Where(x => x.Type is not null)
+                .ToDictionary(x => x.Field.Name, x => x.Type!, StringComparer.OrdinalIgnoreCase);
+        var entityFields = declared
+            .Where(f => types is null || types.ContainsKey(f.Name))
             .Select(f => new TableFieldSpec(f.Name, null, null, Mandatory: false))
+            .ToList();
+        // Keys name the entity field; a caller that derived them from the table names its column.
+        var keys = declared
+            .Where(f => keyFields is not null
+                        && (keyFields.Contains(f.Name, StringComparer.OrdinalIgnoreCase)
+                            || (f.DataField is not null && keyFields.Contains(f.DataField, StringComparer.OrdinalIgnoreCase))))
+            .Select(f => f.Name)
+            .Where(n => entityFields.Any(e => e.Name == n))
             .ToList();
 
         var framework = new List<TableFieldSpec>
@@ -608,24 +633,34 @@ public static class XppScaffolder
         var root = doc.Root!;
         var fieldEls = root.Element("Fields")!.Elements().ToList();
 
-        // IsSelected and TransferStatus are enum columns. The table scaffolder types fields from
-        // their EDT, and neither of those names an EDT — so the discriminator and EnumType are
-        // corrected here rather than smuggled through a fake EDT name.
-        foreach (var (fieldName, enumName) in new[] { ("IsSelected", "DMFIsSelected"), ("TransferStatus", "DMFTransferStatus") })
+        // IsSelected is the EDT DMFIsSelected over NoYes; TransferStatus is the base enum
+        // DMFTransferStatus and has no EDT.
+        foreach (var (fieldName, edt, enumName) in new[]
+                 {
+                     ("IsSelected", (string?)"DMFIsSelected", "NoYes"),
+                     ("TransferStatus", null, "DMFTransferStatus"),
+                 })
         {
             var el = fieldEls.FirstOrDefault(f => f.Element("Name")?.Value == fieldName);
             if (el is null) continue;
-            el.SetAttributeValue(Xsi + "type", "AxTableFieldEnum");
-            el.Element("ExtendedDataType")?.Remove();
-            el.Add(new XElement("EnumType", enumName));
+            Retype(el, new StagingColumnType("Enum", edt, enumName));
+        }
+
+        foreach (var (fieldName, type) in types ?? [])
+        {
+            var el = fieldEls.FirstOrDefault(f => f.Element("Name")?.Value == fieldName);
+            if (el is null) continue;
+            Retype(el, type);
+            if (!keys.Contains(fieldName, StringComparer.OrdinalIgnoreCase)) continue;
+            el.Add(new XElement("AllowEdit", "No"), new XElement("Mandatory", "Yes"));
         }
 
         // StagingIdx, not the generic PrimaryIdx the table scaffolder emits: the DMF looks the
         // index up by name, and it keys on the run (DefinitionGroup + ExecutionId) before the
         // entity's own key — a staging row is unique within a run, not across the table.
-        var businessKey = entityFields.Select(f => f.Name).FirstOrDefault();
+        var businessKey = keys.Count > 0 ? keys : entityFields.Select(f => f.Name).Take(1).ToList();
         var indexFields = new List<string> { "DefinitionGroup", "ExecutionId" };
-        if (businessKey is not null) indexFields.Add(businessKey);
+        indexFields.AddRange(businessKey);
 
         root.Element("Indexes")?.Remove();
         root.Element("ClusteredIndex")?.Remove();
@@ -643,10 +678,42 @@ public static class XppScaffolder
                     new XElement("Fields",
                         indexFields.Select(n => new XElement("AxTableIndexField", new XElement("DataField", n)))))));
 
+        if (!string.IsNullOrWhiteSpace(entityName) && keys.Count > 0)
+        {
+            root.Element("Relations")?.Remove();
+            root.Add(new XElement("Relations",
+                new XElement("AxTableRelation",
+                    new XAttribute(Xsi + "type", "AxTableRelationForeignKey"),
+                    new XElement("Name", "DataEntity"),
+                    new XElement("Cardinality", "ExactlyOne"),
+                    new XElement("EntityRelationshipRole", "@DMF:StagingToDataEntityRelationshipRole"),
+                    new XElement("RelatedTable", entityName),
+                    new XElement("RelatedTableCardinality", "ZeroOne"),
+                    new XElement("RelationshipType", "Link"),
+                    new XElement("Validate", "No"),
+                    new XElement("Constraints",
+                        keys.Select(k => new XElement("AxTableRelationConstraint",
+                            new XAttribute(Xsi + "type", "AxTableRelationConstraintField"),
+                            new XElement("Name", k),
+                            new XElement("Field", k),
+                            new XElement("RelatedField", k)))))));
+        }
+
         // Members were appended, so put the document back into contract order before anyone
         // sees it — a misordered member is dropped on read and the file still looks right.
         ContractOrderCanonicalizer.Apply(doc);
         return doc;
+    }
+
+    /// <summary>Give a scaffolded table field the subtype, EDT and enum of <paramref name="type"/>.</summary>
+    private static void Retype(XElement field, StagingColumnType type)
+    {
+        field.SetAttributeValue(Xsi + "type", "AxTableField" + type.Kind);
+        field.Element("ExtendedDataType")?.Remove();
+        field.Element("EnumType")?.Remove();
+        if (type.Edt is not null) field.Add(new XElement("ExtendedDataType", type.Edt));
+        if (type.StringSize is not null) field.Add(new XElement("StringSize", type.StringSize));
+        if (type.EnumType is not null) field.Add(new XElement("EnumType", type.EnumType));
     }
 
     /// <summary>
@@ -1784,7 +1851,7 @@ public static class XppScaffolder
 
     private static string InferConcreteTypeSuffixFromExtends(string? extends)
     {
-        var e = extends?.ToLowerInvariant();
+        var e = (Knowledge.KernelEdts.BaseType(extends) ?? extends)?.ToLowerInvariant();
         if (string.IsNullOrEmpty(e)) return "String";
         var exact = e switch
         {

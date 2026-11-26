@@ -1372,6 +1372,38 @@ public sealed class ObjectModifyEngineTests : IDisposable
         Assert.Null(value.Element("Value"));
     }
 
+    /// <summary>
+    /// A member of an enum that stores values needs one: without a &lt;Value&gt; it reads as 0, the
+    /// first member's, and xppc refuses the enum with "Duplicate value '0' detected". An enum with
+    /// <c>UseEnumValue=No</c> is numbered by the platform and compiles without.
+    /// </summary>
+    [Theory]
+    [InlineData("", "<AxEnumValue><Name>None</Name></AxEnumValue><AxEnumValue><Name>Open</Name><Value>4</Value></AxEnumValue>", "5")]
+    [InlineData("<UseEnumValue>Yes</UseEnumValue>", "<AxEnumValue><Name>None</Name></AxEnumValue>", "1")]
+    [InlineData("", "", null)] // the first member is 0, which is left out
+    [InlineData("<UseEnumValue>No</UseEnumValue>", "<AxEnumValue><Name>None</Name></AxEnumValue><AxEnumValue><Name>Open</Name><Value>1</Value></AxEnumValue>", null)]
+    public void A_new_member_is_numbered_when_the_enum_stores_values(string useEnumValue, string members, string? expected)
+    {
+        var capture = new BridgeCapture(
+            $"<AxEnum><Name>ConStatus</Name>{useEnumValue}<EnumValues>{members}</EnumValues></AxEnum>");
+        using var harness = FakeBridge.Create(capture.Respond);
+
+        var result = ObjectModifyEngine.ModifyCore(new ObjectModifyEngine.ModifyRequest
+        {
+            Operation = ObjectModifyEngine.Operation.AddEnumValue,
+            Kind = "enum",
+            ObjectName = "ConStatus",
+            Model = "FleetCustom",
+            Member = "Closed",
+        }, _repo, harness.Client, _journalDb);
+
+        Assert.True(result.Ok, result.Error?.Message);
+        Assert.Equal("enum", (string?)capture.WriteArgs!["kind"]);
+        var added = XDocument.Parse((string)capture.WriteArgs!["xml"]!).Descendants("AxEnumValue")
+            .Single(v => v.Element("Name")!.Value == "Closed");
+        Assert.Equal(expected, added.Element("Value")?.Value);
+    }
+
     [Fact]
     public void An_edt_extension_is_scaffolded_with_the_root_element_the_metamodel_declares()
     {

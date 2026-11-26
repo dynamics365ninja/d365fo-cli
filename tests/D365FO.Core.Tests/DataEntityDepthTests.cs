@@ -152,13 +152,65 @@ public class DataEntityDepthTests
         Assert.Equal("AxTableFieldString", fields["DefinitionGroup"].Attribute(Xsi + "type")!.Value);
         Assert.Equal("DMFExecutionId", fields["ExecutionId"].Element("ExtendedDataType")!.Value);
 
-        // IsSelected and TransferStatus are enum columns, not EDT ones.
-        foreach (var (field, enumName) in new[] { ("IsSelected", "DMFIsSelected"), ("TransferStatus", "DMFTransferStatus") })
-        {
-            Assert.Equal("AxTableFieldEnum", fields[field].Attribute(Xsi + "type")!.Value);
-            Assert.Equal(enumName, fields[field].Element("EnumType")!.Value);
-            Assert.Null(fields[field].Element("ExtendedDataType"));
-        }
+        // DMFIsSelected is an EDT over NoYes; DMFTransferStatus is a base enum. There is no enum
+        // called DMFIsSelected, so naming it as one does not compile.
+        Assert.Equal("AxTableFieldEnum", fields["IsSelected"].Attribute(Xsi + "type")!.Value);
+        Assert.Equal("DMFIsSelected", fields["IsSelected"].Element("ExtendedDataType")!.Value);
+        Assert.Equal("NoYes", fields["IsSelected"].Element("EnumType")!.Value);
+        Assert.Equal("AxTableFieldEnum", fields["TransferStatus"].Attribute(Xsi + "type")!.Value);
+        Assert.Equal("DMFTransferStatus", fields["TransferStatus"].Element("EnumType")!.Value);
+        Assert.Null(fields["TransferStatus"].Element("ExtendedDataType"));
+    }
+
+    private static readonly Dictionary<string, StagingColumnType> VehicleColumns = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ["VehicleId"] = new("String", "ConVehicleId", null),
+        ["Mileage"] = new("Real", "Qty", null),
+        ["Kind"] = new("Enum", null, "ConVehicleKind"),
+        ["Registered"] = new("Date", null, null),
+    };
+
+    private static XDocument TypedStagingTable()
+        => XppScaffolder.EntityStagingTable(
+            "ConVehicleEntityStaging",
+            [
+                new EntityFieldSpec("Mileage", "Mileage", false), new EntityFieldSpec("VehicleId", "VehicleId", true),
+                new EntityFieldSpec("Kind", null, false), new EntityFieldSpec("RegisteredOn", "Registered", false),
+                new EntityFieldSpec("Unknown", "NoSuchColumn", false),
+            ],
+            entityName: "ConVehicleEntity", keyFields: ["VehicleId"],
+            columnType: f => VehicleColumns.GetValueOrDefault(f.DataField ?? f.Name));
+
+    [Fact]
+    public void A_staging_column_is_typed_like_the_column_it_stages()
+    {
+        var fields = TypedStagingTable().Root!.Element("Fields")!.Elements()
+            .ToDictionary(f => f.Element("Name")!.Value);
+
+        Assert.Equal("AxTableFieldReal", fields["Mileage"].Attribute(Xsi + "type")!.Value);
+        Assert.Equal("Qty", fields["Mileage"].Element("ExtendedDataType")!.Value);
+        Assert.Equal("AxTableFieldEnum", fields["Kind"].Attribute(Xsi + "type")!.Value);
+        Assert.Equal("ConVehicleKind", fields["Kind"].Element("EnumType")!.Value);
+        Assert.Equal("AxTableFieldDate", fields["RegisteredOn"].Attribute(Xsi + "type")!.Value);
+        // A column whose type is not known is left out, never guessed.
+        Assert.DoesNotContain("Unknown", fields.Keys);
+        Assert.Equal("Yes", fields["VehicleId"].Element("Mandatory")!.Value);
+    }
+
+    [Fact]
+    public void The_staging_index_and_the_relation_follow_the_entity_key()
+    {
+        var doc = TypedStagingTable();
+        var root = doc.Root!;
+
+        Assert.Equal(
+            ["DefinitionGroup", "ExecutionId", "VehicleId"],
+            root.Element("Indexes")!.Descendants("DataField").Select(d => d.Value).ToArray());
+        var relation = Assert.Single(root.Element("Relations")!.Elements());
+        Assert.Equal("DataEntity", relation.Element("Name")!.Value);
+        Assert.Equal("ConVehicleEntity", relation.Element("RelatedTable")!.Value);
+        Assert.Equal("VehicleId", relation.Descendants("RelatedField").Single().Value);
+        Assert.Empty(Shape(doc));
     }
 
     [Fact]

@@ -322,6 +322,52 @@ public sealed class FormDataSourceModifyTests : IDisposable
         Assert.Equal("Vehicle", Child(grid, "DataSource").Value);
     }
 
+    /// <summary>
+    /// A reference group binds through <c>ReferenceField</c>; it has no <c>DataField</c>, so one
+    /// written there is dropped and the control is saved bound to nothing.
+    /// </summary>
+    [Theory]
+    [InlineData("ReferenceGroup")]
+    [InlineData("referencegroup")]
+    public void A_reference_group_binds_its_reference_field(string type)
+    {
+        var (result, written) = Run(Control("Vehicle", type: type)
+            with { DataField = "Driver", Model = "FleetCustom", Parent = null });
+
+        Assert.True(result.Ok, result.Error?.Message);
+        var control = written!.Descendants().Single(e =>
+            e.Name.LocalName == "AxFormControl" && Child(e, "Name").Value == "Grid_New");
+        Assert.Equal("Driver", Child(control, "ReferenceField").Value);
+        Assert.DoesNotContain(control.Elements(), e => e.Name.LocalName == "DataField");
+        var order = control.Elements().Select(e => e.Name.LocalName).ToList();
+        Assert.True(order.IndexOf("FormControlExtension") < order.IndexOf("Controls"));
+        Assert.True(order.IndexOf("Controls") < order.IndexOf("DataSource"));
+        Assert.True(order.IndexOf("DataSource") < order.IndexOf("ReferenceField"));
+    }
+
+    [Theory]
+    [InlineData("Grid")] // a control of the base form
+    [InlineData(null)]   // the design root
+    public void A_reference_group_added_by_a_form_extension_binds_its_reference_field(string? parent)
+    {
+        var (result, written) = Run(Control("Vehicle", type: "ReferenceGroup") with
+        {
+            DataField = "Driver",
+            Parent = parent,
+            ExtensionSuffix = "Fleet",
+            ExtensionModel = "FleetCustom",
+        });
+
+        Assert.True(result.Ok, result.Error?.Message);
+        var control = written!.Descendants().Single(e =>
+            e.Name.LocalName == "FormControl" && e.Elements().Any(c => c.Name.LocalName == "ReferenceField"));
+        Assert.Equal("AxFormReferenceGroupControl", control.Attribute(XName.Get("type", Xsi))!.Value);
+        Assert.Equal("Driver", Child(control, "ReferenceField").Value);
+        Assert.Equal("Vehicle", Child(control, "DataSource").Value);
+        Assert.Empty(Child(control, "Controls").Elements());
+        Assert.DoesNotContain(control.Elements(), e => e.Name.LocalName == "DataField");
+    }
+
     [Fact]
     public void A_field_and_a_method_cannot_both_be_bound()
     {
