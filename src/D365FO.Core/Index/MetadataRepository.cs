@@ -15,8 +15,10 @@ public sealed partial class MetadataRepository
 {
     /// <summary>Current schema version tracked in PRAGMA user_version.</summary>
     /// <remarks>
-    /// v23: Edts.ReferenceField, the field an EDT table reference joins on. It is only in the
-    /// EDT's file, so the migration clears the SourceFingerprint of every model that has EDTs.
+    /// v24: no new column — case-insensitive twins of the name indexes, built by Schema.sql in
+    /// place, so no re-extract is needed.
+    /// &lt;para&gt;v23: Edts.ReferenceField, the field an EDT table reference joins on. It is only in the
+    /// EDT's file, so the migration clears the SourceFingerprint of every model that has EDTs.&lt;/para&gt;
     /// &lt;para&gt;v22: no new column — a method whose trimmed signature starts with <c>static</c>
     /// (<c>static void main(Args _args)</c>) was indexed with IsStatic = 0. The migration sets it
     /// in place from the stored signature, so no re-extract is needed.&lt;/para&gt;
@@ -32,7 +34,7 @@ public sealed partial class MetadataRepository
     /// EnsureSchema, with no re-extract.&lt;/para&gt;
     /// &lt;para&gt;v17: LabelFiles table (per-label-file source paths for the disk check).&lt;/para&gt;
     /// </remarks>
-    public const int CurrentSchemaVersion = 23;
+    public const int CurrentSchemaVersion = 24;
 
     private static readonly Lazy<string> SchemaSql = new(LoadEmbeddedSchema);
 
@@ -2457,36 +2459,32 @@ public sealed partial class MetadataRepository
         var rawWithAt = "@" + raw;   // e.g. "@SYS11307"
 
         using var conn = OpenReadOnly();
-        // Try two shapes: Key == raw (e.g. "SYS12345") in file=prefix,
-        // or Key == suffix (e.g. "12345") in file=prefix. Fall back to
-        // exact key match across all files for odd prefixes.
-        //
+        // Key == raw ("SYS12345", with or without @) in any file, or Key == suffix
+        // ("12345") in file=prefix. Each branch seeks by Key: the unary + keeps SQLite
+        // from walking the whole label file for the suffix branch.
+        const string match =
+            "Key = @raw OR Key = @rawWithAt OR (Key = @suffix AND +LabelFile = @prefix)";
+
         // NOTE: Dapper's list expansion rewrites "IN @langs" to "IN (@langs0, @langs1, ...)"
         // which breaks a combined "@langs IS NULL" check (SQLite: "row value misused").
         // We branch the SQL in C# instead.
         string sql;
         if (langsLower is null || langsLower.Count == 0)
         {
-            sql = @"
+            sql = $@"
             SELECT LabelFile AS File, Language, Key, Value
             FROM Labels
-            WHERE (LabelFile = @prefix AND Key IN (@raw, @rawWithAt, @suffix))
-               OR Key = @raw
-               OR Key = @rawWithAt
+            WHERE {match}
             ORDER BY LabelFile, Language";
             return conn.Query<LabelMatch>(sql, new { prefix, raw, rawWithAt, suffix }).ToList();
         }
         else
         {
-            sql = @"
+            sql = $@"
             SELECT LabelFile AS File, Language, Key, Value
             FROM Labels
             WHERE LOWER(Language) IN @langs
-              AND (
-                    (LabelFile = @prefix AND Key IN (@raw, @rawWithAt, @suffix))
-                 OR Key = @raw
-                 OR Key = @rawWithAt
-              )
+              AND ({match})
             ORDER BY LabelFile, Language";
             return conn.Query<LabelMatch>(sql, new { langs = langsLower, prefix, raw, rawWithAt, suffix }).ToList();
         }

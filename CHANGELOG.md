@@ -19,6 +19,16 @@ was ported from.
 
 ## [Unreleased]
 
+### Fixed — name and label lookups seek the index instead of scanning it
+
+Names are matched case-insensitively and no index served that comparison, so on a full
+installation each symbol, method or label check walked a whole table: `validate references`
+took over four minutes on one large platform class, and 5 seconds with this change. Where-used
+answers for a bare name are faster too.
+
+Index schema v24: the first command after the update builds the indexes in place (about
+15 seconds on a full index, which grows by about 115 MB). No re-extract.
+
 ### Added — ATTR003: attributes stacked on a method (upstream 1.17.0)
 
 Two attribute lines in a row above a method are a parse error: xppc answers "Invalid token '['"
