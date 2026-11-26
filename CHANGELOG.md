@@ -32,6 +32,12 @@ bypassed by every writer but that form.
 - `prepare` no longer says `validateWrite` runs for X++ writes: plain `insert()` / `update()`
   do not call it.
 
+### Fixed — `install.ps1` runs on a machine without a K: drive
+
+Looking for an existing checkout ended the installer with `Cannot find drive. A drive with the
+name 'K' does not exist.`, because the probe built its path with `Join-Path`, which resolves the
+drive. A candidate on a missing drive, `D365FO_CLI_DIR` included, is now just not a checkout.
+
 ### Fixed — relations derived from an EDT join on the right field (upstream 1.24.0)
 
 `generate table-relation` joined on a field named after the EDT. An EDT's `<TableReferences>`
