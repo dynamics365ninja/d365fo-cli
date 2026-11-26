@@ -60,8 +60,10 @@ public sealed class TableElementModifyTests : IDisposable
         try { Directory.Delete(_root, recursive: true); } catch { /* temp */ }
     }
 
+    /// <summary><paramref name="baseXml"/> answers a read of the table itself when it differs from <paramref name="readXml"/>.</summary>
     private ToolResult<object> Modify(
-        ObjectModifyEngine.ModifyRequest request, string model = "FleetCustom", string? readXml = Table)
+        ObjectModifyEngine.ModifyRequest request, string model = "FleetCustom", string? readXml = Table,
+        string? baseXml = null)
     {
         using var harness = ObjectModifyEngineTests.FakeBridge.Create(message =>
         {
@@ -69,8 +71,9 @@ public sealed class TableElementModifyTests : IDisposable
             var result = new System.Text.Json.Nodes.JsonObject { ["ok"] = true };
             if (method == "readObjectXml")
             {
-                if (readXml is null) result = new() { ["ok"] = false, ["error"] = "NOT_FOUND" };
-                else result["xml"] = readXml;
+                var xml = baseXml is not null && (string?)message["params"]!["name"] == "ConVehicle" ? baseXml : readXml;
+                if (xml is null) result = new() { ["ok"] = false, ["error"] = "NOT_FOUND" };
+                else result["xml"] = xml;
             }
             if (method is "updateObject" or "createObject") _written = (string?)message["params"]!["xml"];
             return new() { ["jsonrpc"] = "2.0", ["id"] = message["id"]?.DeepClone(), ["result"] = result };
@@ -146,5 +149,65 @@ public sealed class TableElementModifyTests : IDisposable
         Assert.Equal("AxTableExtension", Written.Name.LocalName);
         Assert.Equal(["ConPlate"], FieldsOf(Written, "FieldGroupExtensions", "AutoReport"));
         Assert.Empty(Written.Element("FieldGroups")?.Elements() ?? []);
+    }
+
+    [Fact]
+    public void On_an_extension_any_group_of_the_base_table_is_extended()
+    {
+        var result = Modify(
+            Request(ObjectModifyEngine.Operation.AddFieldGroup, "overview") with { Fields = ["ConPlate"], Label = "Mine" },
+            model: "ApplicationSuite", readXml: null, baseXml: Table);
+
+        Assert.True(result.Ok, result.Error?.Message);
+        Assert.Equal(["ConPlate"], FieldsOf(Written, "FieldGroupExtensions", "Overview"));
+        Assert.Empty(Written.Element("FieldGroups")?.Elements() ?? []);
+        // A group extension has no label of its own.
+        Assert.Contains(result.Warnings ?? [], w => w.Contains("label", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public void On_an_extension_a_group_the_base_table_does_not_have_is_declared()
+    {
+        var result = Modify(
+            Request(ObjectModifyEngine.Operation.AddFieldGroup, "ConFleetGroup") with { Fields = ["ConPlate"] },
+            model: "ApplicationSuite", readXml: null, baseXml: Table);
+
+        Assert.True(result.Ok, result.Error?.Message);
+        Assert.Equal(["ConPlate"], FieldsOf(Written, "FieldGroups", "ConFleetGroup"));
+        Assert.Empty(Written.Element("FieldGroupExtensions")?.Elements() ?? []);
+    }
+
+    [Fact]
+    public void A_group_is_not_declared_when_the_base_table_cannot_be_read()
+    {
+        var result = Modify(
+            Request(ObjectModifyEngine.Operation.AddFieldGroup, "Overview") with { Fields = ["ConPlate"] },
+            model: "ApplicationSuite", readXml: null);
+
+        Assert.False(result.Ok);
+        Assert.Null(_written);
+    }
+
+    [Fact]
+    public void An_extended_group_can_be_removed_from_the_extension()
+    {
+        const string extension = """
+            <AxTableExtension><Name>ConVehicle.FleetCustom</Name><FieldGroupExtensions>
+              <AxTableFieldGroupExtension><Name>Overview</Name><Fields>
+                <AxTableFieldGroupField><DataField>ConPlate</DataField></AxTableFieldGroupField>
+              </Fields></AxTableFieldGroupExtension>
+            </FieldGroupExtensions><FieldGroups /></AxTableExtension>
+            """;
+        _repo.ApplyExtract(ExtractBatch.Empty("FleetCustom") with
+        {
+            IsCustom = true,
+            Extensions = [new ExtractedObjectExtension("Table", "ConVehicle", "ConVehicle.FleetCustom", null)],
+        });
+
+        var result = Modify(Request(ObjectModifyEngine.Operation.RemoveFieldGroup, "Overview"),
+            model: "ApplicationSuite", readXml: extension, baseXml: Table);
+
+        Assert.True(result.Ok, result.Error?.Message);
+        Assert.Empty(Written.Element("FieldGroupExtensions")!.Elements());
     }
 }

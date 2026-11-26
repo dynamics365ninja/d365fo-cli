@@ -1143,7 +1143,7 @@ public static partial class ObjectModifyEngine
             Operation.AddDataSource => AddDataSource(doc, request, target, repo, warnings, client),
             Operation.AddIndex => AddIndex(doc, request, target, repo),
             Operation.AddRelation => AddRelation(doc, request),
-            Operation.AddFieldGroup => AddFieldGroup(doc, request, target),
+            Operation.AddFieldGroup => AddFieldGroup(doc, request, target, warnings, client),
             Operation.RemoveField => RemoveField(doc, request, warnings),
             Operation.AddDeleteAction => AddDeleteAction(doc, request),
             Operation.RenameField => RenameField(doc, request),
@@ -1153,6 +1153,7 @@ public static partial class ObjectModifyEngine
             Operation.RemoveQueryRange => RemoveQueryRange(doc, request),
             Operation.AddEntryPoint => AddEntryPoint(doc, request),
             Operation.RemoveEntryPoint => RemoveEntryPoint(doc, request),
+            Operation.RemoveFieldGroup => RemoveFieldGroup(doc, request),
             _ when Removals.TryGetValue(request.Operation, out var shape) => RemoveMember(doc, request, shape),
             _ => (null, ToolResult<object>.Fail(D365FoErrorCodes.BadInput, $"Unhandled operation {request.Operation}.")),
         };
@@ -1331,15 +1332,12 @@ public static partial class ObjectModifyEngine
     private static readonly string[] AutoFieldGroups =
         ["AutoReport", "AutoLookup", "AutoIdentification", "AutoSummary", "AutoBrowse"];
 
-    private static (object?, ToolResult<object>?) AddFieldGroup(XDocument doc, ModifyRequest request, WriteTarget target)
+    private static (object?, ToolResult<object>?) AddFieldGroup(
+        XDocument doc, ModifyRequest request, WriteTarget target, List<string> warnings, BridgeClient client)
     {
         var root = doc.Root!;
         var ns = root.Name.Namespace;
 
-        // A table extension adds to a group of its base table through FieldGroupExtensions: a
-        // second AutoReport declared under FieldGroups does not compile.
-        var extendsBaseGroup = target.IsExtension
-            && AutoFieldGroups.Contains(request.Member, StringComparer.OrdinalIgnoreCase);
         var existing = new[] { "FieldGroups", "FieldGroupExtensions" }
             .SelectMany(c => root.Elements().Where(e => e.Name.LocalName == c).Elements())
             .FirstOrDefault(g => string.Equals(LocalValue(g, "Name"), request.Member, StringComparison.OrdinalIgnoreCase));
@@ -1358,12 +1356,22 @@ public static partial class ObjectModifyEngine
             return (new { fieldGroup = request.Member, added = missing, existed = true }, null);
         }
 
-        if (extendsBaseGroup)
+        // A table extension adds to a group of its base table through FieldGroupExtensions: a
+        // second group of the same name declared under FieldGroups does not compile.
+        if (target.IsExtension)
         {
-            EnsureCollection(root, "FieldGroupExtensions").Add(new XElement(ns + "AxTableFieldGroupExtension",
-                new XElement(ns + "Name", request.Member),
-                new XElement(ns + "Fields", request.Fields!.Select(f => GroupField(ns, f)))));
-            return (new { fieldGroup = request.Member, added = request.Fields, extendsBaseGroup = true }, null);
+            var (baseGroup, failure) = BaseFieldGroup(request, client);
+            if (failure is not null) return (null, failure);
+            if (baseGroup is not null)
+            {
+                EnsureCollection(root, "FieldGroupExtensions").Add(new XElement(ns + "AxTableFieldGroupExtension",
+                    new XElement(ns + "Name", baseGroup),
+                    new XElement(ns + "Fields", request.Fields!.Select(f => GroupField(ns, f)))));
+                if (!string.IsNullOrWhiteSpace(request.Label))
+                    warnings.Add($"The label was not written: '{baseGroup}' is a field group of {request.ObjectName}, "
+                                 + "and an extension only adds fields to it.");
+                return (new { fieldGroup = baseGroup, added = request.Fields, extendsBaseGroup = true }, null);
+            }
         }
 
         var groups = EnsureCollection(root, "FieldGroups");
@@ -1374,6 +1382,37 @@ public static partial class ObjectModifyEngine
 
         groups.Add(group);
         return (new { fieldGroup = request.Member, fields = request.Fields, label = request.Label }, null);
+    }
+
+    /// <summary>
+    /// The base table's own spelling of the group a table extension names, or null when the base
+    /// table has no such group and the extension declares its own.
+    /// </summary>
+    private static (string? Name, ToolResult<object>? Failure) BaseFieldGroup(ModifyRequest request, BridgeClient client)
+    {
+        // Every table has the Auto* groups, so they need no read.
+        var auto = AutoFieldGroups.FirstOrDefault(g => string.Equals(g, request.Member, StringComparison.OrdinalIgnoreCase));
+        if (auto is not null) return (auto, null);
+
+        var (baseTable, _, failure) = ReadObjectDocument(client, "table", request.ObjectName);
+        if (failure is not null) return (null, failure);
+
+        var declared = baseTable!.Root!.Elements().Where(e => e.Name.LocalName == "FieldGroups").Elements()
+            .Select(g => LocalValue(g, "Name"))
+            .FirstOrDefault(n => string.Equals(n, request.Member, StringComparison.OrdinalIgnoreCase));
+        return (declared, null);
+    }
+
+    /// <summary>Remove a field group, or the fields an extension adds to a group of its base table.</summary>
+    private static (object?, ToolResult<object>?) RemoveFieldGroup(XDocument doc, ModifyRequest request)
+    {
+        var shape = Removals[Operation.RemoveFieldGroup];
+        bool Holds(string collection) => doc.Root!.Elements().Where(e => e.Name.LocalName == collection).Elements()
+            .Any(g => string.Equals(LocalValue(g, "Name"), request.Member, StringComparison.OrdinalIgnoreCase));
+
+        if (!Holds(shape.Collection) && Holds("FieldGroupExtensions"))
+            shape = new("FieldGroupExtensions", "AxTableFieldGroupExtension", "Name", "Field group extension");
+        return RemoveMember(doc, request, shape);
     }
 
     private static XElement GroupField(XNamespace ns, string field)

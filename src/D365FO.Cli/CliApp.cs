@@ -300,7 +300,7 @@ public static class CliApp
                 b.AddCommand<ModifyAddDataSourceCommand>("add-data-source").WithDescription("Add a datasource to a live form, optionally joined to an existing one.");
                 b.AddCommand<ModifyAddIndexCommand>("add-index").WithDescription("Add an index to a live table; unique unless --allow-duplicates.");
                 b.AddCommand<ModifyAddRelationCommand>("add-relation").WithDescription("Add a foreign-key relation to a live table.");
-                b.AddCommand<ModifyAddFieldGroupCommand>("add-field-group").WithDescription("Add a field group to a live table.");
+                b.AddCommand<ModifyAddFieldGroupCommand>("add-field-group").WithDescription("Add a field group to a live table, or fields to one it has (a table extension extends a base group).");
                 b.AddCommand<ModifyAddDeleteActionCommand>("add-delete-action").WithDescription("Add a delete action to a live table (Cascade | Restricted | CascadeRestricted | None).");
                 b.AddCommand<ModifyFieldPropertyCommand>("field-property").WithDescription("Set a property (AllowEdit, AllowEditOnCreate, Mandatory, HelpText, …) on an existing table field, checked against the field's AOT contract.");
                 b.AddCommand<ModifyRenameFieldCommand>("rename-field").WithDescription("Rename a table field, rewriting the indexes, field groups and relations that name it.");

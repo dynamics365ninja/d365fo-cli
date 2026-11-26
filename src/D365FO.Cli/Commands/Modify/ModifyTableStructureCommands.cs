@@ -107,7 +107,7 @@ public sealed class ModifyAddFieldGroupCommand : Command<ModifyAddFieldGroupComm
         public string Table { get; init; } = "";
 
         [CommandArgument(1, "<GROUP>")]
-        [System.ComponentModel.Description("New field group name. Overview, General and the five Auto* groups already exist on every table.")]
+        [System.ComponentModel.Description("Field group name. A new name declares a group; an existing one takes the missing fields.")]
         public string Group { get; init; } = "";
 
         [CommandOption("--field <FIELD>")]

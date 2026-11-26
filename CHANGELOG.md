@@ -77,8 +77,9 @@ platform writes.
   and title fields still use the field; those are not rewritten.
 - `add-delete-action` did not see an existing action for the same table and wrote a second one.
 - `add-field-group` on a group that exists puts the missing fields into it instead of refusing.
-  On a table extension an `Auto*` group is extended through `FieldGroupExtensions`; it used to be
-  declared a second time.
+  On a table extension a group of the base table is extended through `FieldGroupExtensions`; it
+  used to be declared a second time. `remove-field-group` removes such an extension too. The base
+  table is read through the bridge, except for the `Auto*` groups every table has.
 
 ### Fixed — `modify add-enum-value` numbers the member when the enum stores values (upstream 1.22.0)
 
