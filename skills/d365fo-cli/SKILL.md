@@ -290,7 +290,7 @@ terminal. Its `body` field holds the same text, and it works from any folder.
 | [`ssrs-report-authoring`](references/ssrs-report-authoring.md) | TmpTable to Contract to DP to Controller to AxReport, Print management |
 | [`sysoperation-batch-patterns`](references/sysoperation-batch-patterns.md) | SysOperation batch jobs, RunBase, migration scripts, retryable/async batch |
 | [`system-objects`](references/system-objects.md) | kernel types, xRecord/Common members, system fields, why the index cannot carry them |
-| [`table-scaffolding`](references/table-scaffolding.md) | Table creation, EDTs, relations, indexes, `TableGroup` vs `TableType`, inheritance |
+| [`table-scaffolding`](references/table-scaffolding.md) | Table creation, EDTs, relations, indexes, `TableGroup` vs `TableType`, inheritance, validation and defaulting methods |
 | [`testing-and-quality`](references/testing-and-quality.md) | SysTestCase, ATL, and the offline validate/lint gates |
 | [`transactions-and-concurrency`](references/transactions-and-concurrency.md) | tts scoping, OCC retry, `UnitOfWork`, error handling |
 | [`warehouse-mobile-app`](references/warehouse-mobile-app.md) | warehouse-app screens, ProcessGuide flows, legacy WHSWorkExecuteDisplay, work execution |

@@ -80,7 +80,8 @@ public static class TableDataMethods
         {
             ["validateWrite"] = new(
                 "validateWrite", "public boolean validateWrite()", "xRecord",
-                "Gate an insert or an update of the whole record; runs for UI and X++ writes alike.",
+                "Gate an insert or an update of the whole record. Forms and data entities call it; plain X++ " +
+                "`insert()`/`update()` do not, so code calls it itself: `if (rec.validateWrite()) { rec.insert(); }`.",
                 [.. PreImage, NextOnce, ValidationReturn]),
             ["validateField"] = new(
                 "validateField", "public boolean validateField(FieldId _fieldIdToCheck)", "xRecord",
@@ -95,13 +96,13 @@ public static class TableDataMethods
                 "Run logic around the physical insert of this buffer.",
                 [
                     "There is no pre-image: `this.orig()` is an empty buffer and `this.RecId` is still 0 until next insert() returns.",
-                    "Validation belongs in validateWrite, which the framework calls first — insert() is for side effects.",
+                    "Validation belongs in validateWrite, which the caller runs before the write — insert() is for side effects.",
                     NextOnce,
                 ]),
             ["update"] = new(
                 "update", "public void update()", "xRecord",
                 "Run logic around the physical update of this buffer.",
-                [.. PreImage, "Validation belongs in validateWrite, which the framework calls first — update() is for side effects.", NextOnce]),
+                [.. PreImage, "Validation belongs in validateWrite, which the caller runs before the write — update() is for side effects.", NextOnce]),
             ["delete"] = new(
                 "delete", "public void delete()", "xRecord",
                 "Run logic around the physical delete of this buffer.",
@@ -133,7 +134,7 @@ public static class TableDataMethods
             ["defaultRow"] = new(
                 "defaultRow", "public void defaultRow()", "xRecord",
                 "Seed a new row from the current context; called by the form framework, unlike initValue.",
-                ["For a default that always applies, wrap initValue: defaultRow does not run for a plain X++ insert.", NextOnce]),
+                ["For a general default wrap initValue instead; neither method runs by itself on a plain X++ `insert()`.", NextOnce]),
             ["defaultField"] = new(
                 "defaultField", "public void defaultField(FieldId _fieldId)", "xRecord",
                 "Seed one field from context.",

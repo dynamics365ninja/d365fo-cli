@@ -1,5 +1,5 @@
 ---
-description: Create AxTable XML in D365 Finance & Operations using business-role pattern presets (Main / Transaction / Parameter / Group / Reference / WorksheetHeader / WorksheetLine), or add fields / indexes / relations to existing tables. Use whenever the user asks to "create a table", "scaffold a master/transaction/parameter table", "add a field", or "set TableGroup / TableType".
+description: Create AxTable XML in D365 Finance & Operations using business-role pattern presets (Main / Transaction / Parameter / Group / Reference / WorksheetHeader / WorksheetLine), add fields / indexes / relations to existing tables, or validate and default their data. Use whenever the user asks to "create a table", "scaffold a master/transaction/parameter table", "add a field", "set TableGroup / TableType", or "validate / default a field" (validateWrite, validateDelete, validateField, initValue).
 applyTo: '**/AxTable/**,**/*Table.xml'
 ---
 > ⛔ **NEVER write X++ AOT XML files directly** via PowerShell, terminal file commands (`Set-Content`, `Out-File`, `New-Item`), editor write tools, or any raw text approach. The XML schema (`<AxClass>`, `<AxTable>`, `<AxForm>`, `<Methods>`, `<SourceCode>`) is proprietary — LLMs have not been trained on it reliably. **ALWAYS use `d365fo generate …` commands** to produce correct AOT XML. If `d365fo` is unavailable in PATH, stop and ask the user to install it.
@@ -155,6 +155,92 @@ Treat the defaults as a *starting point* — always replace placeholder fields
   typically `Mandatory=Yes`, `AllowEdit=No`; `modify add-field … --mandatory
   --no-edit` writes both when the field is added.
 
+## Validation and defaulting on the table
+
+Data validation and default values are table methods. Forms call them from their
+data source, and data entities (OData, data management) call them for their data
+sources unless the entity turns that off. X++ code gets neither by itself —
+`insert()`, `update()` and `delete()` call no validate method and no
+`initValue()` — so a service or batch job calls them:
+`rec.initValue(); … if (rec.validateWrite()) { rec.insert(); }`.
+
+Do not put these rules on a form data source: only that form would apply them.
+
+| Method | Signature | Gates |
+|---|---|---|
+| `validateWrite` | `public boolean validateWrite()` | insert and update of the record |
+| `validateDelete` | `public boolean validateDelete()` | delete |
+| `validateField` | `public boolean validateField(FieldId _fieldIdToCheck)` | one field as it changes |
+| `initValue` | `public void initValue()` | defaults of a new record |
+
+Write only the methods that have a rule — a `validateDelete` added by analogy
+with `validateWrite` is noise. On a table of your own model, `add-method` takes
+the whole method from a file (a method the table already declares is changed with
+`d365fo modify method table …`):
+
+```sh
+d365fo modify add-method table FmVehicle validateWrite --source-file validateWrite.xpp
+```
+
+```xpp
+public boolean validateWrite()
+{
+    boolean ret = super();
+
+    if (this.Mileage < 0)
+    {
+        ret = checkFailed("@Fleet:MileageNegative");
+    }
+
+    return ret;
+}
+```
+
+```xpp
+public boolean validateDelete()
+{
+    boolean       ret = super();
+    FmVehicleLine line;
+
+    select firstonly RecId from line
+        where line.VIN == this.VIN;
+
+    if (line.RecId)
+    {
+        ret = checkFailed("@Fleet:VehicleHasLines");
+    }
+
+    return ret;
+}
+```
+
+```xpp
+public boolean validateField(FieldId _fieldIdToCheck)
+{
+    boolean ret = super(_fieldIdToCheck);
+
+    if (ret && _fieldIdToCheck == fieldNum(FmVehicle, Mileage) && this.Mileage < 0)
+    {
+        ret = checkFailed("@Fleet:MileageNegative");
+    }
+
+    return ret;
+}
+```
+
+```xpp
+public void initValue()
+{
+    super();
+
+    this.RegistrationDate = DateTimeUtil::getToday(DateTimeUtil::getUserPreferredTimeZone());
+}
+```
+
+On a table of a Microsoft or ISV model `add-method` is refused: wrap the method
+with Chain of Command instead (`d365fo find coc <Table>::<method>`, then
+`d365fo generate coc`; see `d365fo knowledge get coc-extension-authoring`).
+
 ## Related AOT objects
 
 ### AOT Query for joining related tables
@@ -284,4 +370,6 @@ while select party
 - Never override the EDT label on a field unless deliberately captioned.
 - Never ship a table without an alternate-key index (BP).
 - Never inline UI strings — labels only (BP `BPErrorLabelIsText`).
+- Never put data validation or defaulting on a form data source when it belongs
+  on the table (`validateWrite`, `validateDelete`, `validateField`, `initValue`).
 - After scaffolding, run `d365fo build && d365fo sync` **only on user request**.

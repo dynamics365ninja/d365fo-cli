@@ -177,9 +177,14 @@ Forms follow a strict initialization order. Extension code must respect it.
 | `FormDataSource.init()` | Add ranges, modify query before first execution |
 | `FormDataSource.executeQuery()` | Modify query dynamically on each refresh |
 | `FormDataSource.active()` | Cursor moves to a new record — update dependent UI |
-| `FormDataSource.validateWrite()` | Custom validation before save |
+| `FormDataSource.validateWrite()` | Checks only this form needs; data validation goes in the table's `validateWrite()` |
 | `FormDataSource.write()` | Post-save logic |
 | `FormControl.clicked()` / `modified()` | Button/field interaction |
+
+Validation and defaults that belong to the data (`validateWrite`,
+`validateDelete`, `validateField`, `initValue`) go on the **table**, so that other
+forms and data entities apply them too and X++ code can call them:
+`d365fo knowledge get table-scaffolding --section "Validation and defaulting on the table"`.
 
 **Key form interaction APIs:**
 - `FormDataSource.research(retainPosition: true)` — refresh grid, keep cursor position.
