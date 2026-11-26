@@ -1486,10 +1486,42 @@ public static class XppValidator
     /// <summary>A masked line with no code: blank, or a comment (the masker keeps only the opener).</summary>
     private static readonly Regex BlankOrCommentLine = new(@"^\s*(?://|/\*)?\s*$", RegexOptions.Compiled);
 
-    /// <summary>The declaration an attribute stack is allowed to precede.</summary>
-    private static readonly Regex TypeDeclarationLine = new(
+    /// <summary>The declaration an attribute stack is allowed to precede; its modifiers may span lines.</summary>
+    private static readonly Regex TypeDeclaration = new(
         @"^\s*(?:(?:public|private|protected|internal|final|abstract|static)\s+)*(?:class|interface)\b",
         RegexOptions.IgnoreCase | RegexOptions.Compiled);
+
+    /// <summary>
+    /// What follows the attributes from line <paramref name="from"/> on: the index of its line
+    /// and the text from there, a few lines of it. A later attribute may span lines
+    /// (<c>[SysObsolete(…,</c> … <c>)]</c>), and the declaration may share its closing line.
+    /// </summary>
+    private static (int Line, string Text) AfterAttributeStack(string[] maskedLines, int from)
+    {
+        int depth = 0;
+        for (int i = from; i < maskedLines.Length; i++)
+        {
+            var line = maskedLines[i];
+            if (depth == 0 && BlankOrCommentLine.IsMatch(line)) continue;
+            if (depth == 0 && !line.TrimStart().StartsWith('[')) return (i, Lines(i, line));
+
+            for (int c = 0; c < line.Length; c++)
+            {
+                if (line[c] == '[') depth++;
+                else if (line[c] == ']' && --depth == 0)
+                {
+                    var rest = line[(c + 1)..].Trim();
+                    if (rest.Length == 0 || rest.StartsWith('[') || BlankOrCommentLine.IsMatch(rest)) continue;
+                    return (i, Lines(i, rest));
+                }
+            }
+        }
+
+        return (maskedLines.Length, "");
+
+        string Lines(int index, string first)
+            => string.Join(' ', maskedLines.Skip(index + 1).Take(3).Prepend(first));
+    }
 
     /// <summary>
     /// ATTR003 — two attributes stacked on a method. A method takes several attributes only
@@ -1507,14 +1539,9 @@ public static class XppValidator
             if (!AttributeLine.IsMatch(maskedLines[i]) || !AttributeLine.IsMatch(maskedLines[i + 1])) continue;
 
             // What is being decorated decides legality, so walk past the rest of the stack.
-            int j = i + 2;
-            while (j < maskedLines.Length
-                && (AttributeLine.IsMatch(maskedLines[j]) || BlankOrCommentLine.IsMatch(maskedLines[j])))
-            {
-                j++;
-            }
+            var (j, target) = AfterAttributeStack(maskedLines, i + 2);
 
-            if (j >= maskedLines.Length || !TypeDeclarationLine.IsMatch(maskedLines[j]))
+            if (!TypeDeclaration.IsMatch(target))
             {
                 var names = new[] { maskedLines[i], maskedLines[i + 1] }
                     .Select(l => Regex.Match(l, @"\[\s*([A-Za-z_]\w*)").Groups[1].Value);

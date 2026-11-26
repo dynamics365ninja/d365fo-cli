@@ -931,6 +931,45 @@ public class XppValidatorPortedRulesTests
         {
         }
         """)]
+    // shipped shapes: a later attribute spans lines (VendInvoiceGetInvoiceContextAction)
+    [InlineData("""
+        [DataContract]
+        [SysCopilotChatGlobalAction]
+        [SysCopilotChatActionDefinition(
+            identifierStr(MS.ServerForm.VendInvoiceCopilot.GetVendInvoiceContext),
+            'Get vendor invoice context',
+            MenuItemType::Action)]
+            public final class VendInvoiceGetInvoiceContextAction extends SysCopilotChatAction
+        {
+        }
+        """)]
+    // (FinTagFeature) a literal inside it spans lines too
+    [InlineData("""
+        [ExportAttribute(identifierStr(Microsoft.Dynamics.IFeatureMetadata))]
+        [Microsoft.Dynamics.BusinessPlatform.SharedTypes.InternalUseOnlyAttribute]
+        [SysObsolete(@'This feature is obsolete.
+        Use FinTagConfiguration instead.', false, 15\11\2024)]
+        public final class FinTagFeature implements IFeatureLifecycle
+        {
+        }
+        """)]
+    // modifiers on their own line, and a declaration on the closing line
+    [InlineData("""
+        [DataContractAttribute]
+        [SysOperationGroupAttribute('Dates')]
+        public final
+        class MyContract
+        {
+        }
+        """)]
+    [InlineData("""
+        [DataContractAttribute]
+        [SysOperationGroupAttribute('Dates')]
+        [Other(
+            1)] class MyContract
+        {
+        }
+        """)]
     // one bracket with several attributes, and a single one
     [InlineData("""
         [SysTestMethod, SysTestCategory('Fast')]
