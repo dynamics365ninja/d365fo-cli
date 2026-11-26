@@ -209,6 +209,36 @@ public class XrefBuildAndCoverageTests
         }
     }
 
+    [Theory]
+    [InlineData("DynTpmDeal.added")]
+    [InlineData("DynTpmDeal::added")]
+    public void A_member_an_extension_class_adds_is_looked_up_in_that_class(string symbol)
+    {
+        var db = Path.Combine(Path.GetTempPath(), $"xref-ext-{Guid.NewGuid():N}.sqlite");
+        try
+        {
+            var repo = new D365FO.Core.Index.MetadataRepository(db);
+            repo.EnsureSchema();
+            repo.ApplyExtract(new D365FO.Core.Index.ExtractBatch(
+                Model: "CCTPM", Publisher: "Test", Layer: "cus", IsCustom: true,
+                Tables: [],
+                Classes: [new D365FO.Core.Index.ExtractedClass("DynTpmDeal", null, false, false, null, [])],
+                Edts: [], Enums: [], MenuItems: [],
+                CocExtensions: [new D365FO.Core.Index.ExtractedCoc("DynTpmDeal", "added", "DynTpmDeal_Extension")],
+                Labels: []));
+
+            var owner = XrefCoverage.OwnerOf(symbol, repo);
+
+            Assert.Equal(["DynTpmDeal_Extension"], owner!.ExtensionClasses);
+        }
+        finally
+        {
+            SqlitePool.ReleaseFor(db);
+            foreach (var ext in new[] { "", "-wal", "-shm" })
+                try { File.Delete(db + ext); } catch { }
+        }
+    }
+
     [Fact]
     public void A_coverage_reply_is_read_for_the_module_asked_about()
     {

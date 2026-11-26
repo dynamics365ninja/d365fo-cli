@@ -99,8 +99,8 @@ public class XrefBareNameLookupTests
     {
         IReadOnlyList<string>? toDirect = null, toBridge = null;
         var r = XrefReferences.Find("DynTpmDealTable", null, null, 200, lines: 0,
-            direct: (_, _, _, _, kinds) => { toDirect = kinds; return (null, "SqlException: no route"); },
-            bridge: (_, _, _, _, kinds) =>
+            direct: (_, _, _, _, kinds, _) => { toDirect = kinds; return (null, "SqlException: no route"); },
+            bridge: (_, _, _, _, kinds, _) =>
             {
                 toBridge = kinds;
                 return (new JsonObject { ["ok"] = true, ["count"] = 0, ["match"] = "object", ["items"] = new JsonArray() }, null);
@@ -117,7 +117,7 @@ public class XrefBareNameLookupTests
     {
         IReadOnlyList<string>? asked = ["sentinel"];
         XrefReferences.Find("Unknown", null, null, 200, lines: 0,
-            direct: (_, _, _, _, kinds) => { asked = kinds; return (new JsonObject { ["ok"] = true, ["count"] = 0, ["items"] = new JsonArray() }, null); },
+            direct: (_, _, _, _, kinds, _) => { asked = kinds; return (new JsonObject { ["ok"] = true, ["count"] = 0, ["items"] = new JsonArray() }, null); },
             bridge: null, ownerOf: _ => null);
 
         Assert.Null(asked);

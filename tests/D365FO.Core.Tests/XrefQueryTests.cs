@@ -34,9 +34,122 @@ public class XrefQueryTests
         var p = XrefQuery.ResolveTargetPaths("SalesTable.initFromSalesQuotationTable");
 
         Assert.True(p.Scoped);
-        Assert.Empty(p.Like);
+        // The only patterns are the extensions of this owner, with the member spelled out.
+        Assert.All(p.Like, l => Assert.EndsWith("/initFromSalesQuotationTable", l));
+        Assert.All(p.Like, l => Assert.Contains("SalesTable.%/", l));
         Assert.Contains("/Tables/SalesTable/Methods/initFromSalesQuotationTable", p.Exact);
         Assert.Contains("/Classes/SalesTable/Fields/initFromSalesQuotationTable", p.Exact);
+    }
+
+    // The metadata shape and the extension that adds a member: asking for "/Tables/T/Fields/f"
+    // alone found none of the form bindings, relations or mappings.
+    [Fact]
+    public void A_table_field_is_asked_in_both_shapes_and_under_table_extensions()
+    {
+        var p = XrefQuery.ResolveTargetPaths("CustTable.AccountNum");
+
+        Assert.Contains("Table/CustTable/TableFieldString/AccountNum", p.Exact);
+        Assert.Contains("Table/CustTable/Method/AccountNum", p.Exact);
+        Assert.Contains("DataEntityView/CustTable/DataEntityViewMappedField/AccountNum", p.Exact);
+        Assert.Contains("Map/CustTable/MapFieldString/AccountNum", p.Exact);
+        Assert.Contains("/TableExtensions/CustTable.%/Fields/AccountNum", p.Like);
+        Assert.Contains("TableExtension/CustTable.%/TableFieldString/AccountNum", p.Like);
+        // A field group of the same name is a different symbol.
+        Assert.DoesNotContain(p.Exact, e => e.Contains("TableFieldGroup", StringComparison.Ordinal));
+    }
+
+    [Theory]
+    [InlineData("NoYes.Yes")]
+    [InlineData("NoYes::Yes")]
+    public void An_enum_value_is_found_in_both_shapes_and_under_enum_extensions(string symbol)
+    {
+        var p = XrefQuery.ResolveTargetPaths(symbol);
+
+        Assert.True(p.Scoped);
+        Assert.Contains("/Enums/NoYes/EnumValues/Yes", p.Exact);
+        Assert.Contains("Enum/NoYes/EnumValue/Yes", p.Exact);
+        Assert.Contains("/EnumExtensions/NoYes.%/EnumValues/Yes", p.Like);
+        Assert.Contains("EnumExtension/NoYes.%/EnumValue/Yes", p.Like);
+    }
+
+    // Split at the first dot, this asked for a member "CustTable.write" of the form: an
+    // authoritative zero for a method that has callers.
+    [Fact]
+    public void A_form_data_source_method_resolves_to_its_data_source()
+    {
+        var p = XrefQuery.ResolveTargetPaths("CustTableForm.CustTable.write");
+
+        Assert.True(p.Scoped);
+        Assert.Equal(
+            new[]
+            {
+                "/Forms/CustTableForm/DataSources/CustTable/Methods/write",
+                "Form/CustTableForm/FormDataSourceRoot/CustTable/Method/write",
+            },
+            p.Exact);
+        Assert.Empty(p.Like);
+    }
+
+    [Fact]
+    public void A_method_an_extension_class_adds_is_asked_under_that_class()
+    {
+        var p = XrefQuery.ResolveTargetPaths("CustTable.myMethod", null, ["CustTableMy_Extension"]);
+
+        Assert.Contains("/Classes/CustTableMy_Extension/Methods/myMethod", p.Exact);
+    }
+
+    [Theory]
+    [InlineData("/Tables/CustTable/TableIndexs/AccountIdx", "Table/CustTable/TableIndex/AccountIdx")]
+    [InlineData("/Tables/CustTable/TableFieldGroups/Overview", "Table/CustTable/TableFieldGroup/Overview")]
+    [InlineData("/Enums/NoYes/EnumValues/Yes", "Enum/NoYes/EnumValue/Yes")]
+    public void An_explicit_index_group_or_value_path_is_a_leaf_with_its_metadata_twin(string path, string twin)
+    {
+        var p = XrefQuery.ResolveTargetPaths(path);
+
+        Assert.True(p.Scoped);
+        Assert.Contains(path, p.Exact);
+        Assert.Contains(twin, p.Exact);
+        Assert.DoesNotContain(p.Like, l => l.EndsWith("/%", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void A_metadata_path_is_taken_as_given()
+    {
+        var p = XrefQuery.ResolveTargetPaths("Table/CustTable/TableIndex/AccountIdx");
+
+        Assert.Equal(new[] { "Table/CustTable/TableIndex/AccountIdx" }, p.Exact);
+        Assert.Empty(p.Like);
+        Assert.True(p.Scoped);
+    }
+
+    [Fact]
+    public void An_empty_answer_for_a_name_the_database_lacks_says_so()
+    {
+        var r = XrefReferences.Find("SalesLine.nothing", null, null, 200, lines: 0,
+            direct: (_, _, _, _, _, _) => (new JsonObject
+            {
+                ["ok"] = true, ["count"] = 0, ["scoped"] = false, ["resolved"] = false, ["items"] = new JsonArray(),
+            }, null),
+            bridge: null);
+
+        Assert.True(r.Ok);
+        Assert.False((bool)Data(r)["resolved"]!);
+        Assert.False((bool)Data(r)["scoped"]!);
+        Assert.Contains("not \"no references\"", Assert.Single(r.Warnings!));
+    }
+
+    [Fact]
+    public void An_answer_from_an_index_or_field_group_says_which_it_was()
+    {
+        var r = XrefReferences.Find("CustTable.AccountIdx", null, null, 200, lines: 1,
+            direct: (_, _, _, _, _, _) => (new JsonObject
+            {
+                ["ok"] = true, ["count"] = 0, ["matched"] = "index-or-field-group", ["items"] = new JsonArray(),
+            }, null),
+            bridge: null);
+
+        Assert.Equal("index-or-field-group", (string?)Data(r)["matched"]);
+        Assert.Contains("index or field group", Assert.Single(r.Warnings!));
     }
 
     [Fact]
@@ -44,8 +157,9 @@ public class XrefQueryTests
     {
         var p = XrefQuery.ResolveTargetPaths("/Tables/SalesLine/Fields/SalesPrice");
 
-        Assert.Equal(new[] { "/Tables/SalesLine/Fields/SalesPrice" }, p.Exact);
-        Assert.Empty(p.Like);
+        Assert.Equal("/Tables/SalesLine/Fields/SalesPrice", p.Exact[0]);
+        Assert.Contains("Table/SalesLine/TableFieldReal/SalesPrice", p.Exact);
+        Assert.Contains("/TableExtensions/SalesLine.%/Fields/SalesPrice", p.Like);
         Assert.True(p.Scoped);
     }
 
@@ -166,9 +280,9 @@ public class XrefQueryTests
     {
         var asked = new List<bool>();
         XrefReferences.Find("SalesLine", null, null, 10, lines: 0,
-            direct: (_, _, _, agg, _) => { asked.Add(agg); return (Rows(false), null); }, bridge: null);
+            direct: (_, _, _, agg, _, _) => { asked.Add(agg); return (Rows(false), null); }, bridge: null);
         XrefReferences.Find("SalesLine", null, null, 10, lines: 1,
-            direct: (_, _, _, agg, _) => { asked.Add(agg); return (Rows(false), null); }, bridge: null);
+            direct: (_, _, _, agg, _, _) => { asked.Add(agg); return (Rows(false), null); }, bridge: null);
 
         Assert.Equal(new[] { true, false }, asked);
     }
@@ -225,6 +339,7 @@ public class XrefQueryTests
     [InlineData("/Classes/SalesLineType/Methods/insert", "/Classes/SalesLineType", "insert")]
     [InlineData("/Forms/SalesTable/DataSources/SalesLine/Methods/active", "/Forms/SalesTable", "active")]
     [InlineData("/Classes/SalesLineType", "/Classes/SalesLineType", null)]
+    [InlineData("Form/SalesTable/FormDataSourceRoot/SalesLine?Table", "Form/SalesTable", "SalesLine?Table")]
     public void A_source_path_folds_to_its_object(string source, string obj, string? member)
     {
         Assert.Equal(obj, XrefQuery.ObjectOf(source, out var m));
@@ -282,7 +397,7 @@ public class XrefQueryTests
     public void Names_only_folds_references_into_one_row_per_object()
     {
         var r = XrefReferences.Find("SalesLine", null, null, 200, lines: 0,
-            direct: (_, _, _, _, _) => (Rows(false, Sample), null), bridge: null);
+            direct: (_, _, _, _, _, _) => (Rows(false, Sample), null), bridge: null);
 
         Assert.True(r.Ok);
         var data = Data(r);
@@ -308,7 +423,7 @@ public class XrefQueryTests
     {
         int asked = 0;
         XrefReferences.Find("SalesLine", null, null, 10, lines: 0,
-            direct: (_, _, limit, _, _) => { asked = limit; return (Rows(false, Sample), null); }, bridge: null);
+            direct: (_, _, limit, _, _, _) => { asked = limit; return (Rows(false, Sample), null); }, bridge: null);
 
         Assert.True(asked > 10);
     }
@@ -317,7 +432,7 @@ public class XrefQueryTests
     public void Names_only_caps_objects_and_says_it_did()
     {
         var r = XrefReferences.Find("SalesLine", null, null, 2, lines: 0,
-            direct: (_, _, _, _, _) => (Rows(false, Sample), null), bridge: null);
+            direct: (_, _, _, _, _, _) => (Rows(false, Sample), null), bridge: null);
 
         var data = Data(r);
         Assert.Equal(2, (int)data["count"]!);
@@ -329,7 +444,7 @@ public class XrefQueryTests
     {
         int asked = 0;
         var r = XrefReferences.Find("SalesLine", null, null, 50, lines: 1,
-            direct: (_, _, limit, _, _) => { asked = limit; return (Rows(false, Sample), null); }, bridge: null);
+            direct: (_, _, limit, _, _, _) => { asked = limit; return (Rows(false, Sample), null); }, bridge: null);
 
         var data = Data(r);
         Assert.Equal(50, asked);
@@ -347,8 +462,8 @@ public class XrefQueryTests
     public void The_bridge_answers_when_the_direct_query_cannot()
     {
         var r = XrefReferences.Find("SalesLine", null, null, 200, lines: 0,
-            direct: (_, _, _, _, _) => (null, "SqlException: no route"),
-            bridge: (_, _, _, _, _) => (Rows(false, Sample), null));
+            direct: (_, _, _, _, _, _) => (null, "SqlException: no route"),
+            bridge: (_, _, _, _, _, _) => (Rows(false, Sample), null));
 
         Assert.True(r.Ok);
         Assert.Equal("xrefdb-bridge", (string?)Data(r)["_source"]);
@@ -358,8 +473,8 @@ public class XrefQueryTests
     public void Both_failures_are_reported_when_neither_can_answer()
     {
         var r = XrefReferences.Find("SalesLine", null, null, 200, lines: 0,
-            direct: (_, _, _, _, _) => (null, "SqlException: no route"),
-            bridge: (_, _, _, _, _) => (null, "bridge error: timeout"));
+            direct: (_, _, _, _, _, _) => (null, "SqlException: no route"),
+            bridge: (_, _, _, _, _, _) => (null, "bridge error: timeout"));
 
         Assert.False(r.Ok);
         Assert.Equal(D365FoErrorCodes.XrefUnavailable, r.Error!.Code);
@@ -371,7 +486,7 @@ public class XrefQueryTests
     public void A_model_filter_is_rejected_rather_than_dropped()
     {
         var r = XrefReferences.Find("SalesLine", null, "Foundation", 200, 0,
-            direct: (_, _, _, _, _) => throw new InvalidOperationException("must not query"), bridge: null);
+            direct: (_, _, _, _, _, _) => throw new InvalidOperationException("must not query"), bridge: null);
 
         Assert.Equal(D365FoErrorCodes.BadInput, r.Error!.Code);
     }
@@ -382,7 +497,7 @@ public class XrefQueryTests
     public void An_artifact_kind_is_rejected_where_a_reference_kind_is_meant(string kind)
     {
         var r = XrefReferences.Find("SalesLine", kind, null, 200, 0,
-            direct: (_, _, _, _, _) => throw new InvalidOperationException("must not query"), bridge: null);
+            direct: (_, _, _, _, _, _) => throw new InvalidOperationException("must not query"), bridge: null);
 
         Assert.Equal(D365FoErrorCodes.BadInput, r.Error!.Code);
         Assert.Contains("Call", r.Error.Hint);
@@ -393,7 +508,7 @@ public class XrefQueryTests
     {
         string? asked = null;
         XrefReferences.Find("SalesLine", "call", null, 200, 0,
-            direct: (_, kind, _, _, _) => { asked = kind; return (Rows(false), null); }, bridge: null);
+            direct: (_, kind, _, _, _, _) => { asked = kind; return (Rows(false), null); }, bridge: null);
 
         Assert.Equal("Call", asked);
     }

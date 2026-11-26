@@ -29,6 +29,22 @@ answers for a bare name are faster too.
 Index schema v24: the first command after the update builds the indexes in place (about
 15 seconds on a full index, which grows by about 115 MB). No re-extract.
 
+### Fixed — `find refs --xref` asks for a member where the compiler writes it (upstream 1.19.0)
+
+`Owner.member` queried the code shape of fields and methods only, and answered an authoritative
+zero for the rest.
+
+- Both shapes are queried: `/Tables/T/Fields/f` and the metadata one
+  (`Table/T/TableFieldString/f` …) that holds form bindings, relations and entity mappings.
+- Enum values (`NoYes.Yes`, `NoYes::Yes`), fields and values a table or enum extension adds,
+  methods an `[ExtensionOf]` class adds, and `Form.DataSource.method` are found.
+- A name that is no field, method or value is tried as an index or field group, flagged `matched`.
+- An empty answer for a name the database does not hold carries `resolved: false`, `scoped: false`
+  and a warning instead of reading as "no callers".
+- Prefix patterns are resolved one index seek at a time. A bare name the index knows went from
+  4.8 s to 2.3 s on a 19M-reference database.
+- A metadata source keeps its shape (`Form/SalesTable`, no leading slash).
+
 ### Added — ATTR003: attributes stacked on a method (upstream 1.17.0)
 
 Two attribute lines in a row above a method are a parse error: xppc answers "Invalid token '['"

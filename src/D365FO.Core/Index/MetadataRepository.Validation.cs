@@ -148,6 +148,16 @@ public sealed partial class MetadataRepository : IReferenceIndex, IPropertyStats
         return null;
     }
 
+    /// <summary>The <c>[ExtensionOf]</c> classes of <paramref name="ownerName"/> that declare the method.</summary>
+    public IReadOnlyList<string> GetExtensionClassesDeclaring(string ownerName, string methodName)
+    {
+        using var conn = OpenReadOnly();
+        return conn.Query<string>(@"
+            SELECT DISTINCT ExtensionClass FROM CocExtensions
+            WHERE TargetClass = @ownerName COLLATE NOCASE AND TargetMethod = @methodName COLLATE NOCASE
+            ORDER BY ExtensionClass", new { ownerName, methodName }).ToList();
+    }
+
     /// <inheritdoc />
     public bool FieldExists(string tableName, string fieldName)
     {

@@ -198,7 +198,13 @@ namespace D365FO.Bridge
                     .Select(v => v.TryGetValue<string>(out var s) ? s : null)
                     .Where(s => !string.IsNullOrEmpty(s))
                     .ToList();
-            return XrefRepository.Find(symbol, kind, limit, objectKinds);
+            List<string> extensionClasses = null;
+            if (args != null && args["extensionClasses"] is JsonArray ex)
+                extensionClasses = ex.OfType<JsonValue>()
+                    .Select(v => v.TryGetValue<string>(out var s) ? s : null)
+                    .Where(s => !string.IsNullOrEmpty(s))
+                    .ToList();
+            return XrefRepository.Find(symbol, kind, limit, objectKinds, extensionClasses);
         }
 
         internal JsonObject XrefCoverage(JsonObject args)

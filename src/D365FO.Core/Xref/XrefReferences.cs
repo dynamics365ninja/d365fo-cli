@@ -7,10 +7,12 @@ namespace D365FO.Core.Xref;
 /// <summary>
 /// One source of xref rows: the raw <see cref="XrefQuery.Find(System.Data.Common.DbConnection, string, string, int, bool, IList{string})"/> payload, or null with the
 /// reason it could not be queried. <c>objectKinds</c> is what the local index says a bare name
-/// is (null when unknown), so the query can seek it instead of scanning.
+/// is (null when unknown), so the query can seek it instead of scanning;
+/// <c>extensionClasses</c> are the ones that declare the member of <c>Owner.member</c>.
 /// </summary>
 internal delegate (JsonObject? Result, string? Error) XrefSource(
-    string symbol, string? kind, int limit, bool aggregate, IReadOnlyList<string>? objectKinds);
+    string symbol, string? kind, int limit, bool aggregate, IReadOnlyList<string>? objectKinds,
+    IReadOnlyList<string>? extensionClasses);
 
 /// <summary>
 /// The compiler's where-used, answered from <c>DYNAMICSXREFDB</c> — shared by
@@ -76,7 +78,7 @@ public static class XrefReferences
         Func<string, XrefCoverage.Owner?>? ownerOf = null) =>
         Find(symbol, kind, model, limit, lines, QueryDirect,
             // The bridge speaks the per-reference shape only; Group folds either.
-            BridgeGate.ShouldTry() ? (s, k, l, _, o) => BridgeGate.FindReferencesViaXref(s, k, l, o) : null,
+            BridgeGate.ShouldTry() ? (s, k, l, _, o, e) => BridgeGate.FindReferencesViaXref(s, k, l, o, e) : null,
             ownerOf, CoverageDirectThenBridge);
 
     internal static ToolResult<object> Find(
@@ -117,8 +119,10 @@ public static class XrefReferences
         var owner = SafeOwnerOf(ownerOf, symbol);
         var objectKinds = owner?.Kinds is { Count: > 0 } k ? k : null;
 
+        var extensionClasses = owner?.ExtensionClasses is { Count: > 0 } x ? x : null;
+
         var aggregate = lines <= 0;
-        var (raw, directError) = direct(symbol, refKind, rowLimit, aggregate, objectKinds);
+        var (raw, directError) = direct(symbol, refKind, rowLimit, aggregate, objectKinds, extensionClasses);
         var source = "xrefdb";
         string? bridgeError = null;
 
@@ -128,7 +132,7 @@ public static class XrefReferences
         var unreachable = directError?.StartsWith(ServerUnreachable, StringComparison.Ordinal) == true;
         if (raw is null && bridge is not null && !unreachable)
         {
-            (raw, bridgeError) = bridge(symbol, refKind, rowLimit, aggregate, objectKinds);
+            (raw, bridgeError) = bridge(symbol, refKind, rowLimit, aggregate, objectKinds, extensionClasses);
             source = "xrefdb-bridge";
         }
 
@@ -158,7 +162,20 @@ public static class XrefReferences
         var rawCount = (raw["items"] as JsonArray)?.Count ?? (int?)raw["count"] ?? 0;
         var verdict = XrefCoverage.Assess(rawCount, symbol, owner, hasRows);
         if (verdict.Failure is not null) return verdict.Failure;
-        IReadOnlyList<string>? warnings = verdict.Warning is null ? null : [verdict.Warning];
+        var found = new List<string>();
+        if (verdict.Warning is not null) found.Add(verdict.Warning);
+        var unresolved = (bool?)raw["resolved"] == false;
+        if (unresolved)
+        {
+            found.Add($"DYNAMICSXREFDB has no name for '{symbol}', so this empty answer is not \"no references\". " +
+                "Check the owner and the member (an index, field group, enum value or Form.DataSource.method " +
+                "can be named too), pass the AOT path, or build the declaring model with --xref.");
+        }
+
+        var matched = (string?)raw["matched"];
+        if (matched is not null)
+            found.Add($"'{symbol}' is no field, method or enum value: these are the references to the index or field group of that name.");
+        IReadOnlyList<string>? warnings = found.Count == 0 ? null : found;
 
         raw.Remove("ok");
         raw.Remove("source");
@@ -168,7 +185,7 @@ public static class XrefReferences
         // Provenance and shape ahead of the rows: a caller that reads the head of a long answer
         // must not miss which store answered.
         var rows = new JsonObject { ["_source"] = source, ["mode"] = "references" };
-        foreach (var key in new[] { "symbol", "kindFilter", "scoped", "match", "objectKinds", "count", "truncated", "items" })
+        foreach (var key in new[] { "symbol", "kindFilter", "scoped", "match", "matched", "resolved", "objectKinds", "count", "truncated", "items" })
         {
             if (raw[key] is not { } value) continue;
             raw.Remove(key);
@@ -262,6 +279,8 @@ public static class XrefReferences
         var kindFilter = (string?)raw["kindFilter"];
         if (!string.IsNullOrEmpty(kindFilter)) result["kindFilter"] = kindFilter;
         if (raw["objectKinds"] is JsonArray objectKinds) result["objectKinds"] = objectKinds.DeepClone();
+        if ((bool?)raw["resolved"] == false) result["resolved"] = false;
+        if ((string?)raw["matched"] is { } matched) result["matched"] = matched;
         return result;
     }
 
@@ -318,7 +337,8 @@ public static class XrefReferences
     }
 
     private static (JsonObject? Result, string? Error) QueryDirect(
-        string symbol, string? kind, int limit, bool aggregate, IReadOnlyList<string>? objectKinds)
+        string symbol, string? kind, int limit, bool aggregate, IReadOnlyList<string>? objectKinds,
+        IReadOnlyList<string>? extensionClasses)
     {
         try
         {
@@ -331,7 +351,8 @@ public static class XrefReferences
             {
                 return (null, ServerUnreachable + ex.GetType().Name + ": " + ex.Message);
             }
-            var result = XrefQuery.Find(connection, symbol, kind, limit, aggregate, objectKinds?.ToList());
+            var result = XrefQuery.Find(connection, symbol, kind, limit, aggregate, objectKinds?.ToList(),
+                extensionClasses?.ToList());
             if ((bool?)result["ok"] == true) return (result, null);
             return (null, (string?)result["error"] + ": " + (string?)result["message"]);
         }

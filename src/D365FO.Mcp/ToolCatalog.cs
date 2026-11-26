@@ -362,7 +362,9 @@ public static class ToolCatalog
             "extensions, CoC, event handlers, services, reports; `kind` filters the referencing kind (Form, Query, " +
             "MenuItem, Security…), `model` the referencing model; complete `byVia`/`byKind` counts come first. " +
             "`xref: true`: the compiler's cross-reference (DYNAMICSXREFDB) — complete and compiler-resolved, " +
-            "`kind` is a reference kind (Call/Type/Extends/Implements/Property/Attribute/…), no `model`/`allModels`. Returns one row per " +
+            "`kind` is a reference kind (Call/Type/Extends/Implements/Property/Attribute/…), no `model`/`allModels`; `Owner.member` " +
+            "(also `Enum::Value`, `Form.DataSource.method`) scopes to one member, and `resolved: false` means the database " +
+            "has no such name. Returns one row per " +
             "referencing object (`limit` caps objects, default 200); `lines: N` returns one row per method with " +
             "up to N sample lines (xref: one row per reference with line/column).",
             Schema(("name", "string", true), ("kind", "string", false), ("model", "string", false), ("limit", "integer", false),

@@ -246,8 +246,10 @@ public static class BridgeGate
     /// What the local index says a bare name is, so the bridge can seek it. A bridge built before
     /// this argument existed ignores it and keeps the "anywhere" match.
     /// </param>
+    /// <param name="extensionClasses">The <c>[ExtensionOf]</c> classes that declare the member of <c>Owner.member</c>.</param>
     public static (JsonObject? Result, string? Error) FindReferencesViaXref(
-        string symbol, string? kind, int limit, IReadOnlyList<string>? objectKinds = null)
+        string symbol, string? kind, int limit, IReadOnlyList<string>? objectKinds = null,
+        IReadOnlyList<string>? extensionClasses = null)
     {
         if (!ShouldTry())
             return (null, "the metadata bridge is disabled — set D365FO_BRIDGE_ENABLED=1 on the dev VM.");
@@ -266,6 +268,8 @@ public static class BridgeGate
             if (!string.IsNullOrEmpty(kind)) args["kind"] = kind;
             if (objectKinds is { Count: > 0 })
                 args["objectKinds"] = new JsonArray(objectKinds.Select(o => (JsonNode)o).ToArray());
+            if (extensionClasses is { Count: > 0 })
+                args["extensionClasses"] = new JsonArray(extensionClasses.Select(e => (JsonNode)e).ToArray());
             var result = client.SendAsync("findReferences", args).GetAwaiter().GetResult();
             if (result is null) return (null, "the bridge returned no result.");
             var ok = (bool?)result["ok"] ?? false;
