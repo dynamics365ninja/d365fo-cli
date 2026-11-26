@@ -782,3 +782,25 @@ CREATE INDEX IF NOT EXISTS IX_SecurityMap_Role           ON SecurityMap(Role);
 -- FormDataSources 222 times over. Every other FK column in this schema is already
 -- covered by an index; this was the only one that was not.
 CREATE INDEX IF NOT EXISTS IX_FormDataSources_FormId     ON FormDataSources(FormId);
+
+-- v24: names are compared with COLLATE NOCASE (X++ is case-insensitive), which none of the
+-- BINARY indexes above can serve. Without these twins every symbol or member lookup is a
+-- scan; `validate references` over one large class made minutes of them on a full AOT.
+-- IX_Edts_Name_NoCase is declared with Edts.
+CREATE INDEX IF NOT EXISTS IX_Tables_Name_NoCase         ON Tables(Name COLLATE NOCASE);
+CREATE INDEX IF NOT EXISTS IX_Classes_Name_NoCase        ON Classes(Name COLLATE NOCASE);
+CREATE INDEX IF NOT EXISTS IX_Enums_Name_NoCase          ON Enums(Name COLLATE NOCASE);
+CREATE INDEX IF NOT EXISTS IX_Forms_Name_NoCase          ON Forms(Name COLLATE NOCASE);
+CREATE INDEX IF NOT EXISTS IX_Queries_Name_NoCase        ON Queries(Name COLLATE NOCASE);
+CREATE INDEX IF NOT EXISTS IX_Views_Name_NoCase          ON Views(Name COLLATE NOCASE);
+CREATE INDEX IF NOT EXISTS IX_DataEntities_Name_NoCase   ON DataEntities(Name COLLATE NOCASE);
+CREATE INDEX IF NOT EXISTS IX_Maps_Name_NoCase           ON Maps(Name COLLATE NOCASE);
+CREATE INDEX IF NOT EXISTS IX_MenuItems_Name_NoCase      ON MenuItems(Name COLLATE NOCASE);
+CREATE INDEX IF NOT EXISTS IX_ObjExt_Name_NoCase         ON ObjectExtensions(ExtensionName COLLATE NOCASE);
+CREATE INDEX IF NOT EXISTS IX_Methods_ClassId_NameNoCase ON Methods(ClassId, Name COLLATE NOCASE);
+CREATE INDEX IF NOT EXISTS IX_TableMethods_NameNoCase    ON TableMethods(TableId, Name COLLATE NOCASE);
+CREATE INDEX IF NOT EXISTS IX_Coc_Target_NoCase          ON CocExtensions(TargetClass COLLATE NOCASE, TargetMethod COLLATE NOCASE);
+-- Labels is the largest table (1.4M rows on a full AOT). A label token is checked by file
+-- and key, case-insensitively; a legacy @SYS token also by key alone, in any file.
+CREATE INDEX IF NOT EXISTS IX_Labels_FileKey_NoCase      ON Labels(LabelFile COLLATE NOCASE, Key COLLATE NOCASE);
+CREATE INDEX IF NOT EXISTS IX_Labels_KeyOnly             ON Labels(Key);

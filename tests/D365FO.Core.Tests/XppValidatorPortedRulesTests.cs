@@ -210,6 +210,190 @@ public class XppValidatorPortedRulesTests
         Assert.DoesNotContain(v, x => x.Rule == "COC004");
     }
 
+    /// <summary>An extension class around <paramref name="methods"/>.</summary>
+    private static string Coc(string methods) => $$"""
+        [ExtensionOf(tableStr(CustTable))]
+        final class CustTable_Extension
+        {
+        {{methods}}
+        }
+        """;
+
+    private static int Coc004Count(string methods) => Run(Coc(methods)).Count(x => x.Rule == "COC004");
+
+    // Only a block that branches or loops makes `next` conditional. try, finally, using and a
+    // bare block run their body every time and xppc accepts next there; counting every block
+    // deeper than the method body refused shipped extensions that compile.
+    [Theory]
+    [InlineData("""
+        public void insert()
+        {
+            try
+            {
+                next insert();
+
+                if (this.RecId)
+                {
+                    this.log();
+                }
+            }
+            finally
+            {
+                if (this.RecId)
+                {
+                    this.dispose();
+                }
+            }
+        }
+        """)]
+    [InlineData("""
+        public InventDimId insertFromForm(InventDim _inventDim)
+        {
+            using (var _ = MyContext::construct())
+            {
+                return next insertFromForm(_inventDim);
+            }
+        }
+        """)]
+    [InlineData("""
+        public void insert()
+        {
+            using (var context = MyContext::construct(
+                this.RecId))
+            {
+                next insert();
+            }
+        }
+        """)]
+    [InlineData("""
+        public void insert()
+        {
+            {
+                next insert();
+            }
+        }
+
+        public void update()
+        {
+            try { next update(); } finally { this.log(); }
+        }
+        """)]
+    public void Coc004_quiet_on_next_inside_a_block_that_always_runs(string methods)
+        => Assert.Equal(0, Coc004Count(methods));
+
+    [Theory]
+    // an if nested in a try
+    [InlineData("""
+        public void insert()
+        {
+            try
+            {
+                if (this.RecId)
+                {
+                    next insert();
+                }
+            }
+            finally
+            {
+            }
+        }
+        """)]
+    // a catch runs only on an exception
+    [InlineData("""
+        public void insert()
+        {
+            try
+            {
+                this.prepare();
+            }
+            catch
+            {
+                next insert();
+            }
+        }
+        """)]
+    // else on its own line
+    [InlineData("""
+        public void insert()
+        {
+            if (this.RecId)
+            {
+                this.prepare();
+            }
+            else
+            {
+                next insert();
+            }
+        }
+        """)]
+    // a condition spanning lines: neither the brace's line nor the one above holds the keyword
+    [InlineData("""
+        public void insert()
+        {
+            if (this.AccountNum
+                && this.CustGroup)
+            {
+                next insert();
+            }
+        }
+        """)]
+    [InlineData("""
+        public void update()
+        {
+            while (this.AccountNum
+                && this.CustGroup) {
+                next update();
+            }
+        }
+        """)]
+    // a for header carries semicolons of its own
+    [InlineData("""
+        public void update()
+        {
+            int i;
+            for (i = 0; i < 2; i++)
+            {
+                next update();
+            }
+        }
+        """)]
+    // a switch, with the case on its own lines
+    [InlineData("""
+        public void update()
+        {
+            switch (this.CustGroup)
+            {
+                case 'A':
+                    next update();
+                    break;
+            }
+        }
+        """)]
+    public void Coc004_flags_next_inside_a_block_that_branches_or_loops(string methods)
+        => Assert.Equal(1, Coc004Count(methods));
+
+    // A condition that opens no block of its own still decides whether next runs.
+    [Theory]
+    [InlineData("""
+        public void insert()
+        {
+            if (this.RecId)
+                next insert();
+        }
+        """)]
+    [InlineData("""
+        public void insert()
+        {
+            if (this.RecId)
+            {
+                this.prepare();
+            }
+            else { next insert(); }
+        }
+        """)]
+    public void Coc004_flags_next_after_a_condition_without_its_own_line(string methods)
+        => Assert.Equal(1, Coc004Count(methods));
+
     [Fact]
     public void Coc005_flags_this_checkFailed_on_table_buffer()
     {
@@ -687,6 +871,173 @@ public class XppValidatorPortedRulesTests
             """;
         var v = Run(code);
         Assert.Contains(v, x => x.Rule == "ATTR002" && x.Severity == "warning");
+    }
+
+    // ── ATTR003 ──────────────────────────────────────────────────────────────
+
+    private const string StackedMethod = """
+        [Hookable(false)]
+        [SysObsolete('Obsolete.', false, 26\06\2024)]
+        public void run()
+        {
+        }
+        """;
+
+    /// <summary>
+    /// xppc parses table and form methods one by one and accepts the stack: the shipped form
+    /// RetailTransactionArchiveForm is written that way.
+    /// </summary>
+    [Theory]
+    [InlineData(@"K:\Packages\M\M\AxForm\F.xml", null, null)]
+    [InlineData("/Packages/M/M/AxTable/T.xml", null, null)]
+    [InlineData(null, "form", null)]
+    [InlineData(null, "Table", null)]
+    [InlineData(null, null, "public class F extends FormRun\n{\n}\n")]
+    [InlineData(null, null, "public class T extends common\n{\n}\n")]
+    public void Attr003_quiet_for_a_table_or_form_method(string? path, string? ownerKind, string? declaration)
+        => Assert.DoesNotContain(
+            XppValidator.Validate(declaration + StackedMethod, sourcePath: path, ownerKind: ownerKind),
+            x => x.Rule == "ATTR003");
+
+    [Theory]
+    [InlineData(@"K:\Packages\M\M\AxClass\C.xml", null, null)]
+    [InlineData(null, "class", null)]
+    [InlineData(null, null, "public class C extends RunBaseBatch\n{\n}\n")]
+    public void Attr003_is_an_error_in_a_class(string? path, string? ownerKind, string? declaration)
+    {
+        var finding = Assert.Single(
+            XppValidator.Validate(declaration + StackedMethod, sourcePath: path, ownerKind: ownerKind),
+            x => x.Rule == "ATTR003");
+        Assert.Equal("error", finding.Severity);
+    }
+
+    [Fact]
+    public void Attr003_only_warns_when_the_owner_of_the_method_is_unknown()
+        => Assert.Equal("warning", Assert.Single(Run(StackedMethod), x => x.Rule == "ATTR003").Severity);
+
+    [Theory]
+    [InlineData("""
+        [SysTestMethod]
+        [SysTestCategory('Fast')]
+        public void run_zeroRate_returnsZero()
+        {
+        }
+        """)]
+    // a comment between the stack and the method changes nothing
+    [InlineData("""
+        [SysTestMethod]
+        [SysTestPriority(1)] // keep first
+        /// <summary>Does a thing.</summary>
+        /* and another */
+        public void run()
+        {
+        }
+        """)]
+    [InlineData("""
+        public class MyContract
+        {
+            [DataMember]
+            [SysOperationLabel(literalStr("@SYS1"))]
+
+            public str parmName(str _name = name)
+            {
+                return name;
+            }
+        }
+        """)]
+    public void Attr003_flags_attributes_stacked_on_a_method(string code)
+    {
+        var finding = Assert.Single(XppValidator.Validate(code, ownerKind: "class"), x => x.Rule == "ATTR003");
+        Assert.Equal("error", finding.Severity);
+    }
+
+    [Theory]
+    // legal above a class declaration, comments between or not
+    [InlineData("""
+        [DataContractAttribute]
+        [SysOperationGroupAttribute('Dates', "@SYS1", '1')]
+        public final class MyContract
+        {
+        }
+        """)]
+    [InlineData("""
+        [DataContractAttribute]
+        [SysOperationContractProcessing(classStr(MyBuilder))]
+        /// <summary>Contract.</summary>
+        // note
+        /* block
+           comment */
+        class MyContract
+        {
+        }
+        """)]
+    // shipped shapes: a later attribute spans lines (VendInvoiceGetInvoiceContextAction)
+    [InlineData("""
+        [DataContract]
+        [SysCopilotChatGlobalAction]
+        [SysCopilotChatActionDefinition(
+            identifierStr(MS.ServerForm.VendInvoiceCopilot.GetVendInvoiceContext),
+            'Get vendor invoice context',
+            MenuItemType::Action)]
+            public final class VendInvoiceGetInvoiceContextAction extends SysCopilotChatAction
+        {
+        }
+        """)]
+    // (FinTagFeature) a literal inside it spans lines too
+    [InlineData("""
+        [ExportAttribute(identifierStr(Microsoft.Dynamics.IFeatureMetadata))]
+        [Microsoft.Dynamics.BusinessPlatform.SharedTypes.InternalUseOnlyAttribute]
+        [SysObsolete(@'This feature is obsolete.
+        Use FinTagConfiguration instead.', false, 15\11\2024)]
+        public final class FinTagFeature implements IFeatureLifecycle
+        {
+        }
+        """)]
+    // modifiers on their own line, and a declaration on the closing line
+    [InlineData("""
+        [DataContractAttribute]
+        [SysOperationGroupAttribute('Dates')]
+        public final
+        class MyContract
+        {
+        }
+        """)]
+    [InlineData("""
+        [DataContractAttribute]
+        [SysOperationGroupAttribute('Dates')]
+        [Other(
+            1)] class MyContract
+        {
+        }
+        """)]
+    // one bracket with several attributes, and a single one
+    [InlineData("""
+        [SysTestMethod, SysTestCategory('Fast')]
+        public void run()
+        {
+        }
+
+        [SysTestMethod]
+        public void walk()
+        {
+        }
+        """)]
+    // consecutive container destructuring is not an attribute list
+    [InlineData("""
+        public void run()
+        {
+            [first, second] = this.pair();
+            [third, fourth] = this.pair();
+        }
+        """)]
+    public void Attr003_quiet_where_the_shape_is_legal(string code)
+        => Assert.DoesNotContain(Run(code), x => x.Rule == "ATTR003");
+
+    [Fact]
+    public void Attr003_reads_crlf_source()
+    {
+        var code = "[SysTestMethod]\r\n[SysTestPriority(1)]\r\npublic void run()\r\n{\r\n}\r\n";
+        Assert.Single(Run(code), x => x.Rule == "ATTR003");
     }
 
     [Fact]

@@ -12,6 +12,9 @@ public sealed partial class MetadataRepository : IReferenceIndex, IPropertyStats
 {
     private const int InheritanceWalkLimit = 10;
 
+    /// <summary>Deeper than <see cref="InheritanceWalkLimit"/>: a "missing" verdict needs the whole chain.</summary>
+    private const int MemberWalkLimit = 20;
+
     /// <inheritdoc />
     /// <remarks>
     /// Extensions are symbols too. An extension row does not live in any of the object tables —
@@ -146,6 +149,105 @@ public sealed partial class MetadataRepository : IReferenceIndex, IPropertyStats
             owner = parent;
         }
         return null;
+    }
+
+    /// <inheritdoc />
+    /// <remarks>
+    /// The index keeps only a signature's first line, so the declaration — modifiers, parameters,
+    /// attributes — is read from the AOT file the type was extracted from.
+    /// </remarks>
+    public MemberResolution LookupMember(string ownerName, string memberName, DeclaringKind kind, string? ignoreExtensionClass = null)
+    {
+        var (types, methods, key, parent) = kind == DeclaringKind.Class
+            ? ("Classes", "Methods", "ClassId", "ExtendsName")
+            : ("Tables", "TableMethods", "TableId", "TableExtends");
+
+        using var conn = OpenReadOnly();
+        var chain = new List<string>();
+        var current = ownerName;
+        for (int depth = 0; depth < MemberWalkLimit; depth++)
+        {
+            var type = conn.QueryFirstOrDefault<(string? Name, string? Parent)>(
+                $"SELECT Name, {parent} AS Parent FROM {types} WHERE Name = @current COLLATE NOCASE LIMIT 1",
+                new { current });
+            if (type.Name is null) break;
+            chain.Add(type.Name);
+
+            var declared = conn.QueryFirstOrDefault<(string? Name, string? SourcePath)>($@"
+                SELECT m.Name, t.SourcePath
+                FROM {methods} m JOIN {types} t ON m.{key} = t.{key}
+                WHERE t.Name = @owner COLLATE NOCASE AND m.Name = @method COLLATE NOCASE
+                LIMIT 1", new { owner = type.Name, method = memberName });
+            if (declared.Name is not null)
+            {
+                return new MemberResolution(MemberState.Found, type.Name,
+                    ReadMethodSource(declared.SourcePath, declared.Name), chain);
+            }
+
+            var contributed = conn.ExecuteScalar<long>(@"
+                SELECT COUNT(1) FROM CocExtensions
+                WHERE TargetClass = @owner COLLATE NOCASE AND TargetMethod = @method COLLATE NOCASE
+                  AND (@ignore IS NULL OR ExtensionClass <> @ignore COLLATE NOCASE)",
+                new { owner = type.Name, method = memberName, ignore = ignoreExtensionClass });
+            if (contributed > 0) return new MemberResolution(MemberState.Contributed, type.Name, null, chain);
+
+            if (string.IsNullOrWhiteSpace(type.Parent) || type.Parent.Equals(type.Name, StringComparison.OrdinalIgnoreCase))
+                return new MemberResolution(MemberState.Missing, null, null, chain);
+            current = type.Parent;
+        }
+
+        // The named type, or a base of it, is not in the index. What was walked still says
+        // whether the named type itself has the member.
+        return chain.Count == 0 ? MemberResolution.Unknown : new MemberResolution(MemberState.Unknown, null, null, chain);
+    }
+
+    /// <summary>The <c>[ExtensionOf]</c> classes of <paramref name="ownerName"/> that declare the method.</summary>
+    public IReadOnlyList<string> GetExtensionClassesDeclaring(string ownerName, string methodName)
+    {
+        using var conn = OpenReadOnly();
+        return conn.Query<string>(@"
+            SELECT DISTINCT ExtensionClass FROM CocExtensions
+            WHERE TargetClass = @ownerName COLLATE NOCASE AND TargetMethod = @methodName COLLATE NOCASE
+            ORDER BY ExtensionClass", new { ownerName, methodName }).ToList();
+    }
+
+    /// <summary>Files <see cref="ReadMethodSource"/> keeps parsed; past it the cache starts over.</summary>
+    private const int MethodSourceCacheLimit = 256;
+
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<string, (DateTime Written, Dictionary<string, string> Methods)>
+        _methodSources = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// One method's source from its AOT file. A caller asks for many methods of one type, and
+    /// the large platform files take tens of milliseconds to parse, so a file is read once
+    /// until it changes.
+    /// </summary>
+    private string? ReadMethodSource(string? path, string methodName)
+    {
+        if (string.IsNullOrEmpty(path) || !File.Exists(path)) return null;
+        try
+        {
+            var written = File.GetLastWriteTimeUtc(path);
+            if (!_methodSources.TryGetValue(path, out var file) || file.Written != written)
+            {
+                var methods = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+                foreach (var method in System.Xml.Linq.XDocument.Load(path).Descendants().Where(e => e.Name.LocalName == "Method"))
+                {
+                    var name = method.Elements().FirstOrDefault(c => c.Name.LocalName == "Name")?.Value;
+                    var source = method.Elements().FirstOrDefault(c => c.Name.LocalName == "Source")?.Value;
+                    if (name is not null && source is not null) methods.TryAdd(name, source);
+                }
+
+                if (_methodSources.Count >= MethodSourceCacheLimit) _methodSources.Clear();
+                _methodSources[path] = file = (written, methods);
+            }
+
+            return file.Methods.GetValueOrDefault(methodName);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Xml.XmlException)
+        {
+            return null;
+        }
     }
 
     /// <inheritdoc />

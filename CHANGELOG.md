@@ -19,6 +19,70 @@ was ported from.
 
 ## [Unreleased]
 
+### Fixed — name and label lookups seek the index instead of scanning it
+
+Names are matched case-insensitively and no index served that comparison, so on a full
+installation each symbol, method or label check walked a whole table: `validate references`
+took over four minutes on one large platform class, and 5 seconds with this change. Where-used
+answers for a bare name are faster too.
+
+Index schema v24: the first command after the update builds the indexes in place (about
+15 seconds on a full index, which grows by about 115 MB). No re-extract.
+
+### Fixed — `find refs --xref` asks for a member where the compiler writes it (upstream 1.19.0)
+
+`Owner.member` queried the code shape of fields and methods only, and answered an authoritative
+zero for the rest.
+
+- Both shapes are queried: `/Tables/T/Fields/f` and the metadata one
+  (`Table/T/TableFieldString/f` …) that holds form bindings, relations and entity mappings.
+- Enum values (`NoYes.Yes`, `NoYes::Yes`), fields and values a table or enum extension adds,
+  methods an `[ExtensionOf]` class adds, and `Form.DataSource.method` are found.
+- A name that is no field, method or value is tried as an index or field group, flagged `matched`.
+- An empty answer for a name the database does not hold carries `resolved: false`, `scoped: false`
+  and a warning instead of reading as "no callers".
+- Prefix patterns are resolved one index seek at a time. A bare name the index knows went from
+  4.8 s to 2.3 s on a 19M-reference database.
+- A metadata source keeps its shape (`Form/SalesTable`, no leading slash).
+
+### Fixed — the text scan does not report a declaration as a reference (upstream 1.19.0)
+
+`find refs <method>` listed every method of that name for its own declaration line. Only a call
+further down its body counts now. A table's answer says that metadata uses need `--structural`
+or `--xref`.
+
+### Added — `validate references` checks what a name binds to (upstream 1.24.0)
+
+It proved that names exist and never read the declaration behind them.
+
+- **Intrinsic members**: `methodStr`, `staticMethodStr`, `tableMethodStr`, `tableStaticMethodStr`,
+  `delegateStr` and `staticDelegateStr` need the member on the named type itself (extension classes
+  count, inherited and un-overridden kernel methods do not), of the matching kind
+  (`unknown-method`, `wrong-member-kind`). Only the first two were checked, through the whole
+  inheritance chain.
+- **`coc-target`**: the wrapped method is missing, private, `final` without `[Wrappable]`,
+  `[Hookable(false)]`, or the wrapper differs in parameters, static or return type.
+- **`handler-target`**: parameters that differ from the delegate's, or a pre/post handler on a
+  method that is not hookable.
+- **`obsolete-method`**: a call to a `[SysObsolete]` method, an error when its `isError` is true.
+
+The declaration is read from the indexed AOT file, so nothing needs re-indexing.
+
+### Added — ATTR003: attributes stacked on a class method (upstream 1.17.0)
+
+Two attribute lines in a row above a class method are a parse error: xppc answers "Invalid token
+'['" and abandons the file. `validate xpp` now reports it and says to merge them into one bracket.
+A stack above a class declaration, or on a table or form method, compiles and stays silent. A
+bare method whose owner is unknown is a warning.
+
+### Fixed — COC004 accepts `next` in `try`, `finally` and `using` (upstream 1.22.0)
+
+Any block deeper than the method body counted as conditional, so `validate xpp` refused shipped
+extensions that compile. Only a block whose header branches or loops does now (`if`, `else`,
+`while`, `for`, `do`, `switch`, `case`, `default`, `catch`), including a header that spans lines.
+`else { next … }` and a `next` on the line under a braceless `if`, which used to pass, are
+reported.
+
 ### Fixed — guidance puts data validation and defaults on the table (#293)
 
 The form references and `form-pattern spec` presented the data source `initValue` /

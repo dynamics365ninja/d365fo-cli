@@ -24,7 +24,7 @@ namespace D365FO.Core.Xref
     /// file, so the two paths cannot drift into answering the same symbol differently. All
     /// queries are parameterised and read-only.
     /// </remarks>
-    public static class XrefQuery
+    public static partial class XrefQuery
     {
         /// <summary>
         /// The connection the compiler's own tooling uses on a dev VM: local SQL, integrated auth.
@@ -93,11 +93,12 @@ namespace D365FO.Core.Xref
         /// <list type="bullet">
         /// <item>Explicit AOT path ("/Tables/SalesTable/Methods/initFromX") — used
         /// verbatim. Method/field paths are treated as exact leaves.</item>
-        /// <item>Member-qualified ("SalesTable.initFromX") — scoped to a single
-        /// method/field on its declaring type. The owner's object kind is unknown,
-        /// so method+field variants are expanded across every container type; only
-        /// the path that actually exists matches. This is the precise where-used
-        /// Visual Studio shows, instead of pooling every same-named member.</item>
+        /// <item>Member-qualified ("SalesTable.initFromX", "NoYes::Yes",
+        /// "CustTable.CustTable.write" for a form data source method) — scoped to a single
+        /// member on its declaring type. The owner's object kind is unknown, so the variants
+        /// are expanded across every container type, in the code and the metadata shape; only
+        /// the paths that exist match. This is the precise where-used Visual Studio shows,
+        /// instead of pooling every same-named member.</item>
         /// <item>Label ("@WAX2194" old format, "@LabelFile:LabelId" new format, or
         /// the explicit "/Labels/@..." xref path) — normalised to the single exact
         /// path the X++ compiler records for a label, "/Labels/@&lt;ref&gt;".</item>
@@ -128,11 +129,15 @@ namespace D365FO.Core.Xref
         /// <inheritdoc cref="ResolveTargetPaths(string)"/>
         /// <param name="symbol">The caller's symbol.</param>
         /// <param name="objectKinds">Object kinds the bare name is known to be, or null.</param>
-        public static TargetPaths ResolveTargetPaths(string symbol, IList<string> objectKinds)
-        {
-            // Container segments that can own methods/fields.
-            string[] memberContainers = { "Tables", "Classes", "Forms", "Views", "DataEntityViews", "Queries", "Maps" };
+        public static TargetPaths ResolveTargetPaths(string symbol, IList<string> objectKinds) =>
+            ResolveTargetPaths(symbol, objectKinds, null);
 
+        /// <inheritdoc cref="ResolveTargetPaths(string, IList{string})"/>
+        /// <param name="symbol">The caller's symbol.</param>
+        /// <param name="objectKinds">Object kinds the bare name is known to be, or null.</param>
+        /// <param name="extensionClasses">Extension classes that declare the member of <c>Owner.member</c>.</param>
+        public static TargetPaths ResolveTargetPaths(string symbol, IList<string> objectKinds, IList<string> extensionClasses)
+        {
             var exact = new List<string>();
             var like = new List<string>();
             symbol = (symbol ?? string.Empty).Trim();
@@ -148,24 +153,24 @@ namespace D365FO.Core.Xref
 
             if (symbol.StartsWith("/", StringComparison.Ordinal))
             {
-                exact.Add("/" + trimmed);
-                var scoped = symbol.Contains("/Methods/") || symbol.Contains("/Fields/");
+                var scoped = IsMemberPath(trimmed);
+                AddCodePath("/" + trimmed, exact, like);
                 if (!scoped) like.Add("/" + EscapeLike(trimmed) + "/%");
                 return new TargetPaths(exact, like, scoped);
             }
 
-            if (symbol.Contains("."))
+            // A metadata-shaped path ("Table/CustTable/TableIndex/AccountIdx"), as given.
+            if (symbol.Contains("/"))
             {
-                var dot = symbol.IndexOf('.');
-                var owner = symbol.Substring(0, dot);
-                var member = symbol.Substring(dot + 1);
-                foreach (var ct in memberContainers)
-                {
-                    exact.Add("/" + ct + "/" + owner + "/Methods/" + member);
-                    exact.Add("/" + ct + "/" + owner + "/Fields/" + member);
-                }
-                return new TargetPaths(exact, like, true);
+                var scoped = trimmed.Split('/').Length > 2;
+                exact.Add(trimmed);
+                if (!scoped) like.Add(EscapeLike(trimmed) + "/%");
+                return new TargetPaths(exact, like, scoped);
             }
+
+            string memberOwner, memberName;
+            if (TrySplitMember(symbol, out memberOwner, out memberName))
+                return MemberPaths(memberOwner, memberName, extensionClasses);
 
             // Bare name of a known kind: the object and its children, in both path forms. Exact
             // paths and prefixes only, so every term seeks.
@@ -210,25 +215,12 @@ namespace D365FO.Core.Xref
             // A scoped target (member-qualified, or a label) points at an exact leaf, so it
             // carries no LIKE terms — adding "/%" children or a "%/name" match would pool
             // callers of every same-named member across types.
-            var inParams = new List<string>();
-            for (int i = 0; i < paths.Exact.Count; i++)
-            {
-                var pn = "@P" + i;
-                inParams.Add(pn);
-                AddParameter(cmd, pn, paths.Exact[i]);
-            }
-            var likeConds = new List<string>();
-            for (int i = 0; i < paths.Like.Count; i++)
-            {
-                var pn = "@L" + i;
-                likeConds.Add("tgtName.Path LIKE " + pn);
-                AddParameter(cmd, pn, paths.Like[i]);
-            }
-
-            var where = "tgtName.Path IN (" + string.Join(",", inParams) + ")";
-            if (likeConds.Count > 0)
-                where += " OR " + string.Join(" OR ", likeConds);
-            where = "(" + where + ")";
+            // Prefix patterns are resolved to name ids one seek at a time: OR'ed together with the
+            // IN list, a member query with extension patterns took 2.5 s against 0.1 s. A leading
+            // wildcard scans either way, so the "anywhere" match keeps the single condition.
+            var where = paths.Like.Count > 0 && paths.Like.All(l => !l.StartsWith("%", StringComparison.Ordinal))
+                ? "r.TargetId IN (" + NameIds(cmd, paths) + ")"
+                : PathCondition(cmd, paths);
             if (kindId >= 0)
             {
                 where += " AND r.Kind = @kind";
@@ -262,6 +254,68 @@ ORDER BY srcName.Path";
             AddParameter(cmd, "@limit", limit);
         }
 
+        /// <summary>One condition on the target's path matching any of <paramref name="paths"/>.</summary>
+        private static string PathCondition(DbCommand cmd, TargetPaths paths)
+        {
+            var where = "tgtName.Path IN (" + ExactParameters(cmd, paths) + ")";
+            for (int i = 0; i < paths.Like.Count; i++)
+                where += " OR tgtName.Path LIKE " + LikeParameter(cmd, paths, i);
+            return "(" + where + ")";
+        }
+
+        /// <summary>The ids of the names at <paramref name="paths"/>, one select per term.</summary>
+        private static string NameIds(DbCommand cmd, TargetPaths paths)
+        {
+            var sql = "SELECT Id FROM Names WHERE Path IN (" + ExactParameters(cmd, paths) + ")";
+            for (int i = 0; i < paths.Like.Count; i++)
+                sql += " UNION ALL SELECT Id FROM Names WHERE Path LIKE " + LikeParameter(cmd, paths, i);
+            return sql;
+        }
+
+        private static string ExactParameters(DbCommand cmd, TargetPaths paths)
+        {
+            var names = new List<string>();
+            for (int i = 0; i < paths.Exact.Count; i++)
+            {
+                var pn = "@P" + i;
+                names.Add(pn);
+                AddParameter(cmd, pn, paths.Exact[i]);
+            }
+            return string.Join(",", names);
+        }
+
+        private static string LikeParameter(DbCommand cmd, TargetPaths paths, int i)
+        {
+            var pn = "@L" + i;
+            AddParameter(cmd, pn, paths.Like[i]);
+            return pn;
+        }
+
+        /// <summary>Whether the database holds a name at any of <paramref name="paths"/>.</summary>
+        private static bool AnyNameExists(DbConnection connection, TargetPaths paths)
+        {
+            using (var cmd = connection.CreateCommand())
+            {
+                cmd.CommandTimeout = 30;
+                cmd.CommandText = "SELECT TOP (1) Id FROM (" + NameIds(cmd, paths) + ") AS found";
+                return cmd.ExecuteScalar() != null;
+            }
+        }
+
+        /// <summary><c>Owner.member</c> or <c>Enum::Value</c>; not a label or a path.</summary>
+        private static bool TrySplitMember(string symbol, out string owner, out string member)
+        {
+            owner = null;
+            member = null;
+            var s = (symbol ?? string.Empty).Trim().Replace("::", ".");
+            if (s.Length == 0 || s.Contains("/") || s[0] == '@') return false;
+            var dot = s.IndexOf('.');
+            if (dot <= 0 || dot == s.Length - 1) return false;
+            owner = s.Substring(0, dot);
+            member = s.Substring(dot + 1);
+            return true;
+        }
+
         /// <summary>
         /// Run the where-used query on an open-able connection.
         /// </summary>
@@ -281,7 +335,24 @@ ORDER BY srcName.Path";
         /// <param name="limit">Most rows.</param>
         /// <param name="aggregate">One row per (source, kind) instead of one per reference.</param>
         /// <param name="objectKinds">What the local index says a bare name is, or null.</param>
-        public static JsonObject Find(DbConnection connection, string symbol, string kindFilter, int limit, bool aggregate, IList<string> objectKinds)
+        public static JsonObject Find(DbConnection connection, string symbol, string kindFilter, int limit, bool aggregate, IList<string> objectKinds) =>
+            Find(connection, symbol, kindFilter, limit, aggregate, objectKinds, null);
+
+        /// <inheritdoc cref="Find(DbConnection, string, string, int, bool, IList{string})"/>
+        /// <param name="connection">An open-able connection to the cross-reference database.</param>
+        /// <param name="symbol">A name, <c>Owner.member</c>, an AOT path, or a label reference.</param>
+        /// <param name="kindFilter">A reference kind, or null for every kind.</param>
+        /// <param name="limit">Most rows.</param>
+        /// <param name="aggregate">One row per (source, kind) instead of one per reference.</param>
+        /// <param name="objectKinds">What the local index says a bare name is, or null.</param>
+        /// <param name="extensionClasses">Extension classes that declare the member of <c>Owner.member</c>.</param>
+        /// <remarks>
+        /// An empty answer for a member is authoritative only when the database knows the member:
+        /// otherwise it carries <c>resolved: false</c>. A name that is no field, method or enum
+        /// value is then tried as an index or field group (<c>matched</c> says so).
+        /// </remarks>
+        public static JsonObject Find(DbConnection connection, string symbol, string kindFilter, int limit, bool aggregate,
+            IList<string> objectKinds, IList<string> extensionClasses)
         {
             if (string.IsNullOrWhiteSpace(symbol))
                 return Fail("MISSING_ARG", "symbol is required");
@@ -298,6 +369,8 @@ ORDER BY srcName.Path";
 
             var items = new JsonArray();
             TargetPaths paths;
+            bool resolved = true;
+            string matched = null;
             try
             {
                 if (connection.State != System.Data.ConnectionState.Open) connection.Open();
@@ -309,39 +382,23 @@ ORDER BY srcName.Path";
                     var probed = ProbeKinds(connection, symbol.Trim().Trim('/'));
                     if (probed.Count > 0) objectKinds = probed;
                 }
-                paths = ResolveTargetPaths(symbol, objectKinds);
+                paths = ResolveTargetPaths(symbol, objectKinds, extensionClasses);
+                Read(connection, paths, kindId, limit, aggregate, items);
 
-                using (var cmd = connection.CreateCommand())
+                // Nothing found for one member: say whether the database knows it at all.
+                if (items.Count == 0 && paths.Scoped && !AnyNameExists(connection, paths))
                 {
-                    cmd.CommandTimeout = 30;
-                    Prepare(cmd, paths, kindId, limit, aggregate);
-                    using (var r = cmd.ExecuteReader())
+                    resolved = false;
+                    string owner, member;
+                    if (TrySplitMember(symbol, out owner, out member) && !member.Contains("."))
                     {
-                        while (r.Read())
+                        var other = IndexAndGroupPaths(owner, member);
+                        if (AnyNameExists(connection, other))
                         {
-                            var kind = Convert.ToInt32(r["Kind"]);
-                            if (aggregate)
-                            {
-                                items.Add(new JsonObject
-                                {
-                                    ["source"] = r["SourcePath"] as string,
-                                    ["kind"] = KindLabel(kind),
-                                    ["kindId"] = kind,
-                                    ["module"] = r["Module"] as string ?? string.Empty,
-                                    ["refs"] = Convert.ToInt32(r["Refs"]),
-                                });
-                                continue;
-                            }
-                            items.Add(new JsonObject
-                            {
-                                ["source"] = r["SourcePath"] as string,
-                                ["target"] = r["TargetPath"] as string,
-                                ["kind"] = KindLabel(kind),
-                                ["kindId"] = kind,
-                                ["line"] = Convert.ToInt32(r["Line"]),
-                                ["column"] = Convert.ToInt32(r["Col"]),
-                                ["module"] = r["Module"] as string ?? string.Empty,
-                            });
+                            resolved = true;
+                            matched = "index-or-field-group";
+                            paths = other;
+                            Read(connection, paths, kindId, limit, aggregate, items);
                         }
                     }
                 }
@@ -362,20 +419,60 @@ ORDER BY srcName.Path";
                 ["source"] = "xrefdb",
                 // When the target is scoped (member-qualified, or a label) the query hit one
                 // exact leaf, so an empty list is an authoritative "no callers" — not a hint to
-                // fall back to a looser name-only scan.
-                ["scoped"] = paths.Scoped,
+                // fall back to a looser name-only scan. Not when the database has no such name.
+                ["scoped"] = paths.Scoped && resolved,
                 // How the target was matched: "exact" (a member, label or AOT path), "object" (a bare
                 // name of a known kind, from the local index or probed in the database; seeks only)
                 // or "anywhere" (the name as a node in any path, a scan).
                 ["match"] = MatchOf(symbol, paths, objectKinds),
                 ["items"] = items,
             };
+            if (!resolved) result["resolved"] = false;
+            if (matched != null) result["matched"] = matched;
             // The kinds a bare name was matched as: from the local index, else from the database.
             if ((string)result["match"] == "object")
                 result["objectKinds"] = new JsonArray(objectKinds
                     .Where(k => k != null && KindRoots.ContainsKey(k)).Distinct(StringComparer.OrdinalIgnoreCase)
                     .Select(k => (JsonNode)k).ToArray());
             return result;
+        }
+
+        private static void Read(DbConnection connection, TargetPaths paths, int kindId, int limit, bool aggregate, JsonArray items)
+        {
+            using (var cmd = connection.CreateCommand())
+            {
+                cmd.CommandTimeout = 30;
+                Prepare(cmd, paths, kindId, limit, aggregate);
+                using (var r = cmd.ExecuteReader())
+                {
+                    while (r.Read())
+                    {
+                        var kind = Convert.ToInt32(r["Kind"]);
+                        if (aggregate)
+                        {
+                            items.Add(new JsonObject
+                            {
+                                ["source"] = r["SourcePath"] as string,
+                                ["kind"] = KindLabel(kind),
+                                ["kindId"] = kind,
+                                ["module"] = r["Module"] as string ?? string.Empty,
+                                ["refs"] = Convert.ToInt32(r["Refs"]),
+                            });
+                            continue;
+                        }
+                        items.Add(new JsonObject
+                        {
+                            ["source"] = r["SourcePath"] as string,
+                            ["target"] = r["TargetPath"] as string,
+                            ["kind"] = KindLabel(kind),
+                            ["kindId"] = kind,
+                            ["line"] = Convert.ToInt32(r["Line"]),
+                            ["column"] = Convert.ToInt32(r["Col"]),
+                            ["module"] = r["Module"] as string ?? string.Empty,
+                        });
+                    }
+                }
+            }
         }
 
         /// <summary>
@@ -507,8 +604,9 @@ WHERE m.Module IN (" + string.Join(",", inParams) + ")";
             var s = (symbol ?? string.Empty).Trim();
             return s.Length > 0
                 && TryGetLabelRef(s.Trim('/')) == null
-                && !s.StartsWith("/", StringComparison.Ordinal)
-                && !s.Contains(".");
+                && !s.Contains("/")
+                && !s.Contains(".")
+                && !s.Contains("::");
         }
 
         /// <summary>The path roots for <paramref name="objectKinds"/>; empty when none is known.</summary>
@@ -534,7 +632,8 @@ WHERE m.Module IN (" + string.Join(",", inParams) + ")";
 
         /// <summary>
         /// The object a source path belongs to:  <c>/Classes/SalesLineType/Methods/insert</c> →
-        /// <c>/Classes/SalesLineType</c>, with the rest (<c>insert</c>) as the member.
+        /// <c>/Classes/SalesLineType</c>, with the rest (<c>insert</c>) as the member. A metadata
+        /// path keeps its shape, without a leading slash.
         /// </summary>
         public static string ObjectOf(string sourcePath, out string member)
         {
@@ -543,7 +642,8 @@ WHERE m.Module IN (" + string.Join(",", inParams) + ")";
             var parts = sourcePath.Trim('/').Split('/');
             if (parts.Length < 2) return sourcePath;
             if (parts.Length > 2) member = parts[parts.Length - 1];
-            return "/" + parts[0] + "/" + parts[1];
+            var root = sourcePath[0] == '/' ? "/" : string.Empty;
+            return root + parts[0] + "/" + parts[1];
         }
 
         private static string TryGetLabelRef(string trimmed)

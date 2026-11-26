@@ -1,5 +1,6 @@
 using System.Text.RegularExpressions;
 using D365FO.Core.Extract;
+using D365FO.Core.Validation;
 
 namespace D365FO.Core.Index;
 
@@ -203,17 +204,29 @@ public static class MethodSourceSearch
             // \bword\b disk scan.
             static string Quote(string t) => "\"" + t.Replace("\"", "\"\"") + "\"";
             IEnumerable<MethodSourceMatch> rows = member is null
-                ? repo.SearchMethodSource(Quote(token), limit, ftsModels, normKind, objectName: null)
-                : repo.SearchMethodSource(Quote(token) + " AND " + Quote(member.Owner), limit, ftsModels, normKind, objectName: null)
-                    .Concat(repo.SearchMethodSource(Quote(token), limit, ftsModels, normKind, objectName: member.Owner))
+                ? repo.SearchMethodSource(Quote(token), limit, ftsModels, normKind, objectName: null, bodyOf: token)
+                : repo.SearchMethodSource(Quote(token) + " AND " + Quote(member.Owner), limit, ftsModels, normKind, objectName: null, bodyOf: token)
+                    .Concat(repo.SearchMethodSource(Quote(token), limit, ftsModels, normKind, objectName: member.Owner, bodyOf: token))
                     .DistinctBy(r => (r.Kind, r.ObjectName, r.MethodName, r.Model));
             foreach (var mm in rows)
             {
                 if (hits.Count >= limit) { truncated = true; break; }
                 // The tokenizer drops the '@' and the ':', so "@File:Key" matches the words
                 // "File Key" anywhere. A label hit is checked against the body; labels have few uses.
-                var lines = SampleLines(mm.Kind, mm.SourcePath, mm.MethodName, rx,
-                    isLabel ? Math.Max(1, sampleLinesPerHit) : sampleLinesPerHit);
+                IReadOnlyList<SourceRefMatchLine> lines;
+                if (mm.Body is { } own && !isLabel && IsNamed(mm.Kind, mm.MethodName, token))
+                {
+                    // The method of this name: its declaration is not a reference to itself.
+                    var rest = WithoutDeclaration(own, token);
+                    if (!rx.IsMatch(XppLexer.Mask(rest))) continue;
+                    lines = SampleLinesFromBody(rest, rx, sampleLinesPerHit);
+                }
+                else
+                {
+                    lines = SampleLines(mm.Kind, mm.SourcePath, mm.MethodName, rx,
+                        isLabel ? Math.Max(1, sampleLinesPerHit) : sampleLinesPerHit);
+                }
+
                 if (isLabel)
                 {
                     if (lines.Count == 0 && !string.IsNullOrEmpty(mm.SourcePath) && File.Exists(mm.SourcePath)) continue;
@@ -465,7 +478,16 @@ public static class MethodSourceSearch
                     : $"'{owner.Canonical}' has no member '{member.Member}' in the index.";
             }
             if (needle.StartsWith('@')) return null; // a label reference is text, not a symbol
-            return repo.Resolve(needle) is not null || repo.IsKnownMemberName(needle)
+            var known = repo.Resolve(needle);
+            if (known is not null && known.Kinds.Contains("table"))
+            {
+                // Most uses of a table are declarative, which no code scan sees.
+                return $"This scan reads X++ only. Where '{known.Canonical}' is used in metadata (data sources, "
+                       + $"relations, field types) comes from `d365fo find refs {known.Canonical} --structural` "
+                       + "or `--xref`.";
+            }
+
+            return known is not null || repo.IsKnownMemberName(needle)
                 ? null
                 : $"'{needle}' is not a known object, method or field in the index. The text search ran anyway "
                   + "(it also finds kernel functions and macros). If you meant an object, check the spelling with "
@@ -494,12 +516,37 @@ public static class MethodSourceSearch
             foreach (var m in src)
             {
                 if (!rx.IsMatch(m.Body) || !keep(row.Name, m.Body)) continue;
+                var searched = m.Body;
+                if (!IsLabelReference(token) && IsNamed(row.Kind, m.Name, token))
+                {
+                    searched = WithoutDeclaration(m.Body, token);
+                    if (!rx.IsMatch(XppLexer.Mask(searched))) continue;
+                }
                 if (hits.Count >= limit) { truncated = true; break; }
                 hits.Add(new SourceRefHit(
                     row.Kind, row.Name, row.Model, m.Name, row.SourcePath,
-                    SampleLinesFromBody(m.Body, rx, sampleLinesPerHit)));
+                    SampleLinesFromBody(searched, rx, sampleLinesPerHit)));
             }
         }
+    }
+
+    /// <summary>Whether the method (a form member by its last segment) is named <paramref name="token"/>.</summary>
+    private static bool IsNamed(string kind, string method, string token)
+    {
+        var dot = kind == "Form" ? method.LastIndexOf('.') : -1;
+        return method.AsSpan(dot + 1).Equals(token, StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// <paramref name="body"/> with the name in the method's own declaration blanked: the first
+    /// <c>name(</c> in code. A recursive call further down stays.
+    /// </summary>
+    private static string WithoutDeclaration(string body, string name)
+    {
+        var declaration = Regex.Match(XppLexer.Mask(body), $@"\b{Regex.Escape(name)}\s*\(", RegexOptions.IgnoreCase);
+        return declaration.Success
+            ? body.Remove(declaration.Index, name.Length).Insert(declaration.Index, new string(' ', name.Length))
+            : body;
     }
 
     /// <summary>

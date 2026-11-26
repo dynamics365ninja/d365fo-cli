@@ -35,6 +35,7 @@
     <!-- The XREFDB where-used query, shared for the same reason: the CLI and MCP run it
          directly, the bridge's findReferences is the fallback, and both must answer alike. -->
     <Compile Include="..\D365FO.Core\Xref\XrefQuery.cs" Link="Shared\XrefQuery.cs" />
+    <Compile Include="..\D365FO.Core\Xref\XrefQuery.Members.cs" Link="Shared\XrefQuery.Members.cs" />
   </ItemGroup>
 
 </Project>

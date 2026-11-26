@@ -38,7 +38,11 @@ public static class XrefCoverage
     /// Every object kind the index knows the name as (<c>table</c>, <c>form</c>, …). A table and its
     /// form often share one. The xref query uses them to seek a bare name instead of scanning.
     /// </param>
-    public sealed record Owner(string Model, string? Module, IReadOnlyList<string>? Kinds = null);
+    /// <param name="ExtensionClasses">
+    /// For <c>Owner.member</c>, the <c>[ExtensionOf]</c> classes of the owner that declare the member.
+    /// </param>
+    public sealed record Owner(string Model, string? Module, IReadOnlyList<string>? Kinds = null,
+        IReadOnlyList<string>? ExtensionClasses = null);
 
     /// <summary>
     /// The type a symbol names: <c>SalesTable</c> for <c>SalesTable</c>,
@@ -57,7 +61,7 @@ public static class XrefCoverage
             return parts.Length >= 2 ? parts[1] : null;
         }
 
-        var dot = s.IndexOf('.');
+        var dot = s.IndexOfAny(['.', ':']);
         return dot > 0 ? s[..dot] : s;
     }
 
@@ -119,7 +123,15 @@ public static class XrefCoverage
 
         // No guess from the model name: a package named otherwise would probe as "no rows" and
         // turn a genuine empty answer into a refusal. An unknown package means unknown coverage.
-        return new Owner(model!, module, kinds);
+        IReadOnlyList<string>? extensionClasses = null;
+        var rest = symbol.Trim().Replace("::", ".");
+        if (!rest.StartsWith('/') && rest.Length > name.Length + 1 && rest[name.Length] == '.')
+        {
+            try { extensionClasses = repo.GetExtensionClassesDeclaring(name, rest[(name.Length + 1)..]); }
+            catch { /* the owner's own paths are still queried */ }
+        }
+
+        return new Owner(model!, module, kinds, extensionClasses);
     }
 
     /// <summary>What a reference answer means once coverage is known.</summary>

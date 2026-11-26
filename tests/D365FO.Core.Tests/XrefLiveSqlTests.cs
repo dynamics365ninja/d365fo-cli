@@ -78,7 +78,12 @@ public sealed class XrefLiveSqlTests : IDisposable
           (N'/Forms/SalesTable/DataSources/SalesLine/Methods/active', 1),
           (N'/Classes/MyExt_SalesLine_Extension', 2),
           (N'/Classes/PrefixOnly/Methods/run', 1),
-          (N'/Classes/Bulk/Methods/run', 1);
+          (N'/Classes/Bulk/Methods/run', 1),
+          -- Member shapes: metadata, extension, enum value, field group, an unused member.
+          (N'Table/PurchLine/TableFieldString/Name', 1), (N'/TableExtensions/PurchLine.My/Fields/Added', 2),
+          (N'Enum/NoYes/EnumValue/Yes', 1), (N'Table/PurchLine/TableFieldGroup/Overview', 1),
+          (N'/Tables/PurchLine/Methods/unused', 1),
+          (N'Form/SalesTable/FormDesign/FormDesign/Grid?DataField', 1);
 
         DECLARE @n TABLE (Path NVARCHAR(900), Id INT);
         INSERT @n SELECT Path, Id FROM Names;
@@ -103,6 +108,12 @@ public sealed class XrefLiveSqlTests : IDisposable
           (@Active, @Find, 1, 5, 18), (@Active, @Find, 1, 9, 18), (@Active, @Find, 1, 14, 18),
           (@Ext, @SalesLine, 4, 1, 1),
           (@Prefix, @TypeCls, 1, 3, 4), (@Prefix, @In, 6, 4, 4);
+
+        INSERT [References] (SourceId, TargetId, Kind, Line, [Column])
+        SELECT s.Id, t.Id, 2, 1, 1 FROM Names s CROSS JOIN Names t
+        WHERE s.Path = N'Form/SalesTable/FormDesign/FormDesign/Grid?DataField'
+          AND t.Path IN (N'Table/PurchLine/TableFieldString/Name', N'/TableExtensions/PurchLine.My/Fields/Added',
+                         N'Enum/NoYes/EnumValue/Yes', N'Table/PurchLine/TableFieldGroup/Overview');
 
         -- 300 Properties that sort before every Call: "the Calls among the first 200 references of any
         -- kind" — the old filter-after-TOP — finds none of the three.
@@ -170,6 +181,44 @@ public sealed class XrefLiveSqlTests : IDisposable
         Assert.True((bool)data["scoped"]!);
         Assert.Equal(new[] { "/Forms/SalesTable" }, Sources(data));
         Assert.Equal(3, (int)data["items"]![0]!["refs"]!);
+    }
+
+    [SqlServerFact]
+    public void Members_are_found_in_every_shape_the_compiler_writes()
+    {
+        if (_database is null) return;
+
+        foreach (var symbol in new[] { "PurchLine.Name", "PurchLine.Added", "NoYes::Yes" })
+        {
+            var data = Ok(XrefReferences.Find(symbol, null, null, 200, lines: 0));
+            Assert.Single(data["items"]!.AsArray());
+        }
+    }
+
+    [SqlServerFact]
+    public void A_name_that_is_only_a_field_group_is_answered_as_one_and_says_so()
+    {
+        if (_database is null) return;
+
+        var r = XrefReferences.Find("PurchLine.Overview", null, null, 200, lines: 0);
+
+        Assert.Equal("index-or-field-group", (string?)Ok(r)["matched"]);
+        Assert.Single(Ok(r)["items"]!.AsArray());
+    }
+
+    [SqlServerFact]
+    public void An_unused_member_is_a_scoped_zero_and_an_unknown_one_is_not()
+    {
+        if (_database is null) return;
+
+        var unused = Ok(XrefReferences.Find("PurchLine.unused", null, null, 200, lines: 0));
+        Assert.True((bool)unused["scoped"]!);
+        Assert.Null(unused["resolved"]);
+
+        var unknown = XrefReferences.Find("PurchLine.nothing", null, null, 200, lines: 0);
+        Assert.False((bool)Ok(unknown)["scoped"]!);
+        Assert.False((bool)Ok(unknown)["resolved"]!);
+        Assert.Single(unknown.Warnings!);
     }
 
     [SqlServerFact]

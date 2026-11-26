@@ -20,7 +20,10 @@ d365fo lint --output sarif > lint.sarif                       # whole-model swee
 
 `validate references` proves every type, field, method (including arity), enum,
 label and intrinsic target against the index — it catches invented names **before**
-the compiler does. `validate xpp` runs the BP rule canon offline. Fix everything
+the compiler does. It also reads the declaration a name binds to: an intrinsic
+member must be declared on the named type with the right static/delegate kind, a
+CoC wrapper and an event handler must match their target, and a call to a method
+marked obsolete with the error flag set is an error. `validate xpp` runs the BP rule canon offline. Fix everything
 they report in the same turn, re-run, and only then write.
 
 ## 2. SysTestCase — unit tests
@@ -37,6 +40,10 @@ they report in the same turn, re-run, and only then write.
   intention-revealing `<memberUnderTest>_<scenario>_<expectedResult>` name, e.g.
   `calculateDiscount_zeroRate_returnsZero` — which is also what
   `d365fo generate systest` emits.
+- A class method takes several attributes only inside **one** bracket:
+  `[SysTestMethod, SysTestPriority(1)]`. Two attribute lines in a row on a class
+  method are a parse error (xppc: *"Invalid token '['"*; `validate xpp` rule ATTR003).
+  Above a class declaration, and on table and form methods, stacking compiles.
 - `setUp()` / `tearDown()` run before and after **each** test method.
 - Assertions (inherited from `SysTestAssert`): `this.assertEquals()`,
   `assertNotEqual()` (no trailing *s*), `assertTrue()`, `assertFalse()`,

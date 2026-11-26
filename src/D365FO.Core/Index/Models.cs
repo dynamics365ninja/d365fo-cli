@@ -182,7 +182,11 @@ public sealed record MethodSourceMatch(
     string MethodName,
     string Model,
     string? SourcePath,
-    string? Snippet);
+    string? Snippet)
+{
+    /// <summary>The method's source, returned only for a method of the name asked for with it.</summary>
+    public string? Body { get; init; }
+}
 
 public sealed record MenuItemInfo(
     string Name,

@@ -1,3 +1,4 @@
+using System.Text;
 using System.Text.RegularExpressions;
 
 namespace D365FO.Core.Validation;
@@ -59,6 +60,7 @@ public interface IPropertyStatsProvider
 ///   MAC001  A precompiler directive written without its dot (#define X)
 ///   ATTR001 An attribute argument that is not a compile-time literal
 ///   ATTR002 [SysObsolete] without message, isError AND date (xppbp moniker)
+///   ATTR003 Two attribute lines stacked on a class method (xppc: Invalid token '[')
 ///   EXT001  An extension-method class whose class or methods are not static
 ///   KW001   A variable named after a reserved word (the compiler's own 115-word set)
 ///   RPT001  DP reads parmDataContract() but declares no [SRSReportParameterAttribute]
@@ -128,14 +130,19 @@ public static class XppValidator
     /// Where the document came from, when the caller knows. Only XML013 uses it — a file in the
     /// wrong AOT folder is not something stdin can be guilty of.
     /// </param>
+    /// <param name="ownerKind">
+    /// What the methods in <paramref name="code"/> belong to (<c>class</c>, <c>table</c>, <c>form</c>),
+    /// when the caller knows. Only ATTR003 uses it.
+    /// </param>
     public static IReadOnlyList<XppViolation> Validate(
-        string code, string codeType = CodeTypeXpp, IPropertyStatsProvider? stats = null, string? sourcePath = null)
+        string code, string codeType = CodeTypeXpp, IPropertyStatsProvider? stats = null, string? sourcePath = null,
+        string? ownerKind = null)
     {
         var violations = new List<XppViolation>();
         var normalized = NormalizeCodeType(codeType);
         if (normalized == CodeTypeXpp)
         {
-            RunXppRules(code, violations);
+            RunXppRules(code, violations, ownerKind, sourcePath);
         }
         else if (normalized == CodeTypeXmlReport)
         {
@@ -147,7 +154,7 @@ public static class XppValidator
         }
         else if (normalized == CodeTypeXmlTable)
         {
-            RunXppRules(code, violations);
+            RunXppRules(code, violations, "table", sourcePath);
             CheckMissingAlternateKey(code, violations);
             CheckTableProperties(code, stats, violations);
             CheckFieldEdt(code, stats, violations);
@@ -184,7 +191,8 @@ public static class XppValidator
         _ => CodeTypeXpp,
     };
 
-    private static void RunXppRules(string code, List<XppViolation> violations)
+    private static void RunXppRules(
+        string code, List<XppViolation> violations, string? ownerKind, string? sourcePath)
     {
         var masked = XppLexer.Mask(code);
         CheckTodayDeprecated(code, violations);
@@ -217,6 +225,7 @@ public static class XppValidator
         CheckInOperatorLiteral(masked, violations);
         CheckSelectExpressionAndValidTimeState(masked, violations);
         CheckAttributeArguments(code, masked, violations);
+        CheckStackedMethodAttributes(code, masked, OwnerOfMethods(masked, ownerKind, sourcePath), violations);
         CheckExtensionMethodClassShape(code, masked, violations);
         CheckReservedIdentifiers(code, masked, violations);
     }
@@ -476,6 +485,12 @@ public static class XppValidator
     /// masked copy, so a '{' inside a literal or a doc comment cannot shift the method
     /// boundaries.
     /// </summary>
+    /// <remarks>
+    /// Only a block whose header branches or loops makes <c>next</c> conditional. A
+    /// <c>try</c>, <c>finally</c>, <c>using</c> or bare block runs its body every time and xppc
+    /// accepts <c>next</c> there; counting every block deeper than the method body refused
+    /// shipped extensions that compile. <c>catch</c> stays conditional.
+    /// </remarks>
     private static void CheckCocNextUnconditional(string code, string masked, List<XppViolation> v)
     {
         if (!Regex.IsMatch(code, @"\[ExtensionOf\s*\(", RegexOptions.IgnoreCase)) return;
@@ -491,6 +506,13 @@ public static class XppValidator
         int methodBodyDepth = 0;
         var nexts = new List<(int Line, string Excerpt, bool Conditional)>();
         int? earlyReturn = null;
+        // One entry per block open inside the current method body: does its header branch?
+        var blocks = new Stack<bool>();
+        // The text since the last '{', '}' or statement-ending ';' — the header of the next
+        // block, or of the statement being read. It spans lines (`if (a`, `&& b)`, `{`), and a
+        // ';' inside parentheses belongs to it (`for (i = 0; i < n; i++)`).
+        var header = new StringBuilder();
+        int parens = 0;
 
         void CloseMethod()
         {
@@ -528,17 +550,11 @@ public static class XppValidator
                 classBodyDepth = depthAtLineStart + 1;
             }
 
+            Match? nextCall = null;
             if (methodName is not null)
             {
-                var nextCall = Regex.Match(clean, $@"\bnext\s+{Regex.Escape(methodName)}\b");
-                if (nextCall.Success)
-                {
-                    nexts.Add((i + 1, lines[i].Trim(),
-                        // Deeper than the method body means it sits inside if/while/switch/try;
-                        // the same-line form "if (ret) ret = next foo();" never opens a block.
-                        depthAtLineStart > methodBodyDepth || Regex.IsMatch(clean, @"\b(if|while|for|switch|case)\b")));
-                }
-                else if (earlyReturn is null && depthAtLineStart > methodBodyDepth && Regex.IsMatch(clean, @"\breturn\b"))
+                nextCall = Regex.Match(clean, $@"\bnext\s+{Regex.Escape(methodName)}\b");
+                if (!nextCall.Success && earlyReturn is null && depthAtLineStart > methodBodyDepth && Regex.IsMatch(clean, @"\breturn\b"))
                 {
                     earlyReturn = i + 1;
                 }
@@ -555,18 +571,58 @@ public static class XppValidator
                 }
             }
 
-            foreach (var ch in clean)
+            // A directive line (#if.X) is not part of any statement's header.
+            var isDirective = clean.TrimStart().StartsWith('#');
+            for (int c = 0; c < clean.Length; c++)
             {
-                if (ch == '{') depth++;
+                if (nextCall is { Success: true } && c == nextCall.Index)
+                {
+                    // Judged where the call sits: inside a branching block, or after a header
+                    // that opens no block of its own — "if (ret) ret = next foo();".
+                    nexts.Add((i + 1, lines[i].Trim(),
+                        blocks.Contains(true) || ConditionalHeader.IsMatch(header.ToString())));
+                }
+
+                var ch = clean[c];
+                if (ch == '{')
+                {
+                    depth++;
+                    if (methodName is not null && depth > methodBodyDepth)
+                        blocks.Push(ConditionalHeader.IsMatch(header.ToString()));
+                    header.Clear();
+                    parens = 0;
+                }
                 else if (ch == '}')
                 {
+                    if (methodName is not null && depth > methodBodyDepth) blocks.TryPop(out _);
                     depth--;
-                    if (methodName is not null && depth < methodBodyDepth) CloseMethod();
+                    if (methodName is not null && depth < methodBodyDepth)
+                    {
+                        CloseMethod();
+                        blocks.Clear();
+                    }
+                    header.Clear();
+                    parens = 0;
+                }
+                else if (ch == ';' && parens <= 0)
+                {
+                    header.Clear();
+                }
+                else if (!isDirective)
+                {
+                    if (ch == '(') parens++;
+                    else if (ch == ')') parens--;
+                    header.Append(ch);
                 }
             }
+            header.Append(' ');
         }
         CloseMethod();
     }
+
+    /// <summary>A block or statement header that branches or loops.</summary>
+    private static readonly Regex ConditionalHeader = new(
+        @"\b(if|else|while|for|do|switch|case|default|catch)\b", RegexOptions.Compiled);
 
     /// <summary>Global functions, not members of <c>Common</c> — unqualified on a table buffer.</summary>
     private static readonly string[] GlobalFunctionsNotOnTable =
@@ -994,7 +1050,7 @@ public static class XppValidator
             aliased.Add(u.Groups[1].Value);
 
         // `About` names the C# type a pattern is about, when it is about one — read from the
-        // tuple rather than dug back out of the regex, where a leading  left the name without
+        // tuple rather than dug back out of the regex, where a leading \b left the name without
         // a word boundary in front of it and the alias never matched.
         var patterns = new (string Re, RegexOptions Options, string Fix, string? About)[]
         {
@@ -1427,6 +1483,107 @@ public static class XppValidator
             return false; // ::, quotes, digits, operators — not an attribute list
         }
         return sawName;
+    }
+
+    /// <summary>A masked line that is nothing but one bracketed attribute list (and perhaps a comment).</summary>
+    private static readonly Regex AttributeLine = new(
+        @"^\s*\[\s*[A-Za-z_][^\]]*\]\s*(?:(?://|/\*)\s*)?$", RegexOptions.Compiled);
+
+    /// <summary>A masked line with no code: blank, or a comment (the masker keeps only the opener).</summary>
+    private static readonly Regex BlankOrCommentLine = new(@"^\s*(?://|/\*)?\s*$", RegexOptions.Compiled);
+
+    /// <summary>The declaration an attribute stack is allowed to precede; its modifiers may span lines.</summary>
+    private static readonly Regex TypeDeclaration = new(
+        @"^\s*(?:(?:public|private|protected|internal|final|abstract|static)\s+)*(?:class|interface)\b",
+        RegexOptions.IgnoreCase | RegexOptions.Compiled);
+
+    /// <summary>
+    /// What follows the attributes from line <paramref name="from"/> on: the index of its line
+    /// and the text from there, a few lines of it. A later attribute may span lines
+    /// (<c>[SysObsolete(…,</c> … <c>)]</c>), and the declaration may share its closing line.
+    /// </summary>
+    private static (int Line, string Text) AfterAttributeStack(string[] maskedLines, int from)
+    {
+        int depth = 0;
+        for (int i = from; i < maskedLines.Length; i++)
+        {
+            var line = maskedLines[i];
+            if (depth == 0 && BlankOrCommentLine.IsMatch(line)) continue;
+            if (depth == 0 && !line.TrimStart().StartsWith('[')) return (i, Lines(i, line));
+
+            for (int c = 0; c < line.Length; c++)
+            {
+                if (line[c] == '[') depth++;
+                else if (line[c] == ']' && --depth == 0)
+                {
+                    var rest = line[(c + 1)..].Trim();
+                    if (rest.Length == 0 || rest.StartsWith('[') || BlankOrCommentLine.IsMatch(rest)) continue;
+                    return (i, Lines(i, rest));
+                }
+            }
+        }
+
+        return (maskedLines.Length, "");
+
+        string Lines(int index, string first)
+            => string.Join(' ', maskedLines.Skip(index + 1).Take(3).Prepend(first));
+    }
+
+    private enum MethodOwner { Unknown, Class, TableOrForm }
+
+    /// <summary>A table and a form declare their methods in a class of one of these.</summary>
+    private static readonly Regex TableOrFormDeclaration = new(
+        @"\bclass\s+\w+\s+extends\s+(?:FormRun|Common)\b", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+
+    /// <summary>What the methods in a source belong to: as the caller says, else its AOT folder, else its declaration.</summary>
+    private static MethodOwner OwnerOfMethods(string masked, string? ownerKind, string? sourcePath)
+    {
+        bool Is(string kind) => string.Equals(ownerKind, kind, StringComparison.OrdinalIgnoreCase);
+        if (Is("table") || Is("form")) return MethodOwner.TableOrForm;
+        if (Is("class")) return MethodOwner.Class;
+
+        var folders = sourcePath?.Split('/', '\\') ?? [];
+        if (folders.Contains("AxTable", StringComparer.OrdinalIgnoreCase)
+            || folders.Contains("AxForm", StringComparer.OrdinalIgnoreCase)) return MethodOwner.TableOrForm;
+        if (folders.Contains("AxClass", StringComparer.OrdinalIgnoreCase)) return MethodOwner.Class;
+
+        if (TableOrFormDeclaration.IsMatch(masked)) return MethodOwner.TableOrForm;
+        return masked.Split('\n').Any(TypeDeclaration.IsMatch) ? MethodOwner.Class : MethodOwner.Unknown;
+    }
+
+    /// <summary>
+    /// ATTR003 — two attributes stacked on a class method. A class method takes several
+    /// attributes only inside ONE bracket; a second bracketed line is a parse error and xppc
+    /// answers "Invalid token '['", which names no rule and abandons the whole file. Stacking
+    /// is legal above a class declaration, and on table and form methods, and shipped code does
+    /// both. A bare method whose owner is unknown is only warned about.
+    /// </summary>
+    private static void CheckStackedMethodAttributes(string code, string masked, MethodOwner owner, List<XppViolation> v)
+    {
+        if (owner == MethodOwner.TableOrForm) return;
+
+        var lines = code.Split('\n');
+        var maskedLines = masked.Split('\n');
+
+        for (int i = 0; i + 1 < maskedLines.Length; i++)
+        {
+            if (!AttributeLine.IsMatch(maskedLines[i]) || !AttributeLine.IsMatch(maskedLines[i + 1])) continue;
+
+            // What is being decorated decides legality, so walk past the rest of the stack.
+            var (j, target) = AfterAttributeStack(maskedLines, i + 2);
+
+            if (!TypeDeclaration.IsMatch(target))
+            {
+                var names = new[] { maskedLines[i], maskedLines[i + 1] }
+                    .Select(l => Regex.Match(l, @"\[\s*([A-Za-z_]\w*)").Groups[1].Value);
+                v.Add(new XppViolation("ATTR003", owner == MethodOwner.Class ? "error" : "warning", i + 1, lines[i].Trim(),
+                    $"Merge them into ONE bracket: [{string.Join(", ", names)}]. Two bracketed lines in a row " +
+                    "on a class method is a parse error — xppc answers \"Invalid token '['\" and abandons the whole " +
+                    "file. Table and form methods accept them."));
+            }
+
+            i = j - 1; // one finding per stack, not one per pair
+        }
     }
 
     /// <summary>
