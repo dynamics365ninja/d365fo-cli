@@ -21,7 +21,10 @@ d365fo lint --output sarif > lint.sarif                       # whole-model swee
 
 `validate references` proves every type, field, method (including arity), enum,
 label and intrinsic target against the index — it catches invented names **before**
-the compiler does. `validate xpp` runs the BP rule canon offline. Fix everything
+the compiler does. It also reads the declaration a name binds to: an intrinsic
+member must be declared on the named type with the right static/delegate kind, a
+CoC wrapper and an event handler must match their target, and a call to a method
+marked obsolete with the error flag set is an error. `validate xpp` runs the BP rule canon offline. Fix everything
 they report in the same turn, re-run, and only then write.
 
 ## 2. SysTestCase — unit tests

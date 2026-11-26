@@ -6,7 +6,8 @@ namespace D365FO.Core.Validation;
 /// <summary>
 /// One unresolved reference found by <see cref="ReferenceResolver"/>.
 /// Kind: unknown-type | unknown-static-member | unknown-method | unknown-field |
-/// unknown-label | unknown-intrinsic-target | arity-mismatch.
+/// unknown-label | unknown-intrinsic-target | arity-mismatch | wrong-member-kind |
+/// coc-target | handler-target | obsolete-method.
 /// </summary>
 public sealed record ReferenceViolation(string Kind, string Severity, int Line, string Identifier, string Detail);
 
@@ -14,6 +15,35 @@ public sealed record ResolveResult(IReadOnlyList<ReferenceViolation> Violations,
 
 /// <summary>Result of a method lookup: found + optional signature text.</summary>
 public sealed record MethodLookup(string? Signature);
+
+/// <summary>The kinds of type whose methods and delegates the index holds.</summary>
+public enum DeclaringKind { Class, Table }
+
+/// <summary>Where <see cref="IReferenceIndex.LookupMember"/> ended up.</summary>
+public enum MemberState
+{
+    /// <summary>The index cannot say: the type, or a base of it, is not indexed.</summary>
+    Unknown,
+
+    /// <summary>A type in the chain declares it.</summary>
+    Found,
+
+    /// <summary>An extension class adds or wraps it.</summary>
+    Contributed,
+
+    /// <summary>Every type in the chain is indexed and none declares it.</summary>
+    Missing,
+}
+
+/// <summary>A member resolved along the <c>extends</c> chain.</summary>
+/// <param name="State">How the walk ended.</param>
+/// <param name="Owner">The type that declares or is extended with it.</param>
+/// <param name="Source">The declaring method's source, when its AOT file can be read.</param>
+/// <param name="Chain">The types walked, the named one first.</param>
+public sealed record MemberResolution(MemberState State, string? Owner, string? Source, IReadOnlyList<string> Chain)
+{
+    public static MemberResolution Unknown { get; } = new(MemberState.Unknown, null, null, []);
+}
 
 /// <summary>
 /// Minimal index surface the resolver needs. Implemented by
@@ -28,6 +58,12 @@ public interface IReferenceIndex
 
     /// <summary>Find a method on an object, walking the inheritance chain and CoC extensions.</summary>
     MethodLookup? FindMethod(string ownerName, string methodName);
+
+    /// <summary>
+    /// Resolve a method or delegate on a class or table, or on the first base that has it.
+    /// <paramref name="ignoreExtensionClass"/> leaves one extension class's contributions out.
+    /// </summary>
+    MemberResolution LookupMember(string ownerName, string memberName, DeclaringKind kind, string? ignoreExtensionClass = null);
 
     /// <summary>Field on a table/view/entity/map incl. extension-added fields (system fields handled by the resolver).</summary>
     bool FieldExists(string tableName, string fieldName);
@@ -54,7 +90,7 @@ public interface IReferenceIndex
 ///             instance method missing, legacy label not found,
 ///             label file unknown (may be created later in the same task)
 /// </summary>
-public static class ReferenceResolver
+public static partial class ReferenceResolver
 {
     // ── X++ language tables ──────────────────────────────────────────────────
 
@@ -247,6 +283,10 @@ public static class ReferenceResolver
         ["mapstr"] = new[] { "map" },
         ["methodstr"] = new[] { "class", "table", "form", "class-extension" },
         ["staticmethodstr"] = new[] { "class", "class-extension" },
+        ["tablemethodstr"] = new[] { "table", "view", "map", "data-entity" },
+        ["tablestaticmethodstr"] = new[] { "table", "view", "map", "data-entity" },
+        ["delegatestr"] = new[] { "class", "table", "form", "view", "map", "data-entity", "class-extension" },
+        ["staticdelegatestr"] = new[] { "class", "table", "form", "view", "map", "data-entity", "class-extension" },
         ["dataentitydatasourcestr"] = new[] { "data-entity" },
         ["tablefieldgroupstr"] = new[] { "table", "table-extension" },
         ["menuitemdisplaystr"] = null,
@@ -500,6 +540,16 @@ public static class ReferenceResolver
             }
         }
 
+        // The compiler does not report obsolete calls made from obsolete code.
+        var callerObsolete = Regex.IsMatch(cleaned, @"\bSysObsolete(?:Attribute)?\b", RegexOptions.IgnoreCase);
+        var obsoleteChecked = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var definedHere = TypesDefinedOrExtended(cleaned);
+        void CheckObsolete(string owner, string member, DeclaringKind kind, int line)
+        {
+            if (!obsoleteChecked.Add($"{owner}.{member}")) return;
+            if (ObsoleteCall(index, owner, member, kind, line, callerObsolete) is { } obsolete) violations.Add(obsolete);
+        }
+
         // ── 2. Intrinsic functions ───────────────────────────────────────────
         foreach (Match m in Regex.Matches(cleaned,
             @"\b([A-Za-z]+[Ss]tr|tableNum|classNum|enumNum|enumCnt|fieldNum|extendedTypeNum)\s*\(\s*([A-Za-z_]\w*)\s*(?:,\s*([A-Za-z_]\w*)\s*)?\)",
@@ -511,9 +561,13 @@ public static class ReferenceResolver
             var member = m.Groups[3].Success ? m.Groups[3].Value : null;
             int line = LineOf(cleaned, m.Index);
 
-            if (locals.DeclaredNames.Contains(target)) { verifiedCount++; continue; }
+            if (locals.DeclaredNames.Contains(target) && !MemberIntrinsics.ContainsKey(fn)) { verifiedCount++; continue; }
+            // A kernel class declares its members in binary: nothing here can judge them.
+            if (MemberIntrinsics.ContainsKey(fn) && IsKernel(target)) { verifiedCount++; continue; }
 
             var kinds = LookupKinds(target);
+            // A class declared in this snippet is not in the index yet.
+            if (kinds.Count == 0 && locals.DeclaredNames.Contains(target)) { verifiedCount++; continue; }
             bool targetOk = expected is null
                 ? (kinds.Count > 0 || SafeMenuItemExists(index, target))
                 : kinds.Any(t => expected.Contains(t, StringComparer.OrdinalIgnoreCase))
@@ -545,17 +599,17 @@ public static class ReferenceResolver
                             $"Field \"{member}\" not found on {target} (checked fields, system fields, table extensions). Use `d365fo get table {target}`."));
                     }
                 }
-                else if (fnLower is "methodstr" or "staticmethodstr")
+                else if (MemberIntrinsics.TryGetValue(fnLower, out var spec))
                 {
-                    if (SafeFindMethod(index, target, member) is not null)
+                    // A member the snippet itself declares on that type is not indexed yet.
+                    var declaredHere = definedHere.Contains(target) && XppDeclaration.Parse(cleaned, member) is not null;
+                    if (!declaredHere && CheckIntrinsicMember(index, spec, target, member, line, kinds) is { } finding)
                     {
-                        verifiedCount++;
+                        violations.Add(finding);
                     }
                     else
                     {
-                        violations.Add(new ReferenceViolation("unknown-method", "error", line,
-                            $"{target}.{member}",
-                            $"Method \"{member}\" not found on {target} (checked inheritance chain and extensions). Use `d365fo get class {target}`."));
+                        verifiedCount++;
                     }
                 }
                 else
@@ -605,6 +659,8 @@ public static class ReferenceResolver
                 continue;
             }
             verifiedCount++;
+            CheckObsolete(typeName, member,
+                kinds.Contains("class", StringComparer.OrdinalIgnoreCase) ? DeclaringKind.Class : DeclaringKind.Table, line);
 
             // Arity check when the call site and the signature are both parseable
             if (method.Signature is not null)
@@ -675,6 +731,7 @@ public static class ReferenceResolver
                     if (builtin || SafeFindMethod(index, typeName, member) is not null)
                     {
                         verifiedCount++;
+                        CheckObsolete(typeName, member, isClass ? DeclaringKind.Class : DeclaringKind.Table, line);
                     }
                     else
                     {
@@ -699,6 +756,10 @@ public static class ReferenceResolver
                 }
             }
         }
+
+        // ── 6. What wrappers and event handlers bind to ──────────────────────
+        violations.AddRange(CheckWrappers(cleaned, index));
+        violations.AddRange(CheckHandlers(cleaned, index));
 
         return new ResolveResult(violations, verifiedCount);
     }

@@ -51,6 +51,23 @@ zero for the rest.
 further down its body counts now. A table's answer says that metadata uses need `--structural`
 or `--xref`.
 
+### Added — `validate references` checks what a name binds to (upstream 1.24.0)
+
+It proved that names exist and never read the declaration behind them.
+
+- **Intrinsic members**: `methodStr`, `staticMethodStr`, `tableMethodStr`, `tableStaticMethodStr`,
+  `delegateStr` and `staticDelegateStr` need the member on the named type itself (extension classes
+  count, inherited and un-overridden kernel methods do not), of the matching kind
+  (`unknown-method`, `wrong-member-kind`). Only the first two were checked, through the whole
+  inheritance chain.
+- **`coc-target`**: the wrapped method is missing, private, `final` without `[Wrappable]`,
+  `[Hookable(false)]`, or the wrapper differs in parameters, static or return type.
+- **`handler-target`**: parameters that differ from the delegate's, or a pre/post handler on a
+  method that is not hookable.
+- **`obsolete-method`**: a call to a `[SysObsolete]` method, an error when its `isError` is true.
+
+The declaration is read from the indexed AOT file, so nothing needs re-indexing.
+
 ### Added — ATTR003: attributes stacked on a method (upstream 1.17.0)
 
 Two attribute lines in a row above a method are a parse error: xppc answers "Invalid token '['"
