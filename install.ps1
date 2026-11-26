@@ -114,7 +114,9 @@ function Find-Checkout {
     $candidates += (Join-Path $env:USERPROFILE 'd365fo-cli')
 
     foreach ($dir in $candidates) {
-        if (Test-Path (Join-Path $dir '.git')) { return $dir }
+        # Not Join-Path: it resolves the drive, so a candidate on a drive this machine does
+        # not have (K: outside a cloud-hosted VM) would end the script instead of not matching.
+        if (Test-Path -LiteralPath ([IO.Path]::Combine($dir, '.git'))) { return $dir }
     }
     if ($env:D365FO_CLI_DIR -and (Test-Path $env:D365FO_CLI_DIR) -and (Get-ChildItem $env:D365FO_CLI_DIR -Force | Select-Object -First 1)) {
         Fail "$($env:D365FO_CLI_DIR) exists, is not empty, and is not a git checkout. Empty it or point `$env:D365FO_CLI_DIR elsewhere."
