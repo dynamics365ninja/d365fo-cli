@@ -3,9 +3,10 @@
 //   node scripts/build-npm-packages.mjs --version 0.3.0 --out npm-out [--pack] <rid>=<folder> ...
 //
 // <folder> holds what scripts/publish-release-layout.sh writes. One package per given platform
-// goes to <out>/<name>, plus the `d365fo-cli` launcher package, which depends on all of them as
-// optionalDependencies so that npm installs only the one that fits. --pack also writes the
-// tarballs to <out>/tarballs. See docs/RELEASING.md.
+// goes to <out>/<name>, plus the `@dynamics365ninja/d365fo-cli` launcher package, which depends on
+// all of them as optionalDependencies so that npm installs only the one that fits. --pack also
+// writes the tarballs to <out>/tarballs, named as npm names a scoped package's
+// (`dynamics365ninja-d365fo-cli-<version>.tgz`). See docs/RELEASING.md.
 import { execSync } from 'node:child_process';
 import fs from 'node:fs';
 import { createRequire } from 'node:module';
@@ -15,7 +16,7 @@ import { parseArgs } from 'node:util';
 
 const repo = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const launcherDir = path.join(repo, 'npm', 'd365fo-cli');
-const { PLATFORMS, TOOLS, platformPackage } = createRequire(import.meta.url)(
+const { PACKAGE, PLATFORMS, TOOLS, platformPackage } = createRequire(import.meta.url)(
   path.join(launcherDir, 'launcher', 'launch.js'));
 
 const RID_TARGETS = {
@@ -41,11 +42,14 @@ if (positionals.length === 0) fail('Name at least one platform as <rid>=<folder>
 if (fs.existsSync(out) && fs.readdirSync(out).length > 0) fail(`${out} is not empty.`);
 
 const manifest = JSON.parse(fs.readFileSync(path.join(launcherDir, 'package.json'), 'utf8'));
+if (manifest.name !== PACKAGE) fail(`npm/d365fo-cli/package.json names ${manifest.name}, launch.js ${PACKAGE}.`);
 const shared = {
   license: manifest.license,
   repository: manifest.repository,
   homepage: manifest.homepage,
   bugs: manifest.bugs,
+  // A scoped package is private unless published otherwise.
+  publishConfig: { access: 'public' },
 };
 
 const writeJson = (file, value) => fs.writeFileSync(file, `${JSON.stringify(value, null, 2)}\n`);
@@ -88,7 +92,7 @@ for (const argument of positionals) {
   writeJson(path.join(destination, 'package.json'), {
     name,
     version,
-    description: `The ${target} binaries of d365fo-cli. Install d365fo-cli instead.`,
+    description: `The ${target} binaries of ${PACKAGE}. Install ${PACKAGE} instead.`,
     ...shared,
     os: [os],
     cpu: [cpu],
@@ -96,7 +100,7 @@ for (const argument of positionals) {
     preferUnplugged: true,
   });
   fs.writeFileSync(path.join(destination, 'README.md'),
-    `# ${name}\n\nThe ${target} binaries of [d365fo-cli](https://www.npmjs.com/package/d365fo-cli). `
+    `# ${name}\n\nThe ${target} binaries of [${PACKAGE}](https://www.npmjs.com/package/${PACKAGE}). `
     + 'Install that package; npm adds this one on a matching system.\n');
   addLicense(destination);
   built.push(name);

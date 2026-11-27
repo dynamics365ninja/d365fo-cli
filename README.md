@@ -7,7 +7,7 @@
 **One command-line tool that knows every X++ class, table, form, EDT and label in *your* D365FO codebase —<br/>
 so GitHub Copilot, Claude Code and any agent with a shell write X++ that compiles.**
 
-[![npm](https://img.shields.io/npm/v/d365fo-cli.svg?logo=npm&color=cb3837)](https://www.npmjs.com/package/d365fo-cli)
+[![npm](https://img.shields.io/npm/v/@dynamics365ninja/d365fo-cli.svg?logo=npm&color=cb3837)](https://www.npmjs.com/package/@dynamics365ninja/d365fo-cli)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![.NET](https://img.shields.io/badge/.NET-10-purple.svg)](https://dotnet.microsoft.com/)
 [![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey.svg)](docs/SETUP.md)
@@ -123,7 +123,7 @@ Structural violations (wrong order, missing container, disallowed control, misap
 With [Node.js](https://nodejs.org) 18 or later:
 
 ```powershell
-npm install -g d365fo-cli
+npm install -g @dynamics365ninja/d365fo-cli
 d365fo init                 # finds PackagesLocalDirectory and saves the configuration
 d365fo index extract        # reads your metadata into the index (minutes, once)
 d365fo doctor               # says what is still missing

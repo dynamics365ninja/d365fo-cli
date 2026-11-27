@@ -7,7 +7,7 @@ namespace D365FO.Cli.Tests;
 public sealed class UpdateAndSkillsCommandTests
 {
     [Theory]
-    [InlineData(InstallKind.Npm, true, "npm install -g d365fo-cli@0.3.1")]
+    [InlineData(InstallKind.Npm, true, "npm install -g @dynamics365ninja/d365fo-cli@0.3.1")]
     [InlineData(InstallKind.Installer, true, "$env:D365FO_CLI_VERSION = 'v0.3.1'")]
     [InlineData(InstallKind.Installer, false, "D365FO_CLI_VERSION=v0.3.1 bash")]
     [InlineData(InstallKind.Source, true, "git checkout v0.3.1")]

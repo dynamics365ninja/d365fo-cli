@@ -18,6 +18,14 @@ was ported from.
 
 ## [Unreleased]
 
+### Changed
+
+- **The npm packages are scoped: `npm install -g @dynamics365ninja/d365fo-cli`.** npm's spam
+  detection refused to publish the unscoped `d365fo-cli` names, so 0.3.0 never reached the
+  registry. The platform packages moved with it (`@dynamics365ninja/d365fo-cli-win32-x64`,
+  `-linux-x64`, `-darwin-x64`, `-darwin-arm64`); the `d365fo` and `d365fo-cli-mcp` commands keep
+  their names. `doctor`, `update` and the launcher recognise only the scoped installation.
+
 ## [0.3.0] - 2026-11-27
 
 `d365fo` can be installed and updated with npm:

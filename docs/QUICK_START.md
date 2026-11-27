@@ -60,7 +60,7 @@ No .NET SDK is needed: the packages carry self-contained binaries.
 ### 2. Install
 
 ```powershell
-npm install -g d365fo-cli
+npm install -g @dynamics365ninja/d365fo-cli
 d365fo version
 ```
 

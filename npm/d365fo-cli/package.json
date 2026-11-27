@@ -1,5 +1,5 @@
 {
-  "name": "d365fo-cli",
+  "name": "@dynamics365ninja/d365fo-cli",
   "version": "0.0.0",
   "private": true,
   "description": "AI-native CLI and MCP server for Dynamics 365 Finance & Operations X++ development",
@@ -18,5 +18,8 @@
   "files": ["launcher"],
   "engines": {
     "node": ">=18"
+  },
+  "publishConfig": {
+    "access": "public"
   }
 }

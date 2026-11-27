@@ -57,7 +57,7 @@ public sealed partial class UpdateCommand : Command<UpdateCommand.Settings>
         return kind switch
         {
             InstallKind.Npm =>
-                $"Close editors running d365fo-cli-mcp, run `d365fo daemon stop`, then `npm install -g d365fo-cli@{to ?? "latest"}`.",
+                $"Close editors running d365fo-cli-mcp, run `d365fo daemon stop`, then `npm install -g {Installation.NpmPackage}@{to ?? "latest"}`.",
             InstallKind.Installer when windows =>
                 (tag is null ? "" : $"Set $env:D365FO_CLI_VERSION = '{tag}', then run ")
                 + (tag is null ? "Run " : "")

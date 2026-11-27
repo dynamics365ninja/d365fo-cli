@@ -9,6 +9,12 @@ const path = require('node:path');
 const { parseUpdate, compareVersions, globalPrefix, update } = require(
   path.join(__dirname, '..', 'd365fo-cli', 'launcher', 'update.js'));
 
+// The installed package sits in its scope folder: node_modules/@dynamics365ninja/d365fo-cli.
+const SCOPE = '@dynamics365ninja';
+const PACKAGE = `${SCOPE}/d365fo-cli`;
+// name@version, where a scoped name starts with an @ of its own.
+const versionOf = (spec) => (spec.lastIndexOf('@') > 0 ? spec.slice(spec.lastIndexOf('@') + 1) : undefined);
+
 test('only an update with known options is handled by the launcher', () => {
   assert.deepStrictEqual(parseUpdate(['update']), { check: false, to: undefined, output: undefined });
   assert.deepStrictEqual(
@@ -31,12 +37,14 @@ test('versions are ordered as semantic versions', () => {
 });
 
 test('only a global installation has a prefix to update', () => {
-  const unix = path.join('/usr/local', 'lib', 'node_modules', 'd365fo-cli');
+  const unix = path.join('/usr/local', 'lib', 'node_modules', SCOPE, 'd365fo-cli');
   assert.strictEqual(globalPrefix(unix, { windows: false, exists: () => true }), path.join('/usr/local'));
-  assert.strictEqual(globalPrefix(path.join('/project', 'node_modules', 'd365fo-cli'), { windows: false, exists: () => true }), null);
+  assert.strictEqual(globalPrefix(path.join('/project', 'node_modules', SCOPE, 'd365fo-cli'), { windows: false, exists: () => true }), null);
+  // Outside its scope folder it is not an installation of this package.
+  assert.strictEqual(globalPrefix(path.join('/usr/local', 'lib', 'node_modules', 'd365fo-cli'), { windows: false, exists: () => true }), null);
 
   const prefix = path.join('/prefix');
-  const installed = path.join(prefix, 'node_modules', 'd365fo-cli');
+  const installed = path.join(prefix, 'node_modules', SCOPE, 'd365fo-cli');
   const shim = path.join(prefix, 'd365fo.cmd');
   assert.strictEqual(globalPrefix(installed, { windows: true, exists: (f) => f === shim }), prefix);
   // A project's node_modules has no command shim beside it.
@@ -45,19 +53,19 @@ test('only a global installation has a prefix to update', () => {
 
 function scenario({ current = '1.0.0', latest = '1.1.0', install = 0, binaries, prefix = '/prefix' } = {}) {
   const modules = fs.mkdtempSync(path.join(os.tmpdir(), 'd365fo-update-test-'));
-  const packageDir = path.join(modules, 'd365fo-cli');
-  fs.mkdirSync(packageDir);
+  const packageDir = path.join(modules, SCOPE, 'd365fo-cli');
+  fs.mkdirSync(packageDir, { recursive: true });
   fs.writeFileSync(path.join(packageDir, 'package.json'), JSON.stringify({ version: current }));
   const calls = [];
   let installed = current;
   const npm = (args) => {
     calls.push(args.join(' '));
     if (args[0] === 'view') {
-      const [, wanted] = args[1].split('@');
+      const wanted = versionOf(args[1]);
       if (latest === null) return { status: 1, stdout: '', stderr: 'ENOTFOUND' };
       return { status: 0, stdout: wanted === '9.9.9' ? '' : `${wanted ?? latest}\n`, stderr: '' };
     }
-    if (install === 0) installed = args.at(-1).split('@')[1];
+    if (install === 0) installed = versionOf(args.at(-1));
     return { status: install };
   };
   const run = (options = {}) => update({ check: false, ...options }, {
@@ -70,18 +78,19 @@ test('a newer release is installed into the same prefix', (t) => {
   const s = scenario();
   t.after(s.cleanup);
   assert.deepStrictEqual(s.run().data, { current: '1.0.0', target: '1.1.0', updateAvailable: true, updated: true });
-  assert.deepStrictEqual(s.calls, ['view d365fo-cli version', 'install -g --prefix /prefix d365fo-cli@1.1.0']);
+  assert.deepStrictEqual(s.calls, [`view ${PACKAGE} version`, `install -g --prefix /prefix ${PACKAGE}@1.1.0`]);
 });
 
 test('files a running process kept npm from removing are reported', (t) => {
   const clean = scenario();
   const held = scenario();
   t.after(() => [clean, held].forEach((s) => s.cleanup()));
-  fs.mkdirSync(path.join(held.modules, '.d365fo-cli-Ab12Cd34'));
+  const retired = path.join(held.modules, SCOPE, '.d365fo-cli-Ab12Cd34');
+  fs.mkdirSync(retired);
   assert.strictEqual(clean.run().warnings, undefined);
   const [warning] = held.run().warnings;
   assert.match(warning, /still running the old version/);
-  assert.ok(warning.includes(path.join(held.modules, '.d365fo-cli-Ab12Cd34')));
+  assert.ok(warning.includes(retired));
 });
 
 test('--check and an up-to-date installation change nothing', (t) => {

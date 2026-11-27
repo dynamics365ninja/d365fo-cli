@@ -8,9 +8,7 @@ const { spawnSync } = require('node:child_process');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
-const { platformPackage } = require('./launch.js');
-
-const PACKAGE = 'd365fo-cli';
+const { PACKAGE, platformPackage } = require('./launch.js');
 const VERSION = /^\d+\.\d+\.\d+(-[0-9A-Za-z.-]+)?$/;
 
 /**
@@ -81,7 +79,10 @@ function compareVersions(a, b) {
  * project's node_modules, an npx cache), which `npm install -g` would not update.
  */
 function globalPrefix(packageDir, { windows = process.platform === 'win32', exists = fs.existsSync } = {}) {
-  const modules = path.dirname(packageDir);
+  // A scoped package sits one folder deeper: node_modules/@scope/name.
+  const scope = path.dirname(packageDir);
+  if (path.basename(scope) !== PACKAGE.split('/')[0]) return null;
+  const modules = path.dirname(scope);
   if (path.basename(modules) !== 'node_modules') return null;
   if (windows) {
     const prefix = path.dirname(modules);
@@ -117,13 +118,14 @@ function installedVersion(packageDir, name) {
 }
 
 // A running d365fo process does not stop npm on Windows: npm moves the package aside, installs
-// the new one, and cannot delete the folder the process still holds.
+// the new one, and cannot delete the folder the process still holds. The folder it moves it to
+// is `.<name>-<hash>` beside the package, inside the scope folder.
 function leftBehind(packageDir) {
-  const modules = path.dirname(packageDir);
+  const scope = path.dirname(packageDir);
   try {
-    return fs.readdirSync(modules)
-      .filter((name) => name.startsWith(`.${PACKAGE}-`))
-      .map((name) => path.join(modules, name));
+    return fs.readdirSync(scope)
+      .filter((name) => name.startsWith(`.${path.basename(packageDir)}-`))
+      .map((name) => path.join(scope, name));
   } catch {
     return [];
   }

@@ -190,16 +190,17 @@ jobs:
           path: npm-out/tarballs/*.tgz
 
       # The platform packages first: the launcher must never name versions that do not exist.
-      # A version already in the registry is skipped, so a failed run can be re-run.
+      # A version already in the registry is skipped, so a failed run can be re-run. npm names
+      # the tarball of @dynamics365ninja/<name> dynamics365ninja-<name>-<version>.tgz.
       - name: Publish to npm
         if: vars.NPM_PUBLISH == 'true'
         run: |
           tag=latest
           case "$VERSION" in *-*) tag=next ;; esac
           for name in d365fo-cli-win32-x64 d365fo-cli-linux-x64 d365fo-cli-darwin-x64 d365fo-cli-darwin-arm64 d365fo-cli; do
-            if [ "$(npm view "$name@$VERSION" version 2>/dev/null)" = "$VERSION" ]; then
-              echo "$name@$VERSION is already published."
+            if [ "$(npm view "@dynamics365ninja/$name@$VERSION" version 2>/dev/null)" = "$VERSION" ]; then
+              echo "@dynamics365ninja/$name@$VERSION is already published."
             else
-              npm publish "./npm-out/tarballs/$name-$VERSION.tgz" --access public --tag "$tag"
+              npm publish "./npm-out/tarballs/dynamics365ninja-$name-$VERSION.tgz" --access public --tag "$tag"
             fi
           done

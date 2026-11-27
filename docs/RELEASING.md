@@ -72,43 +72,51 @@ that a D365FO VM already has). They are not code-signed.
 
 ## npm packages
 
-The workflow's `npm` job makes five packages from the release archives:
+The workflow's `npm` job makes five packages from the release archives, all in the npm scope
+`@dynamics365ninja` (npm's spam detection refused the unscoped names):
 
 | Package | Contents |
 |---|---|
-| `d365fo-cli` | The Node launcher behind the `d365fo` and `d365fo-cli-mcp` commands |
-| `d365fo-cli-win32-x64` | `bin`, `mcp`, `D365FO.Bridge` |
-| `d365fo-cli-linux-x64`, `-darwin-x64`, `-darwin-arm64` | `bin`, `mcp` |
+| `@dynamics365ninja/d365fo-cli` | The Node launcher behind the `d365fo` and `d365fo-cli-mcp` commands |
+| `@dynamics365ninja/d365fo-cli-win32-x64` | `bin`, `mcp`, `D365FO.Bridge` |
+| `@dynamics365ninja/d365fo-cli-linux-x64`, `-darwin-x64`, `-darwin-arm64` | `bin`, `mcp` |
 
-The platform packages are `optionalDependencies` of `d365fo-cli` at the same version, so npm
-installs the one that matches the machine; none runs an install script. The launcher sources are
-in `npm/`, and `scripts/build-npm-packages.mjs` stamps the version.
+The platform packages are `optionalDependencies` of `@dynamics365ninja/d365fo-cli` at the same
+version, so npm installs the one that matches the machine; none runs an install script. The
+launcher sources are in `npm/`, and `scripts/build-npm-packages.mjs` stamps the version. The
+scope is spelled in `npm/d365fo-cli/launcher/launch.js` (`PACKAGE`), `npm/d365fo-cli/package.json`,
+`scripts/smoke-npm-package.mjs`, the publish step of `release.yml` and
+`src/D365FO.Core/Ops/Installation.cs` (`NpmScope`), which recognises an npm installation by it.
 
-The tarballs are attached to every release run as the artifact `npm-packages`. They are
-published only when the repository variable `NPM_PUBLISH` is `true`. A version with a suffix
-goes to the `next` dist-tag, any other to `latest`.
+npm names the tarball of a scoped package without the `@` and with `-` for the `/`:
+`dynamics365ninja-d365fo-cli-<version>.tgz`. The tarballs are attached to every release run as
+the artifact `npm-packages`. They are published only when the repository variable `NPM_PUBLISH`
+is `true`. A version with a suffix goes to the `next` dist-tag, any other to `latest`.
 
 ### Publishing for the first time
 
 npm configures a trusted publisher in the settings of a package, so each package is first
 published by hand, once:
 
-1. Cut the release with `NPM_PUBLISH` unset, and download the tarballs:
-   `gh run download <run-id> -n npm-packages -D npm-packages`.
-2. `npm login`, then publish the four platform packages and `d365fo-cli` **last**:
+1. On npmjs.com, create the organization `dynamics365ninja` (free for public packages), or
+   publish from the npm account of that name: the scope has to be one you can publish to.
+2. Cut the release with `NPM_PUBLISH` unset, and download the tarballs:
+   `gh run download <run-id> --repo dynamics365ninja/d365fo-cli -n npm-packages -D npm-packages`,
+   or from the run's page on GitHub (Artifacts, `npm-packages`).
+3. `npm login`, then publish the four platform packages and the launcher **last**:
 
    ```sh
-   npm publish ./npm-packages/d365fo-cli-win32-x64-<version>.tgz --access public
+   npm publish ./npm-packages/dynamics365ninja-d365fo-cli-win32-x64-<version>.tgz --access public
    # … linux-x64, darwin-x64, darwin-arm64, then:
-   npm publish ./npm-packages/d365fo-cli-<version>.tgz --access public
+   npm publish ./npm-packages/dynamics365ninja-d365fo-cli-<version>.tgz --access public
    ```
 
-3. On npmjs.com, in the settings of **each** of the five packages, add a trusted publisher:
+4. On npmjs.com, in the settings of **each** of the five packages, add a trusted publisher:
    GitHub Actions, organization `dynamics365ninja`, repository `d365fo-cli`, workflow filename
    `release.yml`, with direct `npm publish` allowed. A new configuration expires unless it is
    used for a successful publish within 2 days, so do this shortly before the next release, or
    expect to add it again.
-4. Set the repository variable: `gh variable set NPM_PUBLISH --body true`.
+5. Set the repository variable: `gh variable set NPM_PUBLISH --body true`.
 
 Renaming `release.yml` breaks publishing until all five configurations name the new file.
 
@@ -124,7 +132,7 @@ bridge it would start is a different build.
 With npm:
 
 ```sh
-npm install -g d365fo-cli@0.3.0     # an npm installation moves with: d365fo update --to 0.3.0
+npm install -g @dynamics365ninja/d365fo-cli@0.3.0     # an npm installation moves with: d365fo update --to 0.3.0
 ```
 
 With the installer (builds from the tagged source):

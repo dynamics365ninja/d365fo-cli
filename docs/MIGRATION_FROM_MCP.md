@@ -39,7 +39,7 @@ Be aware of the cost: keeping MCP registered injects its full schema overhead (~
 
 The existing `.mcp.json` stays unchanged. The CLI is added alongside:
 
-1. Install the CLI: `npm install -g d365fo-cli` — see [SETUP.md](SETUP.md).
+1. Install the CLI: `npm install -g @dynamics365ninja/d365fo-cli` — see [SETUP.md](SETUP.md).
 2. Run `d365fo skills install <your-xpp-repo> --for copilot` to deploy the `d365fo-cli` Copilot skill.
 3. Copilot automatically uses the shell tool for CLI commands and MCP for tool calls — both from the same index.
 
