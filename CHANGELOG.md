@@ -18,6 +18,18 @@ was ported from.
 
 ## [Unreleased]
 
+### Added — `d365fo update` and `d365fo skills install`
+
+- `update` in an npm installation moves it to the latest release, or with `--to` to a chosen one;
+  `--check` only reports. It verifies that the platform binaries arrived, which npm does not, and
+  warns when a running process still holds the previous version. Any other installation is told
+  the step that updates it.
+- `skills install <repository> --for claude|copilot|all` writes the skills embedded in the CLI,
+  so they match its version without a checkout. It removes only files it recorded writing, and
+  refuses to overwrite a same-named skill it did not write (`--force`).
+- `doctor` reports how the CLI is installed, warns when `PATH` holds another `d365fo` that a
+  shell could run instead, and says when `D365FO_BRIDGE_PATH` is why the bridge does not match.
+
 ### Added — npm packages
 
 A release now builds `d365fo-cli` and one binary package per platform

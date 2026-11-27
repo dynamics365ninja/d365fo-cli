@@ -255,6 +255,8 @@ public sealed class SchemaCommand : Command<SchemaCommand.Settings>
         C("config use", "Persist the default profile in settings.json.", ["[NAME]"], ["--clear", "--create", "--output"], []),
         C("config current", "The active profile, where it came from, and its index DB.", [], ["--output"], []),
         C("version", "Print version information.", [], ["--output"], []),
+        C("update", "Update this installation (npm), or report the step that updates it.", [], ["--check", "--to", "--output"], []),
+        C("skills install", "Write this build's agent skills into an X++ repository.", ["<REPOSITORY>"], ["--for", "--dry-run", "--force", "--output"], []),
 
         // ── The rest of the registered surface ─────────────────────────────
         // Everything below was reachable from the shell and invisible here, which is the same

@@ -108,7 +108,7 @@ jobs:
         with:
           node-version: '24'
       - name: Launcher tests
-        run: node --test npm/test/launch.test.js
+        run: node --test npm/test/launch.test.js npm/test/update.test.js
       - name: Publish, pack, install and run
         shell: bash
         run: |

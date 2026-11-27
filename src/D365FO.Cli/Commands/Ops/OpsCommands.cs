@@ -105,6 +105,29 @@ public sealed class DoctorCommand : Command<DoctorCommand.Settings>
             OperatingSystem.IsWindows() ? DoctorSeverity.Ok : DoctorSeverity.Warn,
             OperatingSystem.IsWindows() ? null : "Non-Windows host: write-ops (build, sync, bp, test) are unavailable.");
 
+        var install = Installation.Detect(AppContext.BaseDirectory);
+        Add("install", DoctorSeverity.Ok,
+            $"{install.ToString().ToLowerInvariant()}: {AppContext.BaseDirectory}"
+            + (install == InstallKind.Npm && OperatingSystem.IsWindows()
+                ? " — `d365fo.cmd` expands %VAR% and cuts an argument at a line break; pass such text from PowerShell or Git Bash, or through a file."
+                : ""));
+
+        // Two installations leave a shell running whichever comes first on PATH, and an update
+        // that only touches the other one looks like it did nothing.
+        var onPath = Installation.FindOnPath(Environment.GetEnvironmentVariable("PATH"), OperatingSystem.IsWindows());
+        var shadowing = onPath.Count > 1
+                        || (onPath.Count == 1 && !Installation.Starts(onPath[0], AppContext.BaseDirectory));
+        Add("install.path",
+            shadowing ? DoctorSeverity.Warn : DoctorSeverity.Ok,
+            onPath.Count == 0
+                ? "d365fo is not on PATH"
+                : !shadowing
+                    ? onPath[0].Command
+                    : "PATH finds, in order: "
+                      + string.Join(", ", onPath.Select(c => c.Command
+                          + (Installation.Starts(c, AppContext.BaseDirectory) ? " (this one)" : "")))
+                      + ". A shell runs the first. Keep one installation, or remove the others from PATH.");
+
         // Being on Windows is not the same as having a working X++ toolchain, and answering
         // "is build tooling functional here?" with an OS check is how a broken MSBuild reached
         // the user as an unexplained MSB4062 (issue #207). Probe the tools themselves.
@@ -182,12 +205,17 @@ public sealed class DoctorCommand : Command<DoctorCommand.Settings>
                 catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { /* reported as unknown */ }
                 var sameBuild = bridgeVersion is not null
                     && ProductVersion.SameBuild(ProductVersion.Informational, bridgeVersion);
+                var overridden = string.Equals(
+                    bridgeExe, D365FoSettings.Resolve("D365FO_BRIDGE_PATH"), StringComparison.OrdinalIgnoreCase);
                 Add("bridge.version",
                     sameBuild ? DoctorSeverity.Ok : DoctorSeverity.Warn,
                     sameBuild
                         ? bridgeVersion
                         : $"The bridge is {bridgeVersion ?? "of an unknown version"} and the CLI is " +
-                          $"{ProductVersion.Informational}. Rebuild both from the same revision (re-run the installer).");
+                          $"{ProductVersion.Informational}. " +
+                          (overridden
+                              ? "D365FO_BRIDGE_PATH points the CLI at it: remove that setting to use the bridge installed with the CLI, or point it at a matching one."
+                              : "Rebuild both from the same revision (update the installation)."));
             }
 
             // Mirror the bridge's own resolution (MetadataBootstrap.ResolveBinPath):

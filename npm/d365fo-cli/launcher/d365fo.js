@@ -1,4 +1,9 @@
 #!/usr/bin/env node
 'use strict';
 
-require('./launch.js').run('d365fo');
+const { run } = require('./launch.js');
+const { parseUpdate, runUpdate } = require('./update.js');
+
+const update = parseUpdate(process.argv.slice(2));
+if (update) runUpdate(update);
+else run('d365fo');

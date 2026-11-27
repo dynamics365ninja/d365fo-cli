@@ -245,6 +245,9 @@ flowchart LR
 >
 > Setting `D365FO_WORKSPACE_PATH` (or any `D365FO_*` env var) has **zero effect** on Copilot's skill discovery. If Copilot isn't finding your skill, the fix is always about **which folder is open in the editor**, never about CLI configuration — re-run `Install-D365FoCopilotSkills.ps1` against the folder that holds the `.sln` you open (or use the personal-skill folder), not against `D365FO_WORKSPACE_PATH`.
 
+> **Without a checkout** (a release archive, or any `d365fo` from 0.3.0 on), the CLI installs the
+> skills it carries: `d365fo skills install <your X++ repository> --for claude|copilot|all`.
+
 ### Claude Code (CLI or VS Code extension)
 
 ```powershell

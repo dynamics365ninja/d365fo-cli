@@ -105,6 +105,8 @@ public class CliMcpParityTests
         ["index build"] = "Creates the index database. First-run setup, and the server needs a database to have been started at all.",
         ["index extract"] = "Walks the whole PackagesLocalDirectory — minutes of filesystem work, which is the wrong shape for a call someone waits on. The narrow form an agent actually needs is `index sync`, which re-reads one model and IS exposed (`index_sync`).",
         ["index refresh"] = "The incremental form of `index extract`, and the same reason. `index sync` is its per-model counterpart over MCP.",
+        ["update"] = "Replaces the installed binaries — the MCP server answering the call among them. An operator task.",
+        ["skills install"] = "Writes agent instructions into a repository for an agent with a shell; an MCP client gets its instructions from the server and `get_knowledge`.",
         ["schema"] = "Publishes this manifest — the shell surface described for an agent that has a shell. An MCP client reads `tools/list` instead.",
         ["agent-prompt"] = "Emits the CLI-first system prompt. Same reason as `schema`: it describes the shell surface to a harness that will use it.",
     };
