@@ -1,0 +1,5 @@
+# Files a Unix shell or a shebang line reads. With core.autocrlf (the default on Windows,
+# GitHub's Windows runners included) they would be checked out with CRLF and fail to run:
+# bash rejects the line endings, and a published npm launcher would break on Linux and macOS.
+*.sh                    text eol=lf
+npm/**/*.js             text eol=lf

@@ -1,0 +1,22 @@
+{
+  "name": "d365fo-cli",
+  "version": "0.0.0",
+  "private": true,
+  "description": "AI-native CLI and MCP server for Dynamics 365 Finance & Operations X++ development",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/dynamics365ninja/d365fo-cli.git"
+  },
+  "homepage": "https://github.com/dynamics365ninja/d365fo-cli#readme",
+  "bugs": "https://github.com/dynamics365ninja/d365fo-cli/issues",
+  "keywords": ["d365fo", "dynamics365", "x++", "xpp", "mcp", "cli"],
+  "bin": {
+    "d365fo": "launcher/d365fo.js",
+    "d365fo-cli-mcp": "launcher/d365fo-cli-mcp.js"
+  },
+  "files": ["launcher"],
+  "engines": {
+    "node": ">=18"
+  }
+}

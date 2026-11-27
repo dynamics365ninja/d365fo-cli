@@ -66,7 +66,49 @@ tests, and attaches to the GitHub release:
 | `SHA256SUMS` | Checksums of the archives |
 
 The binaries are self-contained (no .NET runtime needed; the bridge uses the .NET Framework 4.8
-that a D365FO VM already has). They are not code-signed. There is no package registry.
+that a D365FO VM already has). They are not code-signed.
+
+## npm packages
+
+The workflow's `npm` job makes five packages from the release archives:
+
+| Package | Contents |
+|---|---|
+| `d365fo-cli` | The Node launcher behind the `d365fo` and `d365fo-cli-mcp` commands |
+| `d365fo-cli-win32-x64` | `bin`, `mcp`, `D365FO.Bridge` |
+| `d365fo-cli-linux-x64`, `-darwin-x64`, `-darwin-arm64` | `bin`, `mcp` |
+
+The platform packages are `optionalDependencies` of `d365fo-cli` at the same version, so npm
+installs the one that matches the machine; none runs an install script. The launcher sources are
+in `npm/`, and `scripts/build-npm-packages.mjs` stamps the version.
+
+The tarballs are attached to every release run as the artifact `npm-packages`. They are
+published only when the repository variable `NPM_PUBLISH` is `true`. A version with a suffix
+goes to the `next` dist-tag, any other to `latest`.
+
+### Publishing for the first time
+
+npm configures a trusted publisher in the settings of a package, so each package is first
+published by hand, once:
+
+1. Cut the release with `NPM_PUBLISH` unset, and download the tarballs:
+   `gh run download <run-id> -n npm-packages -D npm-packages`.
+2. `npm login`, then publish the four platform packages and `d365fo-cli` **last**:
+
+   ```sh
+   npm publish ./npm-packages/d365fo-cli-win32-x64-<version>.tgz --access public
+   # … linux-x64, darwin-x64, darwin-arm64, then:
+   npm publish ./npm-packages/d365fo-cli-<version>.tgz --access public
+   ```
+
+3. On npmjs.com, in the settings of **each** of the five packages, add a trusted publisher:
+   GitHub Actions, organization `dynamics365ninja`, repository `d365fo-cli`, workflow filename
+   `release.yml`, with direct `npm publish` allowed. A new configuration expires unless it is
+   used for a successful publish within 2 days, so do this shortly before the next release, or
+   expect to add it again.
+4. Set the repository variable: `gh variable set NPM_PUBLISH --body true`.
+
+Renaming `release.yml` breaks publishing until all five configurations name the new file.
 
 ## CLI and bridge compatibility
 

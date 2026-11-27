@@ -72,19 +72,10 @@ jobs:
             8.0.x
             10.0.x
 
-      - name: Publish the CLI and the MCP server
+      # The same script the ci workflow packs and installs, so what is released was tried.
+      - name: Publish the release layout
         shell: bash
-        run: |
-          dotnet publish src/D365FO.Cli -c Release -r "$RID" --self-contained \
-            -p:PublishSingleFile=true -p:PublishTrimmed=true -o publish/bin
-          dotnet publish src/D365FO.Mcp -c Release -r "$RID" --self-contained -o publish/mcp
-          cp README.md CHANGELOG.md publish/
-
-      # Beside bin\, where the CLI probes for it (..\D365FO.Bridge\).
-      - name: Publish the metadata bridge
-        if: matrix.rid == 'win-x64'
-        shell: bash
-        run: dotnet publish src/D365FO.Bridge -c Release -o publish/D365FO.Bridge
+        run: bash scripts/publish-release-layout.sh "$RID" publish
 
       # Only where the runner can execute what it built (the macOS runner is arm64).
       - name: Check the published version
@@ -143,3 +134,72 @@ jobs:
           flags=(--repo "$GITHUB_REPOSITORY" --verify-tag --title "$GITHUB_REF_NAME" --notes-file release-notes.md)
           case "$VERSION" in *-*) flags+=(--prerelease) ;; esac
           gh release create "$GITHUB_REF_NAME" dist/* "${flags[@]}"
+
+  # The npm packages are made from the archives of this release, after it exists. They are
+  # always attached to the run as `npm-packages`; publishing needs the repository variable
+  # NPM_PUBLISH=true, because it works only once each package has a trusted publisher on
+  # npmjs.com naming this workflow file. See docs/RELEASING.md.
+  npm:
+    needs: [verify, release]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write   # the OIDC token npm trusted publishing exchanges; there is no NPM_TOKEN
+    env:
+      VERSION: ${{ needs.verify.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+
+      # Trusted publishing needs npm 11.5.1 or later, which Node 24 ships.
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+          registry-url: 'https://registry.npmjs.org'
+
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: dist-*
+          merge-multiple: true
+          path: dist
+
+      # From the archives, not the dist-* folders of the publish jobs: tar keeps the
+      # executable bit, which an Actions artifact does not.
+      - name: Unpack the release archives
+        run: |
+          for rid in win-x64 linux-x64 osx-x64 osx-arm64; do
+            mkdir -p "layout/$rid"
+            if [ "$rid" = "win-x64" ]; then
+              unzip -q "dist/d365fo-cli-$VERSION-$rid.zip" -d "layout/$rid"
+            else
+              tar -xzf "dist/d365fo-cli-$VERSION-$rid.tar.gz" -C "layout/$rid"
+            fi
+          done
+
+      - name: Pack the npm packages
+        run: |
+          node scripts/build-npm-packages.mjs --version "$VERSION" --out npm-out --pack \
+            win-x64=layout/win-x64 linux-x64=layout/linux-x64 \
+            osx-x64=layout/osx-x64 osx-arm64=layout/osx-arm64
+
+      - name: Install and check the Linux package
+        run: node scripts/smoke-npm-package.mjs --version "$VERSION" --tarballs npm-out/tarballs
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: npm-packages
+          path: npm-out/tarballs/*.tgz
+
+      # The platform packages first: the launcher must never name versions that do not exist.
+      # A version already in the registry is skipped, so a failed run can be re-run.
+      - name: Publish to npm
+        if: vars.NPM_PUBLISH == 'true'
+        run: |
+          tag=latest
+          case "$VERSION" in *-*) tag=next ;; esac
+          for name in d365fo-cli-win32-x64 d365fo-cli-linux-x64 d365fo-cli-darwin-x64 d365fo-cli-darwin-arm64 d365fo-cli; do
+            if [ "$(npm view "$name@$VERSION" version 2>/dev/null)" = "$VERSION" ]; then
+              echo "$name@$VERSION is already published."
+            else
+              npm publish "./npm-out/tarballs/$name-$VERSION.tgz" --access public --tag "$tag"
+            fi
+          done
