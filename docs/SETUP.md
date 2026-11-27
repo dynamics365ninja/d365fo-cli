@@ -1,11 +1,38 @@
-# Setup
+<sub>[README](../README.md) › [Docs](README.md) › Setup guide</sub>
 
-Five steps from a fresh clone to a working index that any AI agent can query — or one line that does steps 1–3 for you.
+# 🛠️ Setup
 
-> **TL;DR** — `irm .../install.ps1 | iex` (installs .NET, builds, runs `d365fo init`) · `d365fo index extract` · point your AI agent at it. Done.
-> Day-to-day commands: [EXAMPLES.md](EXAMPLES.md) · env vars: [CONFIGURATION.md](CONFIGURATION.md) · architecture: [ARCHITECTURE.md](ARCHITECTURE.md).
+From nothing installed to a working index that any AI agent can query.
+
+> **TL;DR** — `npm install -g d365fo-cli` · `d365fo init` · `d365fo index extract` · `d365fo skills install <repository> --for copilot|claude|all`. Done.
+> In a hurry: [QUICK_START.md](QUICK_START.md) · env vars: [CONFIGURATION.md](CONFIGURATION.md) · architecture: [ARCHITECTURE.md](ARCHITECTURE.md).
+
+## Install with npm
+
+```powershell
+npm install -g d365fo-cli
+d365fo init
+```
+
+Needs [Node.js](https://nodejs.org) 18 or later and nothing else: the package for your system
+(`win32-x64`, `linux-x64`, `darwin-x64`, `darwin-arm64`) carries self-contained `d365fo` and
+`d365fo-cli-mcp` binaries, and on Windows the metadata bridge. Configuration and the index live in
+`%LOCALAPPDATA%\d365fo-cli` (`~/.local/share/d365fo-cli`), outside the package.
+
+| To | Run |
+|---|---|
+| Update to the latest release | `d365fo update` |
+| Only see whether there is one | `d365fo update --check` |
+| Move to a particular version | `d365fo update --to 0.3.0` |
+| Remove it | `npm uninstall -g d365fo-cli` (configuration and index stay) |
+
+An update succeeds while an editor or the daemon still runs the previous version; restart them
+(`d365fo daemon stop`). With the bridge: set `D365FO_BRIDGE_ENABLED="1"` (see
+[Step 3](#step-3--configure-one-command)). Then continue with [Step 3](#step-3--configure-one-command).
 
 ## One-line install
+
+The alternative that builds from source:
 
 ```powershell
 irm https://raw.githubusercontent.com/dynamics365ninja/d365fo-cli/main/install.ps1 | iex
@@ -55,17 +82,21 @@ flowchart TD
 
 | Component | Version | Needed for |
 |---|---|---|
-| .NET SDK | **10** (pinned in `global.json`) | building / running the CLI |
+| Node.js | 18 or later | installing with npm |
+| .NET SDK | **10** (pinned in `global.json`) | only for building from source |
 | `git` | any | `d365fo review diff` |
 | Visual Studio 2022 / 2026 + Dynamics 365 F&O workload | latest | scenario A — `MSBuild.exe`, `SyncEngine.exe`, `SysTestRunner.exe`, `xppbp.exe` on `PATH` |
 | GitHub Copilot extension | latest | VS agent mode (optional) — Agent Skills are read by **VS 2022 17.14+** and VS 2026; the `.instructions.md` layout is the fallback when a Copilot build does not discover skills |
 | .NET Framework 4.8 Developer Pack | 4.8 | bridge (`D365FO_BRIDGE_ENABLED=1`) — pre-installed on D365FO VMs |
 
-> Off-platform setups (B) only need .NET 10 + git. Everything else is gated by `UNSUPPORTED_PLATFORM` and never invoked.
+> Off-platform setups (B) only need npm (or .NET 10 + git to build from source). Everything else is gated by `UNSUPPORTED_PLATFORM` and never invoked.
 
 ---
 
 ## Step 2 — Install
+
+Installed with [npm](#install-with-npm) or the [installer](#one-line-install)? Go to Step 3. The
+options below build from a checkout by hand.
 
 ### Option 1 — Dev mode (alias, fastest)
 
@@ -189,16 +220,14 @@ flowchart LR
 
 ### GitHub Copilot — Visual Studio (2022 17.14+ / 2026) / VS Code (agent mode)
 
-1. Place `d365fo` on `PATH` (either Option 1 alias or Option 2 binary above).
+1. Have `d365fo` on `PATH` (npm, the installer, or a published binary).
 2. Deploy the `d365fo-cli` Copilot skill into the folder that contains the `.sln` you open in Visual Studio:
 
    ```powershell
-   .\scripts\Install-D365FoCopilotSkills.ps1 `
-     -CliRepo C:\source\d365fo-cli `
-     -XppRepo K:\D365FO\MyProject        # the folder holding MyProject.sln
+   d365fo skills install K:\D365FO\MyProject --for copilot     # the folder holding MyProject.sln
    ```
 
-   The script deploys `skills/d365fo-cli/SKILL.md` and all `references/*.md` to `<XppRepo>\.github\skills\d365fo-cli\`. Copilot auto-discovers skills in `.github/skills/` with no extra configuration.
+   It writes `SKILL.md` and the `references/*.md` this build carries to `<repository>\.github\skills\d365fo-cli\`. Copilot auto-discovers skills in `.github/skills/` with no extra configuration. From a checkout, `scripts\Install-D365FoCopilotSkills.ps1 -XppRepo <repository>` does the same with the checkout's skills.
 
    **Where Visual Studio looks.** VS discovers solution skills in `.github/skills/` **next to the solution** — it does not walk up to parent folders. A copy in `C:\D365\Projects\.github\skills\` is invisible to a solution opened from `C:\D365\Projects\MyProject\MyProject.sln`. (Repo/workspace-root discovery was announced as "pending release" on the Visual Studio blog in June 2026, but has not appeared in the VS release notes as of September 2026.) When several solutions share a parent folder you have two options:
 
@@ -245,22 +274,18 @@ flowchart LR
 >
 > Setting `D365FO_WORKSPACE_PATH` (or any `D365FO_*` env var) has **zero effect** on Copilot's skill discovery. If Copilot isn't finding your skill, the fix is always about **which folder is open in the editor**, never about CLI configuration — re-run `Install-D365FoCopilotSkills.ps1` against the folder that holds the `.sln` you open (or use the personal-skill folder), not against `D365FO_WORKSPACE_PATH`.
 
-> **Without a checkout** (a release archive, or any `d365fo` from 0.3.0 on), the CLI installs the
-> skills it carries: `d365fo skills install <your X++ repository> --for claude|copilot|all`.
-
 ### Claude Code (CLI or VS Code extension)
 
 ```powershell
-.\scripts\Install-D365FoClaudeSkills.ps1 -XppRepo "K:\D365FO\MyProject"
+d365fo skills install K:\D365FO\MyProject --for claude
 ```
 
-The Anthropic-format sibling of `Install-D365FoCopilotSkills.ps1`: it installs the
+(From a checkout: `scripts\Install-D365FoClaudeSkills.ps1`.) It installs the
 `d365fo-cli` router skill (`.claude/skills/d365fo-cli/SKILL.md`, which carries the mandatory
 first steps, the `d365fo` tool mapping and the X++ rule canon, and points at the topic skills)
-plus one `.claude/skills/<topic>/SKILL.md` per knowledge topic, regenerating them first if the
-emitted folder is empty, and prunes topics that were renamed or retired upstream. Both
-scripts emit from the same `skills/_source`, so the two ecosystems cannot disagree about
-a rule.
+plus one `.claude/skills/<topic>/SKILL.md` per knowledge topic, and removes the topics it
+wrote earlier that this version no longer has. Both layouts are generated from the same
+`skills/_source`, so the two ecosystems cannot disagree about a rule.
 
 Manual equivalent, if you would rather not run the script:
 
@@ -289,7 +314,7 @@ Reference the `skills/anthropic/*/SKILL.md` files from your session prompt or `A
 }
 ```
 
-`d365fo-cli-mcp` is the bundled JSON-RPC 2.0 adapter that exposes 20 consolidated, discriminator-based tools backed by the same SQLite index and bridge. Useful for hosts without a shell tool — see [ARCHITECTURE.md#mcp-coexistence](ARCHITECTURE.md#mcp-coexistence).
+`d365fo-cli-mcp` is the bundled JSON-RPC 2.0 adapter that exposes 32 consolidated, discriminator-based tools backed by the same SQLite index and bridge. Useful for hosts without a shell tool — see [ARCHITECTURE.md#mcp-coexistence](ARCHITECTURE.md#mcp-coexistence).
 
 ### Verify
 
@@ -346,7 +371,7 @@ One example per `generate` sub-command (25 more object types, security, reports,
 
 ## Quickstart scripts
 
-The [one-line install](#one-line-install) at the top of this page **is** the quickstart script — `install.ps1` / `install.sh` in the repo root do exactly steps 1–3 (build, publish onto `PATH`, `d365fo init`) and then run `doctor`. Set `D365FO_CLI_RUN_EXTRACT=1` first if you also want step 4 done for you. Reading the steps above is only needed if you want to run them by hand instead.
+The [one-line install](#one-line-install) near the top of this page **is** the quickstart script — `install.ps1` / `install.sh` in the repo root do exactly steps 1–3 (build, publish onto `PATH`, `d365fo init`) and then run `doctor`. Set `D365FO_CLI_RUN_EXTRACT=1` first if you also want step 4 done for you. Reading the steps above is only needed if you want to run them by hand instead.
 
 ---
 

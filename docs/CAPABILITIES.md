@@ -1,4 +1,6 @@
-# d365fo-cli — Capabilities & Feature Overview
+<sub>[README](../README.md) › [Docs](README.md) › Capabilities</sub>
+
+# ✨ d365fo-cli — Capabilities & Feature Overview
 
 Full reference of what the tool provides. For setup see [SETUP.md](SETUP.md), for worked examples see [EXAMPLES.md](EXAMPLES.md), for internals see [ARCHITECTURE.md](ARCHITECTURE.md).
 
@@ -849,9 +851,9 @@ d365fo-cli-mcp --http --port 8080
 
 ## Copilot Skills
 
-The `d365fo-cli` agent skill (`skills/d365fo-cli/`) covers the full X++ authoring and review canon: `SKILL.md` holds the rule canon and tool mapping, and 38 topic files in `references/` are loaded on demand. Deploy to an X++ project with the `Install-D365FoCopilotSkills.ps1` script (see [SETUP.md](SETUP.md)), which installs it to `.github/skills/d365fo-cli/`.
+The `d365fo-cli` agent skill (`skills/d365fo-cli/`) covers the full X++ authoring and review canon: `SKILL.md` holds the rule canon and tool mapping, and 43 topic files in `references/` are loaded on demand. `d365fo skills install <repository> --for copilot` deploys it to `.github/skills/d365fo-cli/` (see [SETUP.md](SETUP.md)).
 
-The same 38 topics are also emitted as `skills/copilot/*.instructions.md` (legacy `applyTo` format) and `skills/anthropic/<id>/SKILL.md` (Claude Code / Claude Desktop). For Claude, `skills/anthropic/d365fo-cli/SKILL.md` plays the role of the Copilot `SKILL.md`: the same rule canon and tool mapping, with a table linking the sibling topic skills.
+The same 43 topics are also emitted as `skills/copilot/*.instructions.md` (legacy `applyTo` format) and `skills/anthropic/<id>/SKILL.md` (Claude Code / Claude Desktop). For Claude, `skills/anthropic/d365fo-cli/SKILL.md` plays the role of the Copilot `SKILL.md`: the same rule canon and tool mapping, with a table linking the sibling topic skills.
 
 | Skill | Covers |
 |-------|--------|

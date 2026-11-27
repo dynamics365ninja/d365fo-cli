@@ -1,4 +1,6 @@
-# Architecture
+<sub>[README](../README.md) › [Docs](README.md) › Architecture</sub>
+
+# 🏛️ Architecture
 
 > For day-to-day usage see [SETUP.md](SETUP.md) and [EXAMPLES.md](EXAMPLES.md).
 

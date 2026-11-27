@@ -7,9 +7,9 @@
 # what's left to do. Safe to re-run — an existing checkout is updated in
 # place instead of re-cloned.
 #
-# There is no package registry yet (see docs/MIGRATION_FROM_MCP.md) — this
-# script clones the repo, builds a self-contained binary with 'dotnet
-# publish', and puts it on PATH. That's the "compilation" step; 'd365fo init'
+# `npm install -g d365fo-cli` installs the released binaries (docs/SETUP.md).
+# This script is the build-from-source path: it clones the repo, builds a
+# self-contained binary with 'dotnet publish', and puts it on PATH. That's the "compilation" step; 'd365fo init'
 # is the setup wizard.
 #
 # Piped through Invoke-Expression, so configuration is env vars, not params:

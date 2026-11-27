@@ -49,6 +49,8 @@ const shared = {
 };
 
 const writeJson = (file, value) => fs.writeFileSync(file, `${JSON.stringify(value, null, 2)}\n`);
+// npm packs a LICENSE file found beside package.json without being told to.
+const addLicense = (folder) => fs.copyFileSync(path.join(repo, 'LICENSE'), path.join(folder, 'LICENSE'));
 // Debug symbols and XML documentation are in the release archives; nothing runs them.
 const shipped = (source) => !/\.pdb$|[\\/]D365FO\.[^\\/]*\.xml$/i.test(source);
 
@@ -96,11 +98,13 @@ for (const argument of positionals) {
   fs.writeFileSync(path.join(destination, 'README.md'),
     `# ${name}\n\nThe ${target} binaries of [d365fo-cli](https://www.npmjs.com/package/d365fo-cli). `
     + 'Install that package; npm adds this one on a matching system.\n');
+  addLicense(destination);
   built.push(name);
 }
 
 const launcher = path.join(out, manifest.name);
 fs.cpSync(launcherDir, launcher, { recursive: true });
+addLicense(launcher);
 const { private: _, ...published } = manifest;
 writeJson(path.join(launcher, 'package.json'), {
   ...published,

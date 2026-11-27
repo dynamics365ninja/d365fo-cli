@@ -1,113 +1,162 @@
-# Quick start
+<sub>[README](../README.md) › [Docs](README.md) › Quick start</sub>
 
-Five minutes from a clean machine to an agent that can answer questions about your D365FO
-metadata. [SETUP.md](SETUP.md) is the same path with every branch and pitfall spelled out; this is
-the straight line through it.
+# 🚀 Quick start
 
-**You need:** .NET 10 SDK, and a machine with a `PackagesLocalDirectory` on it (a D365FO
-development VM, or a copy of the package tree).
+Two different jobs share this page. Pick yours — each path is self-contained.
+
+| Your situation | Path | Effort |
+|---|---|---|
+| You are setting up your own D365FO VM or machine — **the usual case** | [**Install**](#install-on-your-machine) | 10 min, plus the index extract |
+| Your team already runs a shared server and your editor speaks MCP | [**Connect**](#connect-to-a-shared-server) | ~2 min |
+
+> [!NOTE]
+> Deploying the shared server for your team is a separate job, for whoever administers it:
+> [SETUP_AZURE.md](SETUP_AZURE.md).
+
+```mermaid
+flowchart LR
+    start(["Start"]) --> q{"MCP host, and your team<br/>runs a shared server?"}
+    q -- "yes" --> A["<b>Connect</b>"]
+    q -- "no, or I also want to<br/>write · build · test" --> B["<b>Install</b>"]
+    B --> skills["Agent skills"]
+    A --> verify(["✅ Verify"])
+    skills --> verify
+```
 
 ---
 
-## 1. Install
+## Connect to a shared server
 
-```sh
-git clone https://github.com/dynamics365ninja/d365fo-cli
-cd d365fo-cli
-dotnet build -c Release
+You need the server URL from whoever deployed it, and an API key if that deployment enforces one.
+With `d365fo` installed (step 2 below), it writes the editor's configuration after checking that the
+server answers, and leaves your other MCP servers alone:
+
+```powershell
+d365fo connect https://your-server.azurewebsites.net --editor vscode   # or claude; --api-key <key>
 ```
 
-Then either alias it or publish a binary:
+By hand, the entry is the URL ending in `/mcp`, with the key as an `X-Api-Key` header —
+[MCP_CONFIG.md](MCP_CONFIG.md).
 
-```sh
-# PowerShell — add to $PROFILE
-function d365fo { dotnet run --project K:/repos/d365fo-cli/src/D365FO.Cli -c Release -- @args }
+> [!NOTE]
+> A shared server searches and reads the index it was deployed with. It cannot see your local
+> changes or write to your VM; for that, install locally.
 
-# or a real executable
-dotnet publish src/D365FO.Cli -c Release -r win-x64 -o C:/tools/d365fo
+---
+
+## Install on your machine
+
+### 1. Prerequisites
+
+| Requirement | Where to get it | Needed for |
+|---|---|---|
+| Node.js 18 or later | [nodejs.org](https://nodejs.org) | installing with npm |
+| A `PackagesLocalDirectory` | a D365FO development VM, a share, or a copy of the package tree | the index |
+| Visual Studio 2026 (or 2022 ≥ 17.14) | Visual Studio Installer | Copilot, and `build` / `sync` / `test` on Windows |
+| .NET Framework 4.8 | already on D365FO VMs | the metadata bridge (writes into models) |
+
+No .NET SDK is needed: the packages carry self-contained binaries.
+
+### 2. Install
+
+```powershell
+npm install -g d365fo-cli
+d365fo version
 ```
 
-## 2. Point it at the installation
+Without npm: a [release archive](RELEASING.md#installing-a-specific-release) or the
+[source installer](SETUP.md#one-line-install).
 
-```sh
-d365fo init            # writes ~/.d365fo/config.json after probing for the usual locations
-d365fo doctor          # says what is missing, in the order it matters
+### 3. Configure
+
+```powershell
+d365fo init
 ```
 
-`init` guesses; `doctor` checks. If the guess was wrong, one environment variable fixes it:
+In a terminal this is a short wizard: it finds `PackagesLocalDirectory` (or asks for it), an optional
+second root for UDE, your label languages, and saves the answers to
+`%LOCALAPPDATA%\d365fo-cli\settings.json`. Unattended:
 
-```sh
-$env:D365FO_PACKAGES_PATH = "K:\AosService\PackagesLocalDirectory"
+```powershell
+d365fo init --packages K:\AosService\PackagesLocalDirectory --persist-profile
 ```
 
-## 3. Build the index
+To let `d365fo` write into your models, enable the bridge once and open a new shell:
 
-```sh
-d365fo index build      # create the SQLite schema
-d365fo index extract    # ingest metadata — minutes, parallel per model
+```powershell
+[Environment]::SetEnvironmentVariable('D365FO_BRIDGE_ENABLED', '1', 'User')
 ```
 
-This is the only slow step, and it is once per installation. On the development VM this
-repository is built against, the result is 203 models: 18 467 tables, 60 927 classes,
-525 714 methods, 1 420 121 labels — a 750 MB SQLite file that answers in milliseconds.
+### 4. Build the index
 
-Scope it while you are trying things out:
-
-```sh
-d365fo index extract --model ApplicationSuite   # or your own model, which takes seconds
+```powershell
+d365fo index extract
+d365fo doctor
 ```
 
-## 4. Ask it something
+The extract is the only slow step. On the development VM this repository is built against it covers
+203 models — 18 467 tables, 60 927 classes, 525 714 methods, 1 420 121 labels — in a 750 MB SQLite
+file that answers in milliseconds. To try things out first, extract one model:
 
-```sh
+```powershell
+d365fo index extract --model ApplicationSuite     # or your own model, which takes seconds
+```
+
+### 5. Give your agent the skills
+
+```powershell
+d365fo skills install K:\repos\MySolution --for copilot    # the folder holding your .sln
+d365fo skills install K:\repos\MySolution --for claude
+```
+
+The skills teach the agent which commands to run and the X++ rules behind them. Commit the
+`.github/` or `.claude/` folder so your teammates get them too. Where each agent looks, in detail:
+[SETUP.md](SETUP.md#step-5--connect-your-ai-agent).
+
+---
+
+## Verify
+
+Restart the editor, open the AI chat in agent mode, and ask:
+
+```
+What tables contain the CustAccount field?
+```
+
+A `d365fo search` call returning results from **your** metadata — including ISV models no training
+data has ever seen — is the signal that grounding works.
+
+From a shell, the same ground:
+
+```powershell
 d365fo get table CustTable --output json
-d365fo search class "SalesLine" --limit 5
 d365fo find coc CustTable::validateWrite
 d365fo prepare change CustTable --goal "add a fleet reference field"
 ```
 
 `prepare` is the one worth learning first: it answers "what am I about to change, what already
-extends it, and which strategy applies" in a single call, and hands back a **grounding token**
-that `generate` will ask for.
-
-## 5. Generate something
-
-```sh
-d365fo generate extension Table CustTable --suffix Fleet --out ./CustTable.Fleet.xml
-d365fo validate xpp ./CustTable.Fleet.xml --output json
-```
-
-Never hand-write AOT XML — the schema is proprietary and easy to get subtly wrong in ways that
-parse, pass review, and drop your data on read. Every scaffold goes through `generate`, and
-`validate` is the offline check that runs without a compiler.
-
-## 6. Give an agent the same access
-
-```powershell
-# Claude Code / Claude Desktop — copies the d365fo-cli router + per-topic skills into <XppRepo>/.claude/skills/
-.\scripts\Install-D365FoClaudeSkills.ps1 -XppRepo "K:\D365FO\MyProject"
-
-# GitHub Copilot in Visual Studio / VS Code
-.\scripts\Install-D365FoCopilotSkills.ps1 -XppRepo "K:\D365FO\MyProject"
-```
-
-Both installers read the same `skills/_source/` topics, so the two ecosystems cannot disagree
-about a rule, and both remove topics that were retired upstream rather than leaving them to feed
-an agent stale guidance.
-
-For an MCP-only host, see [MCP_CONFIG.md](MCP_CONFIG.md) — the bundled `d365fo-cli-mcp` adapter
-serves the same index over JSON-RPC. If your agent has a shell, prefer the CLI:
-[TOKEN_ECONOMICS.md](TOKEN_ECONOMICS.md) measures why.
+extends it, and which strategy applies" in one call, and hands back the **grounding token** that
+`generate` asks for.
 
 ---
 
-## What to read next
+## Keeping it current
 
-| You want to | Read |
+```powershell
+d365fo update                                         # latest release; --check only looks
+d365fo skills install K:\repos\MySolution --for all   # refresh the skills afterwards
+d365fo index refresh                                  # after your metadata changes
+```
+
+---
+
+## Next steps
+
+| Topic | Documentation |
 |---|---|
-| The install path with every option and pitfall | [SETUP.md](SETUP.md) |
+| Every install path and pitfall | [SETUP.md](SETUP.md) |
 | Everything the tool can do | [CAPABILITIES.md](CAPABILITIES.md) |
-| Worked end-to-end tasks, not one command at a time | [USAGE_EXAMPLES.md](USAGE_EXAMPLES.md) |
+| Whole tasks, end to end | [USAGE_EXAMPLES.md](USAGE_EXAMPLES.md) |
 | One example per command | [EXAMPLES.md](EXAMPLES.md) |
+| Every setting and environment variable | [CONFIGURATION.md](CONFIGURATION.md) |
 | Something is wrong | [TROUBLESHOOTING.md](TROUBLESHOOTING.md) |
-| Every environment variable | [CONFIGURATION.md](CONFIGURATION.md) |

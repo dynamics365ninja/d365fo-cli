@@ -1,13 +1,21 @@
-# MCP configuration
+<sub>[README](../README.md) › [Docs](README.md) › MCP configuration</sub>
+
+# 🔌 MCP configuration
 
 Pointing an MCP client at the bundled `d365fo-cli-mcp` adapter. It serves the same SQLite index and
 the same handlers the CLI uses — [MCP_TOOLS.md](MCP_TOOLS.md) is the generated map of which tool
 reaches which command.
 
 > **If your agent has a shell, use the CLI instead.** The adapter exists for hosts that cannot run
-> a command: Claude Desktop, ChatGPT, an editor MCP panel. Registering it costs 40 132 characters
-> of tool schemas in the model's context on *every* turn against the CLI skill's 366 — measured,
+> a command: Claude Desktop, ChatGPT, an editor MCP panel. Registering it costs 49 076 characters
+> of tool schemas in the model's context on *every* turn against the CLI skill's 600 — measured,
 > not estimated, in [TOKEN_ECONOMICS.md](TOKEN_ECONOMICS.md).
+
+---
+
+`npm install -g d365fo-cli` installs the adapter beside the CLI, as the `d365fo-cli-mcp` command
+([SETUP.md](SETUP.md#install-with-npm)). On Windows that command is an npm shim; a host that starts
+processes without a shell needs `"command": "cmd"`, `"args": ["/c", "d365fo-cli-mcp"]`.
 
 ---
 
@@ -88,7 +96,7 @@ Claude Desktop reads its own `claude_desktop_config.json`. Same shape either way
 ### Cursor, Continue, and other MCP hosts
 
 Same shape — an executable plus environment. If the host has no `env` block, set the variables
-where it is launched from, or put them in `~/.d365fo/config.json`, which the adapter reads too
+where it is launched from, or put them in `%LOCALAPPDATA%\d365fo-cli\settings.json`, which the adapter reads too
 (see [CONFIGURATION.md](CONFIGURATION.md#json-config-file)).
 
 ### Pointing at a deployed HTTP instance
@@ -125,7 +133,7 @@ And four the adapter alone has:
 
 ### Toolsets
 
-A host puts every advertised tool's schema into every turn: about 48k characters for all 32 tools.
+A host puts every advertised tool's schema into every turn: about 49k characters for all 32 tools.
 A client that only looks things up can drop the rest:
 
 ```json

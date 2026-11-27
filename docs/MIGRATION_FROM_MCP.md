@@ -1,4 +1,6 @@
-# MCP Server vs CLI
+<sub>[README](../README.md) › [Docs](README.md) › Migration from MCP</sub>
+
+# 🔀 MCP Server vs CLI
 
 Both tools share an **identical purpose** — give GitHub Copilot access to real D365FO metadata so it generates X++ code that compiles on the first attempt. They differ in protocol and deployment, but share the same data layer.
 
@@ -27,7 +29,7 @@ Both tools share an **identical purpose** — give GitHub Copilot access to real
 
 Run them side by side only when a single index must serve agents with **mixed shell-tool support** (e.g. Copilot in VS Code alongside Claude.ai web), or during a **migration grace period** before you confirm the CLI path covers everything.
 
-Be aware of the cost: keeping MCP registered injects its full schema overhead (~1,800 tok/turn — see [TOKEN_ECONOMICS.md](TOKEN_ECONOMICS.md)) on **every** turn, including turns where only the CLI is called. The "Copilot picks the cheaper one" benefit applies per *call*, not per *turn*, so for a single agent with a working shell tool, prefer **CLI only (Path B)** — it is both cheaper and simpler.
+Be aware of the cost: keeping MCP registered injects its full schema overhead (~13 600 tokens per turn — see [TOKEN_ECONOMICS.md](TOKEN_ECONOMICS.md)) on **every** turn, including turns where only the CLI is called. The "Copilot picks the cheaper one" benefit applies per *call*, not per *turn*, so for a single agent with a working shell tool, prefer **CLI only (Path B)** — it is both cheaper and simpler.
 
 ---
 
@@ -37,8 +39,8 @@ Be aware of the cost: keeping MCP registered injects its full schema overhead (~
 
 The existing `.mcp.json` stays unchanged. The CLI is added alongside:
 
-1. Build and deploy the CLI — see [SETUP.md](SETUP.md).
-2. Run `scripts/Install-D365FoCopilotSkills.ps1 -XppRepo <your-xpp-repo>` to deploy the `d365fo-cli` Copilot skill.
+1. Install the CLI: `npm install -g d365fo-cli` — see [SETUP.md](SETUP.md).
+2. Run `d365fo skills install <your-xpp-repo> --for copilot` to deploy the `d365fo-cli` Copilot skill.
 3. Copilot automatically uses the shell tool for CLI commands and MCP for tool calls — both from the same index.
 
 > **Heads-up — conflict with old MCP instruction files.** If you previously deployed `.github/copilot-instructions.md` from `d365fo-mcp-server`, remove it — the new `d365fo-cli` Copilot skill supersedes it. The skill format avoids the file collision: `.github/skills/d365fo-cli/` coexists with any other skills without clobbering.

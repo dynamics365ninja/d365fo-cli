@@ -1,4 +1,6 @@
-# Examples
+<sub>[README](../README.md) › [Docs](README.md) › Examples</sub>
+
+# 📋 Examples
 
 One worked example per command. Setup lives in [SETUP.md](SETUP.md). Every example assumes `d365fo` is on `PATH` and the index is populated.
 
@@ -940,14 +942,14 @@ d365fo agent-prompt --out .prompts/d365fo.md
 ### GitHub Copilot (VS Code / Visual Studio)
 
 ```powershell
-.\scripts\Install-D365FoCopilotSkills.ps1 -XppRepo "K:\D365FO\MyProject"
+d365fo skills install "K:\D365FO\MyProject" --for copilot
 ```
 
 Copilot auto-discovers `.github/skills/d365fo-cli/` and loads the skill on demand — no extra configuration needed. It drives `d365fo` through its terminal tool.
 
 ### Claude Code / Claude Desktop
 
-Run `Install-D365FoClaudeSkills.ps1`, or drop the contents of `skills/anthropic/` into the project's `.claude/skills/` or `~/.claude/skills/`. The `d365fo-cli` skill is the entry point (first steps, tool mapping, rule canon); each topic `SKILL.md` triggers via its description and `applies_when` front-matter.
+Run `d365fo skills install <repository> --for claude`, or from a checkout drop the contents of `skills/anthropic/` into `~/.claude/skills/`. The `d365fo-cli` skill is the entry point (first steps, tool mapping, rule canon); each topic `SKILL.md` triggers via its description and `applies_when` front-matter.
 
 ### Codex CLI / Gemini CLI
 
@@ -989,7 +991,7 @@ Standalone JSON-RPC 2.0 server (protocol `2024-11-05`) that shares the CLI's ind
 }
 ```
 
-After `dotnet publish src/D365FO.Mcp -c Release -r osx-arm64` you get a standalone `d365fo-cli-mcp` binary you can drop on `$PATH`. The adapter exposes **20 consolidated, discriminator-based tools** (`search`, `get_object_info`, `get_method`, `extension_info`, `object_patterns`, `generate_object`, `security_info`, `labels`, `analyze`, `models`, …) covering CLI parity, security & labels, heuristics, and aggregation — same index, same guardrails. See [MIGRATION_FROM_MCP.md](MIGRATION_FROM_MCP.md) for the full tool list.
+After `dotnet publish src/D365FO.Mcp -c Release -r osx-arm64` you get a standalone `d365fo-cli-mcp` binary you can drop on `$PATH`. The adapter exposes **32 consolidated, discriminator-based tools** (`search`, `get_object_info`, `get_method`, `extension_info`, `object_patterns`, `generate_object`, `security_info`, `labels`, `analyze`, `models`, …) covering CLI parity, security & labels, heuristics, and aggregation — same index, same guardrails. See [MIGRATION_FROM_MCP.md](MIGRATION_FROM_MCP.md) for the full tool list.
 
 ---
 

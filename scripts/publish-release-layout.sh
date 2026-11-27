@@ -17,4 +17,4 @@ if [ "$rid" = "win-x64" ]; then
   dotnet publish src/D365FO.Bridge -c Release -o "$out/D365FO.Bridge"
 fi
 
-cp README.md CHANGELOG.md "$out/"
+cp README.md CHANGELOG.md LICENSE "$out/"

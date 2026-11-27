@@ -1,4 +1,6 @@
-# Custom models and non-standard installations
+<sub>[README](../README.md) › [Docs](README.md) › Custom models</sub>
+
+# 🧩 Custom models and non-standard installations
 
 Everything here is about telling the tool which code is **yours**. It matters more than it sounds:
 the answer decides what gets indexed, what the write path is willing to touch, and what a lint
