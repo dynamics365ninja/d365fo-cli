@@ -7,9 +7,8 @@ All notable changes to `d365fo-cli` are recorded here. The format follows
 
 Releases follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html); the policy, the
 tag format and the release steps are in [docs/RELEASING.md](docs/RELEASING.md). `d365fo --version`
-reports the version and the commit it was built from. No release has been tagged yet: the dated
-sections below are the history from before the first one, grouped by the date the work landed
-on `main`.
+reports the version and the commit it was built from. The first tagged release is `0.2.0`; the
+dated sections at the end are older history, grouped by the date the work landed on `main`.
 
 Upstream references of the form "upstream 1.15.0" point at the sibling
 [`d365fo-mcp-server`](https://github.com/dynamics365ninja/d365fo-mcp-server) release the work
@@ -18,6 +17,72 @@ was ported from.
 ---
 
 ## [Unreleased]
+
+## [0.2.0] - 2026-11-27
+
+The first tagged release of `d365fo-cli`. Until now an installation was identified only by the
+commit it was built from; `v0.2.0` can be installed, pinned and cited.
+
+### What is in it
+
+- **`d365fo`**: search and read an indexed D365 F&O codebase, cross-references and structural
+  where-used, grounded scaffolding (`generate`), in-place edits (`modify`, `labels`, `delete`,
+  `undo`), validators for X++, references and form patterns, and build, sync, test and best
+  practice runs on a D365FO VM.
+- **`d365fo-cli-mcp`**: the same index and commands for MCP-only hosts, over stdio or HTTP.
+- **`D365FO.Bridge`** (Windows): reads and writes through Microsoft's metadata provider.
+- **Archives** for `win-x64`, `linux-x64`, `osx-x64` and `osx-arm64` with `SHA256SUMS`. The
+  binaries are self-contained and not code-signed. The bridge is in the Windows archive only and
+  uses the .NET Framework 4.8 that a D365FO VM already has.
+- **Linux without libicu**: set `DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=1`; `find refs --xref` is
+  then unavailable.
+- **Installers**: `D365FO_CLI_VERSION=v0.2.0` makes `install.ps1` / `install.sh` build this tag.
+  Building from source needs the .NET 10 SDK.
+
+### Compatibility
+
+- **CLI and bridge** must come from this release together; the protocol between them has no
+  version negotiation. `d365fo doctor` warns on a mismatch.
+- While the major version is `0`, a minor release may break compatibility
+  ([versioning policy](https://github.com/dynamics365ninja/d365fo-cli/blob/v0.2.0/docs/RELEASING.md#versioning-policy)).
+
+### Upgrading from a `main` build made before this release
+
+How much of this applies depends on how old that build is.
+
+**Index** (schema v24):
+
+- An index older than v21 is re-extracted in full by the next `d365fo index refresh` (13 minutes
+  for 177 models on a UDE).
+- From v21 or v22, the next `index refresh` re-extracts the models that have EDTs.
+- The first command after the update builds the new lookup indexes in place (about 15 seconds on
+  a full index, which grows by about 115 MB).
+
+**Behaviour that callers may depend on:**
+
+- The MCP adapter is now `d365fo-cli-mcp`. Update `"command": "d365fo-mcp"` in editor
+  configuration that means this adapter, and the startup command of an HTTP deployment.
+- `find refs` and MCP `find_references` return one row per referencing object. Callers that read
+  `items[].method` / `matches` / `path` must pass `--lines` (`lines`).
+- A `settings.json` or profile file that does not parse stops the run with `CONFIG_UNREADABLE`
+  instead of being read as empty.
+- `labels delete` refuses to remove the last definition of a label the owning model still
+  references (`--force` overrides), and refuses label file extensions without
+  `--allow-extension-label-file`.
+- `labels update` changes only the languages it is given text for, and refuses a positional value
+  together with several languages.
+- `D365FO_BRIDGE_ENABLED=0` now switches the bridge off for writes as well.
+- `MCP_SERVER_MODE=read-only` no longer lists or runs `delete_object` (`MODE_NOT_ALLOWED`).
+- Writes re-index the model they touched; `--no-refresh` or `D365FO_AUTO_REFRESH=0` opts out.
+
+Every change is described under "0.2.0 change by change" in
+[CHANGELOG.md](https://github.com/dynamics365ninja/d365fo-cli/blob/v0.2.0/CHANGELOG.md).
+
+---
+
+## 0.2.0 change by change
+
+The entries behind the release notes above, newest first, for the work since 2026-09-01.
 
 ### Fixed — name and label lookups seek the index instead of scanning it
 
