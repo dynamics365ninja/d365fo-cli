@@ -24,3 +24,6 @@ memory/
 # Python bytecode from scripts/ (test-emit-skills.py imports emit-skills.py)
 __pycache__/
 *.pyc
+
+# Output of scripts/build-npm-packages.mjs
+npm-out/

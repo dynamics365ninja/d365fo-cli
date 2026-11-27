@@ -18,6 +18,14 @@ was ported from.
 
 ## [Unreleased]
 
+### Added — npm packages
+
+A release now builds `d365fo-cli` and one binary package per platform
+(`d365fo-cli-win32-x64`, `-linux-x64`, `-darwin-x64`, `-darwin-arm64`), so that
+`npm install -g d365fo-cli` installs the CLI, the MCP server and, on Windows, the bridge without
+a .NET SDK. Node.js 18 or later runs the launcher. Publishing is switched on separately; until
+then the packages are not in the registry. See [docs/RELEASING.md](docs/RELEASING.md#npm-packages).
+
 ## [0.2.0] - 2026-11-27
 
 The first tagged release of `d365fo-cli`. Until now an installation was identified only by the
