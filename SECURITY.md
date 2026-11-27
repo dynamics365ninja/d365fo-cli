@@ -2,13 +2,14 @@
 
 ## Supported versions
 
-This repository has no release tags yet. Security fixes land on `main`, and installations made
-with `install.ps1` / `install.sh` are updated in place by re-running the installer. Once the
-first tag is cut, this table will name the supported minor versions.
+Security fixes land on `main` and ship in the next release of the latest minor version.
+Installations made with `install.ps1` / `install.sh` without `D365FO_CLI_VERSION` are updated
+from `main` by re-running the installer; a pinned installation is updated by naming the newer tag.
 
 | Version | Supported |
 |---------|-----------|
 | `main`  | ✅ |
+| `0.2.x` | ✅ |
 
 ## Reporting a vulnerability
 

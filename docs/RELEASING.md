@@ -49,7 +49,8 @@ how to adapt.
 - The notes are the release's `## [<version>] - <date>` section of
   [CHANGELOG.md](../CHANGELOG.md). They state compatibility requirements: whether the index needs
   a re-extract (schema version change), and anything required of the bridge or the D365FO
-  platform.
+  platform. GitHub limits the body to 125 000 characters: keep the section a summary and put
+  long per-change entries under a separate `## ` heading below it.
 
 ## What a release publishes
 

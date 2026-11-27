@@ -5,7 +5,7 @@
 .DESCRIPTION
     Returns everything between the "## [<Version>]" heading and the next "## " heading.
     Fails when the section is missing or empty, so a release cannot be published without
-    notes. See docs/RELEASING.md.
+    notes, and when it is longer than a GitHub release body can be. See docs/RELEASING.md.
 
 .EXAMPLE
     ./scripts/get-release-notes.ps1 -Version 0.2.0
@@ -32,5 +32,8 @@ foreach ($line in $lines) {
 $notes = ($section -join "`n").Trim() -replace '(\r?\n)+---$', ''
 if (-not $inside) { throw "CHANGELOG.md has no '## [$Version]' section." }
 if (-not $notes.Trim()) { throw "The '## [$Version]' section of CHANGELOG.md is empty." }
+if ($notes.Length -gt 125000) {
+    throw "The '## [$Version]' section of CHANGELOG.md is $($notes.Length) characters; a GitHub release body holds 125000. Summarise it and move the detail under another '## ' heading."
+}
 
 $notes
