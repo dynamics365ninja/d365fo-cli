@@ -1,4 +1,6 @@
-# Shared deployment (Azure App Service)
+<sub>[README](../README.md) › [Docs](README.md) › Shared deployment</sub>
+
+# ☁️ Shared deployment (Azure App Service)
 
 Running **one** `d365fo-cli-mcp` instance a whole team points at, instead of a stdio process per
 developer. [MIGRATION_FROM_MCP.md](MIGRATION_FROM_MCP.md#http-transport--shared-deployment-azure-app-service)

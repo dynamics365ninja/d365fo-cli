@@ -1,4 +1,6 @@
-# Self-improving agent eval loop — design spec
+<sub>[README](../README.md) › [Docs](README.md) › Eval loop</sub>
+
+# 🔁 Self-improving agent eval loop — design spec
 
 **Status:** implemented — a 71-case catalog (L0–L2) replays in CI, and an L3 build
 oracle compiles every reviewed golden where a D365FO installation exists (71 of 71).

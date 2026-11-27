@@ -1,4 +1,6 @@
-# Usage examples
+<sub>[README](../README.md) › [Docs](README.md) › Usage examples</sub>
+
+# 💬 Usage examples
 
 Whole tasks, start to finish. [EXAMPLES.md](EXAMPLES.md) shows one invocation per command; this
 shows the sequences those commands are actually used in, and the decisions between them.

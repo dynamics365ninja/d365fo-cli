@@ -18,6 +18,26 @@ was ported from.
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-11-27
+
+`d365fo` can be installed and updated with npm:
+
+```sh
+npm install -g d365fo-cli
+d365fo update
+```
+
+### Compatibility
+
+- No index change: schema v24, no re-extract.
+- CLI and bridge must come from the same release; the npm Windows package carries both.
+- The npm packages need Node.js 18 or later; the binaries need no .NET installation. They are
+  published to the registry after this release.
+- Moving from an `install.ps1` / `install.sh` installation to npm: remove the old
+  `d365fo-cli\bin` folder from `PATH` (`d365fo doctor` warns while both are there). Configuration
+  and index are shared and stay.
+- `doctor` has two new checks, `install` and `install.path`; the second can add a warning.
+
 ### Added — `d365fo update` and `d365fo skills install`
 
 - `update` in an npm installation moves it to the latest release, or with `--to` to a chosen one;
@@ -35,8 +55,16 @@ was ported from.
 A release now builds `d365fo-cli` and one binary package per platform
 (`d365fo-cli-win32-x64`, `-linux-x64`, `-darwin-x64`, `-darwin-arm64`), so that
 `npm install -g d365fo-cli` installs the CLI, the MCP server and, on Windows, the bridge without
-a .NET SDK. Node.js 18 or later runs the launcher. Publishing is switched on separately; until
-then the packages are not in the registry. See [docs/RELEASING.md](docs/RELEASING.md#npm-packages).
+a .NET SDK. Node.js 18 or later runs the launcher. See
+[docs/RELEASING.md](https://github.com/dynamics365ninja/d365fo-cli/blob/v0.3.0/docs/RELEASING.md#npm-packages).
+
+### Changed — documentation and license
+
+- The README and the documentation follow the layout of the sibling `d365fo-mcp-server`: a map in
+  [docs/README.md](https://github.com/dynamics365ninja/d365fo-cli/blob/v0.3.0/docs/README.md), npm as
+  the first install path, and corrected setup facts (the settings file, the MCP tool count).
+- The repository has its [MIT license file](https://github.com/dynamics365ninja/d365fo-cli/blob/v0.3.0/LICENSE),
+  and the archives and npm packages carry it.
 
 ## [0.2.0] - 2026-11-27
 

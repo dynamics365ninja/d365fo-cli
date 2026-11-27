@@ -1,4 +1,6 @@
-# Authoring knowledge
+<sub>[README](../README.md) › [Docs](README.md) › Knowledge authoring</sub>
+
+# 📐 Authoring knowledge
 
 The knowledge corpus is what an agent reads *before* it calls anything: 43 topics on how D365FO
 actually works, served by `d365fo knowledge get` and by the `get_knowledge` MCP tool, and emitted

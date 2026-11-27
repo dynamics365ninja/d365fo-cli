@@ -1,4 +1,6 @@
-# Versioning and releases
+<sub>[README](../README.md) › [Docs](README.md) › Releasing</sub>
+
+# 📦 Versioning and releases
 
 How a `d365fo` build is identified, what a release contains, and how to install a specific one.
 
@@ -59,7 +61,7 @@ tests, and attaches to the GitHub release:
 
 | Asset | Contents |
 |---|---|
-| `d365fo-cli-<version>-win-x64.zip` | `bin\d365fo.exe`, `mcp\d365fo-cli-mcp.exe`, `D365FO.Bridge\` |
+| `d365fo-cli-<version>-win-x64.zip` | `bin\d365fo.exe`, `mcp\d365fo-cli-mcp.exe`, `D365FO.Bridge\`, `LICENSE` |
 | `d365fo-cli-<version>-linux-x64.tar.gz` | `bin/d365fo`, `mcp/d365fo-cli-mcp` |
 | `d365fo-cli-<version>-osx-x64.tar.gz` | `bin/d365fo`, `mcp/d365fo-cli-mcp` |
 | `d365fo-cli-<version>-osx-arm64.tar.gz` | `bin/d365fo`, `mcp/d365fo-cli-mcp` |
@@ -118,6 +120,12 @@ and the installers keep them together. `d365fo doctor` reports `bridge.version` 
 bridge it would start is a different build.
 
 ## Installing a specific release
+
+With npm:
+
+```sh
+npm install -g d365fo-cli@0.3.0     # an npm installation moves with: d365fo update --to 0.3.0
+```
 
 With the installer (builds from the tagged source):
 

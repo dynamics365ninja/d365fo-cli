@@ -1,4 +1,6 @@
-# Adding a command
+<sub>[README](../README.md) › [Docs](README.md) › New command checklist</sub>
+
+# ✅ Adding a command
 
 What a new `d365fo` command has to satisfy before it is real. Most of it is enforced — the list
 exists so you meet the gates on purpose rather than by bisecting a red build.

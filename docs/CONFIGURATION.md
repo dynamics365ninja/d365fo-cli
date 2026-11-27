@@ -1,4 +1,6 @@
-# Configuration
+<sub>[README](../README.md) › [Docs](README.md) › Configuration</sub>
+
+# ⚙️ Configuration
 
 Run `d365fo init` — in a terminal it's a wizard that asks for what you need and writes `settings.json` (`--persist-profile`); nothing below has to be edited by hand. The tables in this page document what it can write and what every setting does.
 

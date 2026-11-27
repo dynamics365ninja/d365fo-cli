@@ -24,4 +24,6 @@ already has. Configuration and the index live outside the package, so an update 
 On Windows, `d365fo` is an npm command shim. An argument with line breaks or `%` does not
 survive `cmd.exe`; call it from PowerShell or Git Bash, or pass such text through a file.
 
-Documentation: https://github.com/dynamics365ninja/d365fo-cli
+Documentation: https://github.com/dynamics365ninja/d365fo-cli#readme
+
+MIT License.

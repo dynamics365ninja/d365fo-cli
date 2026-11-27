@@ -1,8 +1,23 @@
-# Troubleshooting
+<sub>[README](../README.md) › [Docs](README.md) › Troubleshooting</sub>
+
+# 🩺 Troubleshooting
 
 Common failure modes and their fixes. For installation details see [SETUP.md](SETUP.md).
 
 ---
+
+## npm installation
+
+| Symptom | Cause and fix |
+|---|---|
+| `d365fo` not recognized after `npm install -g` | npm's global folder is not on `PATH`. `npm config get prefix` names it (on Linux and macOS its `bin`); add it and open a new shell |
+| PowerShell: `d365fo.ps1 cannot be loaded because running scripts is disabled` | The execution policy blocks npm's PowerShell shim. `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned`, or call `d365fo.cmd` |
+| An argument arrives cut off, or `%NAME%` is replaced | `d365fo.cmd` goes through `cmd.exe`. Call it from PowerShell or Git Bash, or pass the text through a file (`--source-file`, `--file`) |
+| `The package d365fo-cli-<platform> … is not installed` | Installed with `--omit=optional`, or the platform download failed. `npm install -g d365fo-cli` again |
+| `UPDATE_FAILED` / `UPDATE_INCOMPLETE` | Stop `d365fo daemon` and the editors running `d365fo-cli-mcp`, then `d365fo update` again |
+| `NOT_GLOBAL_INSTALL` | The CLI sits in a project's `node_modules`; update it there with `npm install d365fo-cli@<version>` |
+| After an update, a warning names a `.d365fo-cli-…` folder | A process still runs the old version. Restart it, then delete the folder |
+| `doctor` warns on `install.path` | Two installations; a shell runs the first on `PATH`. Remove the one you do not want, for example the folder an earlier `install.ps1` added |
 
 ## Installer (`install.ps1` / `install.sh`)
 
@@ -492,7 +507,7 @@ Fix, in order:
 
 ### How many tools are exposed
 
-The MCP adapter (`d365fo-cli-mcp`) exposes **20 consolidated, discriminator-based tools** covering the CLI search, get, find, generate, and analyze surface (a single tool dispatches on a `type` / `objectType` / `mode` / `action` / `domain` / `include` field). Each tool definition is included in the model context on every turn.
+The MCP adapter (`d365fo-cli-mcp`) exposes **32 consolidated, discriminator-based tools** covering the CLI search, get, find, generate, and analyze surface (a single tool dispatches on a `type` / `objectType` / `mode` / `action` / `domain` / `include` field). Each tool definition is included in the model context on every turn.
 
 ### Reducing token usage
 
@@ -500,8 +515,8 @@ The primary way to reduce token cost is to use the CLI directly instead of the M
 
 | Approach | Cost per turn |
 |---|---|
-| MCP adapter (20 consolidated tools) | ~1,800 tokens injected into every turn |
-| CLI + lazy-loaded Skills | ~100 tokens — one shell tool definition |
+| MCP adapter (32 consolidated tools) | ~13 600 tokens injected into every turn |
+| CLI + lazy-loaded Skills | ~170 tokens — one shell tool definition |
 
 See [TOKEN_ECONOMICS.md](TOKEN_ECONOMICS.md) for the full analysis.
 

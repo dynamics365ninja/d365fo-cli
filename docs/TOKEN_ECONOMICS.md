@@ -1,8 +1,10 @@
-# Token Economics
+<sub>[README](../README.md) › [Docs](README.md) › Token economics</sub>
+
+# 📊 Token Economics
 
 > **TL;DR** — measured on this repository, not estimated: the bundled MCP adapter puts
-> **40 132 characters** of tool schemas into the agent's context **every turn** (32 tools). The CLI's
-> one-skill layout puts **366**. Everything else — the command manifest, a knowledge topic — is
+> **49 076 characters** of tool schemas into the agent's context **every turn** (32 tools). The CLI's
+> one-skill layout puts **600**. Everything else — the command manifest, a knowledge topic — is
 > pulled only when the agent asks for it.
 
 Re-measure any time with:
@@ -24,23 +26,23 @@ approximate. The ratios, which are what the decision turns on, do not depend on 
 
 | | Chars | ≈ tokens | Paid |
 |---|---:|---:|---|
-| **MCP tool schemas** (32 tools) | 40 132 | ~11 100 | **every turn** |
+| **MCP tool schemas** (32 tools) | 49 076 | ~13 600 | **every turn** |
 | MCP server instructions (`--legacy` and `--http`: full rule canon) | 6 959 | ~1 900 | once per session |
-| MCP server instructions (default SDK stdio: routing only, rules via `get_knowledge`) | 981 | ~270 | once per session |
-| **CLI skill, one-skill layout** | 366 | ~100 | **every turn** |
-| CLI skills, per-topic layout (43 skills) | 15 055 | ~4 200 | **every turn** |
-| `d365fo schema` (36 agent-first commands) | 9 368 | ~2 600 | when the agent asks |
-| `d365fo schema --full` (188 commands) | 46 913 | ~13 000 | when the agent asks |
-| One knowledge topic (median of 43) | 6 429 | ~1 800 | when the topic comes up |
+| MCP server instructions (default SDK stdio: routing only, rules via `get_knowledge`) | 1 076 | ~300 | once per session |
+| **CLI skill, one-skill layout** | 600 | ~170 | **every turn** |
+| CLI skills, per-topic layout (44 skills) | 15 766 | ~4 400 | **every turn** |
+| `d365fo schema` (38 agent-first commands) | 10 201 | ~2 800 | when the agent asks |
+| `d365fo schema --full` (212 commands) | 56 525 | ~15 700 | when the agent asks |
+| One knowledge topic (median of 43) | 6 886 | ~1 900 | when the topic comes up |
 
 The shell tool itself is the host's, not this repository's: its description is whatever the agent
 platform ships, and it is there whether or not `d365fo` is installed. What the CLI adds on top of
 it is the skill row above.
 
 Two layouts, two very different standing costs. `skills/d365fo-cli/` is **one** skill whose
-`SKILL.md` names 43 reference topics and pages each in on demand — 366 characters standing.
-`skills/anthropic/` is **43** skills, each with its own trigger description, all of them listed to
-the model every turn — 15 055 characters standing. Both are emitted from the same
+`SKILL.md` names 43 reference topics and pages each in on demand — 600 characters standing.
+`skills/anthropic/` is **44** skills (43 topics and the router), each with its own trigger description, all of them listed to
+the model every turn — 15 766 characters standing. Both are emitted from the same
 `skills/_source/` topics; pick by whether the host supports lazy references.
 
 ---
@@ -49,23 +51,23 @@ the model every turn — 15 055 characters standing. Both are emitted from the s
 
 ```mermaid
 flowchart LR
-    subgraph MCP["MCP adapter — 40 132 chars / turn"]
+    subgraph MCP["MCP adapter — 49 076 chars / turn"]
         direction TB
-        M1["32 tool schemas<br/>injected every turn<br/>largest: generate_object, 6 927"]
+        M1["32 tool schemas<br/>injected every turn<br/>largest: generate_object, 9 454"]
         M2["+ 6 959 chars of<br/>server instructions,<br/>once per session"]
     end
-    subgraph CLI["d365fo + one skill — 366 chars / turn"]
+    subgraph CLI["d365fo + one skill — 600 chars / turn"]
         direction TB
-        C1["1 skill: name + description<br/>366 chars"]
-        C2["43 topics, paged in<br/>only when relevant<br/>~6 429 chars each"]
-        C3["schema pulled on demand<br/>9 368 chars"]
+        C1["1 skill: name + description<br/>600 chars"]
+        C2["43 topics, paged in<br/>only when relevant<br/>~6 886 chars each"]
+        C3["schema pulled on demand<br/>10 201 chars"]
     end
     MCP -.->|same SQLite index, same handlers| CLI
 ```
 
 There is no "load on demand" for MCP tool definitions: a host injects the full `tools/list` schema
 set into the model's context on every request, which is why the per-turn figure is the whole
-40 132 characters and not an average of what the turn used. The CLI's cost is the skill's trigger
+49 076 characters and not an average of what the turn used. The CLI's cost is the skill's trigger
 line; the agent runs `d365fo schema` (or `--help`) when it needs the surface, and reads a topic
 when the topic is actually on the table.
 
@@ -78,16 +80,16 @@ standard table and wire it into a form":
 
 | | Chars in context | ≈ tokens |
 |---|---:|---:|
-| MCP adapter | 401 320 + 6 959 | ~113 400 |
-| CLI, one-skill layout | 3 660 + 9 368 + 12 858 | ~7 200 |
-| CLI, per-topic layout | 150 550 + 9 368 | ~44 400 |
+| MCP adapter | 490 760 + 6 959 | ~138 300 |
+| CLI, one-skill layout | 6 000 + 10 201 + 13 772 | ~8 300 |
+| CLI, per-topic layout | 157 660 + 10 201 | ~46 600 |
 
 | Turns | MCP | CLI (one skill) | Saving |
 |---:|---:|---:|---:|
-| 5 | 207 619 | 24 056 | **88 %** |
-| 10 | 408 279 | 25 886 | **94 %** |
-| 15 | 608 939 | 27 716 | **95 %** |
-| 20 | 809 599 | 29 546 | **96 %** |
+| 5 | 252 339 | 26 973 | **89 %** |
+| 10 | 497 719 | 29 973 | **94 %** |
+| 15 | 743 099 | 32 973 | **96 %** |
+| 20 | 988 479 | 35 973 | **96 %** |
 
 The saving grows with session length because the MCP cost is per turn and the CLI's on-demand
 pulls are per session. It is a floor, not a ceiling: it counts only what is injected, and not the
@@ -100,7 +102,7 @@ remove from the transcript entirely.
 
 The previous version of this document estimated **~1 800 tokens/turn** for the MCP surface and
 described the adapter as exposing **20 tools**. Measured, the adapter exposes **32** and its
-schemas are **~11 100 tokens/turn** — six times the estimate. The estimate was not unreasonable
+schemas are **~13 600 tokens/turn** — more than seven times the estimate. The estimate was not unreasonable
 when it was written (it was reasoning about upstream's consolidation ratio rather than about this
 adapter), which is precisely the argument for measuring: a number nobody can re-derive drifts
 without anybody noticing, and the direction of the drift is not predictable.
@@ -116,10 +118,10 @@ shrinks with it:
 
 | `MCP_TOOLSETS` | Tools | Schema chars | ≈ tokens |
 |---|---:|---:|---:|
-| `all` (default) | 32 | 48 569 | ~13 500 |
-| `read,knowledge,check` | 19 | 22 131 | ~6 200 |
-| `read,knowledge` | 15 | 16 846 | ~4 700 |
-| `read` | 10 | 11 159 | ~3 100 |
+| `all` (default) | 32 | 49 076 | ~13 600 |
+| `read,knowledge,check` | 19 | 22 462 | ~6 200 |
+| `read,knowledge` | 15 | 17 177 | ~4 800 |
+| `read` | 10 | 11 490 | ~3 200 |
 
 `MCP_TOOLSETS=read python scripts/measure-context-cost.py` reproduces a row. The groups are
 listed in [MCP_CONFIG.md](MCP_CONFIG.md#toolsets).
@@ -151,7 +153,7 @@ python scripts/measure-context-cost.py
 The script asks the adapter for its tool list over the `--legacy` stdio dispatcher (the same
 `ToolCatalog` the SDK transport serves), minifies it, and counts. It reads the skill frontmatter
 for the standing cost and calls `d365fo schema` for the on-demand figures. Numbers here were taken
-on 2026-09-02; they move whenever a tool or a command is added, which is the point.
+on 2026-11-27; they move whenever a tool or a command is added, which is the point.
 
 ---
 
