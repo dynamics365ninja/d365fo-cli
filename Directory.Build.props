@@ -10,7 +10,8 @@
       from here. VersionSuffix is "dev" between releases and removed on the commit a
       v<VersionPrefix> tag points at. See docs/RELEASING.md.
     -->
-    <VersionPrefix>0.2.0</VersionPrefix>
+    <VersionPrefix>0.3.0</VersionPrefix>
+    <VersionSuffix>dev</VersionSuffix>
     <Company>d365fo-cli contributors</Company>
     <Product>d365fo-cli</Product>
     <Copyright>MIT</Copyright>

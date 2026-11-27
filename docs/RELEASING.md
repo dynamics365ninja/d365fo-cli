@@ -116,6 +116,17 @@ git clone --branch v0.2.0 https://github.com/dynamics365ninja/d365fo-cli.git
    git push origin v<version>
    ```
 
+   Pushing the tag is the whole publishing step: the release workflow creates the GitHub release,
+   with its notes and assets. **Do not create the release by hand** (the GitHub UI or
+   `gh release create`). The workflow then fails with `a release with the same tag name already
+   exists`, and that release has no assets. To recover, delete the release but keep the tag
+   (no `--cleanup-tag`), and re-run the failed job:
+
+   ```sh
+   gh release delete v<version>
+   gh run rerun <run-id> --failed
+   ```
+
 5. Check the release workflow and the published release.
 6. In a follow-up pull request, set `VersionPrefix` to the next version and restore
    `<VersionSuffix>dev</VersionSuffix>`.
