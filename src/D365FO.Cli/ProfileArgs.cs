@@ -13,11 +13,12 @@ public static class ProfileArgs
     /// <summary>
     /// Commands that are allowed to run while the selected profile does not
     /// exist: the ones that create/select profiles, plus diagnostics and help,
-    /// which must keep working so the user can find out what is wrong.
+    /// which must keep working so the user can find out what is wrong, and the
+    /// ones that read no configuration at all.
     /// </summary>
     private static readonly HashSet<string> MissingProfileAllowed = new(StringComparer.OrdinalIgnoreCase)
     {
-        "config", "init", "doctor", "version", "help", "completion",
+        "config", "init", "doctor", "version", "help", "completion", "update", "skills",
     };
 
     /// <summary>

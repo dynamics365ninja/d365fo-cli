@@ -441,6 +441,12 @@ public static class CliApp
             cfg.AddCommand<VerifyCommand>("verify").WithDescription("Do the model on disk and its .rnrproj agree? An object the project does not list is never compiled, and nothing else reports it.");
             cfg.AddCommand<DoctorCommand>("doctor").WithDescription("Diagnose environment.");
             cfg.AddCommand<InitCommand>("init").WithDescription("Interactive quickstart: detects PackagesLocalDirectory and prepares the index.");
+            cfg.AddCommand<UpdateCommand>("update").WithDescription("Update this installation: an npm installation updates itself, any other is told the step that does it.");
+            cfg.AddBranch("skills", b =>
+            {
+                b.SetDescription("The agent skills this build carries, for Claude and GitHub Copilot.");
+                b.AddCommand<SkillsInstallCommand>("install").WithDescription("Write the skills into an X++ repository (.claude/skills, .github/skills/d365fo-cli).");
+            });
 
             // Named configuration profiles (#210). Selection itself is the global
             // `--profile <name>` option, peeled off in Program.cs (ProfileArgs).

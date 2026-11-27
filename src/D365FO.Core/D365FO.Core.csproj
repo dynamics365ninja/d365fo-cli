@@ -44,6 +44,16 @@
       <LogicalName>D365FO.Core.Knowledge.%(Filename).md</LogicalName>
       <Visible>false</Visible>
     </EmbeddedResource>
+    <!-- The agent skills `d365fo skills install` writes into an X++ repository, in the two
+         layouts scripts/emit-skills.py generates (see D365FO.Core/Skills/SkillInstaller.cs). -->
+    <EmbeddedResource Include="..\..\skills\anthropic\**\SKILL.md">
+      <LogicalName>D365FO.Skills/claude/%(RecursiveDir)%(Filename)%(Extension)</LogicalName>
+      <Visible>false</Visible>
+    </EmbeddedResource>
+    <EmbeddedResource Include="..\..\skills\d365fo-cli\**\*.md">
+      <LogicalName>D365FO.Skills/copilot/%(RecursiveDir)%(Filename)%(Extension)</LogicalName>
+      <Visible>false</Visible>
+    </EmbeddedResource>
   </ItemGroup>
 
   <ItemGroup>

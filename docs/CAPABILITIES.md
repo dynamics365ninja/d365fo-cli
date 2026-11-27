@@ -712,6 +712,22 @@ d365fo daemon stop
 
 ---
 
+## Installation: `update` · `skills install`
+
+| Command | What it does |
+|---|---|
+| `update [--check] [--to <version>]` | In an [npm installation](RELEASING.md#npm-packages): `npm install -g` of the latest or the named version into the same prefix, then a check that the platform binaries are that version. Any other installation (installer, release archive, source checkout) is only told the step that updates it. |
+| `skills install <repository> --for claude\|copilot\|all` | Writes the skills this build carries to `.claude/skills/` and `.github/skills/d365fo-cli/`. `--dry-run` reports; `--force` overwrites a same-named file d365fo did not write (otherwise `SKILL_CONFLICT`, and nothing is written). |
+
+`skills install` records what it wrote in `.d365fo-cli-skills.json` and removes only recorded
+files when a topic is retired; skills left by the `Install-D365Fo*Skills.ps1` scripts that the
+version no longer has are listed, not deleted.
+
+An update on Windows succeeds while an MCP server or the daemon runs: those processes keep the
+previous version until restarted, and the files npm could not delete are named in a warning.
+
+---
+
 ## Windows-only (D365FO VM)
 
 Wraps the Microsoft tools Visual Studio uses.
