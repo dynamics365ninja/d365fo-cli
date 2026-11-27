@@ -9,7 +9,7 @@ from `main` by re-running the installer; a pinned installation is updated by nam
 | Version | Supported |
 |---------|-----------|
 | `main`  | ✅ |
-| `0.2.x` | ✅ |
+| `0.3.x` | ✅ |
 
 ## Reporting a vulnerability
 
