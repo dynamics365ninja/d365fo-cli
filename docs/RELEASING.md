@@ -102,9 +102,14 @@ published by hand, once:
 1. On npmjs.com, create the organization `dynamics365ninja` (free for public packages), or
    publish from the npm account of that name: the platform packages' scope has to be one you can
    publish to.
-2. Cut the release with `NPM_PUBLISH` unset, and download the tarballs:
-   `gh run download <run-id> --repo dynamics365ninja/d365fo-cli -n npm-packages -D npm-packages`,
-   or from the run's page on GitHub (Artifacts, `npm-packages`).
+2. Cut the release with `NPM_PUBLISH` unset, and download the tarballs of its run (works in
+   PowerShell and bash; put the release's tag in `--branch`):
+
+   ```sh
+   gh run download $(gh run list --repo dynamics365ninja/d365fo-cli --workflow release.yml --branch v<version> --limit 1 --json databaseId -q ".[0].databaseId") --repo dynamics365ninja/d365fo-cli -n npm-packages -D npm-packages
+   ```
+
+   Or from the run's page on GitHub: Artifacts, `npm-packages`, then unzip it into `npm-packages`.
 3. `npm login`, then publish the four platform packages and the launcher **last**:
 
    ```sh
