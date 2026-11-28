@@ -18,6 +18,21 @@ was ported from.
 
 ## [Unreleased]
 
+## [0.3.1] - 2026-11-28
+
+The first release published to npm:
+
+```sh
+npm install -g d365fo-cli
+```
+
+### Compatibility
+
+- No index change: schema v24, no re-extract.
+- CLI and bridge must come from the same release; the npm Windows package carries both.
+- The binaries are in `@dynamics365ninja/d365fo-cli-<platform>`. An npm installation is
+  recognised by that folder; there was no earlier one, since 0.3.0 never reached the registry.
+
 ### Changed
 
 - **The npm platform packages are scoped**: `@dynamics365ninja/d365fo-cli-win32-x64`,
