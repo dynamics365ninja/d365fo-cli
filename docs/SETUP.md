@@ -4,13 +4,13 @@
 
 From nothing installed to a working index that any AI agent can query.
 
-> **TL;DR** — `npm install -g @dynamics365ninja/d365fo-cli` · `d365fo init` · `d365fo index extract` · `d365fo skills install <repository> --for copilot|claude|all`. Done.
+> **TL;DR** — `npm install -g d365fo-cli` · `d365fo init` · `d365fo index extract` · `d365fo skills install <repository> --for copilot|claude|all`. Done.
 > In a hurry: [QUICK_START.md](QUICK_START.md) · env vars: [CONFIGURATION.md](CONFIGURATION.md) · architecture: [ARCHITECTURE.md](ARCHITECTURE.md).
 
 ## Install with npm
 
 ```powershell
-npm install -g @dynamics365ninja/d365fo-cli
+npm install -g d365fo-cli
 d365fo init
 ```
 

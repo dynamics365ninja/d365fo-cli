@@ -13,7 +13,7 @@ reaches which command.
 
 ---
 
-`npm install -g @dynamics365ninja/d365fo-cli` installs the adapter beside the CLI, as the `d365fo-cli-mcp` command
+`npm install -g d365fo-cli` installs the adapter beside the CLI, as the `d365fo-cli-mcp` command
 ([SETUP.md](SETUP.md#install-with-npm)). On Windows that command is an npm shim; a host that starts
 processes without a shell needs `"command": "cmd"`, `"args": ["/c", "d365fo-cli-mcp"]`.
 

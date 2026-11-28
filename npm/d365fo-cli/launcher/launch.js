@@ -14,13 +14,15 @@ const PLATFORMS = ['win32-x64', 'linux-x64', 'darwin-x64', 'darwin-arm64'];
 // Tool name -> folder of the platform package that holds it (the release archive layout).
 const TOOLS = { 'd365fo': 'bin', 'd365fo-cli-mcp': 'mcp' };
 
-// Scoped: npm refused the unscoped names. The platform packages share the scope and prefix.
-const PACKAGE = '@dynamics365ninja/d365fo-cli';
+// The package a user installs. The platform packages are scoped (npm refused their unscoped
+// names); only npm installs them, as optionalDependencies of this one.
+const PACKAGE = 'd365fo-cli';
+const PLATFORM_SCOPE = '@dynamics365ninja';
 
 class LaunchError extends Error {}
 
 function platformPackage(target) {
-  return `${PACKAGE}-${target}`;
+  return `${PLATFORM_SCOPE}/${PACKAGE}-${target}`;
 }
 
 function executablePath(tool, options = {}) {
@@ -98,4 +100,4 @@ function run(tool) {
   launch(file, process.argv.slice(2));
 }
 
-module.exports = { PACKAGE, PLATFORMS, TOOLS, LaunchError, platformPackage, executablePath, launch, run };
+module.exports = { PACKAGE, PLATFORM_SCOPE, PLATFORMS, TOOLS, LaunchError, platformPackage, executablePath, launch, run };

@@ -9,9 +9,7 @@ const path = require('node:path');
 const { parseUpdate, compareVersions, globalPrefix, update } = require(
   path.join(__dirname, '..', 'd365fo-cli', 'launcher', 'update.js'));
 
-// The installed package sits in its scope folder: node_modules/@dynamics365ninja/d365fo-cli.
-const SCOPE = '@dynamics365ninja';
-const PACKAGE = `${SCOPE}/d365fo-cli`;
+const PACKAGE = 'd365fo-cli';
 // name@version, where a scoped name starts with an @ of its own.
 const versionOf = (spec) => (spec.lastIndexOf('@') > 0 ? spec.slice(spec.lastIndexOf('@') + 1) : undefined);
 
@@ -37,14 +35,12 @@ test('versions are ordered as semantic versions', () => {
 });
 
 test('only a global installation has a prefix to update', () => {
-  const unix = path.join('/usr/local', 'lib', 'node_modules', SCOPE, 'd365fo-cli');
+  const unix = path.join('/usr/local', 'lib', 'node_modules', 'd365fo-cli');
   assert.strictEqual(globalPrefix(unix, { windows: false, exists: () => true }), path.join('/usr/local'));
-  assert.strictEqual(globalPrefix(path.join('/project', 'node_modules', SCOPE, 'd365fo-cli'), { windows: false, exists: () => true }), null);
-  // Outside its scope folder it is not an installation of this package.
-  assert.strictEqual(globalPrefix(path.join('/usr/local', 'lib', 'node_modules', 'd365fo-cli'), { windows: false, exists: () => true }), null);
+  assert.strictEqual(globalPrefix(path.join('/project', 'node_modules', 'd365fo-cli'), { windows: false, exists: () => true }), null);
 
   const prefix = path.join('/prefix');
-  const installed = path.join(prefix, 'node_modules', SCOPE, 'd365fo-cli');
+  const installed = path.join(prefix, 'node_modules', 'd365fo-cli');
   const shim = path.join(prefix, 'd365fo.cmd');
   assert.strictEqual(globalPrefix(installed, { windows: true, exists: (f) => f === shim }), prefix);
   // A project's node_modules has no command shim beside it.
@@ -53,8 +49,8 @@ test('only a global installation has a prefix to update', () => {
 
 function scenario({ current = '1.0.0', latest = '1.1.0', install = 0, binaries, prefix = '/prefix' } = {}) {
   const modules = fs.mkdtempSync(path.join(os.tmpdir(), 'd365fo-update-test-'));
-  const packageDir = path.join(modules, SCOPE, 'd365fo-cli');
-  fs.mkdirSync(packageDir, { recursive: true });
+  const packageDir = path.join(modules, 'd365fo-cli');
+  fs.mkdirSync(packageDir);
   fs.writeFileSync(path.join(packageDir, 'package.json'), JSON.stringify({ version: current }));
   const calls = [];
   let installed = current;
@@ -85,7 +81,7 @@ test('files a running process kept npm from removing are reported', (t) => {
   const clean = scenario();
   const held = scenario();
   t.after(() => [clean, held].forEach((s) => s.cleanup()));
-  const retired = path.join(held.modules, SCOPE, '.d365fo-cli-Ab12Cd34');
+  const retired = path.join(held.modules, '.d365fo-cli-Ab12Cd34');
   fs.mkdirSync(retired);
   assert.strictEqual(clean.run().warnings, undefined);
   const [warning] = held.run().warnings;

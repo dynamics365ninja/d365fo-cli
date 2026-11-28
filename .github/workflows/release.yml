@@ -197,10 +197,12 @@ jobs:
         run: |
           tag=latest
           case "$VERSION" in *-*) tag=next ;; esac
-          for name in d365fo-cli-win32-x64 d365fo-cli-linux-x64 d365fo-cli-darwin-x64 d365fo-cli-darwin-arm64 d365fo-cli; do
-            if [ "$(npm view "@dynamics365ninja/$name@$VERSION" version 2>/dev/null)" = "$VERSION" ]; then
-              echo "@dynamics365ninja/$name@$VERSION is already published."
+          for name in @dynamics365ninja/d365fo-cli-win32-x64 @dynamics365ninja/d365fo-cli-linux-x64 \
+                      @dynamics365ninja/d365fo-cli-darwin-x64 @dynamics365ninja/d365fo-cli-darwin-arm64 d365fo-cli; do
+            if [ "$(npm view "$name@$VERSION" version 2>/dev/null)" = "$VERSION" ]; then
+              echo "$name@$VERSION is already published."
             else
-              npm publish "./npm-out/tarballs/dynamics365ninja-$name-$VERSION.tgz" --access public --tag "$tag"
+              file="$(echo "$name" | sed 's#^@##; s#/#-#')-$VERSION.tgz"
+              npm publish "./npm-out/tarballs/$file" --access public --tag "$tag"
             fi
           done

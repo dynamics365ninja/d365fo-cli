@@ -20,11 +20,10 @@ was ported from.
 
 ### Changed
 
-- **The npm packages are scoped: `npm install -g @dynamics365ninja/d365fo-cli`.** npm's spam
-  detection refused to publish the unscoped `d365fo-cli` names, so 0.3.0 never reached the
-  registry. The platform packages moved with it (`@dynamics365ninja/d365fo-cli-win32-x64`,
-  `-linux-x64`, `-darwin-x64`, `-darwin-arm64`); the `d365fo` and `d365fo-cli-mcp` commands keep
-  their names. `doctor`, `update` and the launcher recognise only the scoped installation.
+- **The npm platform packages are scoped**: `@dynamics365ninja/d365fo-cli-win32-x64`,
+  `-linux-x64`, `-darwin-x64`, `-darwin-arm64`. npm's spam detection refused to publish the first
+  unscoped one, so 0.3.0 never reached the registry. The install is unchanged,
+  `npm install -g d365fo-cli`, and npm adds the platform package by itself.
 
 ## [0.3.0] - 2026-11-27
 

@@ -21,8 +21,9 @@ if (!version || !tarballs) {
 
 const windows = process.platform === 'win32';
 const target = `${process.platform}-${process.arch}`;
-const PACKAGE = '@dynamics365ninja/d365fo-cli';
-const names = [PACKAGE, `${PACKAGE}-${target}`];
+const PACKAGE = 'd365fo-cli';
+const PLATFORM_PACKAGE = `@dynamics365ninja/${PACKAGE}-${target}`;
+const names = [PACKAGE, PLATFORM_PACKAGE];
 // What npm pack names the tarball of a scoped package: @scope/name -> scope-name-<version>.tgz.
 const tarball = (name, number) => `${name.replace(/^@/, '').replace('/', '-')}-${number}.tgz`;
 const NEWER = '999.0.0';
@@ -137,10 +138,10 @@ try {
   ok(`npm install -g ${PACKAGE}`);
 
   const modules = windows ? path.join(prefix, 'node_modules') : path.join(prefix, 'lib', 'node_modules');
-  const packageDir = path.join(modules, ...PACKAGE.split('/'));
+  const packageDir = path.join(modules, PACKAGE);
   const shim = windows ? path.join(prefix, 'd365fo.cmd') : path.join(prefix, 'bin', 'd365fo');
   const cli = (args) => sh(`"${shim}" ${args}`);
-  const binaries = () => path.join(packageDir, 'node_modules', ...`${PACKAGE}-${target}`.split('/'));
+  const binaries = () => path.join(packageDir, 'node_modules', ...PLATFORM_PACKAGE.split('/'));
   const installed = (folder) => JSON.parse(fs.readFileSync(path.join(folder, 'package.json'), 'utf8')).version;
 
   const runs = async () => {

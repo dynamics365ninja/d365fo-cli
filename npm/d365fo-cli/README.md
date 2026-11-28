@@ -3,7 +3,7 @@
 AI-native CLI and MCP server for Dynamics 365 Finance & Operations X++ development.
 
 ```sh
-npm install -g @dynamics365ninja/d365fo-cli
+npm install -g d365fo-cli
 d365fo init       # find PackagesLocalDirectory and write the configuration
 d365fo doctor     # what is still missing
 

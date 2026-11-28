@@ -3,10 +3,10 @@
 //   node scripts/build-npm-packages.mjs --version 0.3.0 --out npm-out [--pack] <rid>=<folder> ...
 //
 // <folder> holds what scripts/publish-release-layout.sh writes. One package per given platform
-// goes to <out>/<name>, plus the `@dynamics365ninja/d365fo-cli` launcher package, which depends on
-// all of them as optionalDependencies so that npm installs only the one that fits. --pack also
-// writes the tarballs to <out>/tarballs, named as npm names a scoped package's
-// (`dynamics365ninja-d365fo-cli-<version>.tgz`). See docs/RELEASING.md.
+// goes to <out>/<name> (`@dynamics365ninja/d365fo-cli-<platform>`), plus the `d365fo-cli` launcher
+// package, which depends on all of them as optionalDependencies so that npm installs only the one
+// that fits. --pack also writes the tarballs to <out>/tarballs; npm names a scoped package's
+// `dynamics365ninja-d365fo-cli-<platform>-<version>.tgz`. See docs/RELEASING.md.
 import { execSync } from 'node:child_process';
 import fs from 'node:fs';
 import { createRequire } from 'node:module';

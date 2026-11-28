@@ -79,10 +79,7 @@ function compareVersions(a, b) {
  * project's node_modules, an npx cache), which `npm install -g` would not update.
  */
 function globalPrefix(packageDir, { windows = process.platform === 'win32', exists = fs.existsSync } = {}) {
-  // A scoped package sits one folder deeper: node_modules/@scope/name.
-  const scope = path.dirname(packageDir);
-  if (path.basename(scope) !== PACKAGE.split('/')[0]) return null;
-  const modules = path.dirname(scope);
+  const modules = path.dirname(packageDir);
   if (path.basename(modules) !== 'node_modules') return null;
   if (windows) {
     const prefix = path.dirname(modules);
@@ -118,14 +115,13 @@ function installedVersion(packageDir, name) {
 }
 
 // A running d365fo process does not stop npm on Windows: npm moves the package aside, installs
-// the new one, and cannot delete the folder the process still holds. The folder it moves it to
-// is `.<name>-<hash>` beside the package, inside the scope folder.
+// the new one, and cannot delete the folder the process still holds.
 function leftBehind(packageDir) {
-  const scope = path.dirname(packageDir);
+  const modules = path.dirname(packageDir);
   try {
-    return fs.readdirSync(scope)
-      .filter((name) => name.startsWith(`.${path.basename(packageDir)}-`))
-      .map((name) => path.join(scope, name));
+    return fs.readdirSync(modules)
+      .filter((name) => name.startsWith(`.${PACKAGE}-`))
+      .map((name) => path.join(modules, name));
   } catch {
     return [];
   }
