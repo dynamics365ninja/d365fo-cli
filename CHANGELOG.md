@@ -18,6 +18,13 @@ was ported from.
 
 ## [Unreleased]
 
+### Changed
+
+- **The npm platform packages are scoped**: `@dynamics365ninja/d365fo-cli-win32-x64`,
+  `-linux-x64`, `-darwin-x64`, `-darwin-arm64`. npm's spam detection refused to publish the first
+  unscoped one, so 0.3.0 never reached the registry. The install is unchanged,
+  `npm install -g d365fo-cli`, and npm adds the platform package by itself.
+
 ## [0.3.0] - 2026-11-27
 
 `d365fo` can be installed and updated with npm:

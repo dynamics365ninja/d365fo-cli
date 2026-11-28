@@ -18,5 +18,8 @@
   "files": ["launcher"],
   "engines": {
     "node": ">=18"
+  },
+  "publishConfig": {
+    "access": "public"
   }
 }

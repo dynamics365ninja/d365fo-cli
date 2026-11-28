@@ -14,10 +14,10 @@ test('each tool resolves into its folder of the platform package', () => {
   const resolve = resolveInto('/modules');
   assert.strictEqual(
     executablePath('d365fo', { platform: 'win32', arch: 'x64', resolve }),
-    path.join('/modules', 'd365fo-cli-win32-x64', 'bin', 'd365fo.exe'));
+    path.join('/modules', '@dynamics365ninja', 'd365fo-cli-win32-x64', 'bin', 'd365fo.exe'));
   assert.strictEqual(
     executablePath('d365fo-cli-mcp', { platform: 'darwin', arch: 'arm64', resolve }),
-    path.join('/modules', 'd365fo-cli-darwin-arm64', 'mcp', 'd365fo-cli-mcp'));
+    path.join('/modules', '@dynamics365ninja', 'd365fo-cli-darwin-arm64', 'mcp', 'd365fo-cli-mcp'));
 });
 
 test('an unsupported platform is named with the supported ones', () => {
@@ -31,7 +31,7 @@ test('a missing platform package says how to reinstall', () => {
   const resolve = () => { throw new Error('MODULE_NOT_FOUND'); };
   assert.throws(
     () => executablePath('d365fo', { platform: 'linux', arch: 'x64', resolve }),
-    (error) => error instanceof LaunchError && error.message.includes('d365fo-cli-linux-x64')
+    (error) => error instanceof LaunchError && error.message.includes('@dynamics365ninja/d365fo-cli-linux-x64')
       && error.message.includes('--omit=optional'));
 });
 

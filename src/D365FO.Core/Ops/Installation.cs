@@ -29,15 +29,23 @@ public sealed record PathCommand(string Command, bool Npm, string Home);
 /// <summary>Where the running build lives, and which other builds a shell could pick instead.</summary>
 public static class Installation
 {
+    /// <summary>The npm package a user installs: <c>npm install -g d365fo-cli</c>.</summary>
+    public const string NpmPackage = "d365fo-cli";
+
+    /// <summary>The npm scope of the platform packages, <c>@dynamics365ninja/d365fo-cli-&lt;platform&gt;</c>.</summary>
+    public const string NpmPlatformScope = "@dynamics365ninja";
+
     /// <summary>Classify an installation by the folder its binaries run from.</summary>
     public static InstallKind Detect(string baseDirectory, string? localApplicationData = null)
     {
         var directory = Trim(baseDirectory);
         var parts = directory.Split('/', '\\');
 
-        for (var i = 0; i + 1 < parts.Length; i++)
+        // node_modules/@dynamics365ninja/d365fo-cli-<platform>, the package that holds the binaries.
+        for (var i = 0; i + 2 < parts.Length; i++)
         {
-            if (parts[i] == "node_modules" && parts[i + 1].StartsWith("d365fo-cli", StringComparison.Ordinal))
+            if (parts[i] == "node_modules" && parts[i + 1] == NpmPlatformScope
+                && parts[i + 2].StartsWith(NpmPackage + "-", StringComparison.Ordinal))
                 return InstallKind.Npm;
         }
 
@@ -96,7 +104,7 @@ public static class Installation
         if (windows)
         {
             var shim = command.EndsWith(".cmd", StringComparison.OrdinalIgnoreCase)
-                       && Directory.Exists(Path.Combine(directory, "node_modules", "d365fo-cli"));
+                       && Directory.Exists(Path.Combine(directory, "node_modules", NpmPackage));
             return new PathCommand(command, shim, directory);
         }
 
@@ -104,7 +112,7 @@ public static class Installation
         var target = File.ResolveLinkTarget(command, returnFinalTarget: true)?.FullName;
         if (target is null) return new PathCommand(command, false, directory);
 
-        const string npmPackage = "/lib/node_modules/d365fo-cli/";
+        const string npmPackage = "/lib/node_modules/" + NpmPackage + "/";
         var at = target.IndexOf(npmPackage, StringComparison.Ordinal);
         return at >= 0
             ? new PathCommand(command, true, target[..at])

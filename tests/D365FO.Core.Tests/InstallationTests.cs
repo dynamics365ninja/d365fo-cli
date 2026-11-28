@@ -17,7 +17,8 @@ public sealed class InstallationTests : IDisposable
     [Fact]
     public void Classifies_an_installation_by_where_its_binaries_run()
     {
-        var npm = Folder("prefix", "node_modules", "d365fo-cli", "node_modules", "d365fo-cli-win32-x64", "bin");
+        var npm = Folder("prefix", "node_modules", "d365fo-cli", "node_modules", "@dynamics365ninja", "d365fo-cli-win32-x64", "bin");
+        var unscoped = Folder("other", "node_modules", "d365fo-cli", "node_modules", "d365fo-cli-win32-x64", "bin");
         var installer = Folder("local", "d365fo-cli", "bin");
         var archive = Folder("tools", "d365fo-cli-0.3.0", "bin");
         var source = Folder("checkout", "src", "bin", "Release");
@@ -25,6 +26,8 @@ public sealed class InstallationTests : IDisposable
         var local = Folder("local");
 
         Assert.Equal(InstallKind.Npm, Installation.Detect(npm + Path.DirectorySeparatorChar, local));
+        // Only the scoped platform packages are this project's: an unscoped namesake is someone else's.
+        Assert.Equal(InstallKind.Archive, Installation.Detect(unscoped, local));
         Assert.Equal(InstallKind.Installer, Installation.Detect(installer + Path.DirectorySeparatorChar, local));
         Assert.Equal(InstallKind.Archive, Installation.Detect(archive, local));
         Assert.Equal(InstallKind.Source, Installation.Detect(source, local));
@@ -53,7 +56,7 @@ public sealed class InstallationTests : IDisposable
     {
         var prefix = Folder("npm");
         Touch(prefix, "d365fo.cmd");
-        var binaries = Folder("npm", "node_modules", "d365fo-cli", "node_modules", "d365fo-cli-win32-x64", "bin");
+        var binaries = Folder("npm", "node_modules", "d365fo-cli", "node_modules", "@dynamics365ninja", "d365fo-cli-win32-x64", "bin");
 
         var shim = Assert.Single(Installation.FindOnPath(prefix, windows: true));
 

@@ -8,9 +8,7 @@ const { spawnSync } = require('node:child_process');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
-const { platformPackage } = require('./launch.js');
-
-const PACKAGE = 'd365fo-cli';
+const { PACKAGE, platformPackage } = require('./launch.js');
 const VERSION = /^\d+\.\d+\.\d+(-[0-9A-Za-z.-]+)?$/;
 
 /**

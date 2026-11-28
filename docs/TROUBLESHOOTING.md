@@ -13,7 +13,7 @@ Common failure modes and their fixes. For installation details see [SETUP.md](SE
 | `d365fo` not recognized after `npm install -g` | npm's global folder is not on `PATH`. `npm config get prefix` names it (on Linux and macOS its `bin`); add it and open a new shell |
 | PowerShell: `d365fo.ps1 cannot be loaded because running scripts is disabled` | The execution policy blocks npm's PowerShell shim. `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned`, or call `d365fo.cmd` |
 | An argument arrives cut off, or `%NAME%` is replaced | `d365fo.cmd` goes through `cmd.exe`. Call it from PowerShell or Git Bash, or pass the text through a file (`--source-file`, `--file`) |
-| `The package d365fo-cli-<platform> … is not installed` | Installed with `--omit=optional`, or the platform download failed. `npm install -g d365fo-cli` again |
+| `The package @dynamics365ninja/d365fo-cli-<platform> … is not installed` | Installed with `--omit=optional`, or the platform download failed. `npm install -g d365fo-cli` again |
 | `UPDATE_FAILED` / `UPDATE_INCOMPLETE` | Stop `d365fo daemon` and the editors running `d365fo-cli-mcp`, then `d365fo update` again |
 | `NOT_GLOBAL_INSTALL` | The CLI sits in a project's `node_modules`; update it there with `npm install d365fo-cli@<version>` |
 | After an update, a warning names a `.d365fo-cli-…` folder | A process still runs the old version. Restart it, then delete the folder |

@@ -14,17 +14,22 @@ const PLATFORMS = ['win32-x64', 'linux-x64', 'darwin-x64', 'darwin-arm64'];
 // Tool name -> folder of the platform package that holds it (the release archive layout).
 const TOOLS = { 'd365fo': 'bin', 'd365fo-cli-mcp': 'mcp' };
 
+// The package a user installs. The platform packages are scoped (npm refused their unscoped
+// names); only npm installs them, as optionalDependencies of this one.
+const PACKAGE = 'd365fo-cli';
+const PLATFORM_SCOPE = '@dynamics365ninja';
+
 class LaunchError extends Error {}
 
 function platformPackage(target) {
-  return `d365fo-cli-${target}`;
+  return `${PLATFORM_SCOPE}/${PACKAGE}-${target}`;
 }
 
 function executablePath(tool, options = {}) {
   const { platform = process.platform, arch = process.arch, resolve = require.resolve } = options;
   const target = `${platform}-${arch}`;
   if (!PLATFORMS.includes(target)) {
-    throw new LaunchError(`d365fo-cli has no build for ${target}. Supported: ${PLATFORMS.join(', ')}.`);
+    throw new LaunchError(`${PACKAGE} has no build for ${target}. Supported: ${PLATFORMS.join(', ')}.`);
   }
 
   const name = platformPackage(target);
@@ -34,7 +39,7 @@ function executablePath(tool, options = {}) {
   } catch {
     throw new LaunchError(
       `The package ${name}, which holds the binaries, is not installed. `
-      + 'Reinstall without --omit=optional: npm install -g d365fo-cli');
+      + `Reinstall without --omit=optional: npm install -g ${PACKAGE}`);
   }
 
   const file = platform === 'win32' ? `${tool}.exe` : tool;
@@ -95,4 +100,4 @@ function run(tool) {
   launch(file, process.argv.slice(2));
 }
 
-module.exports = { PLATFORMS, TOOLS, LaunchError, platformPackage, executablePath, launch, run };
+module.exports = { PACKAGE, PLATFORM_SCOPE, PLATFORMS, TOOLS, LaunchError, platformPackage, executablePath, launch, run };
